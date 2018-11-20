@@ -95,7 +95,7 @@ def template FloatExecute {{
             }
 
             if (fault == NoFault) {
-                MiscReg FFLAGS = xc->readMiscReg(MISCREG_FFLAGS);
+                RegVal FFLAGS = xc->readMiscReg(MISCREG_FFLAGS);
                 std::feclearexcept(FE_ALL_EXCEPT);
                 %(code)s;
                 if (rmm_demand && !rmm_resolved) {
