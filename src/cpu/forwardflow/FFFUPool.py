@@ -29,7 +29,7 @@
 from m5.SimObject import SimObject
 from m5.params import *
 from FuncUnit import *
-from FuncUnitConfig import *
+from FFFuncUnitConfig import *
 
 class FFFUPool(SimObject):
     type = 'FFFUPool'

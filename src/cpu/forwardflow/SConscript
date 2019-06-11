@@ -34,7 +34,7 @@ Import('*')
 
 if 'FFCPU' in env['CPU_MODELS']:
     SimObject('FFFUPool.py')
-    SimObject('FuncUnitConfig.py')
+    SimObject('FFFuncUnitConfig.py')
     SimObject('FFCPU.py')
 
     Source('base_dyn_inst.cc')
