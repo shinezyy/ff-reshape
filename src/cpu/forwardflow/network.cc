@@ -66,7 +66,7 @@ OmegaNetwork<T>::OmegaNetwork(uint32_t size, bool ascendPrio)
 }
 
 template<class T>
-tuple<std::vector<bool>, std::vector<Packet<T> *>>
+std::vector<Packet<T> *>
         OmegaNetwork<T>::select(std::vector<Packet<T> *> &_inputs)
 {
     vector<Packet<T>*> buffer[2](size);

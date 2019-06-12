@@ -5,15 +5,21 @@
 #ifndef __FF_FU_WRAPPER_HH__
 #define __FF_FU_WRAPPER_HH__
 
+#include <cpu/forwardflow/dq_pointer.hh>
 #include <cpu/func_unit.hh>
 
+namespace FF{
+
+template<class Impl>
 class FUWrapper {
     FuncUnit fu;
 public:
 
-    bool canServeInst(DynInstPtr &inst);
+    bool canServe(DynInstPtr &inst);
 
     bool checkCapability(DynInstPtr &inst);
+
+    bool consume(DynInstPtr &inst);
 
     bool isOneCycle(inst);
 
@@ -39,6 +45,8 @@ public:
     void setPtrQueue(Queue);
 
     void setValueQueue(Queue);
+
+    std::vector<DQPointer> getInstNextCycle();
 private:
     bool hasLongLatOpReadyNextCycle();
 
@@ -47,4 +55,5 @@ private:
     std::vector<Value> buffer(num_fu);
 };
 
+}
 #endif //__FF_FU_WRAPPER_HH__

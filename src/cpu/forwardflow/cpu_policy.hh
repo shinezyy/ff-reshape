@@ -34,9 +34,11 @@
 
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/commit.hh"
+#include "cpu/forwardflow/dataflow_queue.hh"
 #include "cpu/forwardflow/decode.hh"
 #include "cpu/forwardflow/fetch.hh"
 #include "cpu/forwardflow/free_list.hh"
+#include "cpu/forwardflow/fu_wrapper.hh"
 #include "cpu/forwardflow/iew.hh"
 #include "cpu/forwardflow/inst_queue.hh"
 #include "cpu/forwardflow/lsq.hh"
@@ -106,6 +108,20 @@ struct SimpleCPUPolicy
     /** The struct for all backwards communication. */
     typedef FF::TimeBufStruct<Impl> TimeStruct;
 
+    /** The struct for all backwards communication. */
+    typedef FF::DQOut<Impl> DQStruct;
+
+    typedef FF::DataflowQueueBank<Impl> DataflowQueueBank;
+
+    typedef FF::DataflowQueues<Impl> DataflowQueues;
+
+    typedef FF::FUWrapper<Impl> FUWrapper;
+
+    /** The struct for communication between decode and allocation. */
+    typedef FF::Decode2Allocation<Impl> FFDecodeStruct;
+
+    /** The struct for communication between allocation and diewc. */
+    typedef FF::Allocation2DIEWC<Impl> FFAllocationStruct;
 };
 
 }

@@ -18,9 +18,9 @@ using std::tuple;
 
 template <class T>
 struct Packet{
-    bool valid{false};
+    bool valid{};
     T payload;
-    uint32_t source;
+    uint32_t source{};
     boost::dynamic_bitset<> destBits;
 };
 
@@ -45,7 +45,7 @@ class OmegaNetwork {
     std::vector<std::vector<CrossBar<T>>> switches;
 
 public:
-    tuple<std::vector<bool>, std::vector<Packet<T>*>> select(std::vector<Packet<T>*> &);
+    std::vector<Packet<T>*> select(std::vector<Packet<T>*> &);
 
     OmegaNetwork(uint32_t size, bool ascendPrio);
 

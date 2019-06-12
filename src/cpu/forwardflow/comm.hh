@@ -49,6 +49,7 @@
 
 #include "arch/types.hh"
 #include "base/types.hh"
+#include "cpu/forwardflow/dq_pointer.hh"
 #include "cpu/inst_seq.hh"
 #include "sim/faults.hh"
 
@@ -175,6 +176,16 @@ struct DefaultDecodeDefaultRename {
     DynInstPtr insts[Impl::MaxWidth];
 };
 
+/** Struct that defines the information passed from decode to allocation. */
+template<class Impl>
+struct Decode2Allocation{
+    typedef typename Impl::DynInstPtr DynInstPtr;
+
+    int size;
+
+    DynInstPtr insts[Impl::MaxWidth];
+};
+
 /** Struct that defines the information passed from rename to IEW. */
 template<class Impl>
 struct DefaultRenameDefaultIEW {
@@ -184,6 +195,17 @@ struct DefaultRenameDefaultIEW {
 
     DynInstPtr insts[Impl::MaxWidth];
 };
+
+/** Struct that defines the information passed from allocation to DIEWC. */
+template<class Impl>
+struct Allocation2DIEWC {
+    typedef typename Impl::DynInstPtr DynInstPtr;
+
+    int size;
+
+    DynInstPtr insts[Impl::MaxWidth];
+};
+
 
 /** Struct that defines the information passed from IEW to commit. */
 template<class Impl>
@@ -256,6 +278,26 @@ struct TimeBufStruct {
 
     iewComm iewInfo[Impl::MaxThreads];
 
+    // FF backward communication
+    struct diewcComm {
+        // Also eventually include skid buffer space.
+        unsigned freeDQEntries;
+        unsigned freeLQEntries;
+        unsigned freeSQEntries;
+
+        unsigned dqCount;
+        unsigned ldstqCount;
+
+        unsigned dispatched;
+        unsigned dispatchedToLQ;
+        unsigned dispatchedToSQ;
+
+        bool usedIQ;
+        bool usedLSQ;
+    };
+
+    iewComm diewcInfo;
+
     struct commitComm {
         /////////////////////////////////////////////////////////////////////
         // This code has been re-structured for better packing of variables
@@ -327,7 +369,24 @@ struct TimeBufStruct {
     bool renameUnblock[Impl::MaxThreads];
     bool iewBlock[Impl::MaxThreads];
     bool iewUnblock[Impl::MaxThreads];
+
+    bool diewcBlock;
+    bool diewcUnblock;
 };
+
+/** Struct that defines the information read from DQ banks. */
+template<class Impl>
+struct DQOut {
+    typedef typename Impl::DynInstPtr DynInstPtr;
+
+    bool instValids[Impl::MaxBanks];
+    DynInstPtr insts[Impl::MaxBanks];
+
+    DQPointer pointers[Impl::MaxBanks * Impl::MaxOps];
+
+};
+
+
 
 }
 #endif //__CPU_FF_COMM_HH__

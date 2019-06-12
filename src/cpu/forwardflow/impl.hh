@@ -81,6 +81,12 @@ struct FFCPUImpl
       MaxWidth = 8,
       MaxThreads = 4
     };
+
+    enum {
+        MaxGroups = 2,
+        MaxBanks = 8,
+        MaxOps = 4
+    };
 };
 
 

@@ -347,7 +347,7 @@ class DefaultRename
     typename TimeBuffer<RenameStruct>::wire toIEW;
 
     /** Decode instruction queue interface. */
-    TimeBuffer<DecodeStruct> *decodeQueue;
+    TimeBuffer<DecodeStruct> *deodeQueue;
 
     /** Wire to get decode's output from decode queue. */
     typename TimeBuffer<DecodeStruct>::wire fromDecode;

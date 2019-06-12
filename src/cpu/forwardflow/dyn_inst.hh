@@ -429,6 +429,12 @@ class BaseO3DynInst : public BaseDynInst<Impl>
         panic("MIPS MT not defined for O3 CPU.\n");
     }
 #endif
+
+public:
+    std::array<DQPointer, 4> pointers;
+
+    DQPointer dqPosition;
+
 };
 
 }

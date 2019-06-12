@@ -197,3 +197,9 @@ class DerivFFCPU(BaseCPU):
             print("ERROR: Checker only supported under ARM ISA!")
 
             exit(1)
+
+    DQDepth = Param.Unsigned(32, "depth of each dataflow queue bank")
+    numOperands = Param.Unsigned(4,
+            "number of dest and src operands for each instruction")
+    numDQBanks = Param.Unsigned(4, "number of DQ banks per group")
+    pendingQueueDepth = Param.Unsigned(8, "depth of pending pointers")
