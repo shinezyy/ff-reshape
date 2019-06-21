@@ -13,4 +13,9 @@ struct DQPointer{
     unsigned op;
 };
 
+struct PointerPair{
+    DQPointer dest;
+    DQPointer payload;
+};
+
 #endif //__FF_DQ_POINTER_HH__

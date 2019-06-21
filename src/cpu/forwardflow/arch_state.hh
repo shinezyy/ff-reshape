@@ -6,6 +6,7 @@
 #define __FF_ARCH_REGFILE_HH__
 
 #include <tuple>
+#include "dq_pointer.hh"
 
 namespace FF {
 
@@ -35,7 +36,8 @@ private:
 public:
     bool commitInst(DynInstPtr &inst);
 
-    bool allocateDQ(DynInstPtr &inst);
+    // todo: update map to tell its parent or sibling where to forward
+    PointerPair recordAndUpdateMap(DynInstPtr &inst);
 
     void clearCounters();
 

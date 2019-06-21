@@ -32,6 +32,7 @@
 #ifndef __CPU_FF_CPU_POLICY_HH__
 #define __CPU_FF_CPU_POLICY_HH__
 
+#include "cpu/forwardflow/arch_state.hh"
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/commit.hh"
 #include "cpu/forwardflow/dataflow_queue.hh"
@@ -108,7 +109,7 @@ struct SimpleCPUPolicy
     /** The struct for all backwards communication. */
     typedef FF::TimeBufStruct<Impl> TimeStruct;
 
-    /** The struct for all backwards communication. */
+    /** The struct for dq timing communication. */
     typedef FF::DQOut<Impl> DQStruct;
 
     typedef FF::DataflowQueueBank<Impl> DataflowQueueBank;
@@ -122,6 +123,10 @@ struct SimpleCPUPolicy
 
     /** The struct for communication between allocation and diewc. */
     typedef FF::Allocation2DIEWC<Impl> FFAllocationStruct;
+
+    typedef FF::DIEWC2DIEWC<Impl> DIEWC2DIEWC;
+
+    typedef FF::ArchState<Impl> ArchState;
 };
 
 }

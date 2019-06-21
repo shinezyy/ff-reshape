@@ -21,8 +21,8 @@ namespace FF{
 template <class Impl>
 class DataflowQueueBank{
 
-    typedef typename Impl::DynInstPtr DynInstPtr;
 //    using DynInstPtr = RefCountingPtr<BaseO3DynInst<Impl>>;
+    typedef typename Impl::DynInstPtr DynInstPtr;
 
     const unsigned nOps{4};
 
@@ -31,7 +31,7 @@ class DataflowQueueBank{
 
     const DQPointer nullDQPointer;
 
-    std::vector<DynInstPtr> banks;
+    std::vector<DynInstPtr> instArray;
 
 
     // instructions that waiting for only one operands
@@ -65,6 +65,8 @@ public:
 
     const std::vector<DQPointer> readPointersFromBank();
 
+    DynInstPtr &readInstsFromBank(DQPointer pointer);
+
     bool instGranted;
 
     void tick();
@@ -81,7 +83,7 @@ public:
     typedef typename Impl::O3CPU O3CPU;
 
 //    typedef typename Impl::DynInstPtr DynInstPtr;
-    using DynInstPtr = BaseO3DynInst<Impl>;
+    using DynInstPtr = BaseO3DynInst<Impl>*;
 
     typedef typename Impl::CPUPol::IEW IEW;
     typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
@@ -89,7 +91,7 @@ public:
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
 
 //    typedef typename Impl::CPUPol::DataflowQueueBank DataflowQueueBank;
-    using DataflowQueueBank = DataflowQueueBank<Impl>;
+    using XDataflowQueueBank = DataflowQueueBank<Impl>;
 
     const unsigned WritePorts, ReadPorts;
 
@@ -109,40 +111,71 @@ private:
     const unsigned nOps;
     const unsigned nFUGroups;
 
-    std::vector<std::queue<DQPointer>> queues;
+    std::vector<std::queue<DQPointer>> wake_queues;
 
-    std::vector<DataflowQueueBank> dqs;
+    std::vector<std::queue<Packet<PointerPair>>> forwardPointerQueue;
+
+    std::vector<XDataflowQueueBank> dqs;
 
     TimeBuffer<DQStruct> *DQTS;
 
-    typename TimeBuffer<DQStruct>::wire *toNextCycle;
-    typename TimeBuffer<DQStruct>::wire *fromLastCycle;
+    typename TimeBuffer<DQStruct>::wire toNextCycle;
+    typename TimeBuffer<DQStruct>::wire fromLastCycle;
 
     std::vector<bost> wakenValids;
     std::vector<DynInstPtr> wakenInsts;
 
     OmegaNetwork<DynInstPtr> bankFUNet;
 
-    OmegaNetwork<DQPointer> queueBankNet;
+    OmegaNetwork<DQPointer> wakeupQueueBankNet;
+
+    OmegaNetwork<PointerPair> pointerQueueBankNet;
 
     std::vector<Packet<DynInstPtr>> fu_requests;
     std::vector<bool> fu_req_granted;
-    std::vector<Packet<DynInstPtr>*> fu_request_ptrs;
+    std::vector<Packet<DynInstPtr>*> fu_req_ptrs;
     std::vector<Packet<DynInstPtr>*> fu_granted_ptrs;
 
-    std::vector<Packet<DQPointer>> bank_requests;
-    std::vector<bool> bank_req_granted;
-    std::vector<Packet<DQPointer>*> bank_request_ptrs;
-    std::vector<Packet<DQPointer>*> bank_granted_ptrs;
+    std::vector<Packet<DQPointer>> wakeup_requests;
+    std::vector<bool> wake_req_granted;
+    std::vector<Packet<DQPointer>*> wakeup_req_ptrs;
+    std::vector<Packet<DQPointer>*> wakeup_granted_ptrs;
+
+    std::vector<Packet<PointerPair>> insert_requests;
+    std::vector<bool> insert_req_granted;
+    std::vector<Packet<PointerPair>*> insert_req_ptrs;
+    std::vector<Packet<PointerPair>*> insert_granted_ptrs;
 
     std::vector<FUWrapper> fuWrappers;
 
     const unsigned maxQueueDepth;
 
-    boost::dynamic_bitset<> coordinateFU(DynInstPtr &inst);
+    boost::dynamic_bitset<> coordinateFU(DynInstPtr &inst, unsigned bank);
 
-    boost::dynamic_bitset<> fromUint(unsigned);
+    std::vector<std::vecotr<bool>> fuGroupCaps;
+    std::vector<unsigned> fuPointer;
+    std::vector llBlocked;
+    std::vector llBlockedNext;
 
+    boost::dynamic_bitset<> uint2Bits(unsigned);
+
+    void insertForwardPointer(PointerPair pair);
+
+    DynInstPtr getHead();
+
+    unsigned head, tail;
+
+    DQPointer uint2Pointer(unsigned);
+
+public:
+    void retireHead();
+
+    unsigned int indexMask;
+    unsigned int indexWidth;
+    unsigned int bankMask;
+
+private:
+    unsigned forwardPtrIndex;
 };
 
 }

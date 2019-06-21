@@ -296,7 +296,7 @@ struct TimeBufStruct {
         bool usedLSQ;
     };
 
-    iewComm diewcInfo;
+    diewcComm diewcInfo;
 
     struct commitComm {
         /////////////////////////////////////////////////////////////////////
@@ -372,6 +372,71 @@ struct TimeBufStruct {
 
     bool diewcBlock;
     bool diewcUnblock;
+
+    struct FFCommitComm {
+        /////////////////////////////////////////////////////////////////////
+        // This code has been re-structured for better packing of variables
+        // instead of by stage which is the more logical way to arrange the
+        // data.
+        // F = Fetch
+        // D = Decode
+        // I = IEW
+        // R = Rename
+        // As such each member is annotated with who consumes it
+        // e.g. bool variable name // *F,R for Fetch and Rename
+        /////////////////////////////////////////////////////////////////////
+
+        /// The pc of the next instruction to execute. This is the next
+        /// instruction for a branch mispredict, but the same instruction for
+        /// order violation and the like
+        TheISA::PCState pc; // *F
+
+        /// Provide fetch the instruction that mispredicted, if this
+        /// pointer is not-null a misprediction occured
+        DynInstPtr mispredictInst;  // *F
+
+        /// Instruction that caused the a non-mispredict squash
+        DynInstPtr squashInst; // *F
+
+        /// Hack for now to send back a strictly ordered access to the
+        /// IEW stage.
+        DynInstPtr strictlyOrderedLoad; // *I
+
+        /// Communication specifically to the IQ to tell the IQ that it can
+        /// schedule a non-speculative instruction.
+        InstSeqNum nonSpecSeqNum; // *I
+
+        /// Represents the instruction that has either been retired or
+        /// squashed.  Similar to having a single bus that broadcasts the
+        /// retired or squashed sequence number.
+        InstSeqNum doneSeqNum; // *F, I
+
+        /// Tell Rename how many free entries it has in the DQ
+        unsigned freeDQEntries; // *R
+
+        bool squash; // *F, D, R, I
+        bool dqSquashing; // *F, D, R, I
+
+        /// Rename should re-read number of free dq entries
+        bool usedDQ; // *R
+
+        /// Notify Rename that the dq is empty
+        bool emptyDQ; // *R
+
+        /// Was the branch taken or not
+        bool branchTaken; // *F
+        /// If an interrupt is pending and fetch should stall
+        bool interruptPending; // *F
+        /// If the interrupt ended up being cleared before being handled
+        bool clearInterrupt; // *F
+
+        /// Hack for now to send back an strictly ordered access to
+        /// the IEW stage.
+        bool strictlyOrdered; // *I
+
+    };
+
+    FFCommitComm ffCommitInfo;
 };
 
 /** Struct that defines the information read from DQ banks. */
@@ -384,6 +449,15 @@ struct DQOut {
 
     DQPointer pointers[Impl::MaxBanks * Impl::MaxOps];
 
+};
+
+/** Struct that defines the information passed from DIEWC to DIEWC. */
+template<class Impl>
+struct DIEWC2DIEWC{
+    typedef typename Impl::DynInstPtr DynInstPtr;
+    DynInstPtr commitQueue[Impl::MaxBanks];
+
+    bool canCommit[Impl::MaxWidth];
 };
 
 
