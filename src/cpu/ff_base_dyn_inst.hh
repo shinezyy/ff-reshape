@@ -60,6 +60,7 @@
 #include "cpu/exec_context.hh"
 #include "cpu/exetrace.hh"
 #include "cpu/forwardflow/comm.hh"
+#include "cpu/forwardflow/dq_pointer.hh"
 #include "cpu/inst_res.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/op_class.hh"
@@ -99,6 +100,7 @@ class BaseDynInst : public ExecContext, public RefCounted
 
   protected:
     enum Status {
+        DqEntry,                 /// Instruction is in the DQ
         IqEntry,                 /// Instruction is in the IQ
         RobEntry,                /// Instruction is in the ROB
         LsqEntry,                /// Instruction is in the LSQ
@@ -111,6 +113,7 @@ class BaseDynInst : public ExecContext, public RefCounted
         AtCommit,                /// Instruction has reached commit
         Committed,               /// Instruction has committed
         Squashed,                /// Instruction is squashed
+        SquashedInDQ,            /// Instruction is squashed in the DQ
         SquashedInIQ,            /// Instruction is squashed in the IQ
         SquashedInLSQ,           /// Instruction is squashed in the LSQ
         SquashedInROB,           /// Instruction is squashed in the ROB
@@ -247,22 +250,17 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Flattened register index of the destination registers of this
      *  instruction.
      */
-    std::array<RegId, TheISA::MaxInstDestRegs> _flatDestRegIdx;
+     std::array<RegId, TheISA::MaxInstDestRegs> _flatDestRegIdx;
 
     /** Physical register index of the destination registers of this
      *  instruction.
      */
-    std::array<PhysRegIdPtr, TheISA::MaxInstDestRegs> _destRegIdx;
+    std::array<DQPointer, TheISA::MaxInstDestRegs> _destRegIdx;
 
     /** Physical register index of the source registers of this
      *  instruction.
      */
-    std::array<PhysRegIdPtr, TheISA::MaxInstSrcRegs> _srcRegIdx;
-
-    /** Physical register index of the previous producers of the
-     *  architected destinations.
-     */
-    std::array<PhysRegIdPtr, TheISA::MaxInstDestRegs> _prevDestRegIdx;
+    std::array<DQPointer, TheISA::MaxInstSrcRegs> _srcInstPointer;
 
 
   public:
@@ -358,14 +356,13 @@ class BaseDynInst : public ExecContext, public RefCounted
      */
     PhysRegIdPtr renamedDestRegIdx(int idx) const
     {
-        return _destRegIdx[idx];
+        panic("Not available in RV forwardflow");
     }
 
     /** Returns the physical register index of the i'th source register. */
     PhysRegIdPtr renamedSrcRegIdx(int idx) const
     {
-        assert(TheISA::MaxInstSrcRegs > idx);
-        return _srcRegIdx[idx];
+        panic("Not available in RV forwardflow");
     }
 
     /** Returns the flattened register index of the i'th destination
@@ -381,27 +378,22 @@ class BaseDynInst : public ExecContext, public RefCounted
      */
     PhysRegIdPtr prevDestRegIdx(int idx) const
     {
-        return _prevDestRegIdx[idx];
+        panic("Not available in RV forwardflow");
     }
 
-    /** Renames a destination register to a physical register.  Also records
-     *  the previous physical register that the logical register mapped to.
-     */
-    void renameDestReg(int idx,
-                       PhysRegIdPtr renamed_dest,
-                       PhysRegIdPtr previous_rename)
-    {
-        _destRegIdx[idx] = renamed_dest;
-        _prevDestRegIdx[idx] = previous_rename;
-    }
 
     /** Renames a source logical register to the physical register which
      *  has/will produce that logical register's result.
      *  @todo: add in whether or not the source register is ready.
      */
-    void renameSrcReg(int idx, PhysRegIdPtr renamed_src)
+    void renameSrcReg(int idx, DQPointer renamed_src)
     {
-        _srcRegIdx[idx] = renamed_src;
+        _srcInstPointer[idx] = renamed_src;
+    }
+
+    void trackSrcInst(int idx, DQPointer ptr)
+    {
+
     }
 
     /** Flattens a destination architectural register index into a logical
@@ -776,6 +768,21 @@ class BaseDynInst : public ExecContext, public RefCounted
 
     /** Returns whether or not this instruction is squashed in the IQ. */
     bool isSquashedInIQ() const { return status[SquashedInIQ]; }
+
+    /** Sets this instruction as a entry the DQ. */
+    void setInDQ() { status.set(DqEntry); }
+
+    /** Sets this instruction as a entry the DQ. */
+    void clearInDQ() { status.reset(DqEntry); }
+
+    /** Returns whether or not this instruction has issued. */
+    bool isInDQ() const { return status[DqEntry]; }
+
+    /** Sets this instruction as squashed in the DQ. */
+    void setSquashedInDQ() { status.set(SquashedInDQ); status.set(Squashed);}
+
+    /** Returns whether or not this instruction is squashed in the DQ. */
+    bool isSquashedInDQ() const { return status[SquashedInDQ]; }
 
 
     //Load / Store Queue Functions

@@ -38,26 +38,25 @@ if 'FFCPU' in env['CPU_MODELS']:
     SimObject('FFCPU.py')
 
     Source('base_dyn_inst.cc')
-    Source('commit.cc')
     Source('cpu.cc')
     Source('deriv.cc')
     Source('decode.cc')
     Source('dyn_inst.cc')
     Source('fetch.cc')
-    Source('free_list.cc')
     Source('fu_pool.cc')
-    Source('iew.cc')
-    Source('inst_queue.cc')
     Source('lsq.cc')
     Source('lsq_unit.cc')
     Source('mem_dep_unit.cc')
-    Source('regfile.cc')
-    Source('rename.cc')
-    Source('rename_map.cc')
-    Source('rob.cc')
-    Source('scoreboard.cc')
     Source('store_set.cc')
     Source('thread_context.cc')
+
+    Source('arch_state.cc')
+    Source('allocation.cc')
+    Source('dataflow_queue.cc')
+    Source('diewc.cc')
+    Source('fu_wrapper.cc')
+    Source('network.cc')
+    Source('dq_pointer.cc')
 
     # DebugFlag('CommitRate')
     # DebugFlag('IEW')
@@ -72,6 +71,7 @@ if 'FFCPU' in env['CPU_MODELS']:
     # DebugFlag('Writeback')
     # DebugFlag('DLarge')
     DebugFlag('FFCPU')
+    DebugFlag('DAllocation')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',

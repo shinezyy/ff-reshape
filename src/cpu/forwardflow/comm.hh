@@ -61,6 +61,12 @@ namespace FF{
  */
 using PhysRegIndex = short int;
 
+typedef union {
+    double f;
+    uint64_t i;
+} FFRegValue;
+
+extern ThreadID DummyTid;
 
 /** Physical register ID.
  * Like a register ID but physical. The inheritance is private because the
@@ -292,8 +298,11 @@ struct TimeBufStruct {
         unsigned dispatchedToLQ;
         unsigned dispatchedToSQ;
 
-        bool usedIQ;
+        bool usedDQ;
         bool usedLSQ;
+
+        unsigned dqHead;
+        unsigned dqTail;
     };
 
     diewcComm diewcInfo;
@@ -358,7 +367,6 @@ struct TimeBufStruct {
         /// Hack for now to send back an strictly ordered access to
         /// the IEW stage.
         bool strictlyOrdered; // *I
-
     };
 
     commitComm commitInfo[Impl::MaxThreads];
@@ -373,7 +381,7 @@ struct TimeBufStruct {
     bool diewcBlock;
     bool diewcUnblock;
 
-    struct FFCommitComm {
+    struct DIEWC2DIEWC {
         /////////////////////////////////////////////////////////////////////
         // This code has been re-structured for better packing of variables
         // instead of by stage which is the more logical way to arrange the
@@ -434,9 +442,16 @@ struct TimeBufStruct {
         /// the IEW stage.
         bool strictlyOrdered; // *I
 
+        DynInstPtr commitQueue[Impl::MaxWidth];
+
+        InstSeqNum squashedSeqNum;
+
+        bool canCommit[Impl::MaxWidth];
+
+        bool includeSquashInst;
     };
 
-    FFCommitComm ffCommitInfo;
+    DIEWC2DIEWC diewc2diewc;
 };
 
 /** Struct that defines the information read from DQ banks. */
@@ -452,13 +467,9 @@ struct DQOut {
 };
 
 /** Struct that defines the information passed from DIEWC to DIEWC. */
-template<class Impl>
-struct DIEWC2DIEWC{
-    typedef typename Impl::DynInstPtr DynInstPtr;
-    DynInstPtr commitQueue[Impl::MaxBanks];
-
-    bool canCommit[Impl::MaxWidth];
-};
+//template<class Impl>
+//struct DIEWC2DIEWC{
+//};
 
 
 

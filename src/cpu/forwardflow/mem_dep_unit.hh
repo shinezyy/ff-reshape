@@ -65,9 +65,6 @@ struct SNHash {
     }
 };
 
-template <class Impl>
-class InstructionQueue;
-
 /**
  * Memory dependency unit class.  This holds the memory dependence predictor.
  * As memory operations are issued to the IQ, they are also issued to this
@@ -87,6 +84,7 @@ class MemDepUnit
 
   public:
     typedef typename Impl::DynInstPtr DynInstPtr;
+    typedef typename Impl::CPUPol::DataflowQueues InstructionQueue;
 
     /** Empty constructor. Must call init() prior to using in this case. */
     MemDepUnit();
@@ -116,7 +114,7 @@ class MemDepUnit
     void takeOverFrom();
 
     /** Sets the pointer to the IQ. */
-    void setIQ(InstructionQueue<Impl> *iq_ptr);
+    void setIQ(InstructionQueue *iq_ptr);
 
     /** Inserts a memory instruction. */
     void insert(DynInstPtr &inst);
@@ -269,7 +267,7 @@ class MemDepUnit
     InstSeqNum storeBarrierSN;
 
     /** Pointer to the IQ. */
-    InstructionQueue<Impl> *iqPtr;
+    InstructionQueue *iqPtr;
 
     /** The thread id of this memory dependence unit. */
     int id;

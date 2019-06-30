@@ -3,6 +3,12 @@
 //
 
 #include "allocation.hh"
+#include "base/trace.hh"
+#include "config/the_isa.hh"
+#include "cpu/forwardflow/comm.hh"
+#include "debug/Activity.hh"
+#include "debug/DAllocation.hh"
+#include "params/DerivFFCPU.hh"
 
 namespace FF
 {
@@ -66,12 +72,12 @@ bool Allocation<Impl>::checkSignalsAndUpdate() {
     readFreeEntries();
     readStallSignals();
 
-    if (fromDIEWC->commitInfo.squash) {
-        DPRINTF(Rename, "[tid:%u]: Squashing instructions due to squash from "
-                "commit.\n", tid);
+    if (fromDIEWC->diewc2diewc.squash) {
+        DPRINTF(DAllocation, "Squashing instructions due to squash from "
+                "commit.\n");
 
         // todo: squash
-        // squash(fromCommit->commitInfo[tid].doneSeqNum, tid);
+        // squash(fromCommit->diewc2diewc[tid].doneSeqNum, tid);
 
         return true;
     }
@@ -81,8 +87,7 @@ bool Allocation<Impl>::checkSignalsAndUpdate() {
     }
 
     if (allocationStatus == Blocked) {
-        DPRINTF(Rename, "[tid:%u]: Done blocking, switching to unblocking.\n",
-                tid);
+        DPRINTF(DAllocation, "Done blocking, switching to unblocking.\n");
 
         allocationStatus = Unblocking;
 
@@ -95,19 +100,16 @@ bool Allocation<Impl>::checkSignalsAndUpdate() {
         // Switch status to running if rename isn't being told to block or
         // squash this cycle.
         if (resumeSerialize) {
-            DPRINTF(Rename, "[tid:%u]: Done squashing, switching to serialize.\n",
-                    tid);
+            DPRINTF(DAllocation, "Done squashing, switching to serialize.\n");
 
             allocationStatus = SerializeStall;
             return true;
         } else if (resumeUnblocking) {
-            DPRINTF(Rename, "[tid:%u]: Done squashing, switching to unblocking.\n",
-                    tid);
+            DPRINTF(DAllocation, "Done squashing, switching to unblocking.\n");
             allocationStatus = Unblocking;
             return true;
         } else {
-            DPRINTF(Rename, "[tid:%u]: Done squashing, switching to running.\n",
-                    tid);
+            DPRINTF(DAllocation, "Done squashing, switching to running.\n");
 
             allocationStatus = Running;
             return false;
@@ -116,27 +118,27 @@ bool Allocation<Impl>::checkSignalsAndUpdate() {
 
     if (allocationStatus == SerializeStall) {
         // Stall ends once the ROB is free.
-        DPRINTF(Rename, "[tid:%u]: Done with serialize stall, switching to "
-                "unblocking.\n", tid);
+        DPRINTF(DAllocation, "Done with serialize stall, switching to "
+                "unblocking.\n");
 
         allocationStatus = Unblocking;
 
         unblock();
 
-        DPRINTF(Rename, "[tid:%u]: Processing instruction [%lli] with "
-                "PC %s.\n", tid, serial_inst->seqNum, serial_inst->pcState());
+        DPRINTF(DAllocation, "Processing instruction [%lli] with "
+                "PC %s.\n", serializeInst->seqNum, serializeInst->pcState());
 
         // Put instruction into queue here.
         serializeInst->clearSerializeBefore();
 
         if (!skidBuffer.empty()) {
-            skidBuffer.push_front();
+            skidBuffer.pop_front();
         } else {
-            insts.push_front();
+            insts.pop_front();
         }
 
-        DPRINTF(Rename, "[tid:%u]: Instruction must be processed by rename."
-                " Adding to front of list.\n", tid);
+        DPRINTF(DAllocation, "Instruction must be processed by rename."
+                " Adding to front of list.\n");
 
         serializeInst = nullptr;
 
@@ -144,7 +146,7 @@ bool Allocation<Impl>::checkSignalsAndUpdate() {
     }
 
     // If we've reached this point, we have not gotten any signals that
-    // cause rename to change its status.  Rename remains the same as before.
+    // cause rename to change its status.  Allocation remains the same as before.
     return false;
 }
 
@@ -153,16 +155,16 @@ bool Allocation<Impl>::checkStall() {
     bool ret_val = false;
 
     if (diewcStall) {
-        DPRINTF(Allocation,"[tid:%i]: Stall from DIEWC stage detected.\n", tid);
+        DPRINTF(DAllocation,"Stall from DIEWC stage detected.\n");
         ret_val = true;
 
     } else if (calcFreeDQEntries() <= 0) {
-        DPRINTF(Allocation,"[tid:%i]: Stall: DQ has 0 free entries.\n", tid);
+        DPRINTF(DAllocation,"Stall: DQ has 0 free entries.\n");
         incrFullStat(FullSource::DQ);
         ret_val = true;
 
     } else if (calcFreeLQEntries() <= 0 && calcFreeSQEntries() <= 0) {
-        DPRINTF(Allocation,"[tid:%i]: Stall: LSQ has 0 free entries.\n", tid);
+        DPRINTF(DAllocation,"Stall: LSQ has 0 free entries.\n");
         if (calcFreeLQEntries() <= 0) {
             incrFullStat(FullSource::LQ);
         } else {
@@ -172,9 +174,7 @@ bool Allocation<Impl>::checkStall() {
 
     } else if (allocationStatus == SerializeStall &&
                (!emptyDQ || instsInProgress)) {
-        DPRINTF(Allocation,"[tid:%i]: Stall: Serialize stall and ROB is not "
-                "empty.\n",
-                tid);
+        DPRINTF(DAllocation,"Stall: Serialize stall and ROB is not empty.\n");
         ret_val = true;
     }
 
@@ -193,12 +193,12 @@ void Allocation<Impl>::allocate(bool &status_change) {
         if (resumeSerialize) {
             resumeSerialize = false;
             block();
-            toDecode->allocationUnblock = false;
+            toDecode->renameUnblock[DummyTid] = false;
         } else if (allocationStatus == Unblocking) {
             if (resumeUnblocking) {
                 block();
                 resumeUnblocking = false;
-                toDecode->allocationUnblock = false;
+                toDecode->renameUnblock[DummyTid] = false;
             }
         }
     }
@@ -241,7 +241,7 @@ void Allocation<Impl>::allocateInsts() {
         inst = to_allocate.front();
         to_allocate.pop_front();
 
-        if (inst.isSquashed()) {
+        if (inst->isSquashed()) {
             ++allocatedSquashInsts;
             --inst_available;
             continue;
@@ -252,11 +252,11 @@ void Allocation<Impl>::allocateInsts() {
             break;
         }
 
-        if ((inst.isIprAccess() || inst.isSerializeBefore()) &&
-                !inst.isSerializeHandled()) {
-            if (!inst.isTempSerializeBefore()) {
+        if ((inst->isIprAccess() || inst->isSerializeBefore()) &&
+                !inst->isSerializeHandled()) {
+            if (!inst->isTempSerializeBefore()) {
                 allocatedSerilizing++;
-                inst.setSerializeHandled();
+                inst->setSerializeHandled();
             } else {
                 allocatedTempSerilizing++;
             }
@@ -268,7 +268,7 @@ void Allocation<Impl>::allocateInsts() {
 
         } else if ((inst->isStoreConditional() || inst->isSerializeAfter()) &&
                    !inst->isSerializeHandled()) {
-            DPRINTF(Rename, "Serialize after instruction encountered.\n");
+            DPRINTF(DAllocation, "Serialize after instruction encountered.\n");
 
             allocatedSerializing++;
 
@@ -309,7 +309,7 @@ void Allocation<Impl>::allocateInsts() {
 
     if (blockThisCycle) {
         block();
-        toDecode->allocationUnblock = false;
+        toDecode->renameUnblock[DummyTid] = false;
     }
 }
 
@@ -387,7 +387,7 @@ DQPointer Allocation<Impl>::PositionfromUint(unsigned u) {
     unsigned index = u & indexMask;
     unsigned bank = (u >> indexWidth) & bankMask;
     unsigned group = 0; //todo group is not supported yet
-    return DQPointer{true, group, bank, index, 0};
+    return DQPointer(true, group, bank, index, 0);
 }
 
 template<class Impl>
@@ -400,8 +400,8 @@ bool Allocation<Impl>::block() {
     skidInsert();
     if (allocationStatus != Blocked) {
         if (resumeUnblocking || allocationStatus != Unblocking) {
-            toDecode->allocationBlock = true;
-            toDecode->allocationUnblock = false;
+            toDecode->renameBlock[DummyTid] = true;
+            toDecode->renameUnblock[DummyTid] = false;
             wroteToTimeBuffer = true;
         }
         if (allocationStatus != SerializeStall) {
@@ -415,7 +415,7 @@ bool Allocation<Impl>::block() {
 template<class Impl>
 bool Allocation<Impl>::unblock() {
     if (skidBuffer.empty() && allocationStatus != SerializeStall) {
-        toDecode->allocationUnblock = true;
+        toDecode->renameUnblock[DummyTid] = true;
         wroteToTimeBuffer = true;
         allocationStatus = Running;
         return true;
@@ -425,7 +425,7 @@ bool Allocation<Impl>::unblock() {
 
 template<class Impl>
 void Allocation<Impl>::updateStatus() {
-    bool any_ub = allocationStatus = Unblocking;
+    bool any_ub = allocationStatus == Unblocking;
     if (any_ub) {
         if (overallStatus == Inactive) {
             overallStatus = Active;
@@ -454,11 +454,11 @@ void Allocation<Impl>::updateInProgress() {
 template<class Impl>
 void Allocation<Impl>::readFreeEntries() {
     if (fromDIEWC->diewcInfo.usedDQ) {
-        freeEntries.dqEntries = fromDIEWC->diewcInfo.freeDQEntrues;
+        freeEntries.dqEntries = fromDIEWC->diewcInfo.freeDQEntries;
     }
     if (fromDIEWC->diewcInfo.usedLSQ) {
-        freeEntries.lqEntries = fromDIEWC->diewcInfo.freeLQEntrues;
-        freeEntries.sqEntries = fromDIEWC->diewcInfo.freeSQEntrues;
+        freeEntries.lqEntries = fromDIEWC->diewcInfo.freeLQEntries;
+        freeEntries.sqEntries = fromDIEWC->diewcInfo.freeSQEntries;
     }
 }
 
@@ -495,4 +495,46 @@ int Allocation<Impl>::calcFreeSQEntries() {
     return num_free;
 }
 
+template<class Impl>
+Allocation<Impl>::Allocation(O3CPU* cpu, DerivFFCPUParams *params)
+        : cpu(cpu),
+          instsInProgress(0),
+          loadsInProgress(0),
+          storesInProgress(0),
+          diewcStall(false),
+          emptyDQ(false),
+          serializeInst(nullptr),
+          serializeOnNextInst(false),
+          flatHead(0),
+          flatTail(0),
+          indexWidth((unsigned) ceilLog2(params->DQDepth)),
+          indexMask((unsigned) (1 << indexWidth) - 1),
+          bankMask((unsigned) (1 << ceilLog2(params->numDQBanks)) - 1),
+          dqSize((unsigned) params->DQDepth * params->numDQBanks)
+{
+
+    skidBufferMax = static_cast<unsigned int>(
+            (params->decodeToRenameDelay + 1) * params->decodeWidth);
 }
+
+template<class Impl>
+std::string Allocation<Impl>::name() const {
+    return cpu->name() + ".allocation";
+}
+
+template<class Impl>
+void Allocation<Impl>::incrFullStat(Allocation::FullSource source) {
+
+}
+
+template<class Impl>
+void Allocation<Impl>::serializeAfter(Allocation::InstQueue &insts) {
+
+}
+
+}
+
+
+#include "cpu/forwardflow/isa_specific.hh"
+
+template class FF::Allocation<FFCPUImpl>;

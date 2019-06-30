@@ -46,6 +46,7 @@
 #include "base/cp_annotate.hh"
 #include "cpu/forwardflow/dyn_inst.hh"
 #include "debug/O3PipeView.hh"
+#include "dyn_inst.hh"
 #include "sim/full_system.hh"
 
 namespace FF{
@@ -248,6 +249,39 @@ BaseO3DynInst<Impl>::syscall(int64_t callnum, Fault *fault)
     if (!(curPC == newPC)) {
         this->pcState(newPC);
     }
+}
+
+template<class Impl>
+bool BaseO3DynInst<Impl>::opFulfilled(unsigned i)
+{
+    return !hasOp[i] || opReady[i];
+}
+
+template<class Impl>
+bool BaseO3DynInst<Impl>::memOpFulfilled()
+{
+    return !hasMemDep || memDepReady;
+}
+
+template<class Impl>
+bool BaseO3DynInst<Impl>::miscOpFulfilled()
+{
+    return !hasMiscDep || miscDepReady;
+}
+
+template<class Impl>
+FFRegValue BaseO3DynInst<Impl>::getDestValue()
+{
+    FFRegValue val;
+    if (this->isFloating()) {
+        val.i = this->cpu->readFloatReg(dqPosition);
+
+    } else if (this->isInteger()) {
+        val.i = this->cpu->readIntReg(dqPosition);
+    } else {
+        panic("not ready for other instructions!");
+    }
+    return val;
 }
 
 }

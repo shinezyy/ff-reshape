@@ -6,7 +6,15 @@
 #define __FF_ARCH_REGFILE_HH__
 
 #include <tuple>
-#include "dq_pointer.hh"
+#include <unordered_map>
+
+#include "cpu/forwardflow/comm.hh"
+#include "cpu/forwardflow/dq_pointer.hh"
+#include "cpu/reg_class.hh"
+
+//#include "cpu/forwardflow/dyn_inst.hh"
+
+struct DerivFFCPUParams;
 
 namespace FF {
 
@@ -18,13 +26,12 @@ private:
     //Typedefs from Impl
     typedef typename Impl::CPUPol CPUPol;
     typedef typename Impl::DynInstPtr DynInstPtr;
+//    using DynInstPtr = BaseO3DynInst<Impl>*;
     typedef typename Impl::O3CPU O3CPU;
 
-    const unsigned WritePorts, ReadPorts;
-
-    unsigned writes, reads;
-
-    bool makeCheckPoint(DynInstPtr &inst);
+//    const unsigned WritePorts, ReadPorts;
+//
+//    unsigned writes, reads;
 
     // data structures here:
 
@@ -32,21 +39,52 @@ private:
     // newest value in RF?
     // arch reg pointers: last use and last def
 
+    std::unordered_map<int, FFRegValue> intArchRF;
+    std::unordered_map<int, FFRegValue> floatArchRF;
 
+    using RenameMap = std::unordered_map<RegId, DQPointer>;
+    RenameMap renameMap;
+
+    using Scoreboard = std::unordered_map<RegId, bool>;
+    Scoreboard scoreboard;
+
+    struct Checkpoint {
+        RenameMap renameMap;
+        Scoreboard scoreboard;
+    };
+    std::unordered_map<InstSeqNum, Checkpoint> cpts;
+
+    const unsigned MaxCheckpoints;
+
+    O3CPU *cpu;
 public:
     bool commitInst(DynInstPtr &inst);
 
     // todo: update map to tell its parent or sibling where to forward
-    PointerPair recordAndUpdateMap(DynInstPtr &inst);
+    std::list<PointerPair> recordAndUpdateMap(DynInstPtr &inst);
 
-    void clearCounters();
-
-    bool checkRWLimit();
+//    void clearCounters();
+//
+//    bool checkRWLimit();
 
     bool checkpointsFull();
 
+    bool makeCheckPoint(DynInstPtr &inst);
+
     void recoverCPT(DynInstPtr &inst);
 
+    void recoverCPT(InstSeqNum &num);
+
+    explicit ArchState(DerivFFCPUParams *);
+
+    uint64_t readIntReg(int reg_idx);
+    void setIntReg(int reg_idx, uint64_t);
+
+    double readFloatReg(int reg_idx);
+    void setFloatReg(int reg_idx, double);
+
+    uint64_t readFloatRegBits(int reg_idx);
+    void setFloatRegBits(int reg_idx, uint64_t);
 };
 
 }

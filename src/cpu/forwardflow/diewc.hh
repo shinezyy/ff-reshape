@@ -7,12 +7,15 @@
 
 #include <queue>
 
-#include "cpu/forwardflow/cpu.hh"
-#include "cpu/forwardflow/dataflow_queue.hh"
-#include "cpu/forwardflow/dyn_inst.hh"
-#include "cpu/forwardflow/lsq.hh"
+#include "base/statistics.hh"
+#include "config/the_isa.hh"
+#include "cpu/forwardflow/comm.hh"
+//#include "cpu/forwardflow/dataflow_queue.hh"
+//#include "cpu/forwardflow/lsq.hh"
 #include "cpu/forwardflow/thread_state.hh"
 #include "cpu/timebuf.hh"
+
+struct DerivFFCPUParams;
 
 namespace FF{
 
@@ -21,43 +24,47 @@ class FFDIEWC //dispatch, issue, execution, writeback, commit
 {
 
 public:
+    typedef typename Impl::DynInstPtr DynInstPtr;
+//    using DynInstPtr = BaseO3DynInst<Impl>*;
     //Typedefs from Impl
     typedef typename Impl::CPUPol CPUPol;
 
-//    typedef typename Impl::DynInstPtr DynInstPtr;
-    using DynInstPtr = BaseO3DynInst<Impl>*;
-//    typedef typename Impl::O3CPU XFFCPU;
-    using XFFCPU = FFCPU<Impl>;
-//    typedef typename CPUPol::LSQ XLSQ;
-    using XLSQ = LSQ<Impl>;
-//    typedef typename CPUPol::DataflowQueues DataflowQueues;
-    using XDataflowQueues = DataflowQueues<Impl>;
+    typedef typename Impl::O3CPU XFFCPU;
+//    using XFFCPU = FFCPU<Impl>;
+    typedef typename CPUPol::LSQ XLSQ;
+//    using XLSQ = LSQ<Impl>;
+    typedef typename CPUPol::DataflowQueues XDataflowQueues;
+//    using XDataflowQueues = DataflowQueues<Impl>;
 
     typedef typename CPUPol::FFAllocationStruct AllocationStruct;
-    typedef typename CPUPol::DIEWC2DIEWC DIEWC2DIEWC;
+//    typedef typename CPUPol::DIEWC2DIEWC DIEWC2DIEWC;
     typedef typename CPUPol::TimeStruct TimeStruct;
+    typedef typename CPUPol::FetchStruct FetchStruct;
     typedef typename CPUPol::ArchState ArchState;
     typedef typename CPUPol::FUWrapper FUWrapper;
 
     typedef O3ThreadState<Impl> Thread;
 
 private:
+    XFFCPU *cpu;
+
     /** Decode instruction queue interface. */
     TimeBuffer<AllocationStruct> *allocationQueue;
 
     /** Wire to get decode's output from decode queue. */
     typename TimeBuffer<AllocationStruct>::wire fromAllocation;
 
-    TimeBuffer<DIEWC2DIEWC> *localQueue;
+//    TimeBuffer<DIEWC2DIEWC> *localQueue;
 
-    typename TimeBuffer<DIEWC2DIEWC>::wire toNextCycle;
-
-    typename TimeBuffer<DIEWC2DIEWC>::wire fromLastCycle;
 
     TimeBuffer<TimeStruct> *backwardTB;
 
+    typename TimeBuffer<TimeStruct>::wire toNextCycle;
+
+    typename TimeBuffer<TimeStruct>::wire fromLastCycle;
+
     typename TimeBuffer<TimeStruct>::wire toFetch;
-    typename TimeBuffer<TimeStruct>::wire fromCommit;
+
     typename TimeBuffer<TimeStruct>::wire toAllocation;
 
     /** Variable that tracks if decode has written to the time buffer this
@@ -68,6 +75,7 @@ private:
     /** Structures whose free entries impact the amount of instructions that
      * can be renamed.
      */
+
     struct FreeEntries {
         unsigned dqEntries;
         unsigned lqEntries;
@@ -85,8 +93,6 @@ private:
 
     ArchState archState;
 
-    XLSQ ldstQueue;
-
     FUWrapper fuWrapper;
 
     typedef std::queue<DynInstPtr> InstQueue;
@@ -98,10 +104,33 @@ private:
     InstQueue insts_to_commit;
 
 public:
+    XLSQ ldstQueue;
+
     void tick();
 
-private:
     void squash(DynInstPtr &inst);
+
+    void squashInFlight();
+
+    unsigned numInWindow();
+
+    void takeOverFrom();
+
+    void drainSanityCheck() const;
+
+    bool isDrained() const;
+
+    void drain();
+
+    void drainResume();
+
+    void startupStage();
+
+    void regProbePoints();
+
+    void resetEntries();
+
+private:
 
     void checkSignalsAndUpdate();
 
@@ -163,8 +192,6 @@ private:
 
     bool dqSqushing;
 
-    void clearAllocatedInts();
-
     bool checkStall();
 
     void block();
@@ -179,18 +206,7 @@ private:
     unsigned dispatchWidth;
 
     // todo: change them from int to Stat
-    int dispSquashedInsts;
-    int dqFullEvents;
-    int lqFullEvents;
-    int sqFullEvents;
-    int dispaLoads;
-    int dispStores;
-    int dispNonSpecInsts;
-    int dispatchedInsts;
-    int blockCycles;
-    int squashCycles;
-    int runningCycles;
-    int unblockCycles;
+
     bool updatedQueues;
 
     unsigned skidBufferMax;
@@ -199,17 +215,19 @@ private:
 
     bool commitHead(DynInstPtr &head_inst, unsigned inst_num);
 
-    int commitNonSpecStalls;
     bool committedStores;
     bool hasStoresToWB;
 
     Thread *thread;
 
-    XFFCPU *cpu;
-
+public:
     void generateTrapEvent(ThreadID tid, Fault inst_fault);
 
+    void generateTCEvent(ThreadID tid);
+
     void processTrapEvent(ThreadID tid);
+
+private:
 
     bool trapInFlight;
 
@@ -225,9 +243,11 @@ private:
 
     DynInstPtr &getHeadInst();
 
-    int commitSquashedInsts;
+
     bool changedDQNumEntries;
-    ExecContext::PCState pc;
+
+    TheISA::PCState pc;
+
     bool canHandleInterrupts;
     InstSeqNum lastCommitedSeqNum;
 
@@ -244,7 +264,131 @@ private:
 
     InstSeqNum youngestSeqNum;
 
-    int branchMispredicts;
+    /** Probe points. */
+    ProbePointArg<DynInstPtr> *ppMispredict;
+
+    ProbePointArg<DynInstPtr> *ppDispatch;
+    /** To probe when instruction execution begins. */
+    ProbePointArg<DynInstPtr> *ppExecute;
+    /** To probe when instruction execution is complete. */
+    ProbePointArg<DynInstPtr> *ppToCommit;
+    ProbePointArg<DynInstPtr> *ppCommit;
+    ProbePointArg<DynInstPtr> *ppCommitStall;
+    ProbePointArg<DynInstPtr> *ppSquash;
+
+    /** Distribution of the number of committed instructions each cycle. */
+    Stats::Distribution numCommittedDist;
+    /** Number of cycles where the commit bandwidth limit is reached. */
+    Stats::Scalar commitEligibleSamples;
+    /** Committed instructions by instruction type (OpClass) */
+    Stats::Vector statCommittedInstType;
+
+    bool tcSquash;
+
+    /** Handles squashing due to a trap. */
+    void squashFromTrap();
+
+    /** Handles squashing due to an TC write. */
+    void squashFromTC();
+
+    /** Handles a squash from a squashAfter() request. */
+    void squashFromSquashAfter();
+
+    /** Squashes all in flight instructions. */
+    void squashAll();
+
+    void clearAllocatedInsts();
+public:
+    FFDIEWC(XFFCPU*, DerivFFCPUParams *);
+
+    void cacheUnblocked();
+
+     /** Tells memory dependence unit that a memory instruction needs to be
+     * rescheduled. It will re-execute once replayMemInst() is called.
+     */
+    void rescheduleMemInst(DynInstPtr &inst);
+
+    /** Re-executes all rescheduled memory instructions. */
+    void replayMemInst(DynInstPtr &inst);
+
+    /** Moves memory instruction onto the list of cache blocked instructions */
+    void blockMemInst(DynInstPtr &inst);
+
+    // this
+    void instToWriteback(DynInstPtr &inst);
+
+    bool updateLSQNextCycle;
+
+    void activityThisCycle();
+
+    void wakeCPU();
+
+    void checkMisprediction(DynInstPtr &inst);
+
+    std::string name() const;
+
+    void regStats();
+
+        /** Sets the PC of a specific thread. */
+    void pcState(const TheISA::PCState &val)
+    { pc = val; }
+
+    /** Reads the PC of a specific thread. */
+    TheISA::PCState pcState() { return pc; }
+
+    /** Returns the PC of a specific thread. */
+    Addr instAddr() { return pc.instAddr(); }
+
+    /** Returns the next PC of a specific thread. */
+    Addr nextInstAddr() { return pc.nextInstAddr(); }
+
+    /** Reads the micro PC of a specific thread. */
+    Addr microPC() { return pc.microPC(); }
+
+    /** Sets pointer to list of active threads. */
+    void setActiveThreads(std::list<ThreadID> *at_ptr);
+
+    /** Sets the main time buffer pointer, used for backwards communication. */
+    void setTimeBuffer(TimeBuffer<TimeStruct> *tb_ptr);
+
+    void setFetchQueue(TimeBuffer<FetchStruct> *fq_ptr);
+
+    /** Sets the list of threads. */
+    void setThreads(std::vector<Thread *> &threads);
+
+    /** Deschedules a thread from scheduling */
+    void deactivateThread(ThreadID tid);
+
+    DynInstPtr readHeadInst(ThreadID tid);
+
+private:
+    void updateComInstStats(DynInstPtr &ffdiewc);
+
+    void insertPointerPairs(std::list<PointerPair>);
+
+    void squashDueToBranch(DynInstPtr &ffdiewc);
+
+    std::list <ThreadID> *activeThreads;
+public:
+    // stats
+    Stats::Scalar dispSquashedInsts;
+    Stats::Scalar dqFullEvents;
+    Stats::Scalar lqFullEvents;
+    Stats::Scalar sqFullEvents;
+    Stats::Scalar dispaLoads;
+    Stats::Scalar dispStores;
+    Stats::Scalar dispNonSpecInsts;
+    Stats::Scalar dispatchedInsts;
+    Stats::Scalar blockCycles;
+    Stats::Scalar squashCycles;
+    Stats::Scalar runningCycles;
+    Stats::Scalar unblockCycles;
+    Stats::Scalar commitNonSpecStalls;
+    Stats::Scalar commitSquashedInsts;
+    Stats::Scalar branchMispredicts;
+    Stats::Scalar predictedTakenIncorrect;
+    Stats::Scalar predictedNotTakenIncorrect;
+
 };
 
 

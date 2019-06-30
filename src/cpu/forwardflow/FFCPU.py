@@ -202,4 +202,14 @@ class DerivFFCPU(BaseCPU):
     numOperands = Param.Unsigned(4,
             "number of dest and src operands for each instruction")
     numDQBanks = Param.Unsigned(4, "number of DQ banks per group")
-    pendingQueueDepth = Param.Unsigned(8, "depth of pending pointers")
+
+    pendingQueueDepth = Param.Unsigned(8, "max depth of pending wakeup pointers")
+
+    pendingWakeupQueueDepth = Param.Unsigned(8, "depth of pending wakeup pointers")
+    pendingFwPointerQueueDepth = Param.Unsigned(8, "depth of pending forward pointers")
+
+    PendingWakeupThreshold = Param.Unsigned(8*6, "PendingWakeupThreshold ")
+    PendingWakeupMaxThreshold = Param.Unsigned(8, "PendingWakeupMaxThreshold ")
+    PendingFwPointerThreshold = Param.Unsigned(8*6, "PendingFwPointerThreshold ")
+
+    MaxCheckpoints = Param.Unsigned(16, "Max pending branch instructions")

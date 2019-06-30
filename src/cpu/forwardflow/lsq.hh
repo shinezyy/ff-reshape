@@ -61,7 +61,7 @@ class LSQ {
   public:
     typedef typename Impl::O3CPU O3CPU;
     typedef typename Impl::DynInstPtr DynInstPtr;
-    typedef typename Impl::CPUPol::IEW IEW;
+    typedef typename Impl::CPUPol::DIEWC IEW;
     typedef typename Impl::CPUPol::LSQUnit LSQUnit;
 
     /** SMT policy. */

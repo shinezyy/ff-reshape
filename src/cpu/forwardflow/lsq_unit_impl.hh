@@ -630,8 +630,9 @@ LSQUnit<Impl>::executeLoad(DynInstPtr &inst)
         // realizes there is activity.  Mark it as executed unless it
         // is a strictly ordered load that needs to hit the head of
         // commit.
-        if (!inst->readPredicate())
-            inst->forwardOldRegs();
+        if (!inst->readPredicate()) {
+            panic("No predicate = false in RV\n");
+        }
         DPRINTF(LSQUnit, "Load [sn:%lli] not executed from %s\n",
                 inst->seqNum,
                 (load_fault != NoFault ? "fault" : "predication"));
@@ -639,7 +640,7 @@ LSQUnit<Impl>::executeLoad(DynInstPtr &inst)
             inst->isAtCommit()) {
             inst->setExecuted();
         }
-        iewStage->instToCommit(inst);
+        iewStage->instToWriteback(inst);
         iewStage->activityThisCycle();
     } else {
         assert(inst->effAddrValid());
@@ -681,7 +682,7 @@ LSQUnit<Impl>::executeStore(DynInstPtr &store_inst)
     if (!store_inst->readPredicate()) {
         DPRINTF(LSQUnit, "Store [sn:%lli] not executed from predication\n",
                 store_inst->seqNum);
-        store_inst->forwardOldRegs();
+        panic("No predicate = false in RV\n");
         return store_fault;
     }
 
@@ -1137,7 +1138,7 @@ LSQUnit<Impl>::writeback(DynInstPtr &inst, PacketPtr pkt)
     }
 
     // Need to insert instruction into queue to commit
-    iewStage->instToCommit(inst);
+    iewStage->instToWriteback(inst);
 
     iewStage->activityThisCycle();
 

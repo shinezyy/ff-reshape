@@ -112,7 +112,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
   protected:
     /** Explicitation of dependent names. */
     using BaseDynInst<Impl>::cpu;
-    using BaseDynInst<Impl>::_srcRegIdx;
+    using BaseDynInst<Impl>::_srcInstPointer;
     using BaseDynInst<Impl>::_destRegIdx;
 
     /** Values to be written to the destination misc. registers. */
@@ -211,43 +211,6 @@ class BaseO3DynInst : public BaseDynInst<Impl>
         this->thread->noSquashFromTC = no_squash_from_TC;
     }
 
-    void forwardOldRegs()
-    {
-
-        for (int idx = 0; idx < this->numDestRegs(); idx++) {
-            PhysRegIdPtr prev_phys_reg = this->prevDestRegIdx(idx);
-            const RegId& original_dest_reg =
-                this->staticInst->destRegIdx(idx);
-            switch (original_dest_reg.classValue()) {
-              case IntRegClass:
-                this->setIntRegOperand(this->staticInst.get(), idx,
-                               this->cpu->readIntReg(prev_phys_reg));
-                break;
-              case FloatRegClass:
-                this->setFloatRegOperandBits(this->staticInst.get(), idx,
-                               this->cpu->readFloatRegBits(prev_phys_reg));
-                break;
-              case VecRegClass:
-                this->setVecRegOperand(this->staticInst.get(), idx,
-                               this->cpu->readVecReg(prev_phys_reg));
-                break;
-              case VecElemClass:
-                this->setVecElemOperand(this->staticInst.get(), idx,
-                               this->cpu->readVecElem(prev_phys_reg));
-                break;
-              case CCRegClass:
-                this->setCCRegOperand(this->staticInst.get(), idx,
-                               this->cpu->readCCReg(prev_phys_reg));
-                break;
-              case MiscRegClass:
-                // no need to forward misc reg values
-                break;
-              default:
-                panic("Unknown register class: %d",
-                        (int)original_dest_reg.classValue());
-            }
-        }
-    }
     /** Calls hardware return from error interrupt. */
     Fault hwrei();
     /** Traps to handle specified fault. */
@@ -272,23 +235,23 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
     IntReg readIntRegOperand(const StaticInst *si, int idx)
     {
-        return this->cpu->readIntReg(this->_srcRegIdx[idx]);
+        return this->cpu->readIntReg(this->_srcInstPointer[idx]);
     }
 
     FloatReg readFloatRegOperand(const StaticInst *si, int idx)
     {
-        return this->cpu->readFloatReg(this->_srcRegIdx[idx]);
+        return this->cpu->readFloatReg(this->_srcInstPointer[idx]);
     }
 
     FloatRegBits readFloatRegOperandBits(const StaticInst *si, int idx)
     {
-        return this->cpu->readFloatRegBits(this->_srcRegIdx[idx]);
+        return this->cpu->readFloatRegBits(this->_srcInstPointer[idx]);
     }
 
     const VecRegContainer&
     readVecRegOperand(const StaticInst *si, int idx) const
     {
-        return this->cpu->readVecReg(this->_srcRegIdx[idx]);
+        panic("No Vec support in RV-ForwardFlow");
     }
 
     /**
@@ -297,7 +260,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     VecRegContainer&
     getWritableVecRegOperand(const StaticInst *si, int idx)
     {
-        return this->cpu->getWritableVecReg(this->_destRegIdx[idx]);
+        panic("No Vec support in RV-ForwardFlow");
     }
 
     /** Vector Register Lane Interfaces. */
@@ -306,28 +269,28 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     ConstVecLane8
     readVec8BitLaneOperand(const StaticInst *si, int idx) const
     {
-        return cpu->template readVecLane<uint8_t>(_srcRegIdx[idx]);
+        panic("No Vec support in RV-ForwardFlow");
     }
 
     /** Reads source vector 16bit operand. */
     ConstVecLane16
     readVec16BitLaneOperand(const StaticInst *si, int idx) const
     {
-        return cpu->template readVecLane<uint16_t>(_srcRegIdx[idx]);
+        panic("No Vec support in RV-ForwardFlow");
     }
 
     /** Reads source vector 32bit operand. */
     ConstVecLane32
     readVec32BitLaneOperand(const StaticInst *si, int idx) const
     {
-        return cpu->template readVecLane<uint32_t>(_srcRegIdx[idx]);
+        panic("No Vec support in RV-ForwardFlow");
     }
 
     /** Reads source vector 64bit operand. */
     ConstVecLane64
     readVec64BitLaneOperand(const StaticInst *si, int idx) const
     {
-        return cpu->template readVecLane<uint64_t>(_srcRegIdx[idx]);
+        panic("No Vec support in RV-ForwardFlow");
     }
 
     /** Write a lane of the destination vector operand. */
@@ -335,42 +298,42 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     void
     setVecLaneOperandT(const StaticInst *si, int idx, const LD& val)
     {
-        return cpu->template setVecLane(_destRegIdx[idx], val);
+        panic("No Vec support in RV-ForwardFlow");
     }
     virtual void
     setVecLaneOperand(const StaticInst *si, int idx,
             const LaneData<LaneSize::Byte>& val)
     {
-        return setVecLaneOperandT(si, idx, val);
+        panic("No Vec support in RV-ForwardFlow");
     }
     virtual void
     setVecLaneOperand(const StaticInst *si, int idx,
             const LaneData<LaneSize::TwoByte>& val)
     {
-        return setVecLaneOperandT(si, idx, val);
+        panic("No Vec support in RV-ForwardFlow");
     }
     virtual void
     setVecLaneOperand(const StaticInst *si, int idx,
             const LaneData<LaneSize::FourByte>& val)
     {
-        return setVecLaneOperandT(si, idx, val);
+        panic("No Vec support in RV-ForwardFlow");
     }
     virtual void
     setVecLaneOperand(const StaticInst *si, int idx,
             const LaneData<LaneSize::EightByte>& val)
     {
-        return setVecLaneOperandT(si, idx, val);
+        panic("No Vec support in RV-ForwardFlow");
     }
     /** @} */
 
     VecElem readVecElemOperand(const StaticInst *si, int idx) const
     {
-        return this->cpu->readVecElem(this->_srcRegIdx[idx]);
+        panic("No Vec support in RV-ForwardFlow");
     }
 
     CCReg readCCRegOperand(const StaticInst *si, int idx)
     {
-        return this->cpu->readCCReg(this->_srcRegIdx[idx]);
+        panic("No CC support in RV-ForwardFlow");
     }
 
     /** @todo: Make results into arrays so they can handle multiple dest
@@ -399,22 +362,18 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     setVecRegOperand(const StaticInst *si, int idx,
                      const VecRegContainer& val)
     {
-        this->cpu->setVecReg(this->_destRegIdx[idx], val);
-        BaseDynInst<Impl>::setVecRegOperand(si, idx, val);
+        panic("No Vec support in RV-ForwardFlow");
     }
 
     void setVecElemOperand(const StaticInst *si, int idx,
                            const VecElem val)
     {
-        int reg_idx = idx;
-        this->cpu->setVecElem(this->_destRegIdx[reg_idx], val);
-        BaseDynInst<Impl>::setVecElemOperand(si, idx, val);
+        panic("No Vec support in RV-ForwardFlow");
     }
 
     void setCCRegOperand(const StaticInst *si, int idx, CCReg val)
     {
-        this->cpu->setCCReg(this->_destRegIdx[idx], val);
-        BaseDynInst<Impl>::setCCRegOperand(si, idx, val);
+        panic("No CC support in RV-ForwardFlow");
     }
 
 #if THE_ISA == MIPS_ISA
@@ -433,8 +392,23 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 public:
     std::array<DQPointer, 4> pointers;
 
+    std::array<bool, 4> hasOp;
+    std::array<bool, 4> opReady;
+    bool opFulfilled(unsigned);
+
+    bool hasMemDep;
+    bool memDepReady;
+    bool memOpFulfilled();
+
+    bool hasMiscDep;
+    bool miscDepReady;
+    bool miscOpFulfilled();
+
     DQPointer dqPosition;
 
+    FFRegValue getDestValue();
+
+    SingleFUWrapper *sfuWrapper;
 };
 
 }

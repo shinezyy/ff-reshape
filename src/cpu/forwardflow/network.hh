@@ -11,13 +11,15 @@
 
 #include <boost/dynamic_bitset.hpp>
 
+#include "base/intmath.hh"
+
 namespace FF{
 
 using std::tie;
 using std::tuple;
 
 template <class T>
-struct Packet{
+struct DQPacket{
     bool valid{};
     T payload;
     uint32_t source{};
@@ -30,7 +32,7 @@ public:
 
     CrossBar(uint32_t bits, uint32_t stage, bool ascendPrio);
 
-    tuple<Packet<T>*, Packet<T>*> cross(Packet<T>*, Packet<T>*);
+    tuple<DQPacket<T>*, DQPacket<T>*> cross(DQPacket<T>*, DQPacket<T>*);
 
 protected:
     const uint32_t bits;
@@ -45,14 +47,129 @@ class OmegaNetwork {
     std::vector<std::vector<CrossBar<T>>> switches;
 
 public:
-    std::vector<Packet<T>*> select(std::vector<Packet<T>*> &);
+    std::vector<DQPacket<T>*> select(std::vector<DQPacket<T>*> &);
 
     OmegaNetwork(uint32_t size, bool ascendPrio);
 
-    void connect(std::vector<Packet<T>*>*, std::vector<Packet<T>*>*);
+    void connect(std::vector<DQPacket<T>*>*, std::vector<DQPacket<T>*>*);
 
-    void swap(std::vector<Packet<T>*>*&, std::vector<Packet<T>*>*&);
+    void swap(std::vector<DQPacket<T>*>*&, std::vector<DQPacket<T>*>*&);
 };
+
+}
+
+namespace FF{
+using namespace std;
+
+template<class T>
+CrossBar<T>::CrossBar(uint32_t bits, uint32_t stage, bool ascendPrio)
+:bits(bits),
+stage(stage),
+ascendPrio(ascendPrio)
+{
+
+}
+
+template<class T>
+tuple<DQPacket<T>*, DQPacket<T>*>
+CrossBar<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
+{
+    int low = 1- ascendPrio;
+    int high = ascendPrio;
+    int direction_bit = bits - stage - 1;
+
+    DQPacket<T> * inputs[2];
+    inputs[0] = input0;
+    inputs[1] = input1;
+
+    DQPacket<T> * outputs[2];
+    bool low_granted;
+    low_granted = false;
+
+    int high_demand = inputs[high]->destBits[direction_bit];
+    int low_demand = inputs[low]->destBits[direction_bit];
+
+    if (inputs[high]->valid) {
+        outputs[high_demand] = inputs[high];
+        low_granted = high_demand != low_demand;
+    }
+    if (low_granted || !inputs[high]->valid) {
+        outputs[low_demand] = inputs[low];
+    }
+
+    return make_tuple(outputs[0], outputs[1]);
+}
+
+
+
+template<class T>
+OmegaNetwork<T>::OmegaNetwork(uint32_t size, bool ascendPrio)
+        :
+        size(size)
+{
+    for (auto y = 0; y < size/2; y++) {
+        switches.push_back(vector<CrossBar<T>>());
+        vector<CrossBar<T>> &row = switches.back();
+        for (auto x = 0; x < ceilLog2(size); x++) {
+            row.push_back(CrossBar<T>(static_cast<uint32_t>(ceilLog2(size)),
+                    static_cast<uint32_t>(x), ascendPrio));
+        }
+    }
+    assert(size >= 2);
+    assert(isPowerOf2(size));
+}
+
+template<class T>
+std::vector<DQPacket<T> *>
+        OmegaNetwork<T>::select(std::vector<DQPacket<T> *> &_inputs)
+{
+    array<vector<DQPacket<T>*>, 2> buffer;
+    fill(buffer.begin(), buffer.end(), vector<DQPacket<T>*>(size));
+
+    vector<DQPacket<T>*> *inputs = &buffer[0], *outputs = &buffer[1];
+//    vector<bool> grants(size, false);
+
+    for (uint32_t x = 0; x < ceilLog2(size); x++) {
+        connect(inputs, outputs);
+        swap(inputs, outputs);
+        for (uint32_t y = 0; y < size/2; y += 2) {
+            tie((*outputs)[y], (*outputs)[y+1]) =
+                    switches[y/2][x].cross((*inputs)[y], (*inputs)[y+1]);
+        }
+        swap(inputs, outputs);
+    }
+
+//    for (int i = 0; i < size; i++) {
+//        if ((*inputs)[i]->valid) {
+//            grants[(*inputs)[i]->source] = true;
+//        }
+//    }
+
+    return *inputs;
+}
+
+template<class T>
+void OmegaNetwork<T>::connect(vector<DQPacket<T> *> *left,
+                              std::vector<DQPacket<T>*> *right)
+{
+    assert(left->size() == right->size());
+    assert(left->size() > 0);
+    for (uint32_t i = 0; i < size/2; i++) {
+        (*right)[2*i] = (*left)[i];
+    }
+    for (uint32_t i = 0; i < size/2; i++) {
+        (*right)[2*i + 1] = (*left)[i + size/2];
+    }
+}
+
+template<class T>
+void
+OmegaNetwork<T>::swap(vector<DQPacket<T> *> *&l, vector<DQPacket<T> *> *&r)
+{
+    auto tmp = l;
+    l = r;
+    r = tmp;
+}
 
 }
 #endif //__FF_NETWORK_HH__

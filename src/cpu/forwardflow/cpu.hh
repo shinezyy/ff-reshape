@@ -61,11 +61,11 @@
 #include "cpu/base.hh"
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/cpu_policy.hh"
-#include "cpu/forwardflow/scoreboard.hh"
 #include "cpu/forwardflow/thread_context.hh"
 #include "cpu/forwardflow/thread_state.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/timebuf.hh"
+#include "enums/VecRegRenameMode.hh"
 #include "params/DerivFFCPU.hh"
 #include "sim/process.hh"
 
@@ -403,71 +403,23 @@ class FFCPU : public BaseO3CPU
     void setMiscReg(int misc_reg, const TheISA::MiscReg &val,
             ThreadID tid);
 
-    uint64_t readIntReg(PhysRegIdPtr phys_reg);
-
-    TheISA::FloatReg readFloatReg(PhysRegIdPtr phys_reg);
-
-    TheISA::FloatRegBits readFloatRegBits(PhysRegIdPtr phys_reg);
-
-    const VecRegContainer& readVecReg(PhysRegIdPtr reg_idx) const;
-
-    /**
-     * Read physical vector register for modification.
-     */
-    VecRegContainer& getWritableVecReg(PhysRegIdPtr reg_idx);
-
-    /**
-     * Read physical vector register lane
-     */
-    template<typename VecElem, int LaneIdx>
-    VecLaneT<VecElem, true>
-    readVecLane(PhysRegIdPtr phys_reg) const
-    {
-        vecRegfileReads++;
-        return regFile.readVecLane<VecElem, LaneIdx>(phys_reg);
-    }
-
-    /**
-     * Read physical vector register lane
-     */
-    template<typename VecElem>
-    VecLaneT<VecElem, true>
-    readVecLane(PhysRegIdPtr phys_reg) const
-    {
-        vecRegfileReads++;
-        return regFile.readVecLane<VecElem>(phys_reg);
-    }
-
-    /** Write a lane of the destination vector register. */
-    template<typename LD>
-    void
-    setVecLane(PhysRegIdPtr phys_reg, const LD& val)
-    {
-        vecRegfileWrites++;
-        return regFile.setVecLane(phys_reg, val);
-    }
-
-    const VecElem& readVecElem(PhysRegIdPtr reg_idx) const;
-
-    TheISA::CCReg readCCReg(PhysRegIdPtr phys_reg);
-
-    void setIntReg(PhysRegIdPtr phys_reg, uint64_t val);
-
-    void setFloatReg(PhysRegIdPtr phys_reg, TheISA::FloatReg val);
-
-    void setFloatRegBits(PhysRegIdPtr phys_reg, TheISA::FloatRegBits val);
-
-    void setVecReg(PhysRegIdPtr reg_idx, const VecRegContainer& val);
-
-    void setVecElem(PhysRegIdPtr reg_idx, const VecElem& val);
-
-    void setCCReg(PhysRegIdPtr phys_reg, TheISA::CCReg val);
-
     uint64_t readArchIntReg(int reg_idx, ThreadID tid);
 
-    float readArchFloatReg(int reg_idx, ThreadID tid);
+    double readArchFloatReg(int reg_idx, ThreadID tid);
 
     uint64_t readArchFloatRegInt(int reg_idx, ThreadID tid);
+
+    uint64_t readIntReg(DQPointer);
+
+    double readFloatReg(DQPointer);
+
+    uint64_t readFloatRegBits(DQPointer);
+
+    void setIntReg(DQPointer, uint64_t);
+
+    void setFloatReg(DQPointer, double);
+
+    void setFloatRegBits(DQPointer, uint64_t);
 
     const VecRegContainer& readArchVecReg(int reg_idx, ThreadID tid) const;
     /** Read architectural vector register for modification. */
@@ -478,9 +430,7 @@ class FFCPU : public BaseO3CPU
     VecLaneT<VecElem, true>
     readArchVecLane(int reg_idx, int lId, ThreadID tid) const
     {
-        PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-                    RegId(VecRegClass, reg_idx));
-        return readVecLane<VecElem>(phys_reg);
+        panic("No Vec support in RV-ForwardFlow");
     }
 
 
@@ -489,9 +439,7 @@ class FFCPU : public BaseO3CPU
     void
     setArchVecLane(int reg_idx, int lId, ThreadID tid, const LD& val)
     {
-        PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-                    RegId(VecRegClass, reg_idx));
-        setVecLane(phys_reg, val);
+        panic("No Vec support in RV-ForwardFlow");
     }
 
     const VecElem& readArchVecElem(const RegIndex& reg_idx,
@@ -600,38 +548,19 @@ class FFCPU : public BaseO3CPU
     /** The decode stage. */
     typename CPUPolicy::Decode decode;
 
-    /** The dispatch stage. */
-    typename CPUPolicy::Rename rename;
+    typename CPUPolicy::Allocation allocation;
 
-    /** The issue/execute/writeback stages. */
-    typename CPUPolicy::IEW iew;
+    typename CPUPolicy::DIEWC diewc;
 
-    /** The commit stage. */
-    typename CPUPolicy::Commit commit;
+    typename CPUPolicy::ArchState *archState;
+
+    typename CPUPolicy::DataflowQueues *dq;
 
     /** The rename mode of the vector registers */
     Enums::VecRegRenameMode vecMode;
 
-    /** The register file. */
-    PhysRegFile regFile;
-
-    /** The free list. */
-    typename CPUPolicy::FreeList freeList;
-
-    /** The rename map. */
-    typename CPUPolicy::RenameMap renameMap[Impl::MaxThreads];
-
-    /** The commit rename map. */
-    typename CPUPolicy::RenameMap commitRenameMap[Impl::MaxThreads];
-
-    /** The re-order buffer. */
-    typename CPUPolicy::ROB rob;
-
     /** Active Threads List */
     std::list<ThreadID> activeThreads;
-
-    /** Integer Register Scoreboard */
-    Scoreboard scoreboard;
 
     std::vector<TheISA::ISA *> isa;
 
@@ -652,6 +581,8 @@ class FFCPU : public BaseO3CPU
         RenameIdx,
         IEWIdx,
         CommitIdx,
+        AllocationIdx,
+        IEWCIdx,
         NumStages };
 
     /** Typedefs from the Impl to get the structs that each of the
@@ -752,7 +683,7 @@ class FFCPU : public BaseO3CPU
                RequestPtr &sreqLow, RequestPtr &sreqHigh,
                int load_idx)
     {
-        return this->iew.ldstQueue.read(req, sreqLow, sreqHigh, load_idx);
+        return this->diewc.ldstQueue.read(req, sreqLow, sreqHigh, load_idx);
     }
 
     /** CPU write function, forwards write to LSQ. */
@@ -760,7 +691,7 @@ class FFCPU : public BaseO3CPU
                 const RequestPtr &sreqLow, const RequestPtr &sreqHigh,
                 uint8_t *data, int store_idx)
     {
-        return this->iew.ldstQueue.write(req, sreqLow, sreqHigh,
+        return this->diewc.ldstQueue.write(req, sreqLow, sreqHigh,
                                          data, store_idx);
     }
 

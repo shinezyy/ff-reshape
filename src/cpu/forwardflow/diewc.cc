@@ -1,9 +1,16 @@
 //
 // Created by zyy on 19-6-11.
 //
-
 #include "cpu/forwardflow/diewc.hh"
-#include "diewc.hh"
+
+#include "arch/utility.hh"
+#include "debug/Commit.hh"
+#include "debug/CommitRate.hh"
+#include "debug/Drain.hh"
+#include "debug/ExecFaulting.hh"
+#include "debug/IEW.hh"
+#include "debug/O3PipeView.hh"
+#include "params/DerivFFCPU.hh"
 
 namespace FF{
 
@@ -73,8 +80,8 @@ void FFDIEWC<Impl>::squash(DynInstPtr &inst) {
 
 template<class Impl>
 void FFDIEWC<Impl>::checkSignalsAndUpdate() {
-    if (fromCommit->ffCommitInfo.squashInFlight) {
-        squash();
+    if (fromLastCycle->diewc2diewc.squash) {
+        squashInFlight();
         if (dispatchStatus == Blocked ||
             dispatchStatus == Unblocking) {
             toAllocation->diewcUnblock = true;
@@ -86,7 +93,7 @@ void FFDIEWC<Impl>::checkSignalsAndUpdate() {
     }
     if (dqSqushing) {
         dispatchStatus = Squashing;
-        clearAllocatedInts();
+        clearAllocatedInsts();
         wroteToTimeBuffer = true;
     }
     if (checkStall()){
@@ -181,7 +188,7 @@ void FFDIEWC<Impl>::dispatch() {
             inst->setCanCommit();
 
             // get who is the oldest consumer
-            pointerPackets.push(archState.recordAndUpdateMap(inst));
+            insertPointerPairs(archState.recordAndUpdateMap(inst));
 
             dq.insertBarrier(inst);
             normally_add_to_dq = false;
@@ -190,7 +197,8 @@ void FFDIEWC<Impl>::dispatch() {
             inst->setIssued();
             inst->setExecuted();
             inst->setCanCommit();
-            dq.recordProducer(inst);
+            // dq.recordProducer(inst); // do not need this in FF
+            archState.recordAndUpdateMap(inst);
             normally_add_to_dq = true;
         } else {
             assert(!inst->isExecuted());
@@ -200,7 +208,7 @@ void FFDIEWC<Impl>::dispatch() {
         if (normally_add_to_dq && inst->isNonSpeculative()) {
             inst->setCanCommit();
 
-            pointerPackets.push(archState.recordAndUpdateMap(inst));
+            insertPointerPairs(archState.recordAndUpdateMap(inst));
             dq.insertNonSpec(inst);
 
             ++dispNonSpecInsts;
@@ -208,7 +216,7 @@ void FFDIEWC<Impl>::dispatch() {
         }
 
         if (normally_add_to_dq) {
-            pointerPackets.push(archState.recordAndUpdateMap(inst));
+            insertPointerPairs(archState.recordAndUpdateMap(inst));
             dq.insert(inst);
         }
 
@@ -218,7 +226,7 @@ void FFDIEWC<Impl>::dispatch() {
 #if TRACING_ON
         inst->dispatchTick = curTick() - inst->fetchTick;
 #endif
-        ppDisptch->notify(inst);
+        ppDispatch->notify(inst);
     }
 
     if (!to_dispatch.empty()) {
@@ -234,9 +242,10 @@ void FFDIEWC<Impl>::dispatch() {
 
 template<class Impl>
 void FFDIEWC<Impl>::forward() {
-    for (const auto &pkt: pointerPackets) {
-        dq.insertForwardPointer(pkt);
+    while (!pointerPackets.empty()) {
         // DQ is responsible for the rest stuffs
+        dq.insertForwardPointer(pointerPackets.front());
+        pointerPackets.pop();
     }
 }
 
@@ -252,7 +261,7 @@ void FFDIEWC<Impl>::writeCommitQueue() {
         if (!inst) {
             break;
         }
-        toNextCycle->commitQueue[i] = inst;
+        toNextCycle->diewc2diewc.commitQueue[i] = inst;
     }
 }
 
@@ -260,7 +269,7 @@ template<class Impl>
 void FFDIEWC<Impl>::commit() {
     // read insts
     for (unsigned i = 0; i < width; i++) {
-        insts_to_commit.push(fromLastCycle->commitQueue[i]);
+        insts_to_commit.push(fromLastCycle->diewc2diewc.commitQueue[i]);
     }
 
     handleSquash();
@@ -268,15 +277,8 @@ void FFDIEWC<Impl>::commit() {
     if (commitStatus != DQSquashing) {
         commitInsts();
     }
-}
 
-template<class Impl>
-void FFDIEWC<Impl>::clearAllocatedInts() {
-    InstQueue().swap(insts_from_allocation);
-
-    if (dispatchStatus == Unblocking) {
-        InstQueue().swap(skidBuffer);
-    }
+    // todo: ppStall here?
 }
 
 template<class Impl>
@@ -373,14 +375,12 @@ FFDIEWC<Impl>::
 {
     assert(head_inst);
 
-    ThreadID tid = head_inst->threadNumber;
-
     // If the instruction is not executed yet, then it will need extra
     // handling.  Signal backwards that it should be executed.
     if (!head_inst->isExecuted()) {
         // Keep this number correct.  We have not yet actually executed
         // and committed this instruction.
-        thread[tid]->funcExeInst--;
+        thread->funcExeInst--;
 
         // Make sure we are only trying to commit un-executed instructions we
         // think are possible.
@@ -397,7 +397,7 @@ FFDIEWC<Impl>::
             return false;
         }
 
-        toNextCycle->commitInfo.nonSpecSeqNum = head_inst->seqNum;
+        toNextCycle->diewc2diewc.nonSpecSeqNum = head_inst->seqNum;
 
         // Change the instruction so it won't try to commit again until
         // it is executed.
@@ -406,8 +406,8 @@ FFDIEWC<Impl>::
         if (head_inst->isLoad() && head_inst->strictlyOrdered()) {
             DPRINTF(Commit, "[sn:%lli]: Strictly ordered load, PC %s.\n",
                     head_inst->seqNum, head_inst->pcState());
-            toNextCycle->commitInfo.strictlyOrdered = true;
-            toNextCycle->commitInfo.strictlyOrderedLoad = head_inst;
+            toNextCycle->diewc2diewc.strictlyOrdered = true;
+            toNextCycle->diewc2diewc.strictlyOrderedLoad = head_inst;
         } else {
             ++commitNonSpecStalls;
         }
@@ -458,7 +458,7 @@ FFDIEWC<Impl>::
         // needed to update the state as soon as possible.  This
         // prevents external agents from changing any specific state
         // that the trap need.
-        cpu->trap(inst_fault, tid,
+        cpu->trap(inst_fault, 0,
                   head_inst->notAnInst() ?
                       StaticInst::nullStaticInstPtr :
                       head_inst->staticInst);
@@ -473,7 +473,7 @@ FFDIEWC<Impl>::
         if (head_inst->traceData) {
             if (DTRACE(ExecFaulting)) {
                 head_inst->traceData->setFetchSeq(head_inst->seqNum);
-                head_inst->traceData->setCPSeq(thread[tid]->numOp);
+                head_inst->traceData->setCPSeq(thread->numOp);
                 head_inst->traceData->dump();
             }
             delete head_inst->traceData;
@@ -481,7 +481,7 @@ FFDIEWC<Impl>::
         }
 
         // Generate trap squash event.
-        generateTrapEvent(tid, inst_fault);
+        generateTrapEvent(DummyTid, inst_fault);
         return false;
     }
 
@@ -494,7 +494,7 @@ FFDIEWC<Impl>::
             head_inst->seqNum, head_inst->pcState());
     if (head_inst->traceData) {
         head_inst->traceData->setFetchSeq(head_inst->seqNum);
-        head_inst->traceData->setCPSeq(thread[tid]->numOp);
+        head_inst->traceData->setCPSeq(thread->numOp);
         head_inst->traceData->dump();
         delete head_inst->traceData;
         head_inst->traceData = NULL;
@@ -505,7 +505,7 @@ FFDIEWC<Impl>::
     }
 
     // Update the commit rename map
-    archState.commit(head_inst);
+    archState.commitInst(head_inst);
     dq.retireHead();
 
 #if TRACING_ON
@@ -583,7 +583,7 @@ FFDIEWC<Impl>::commitInsts()
             DPRINTF(Commit, "Retiring squashed instruction from "
                     "ROB.\n");
 
-            dq->retireHead();
+            dq.retireHead();
 
             ++commitSquashedInsts;
             // Notify potential listeners that this instruction is squashed
@@ -612,11 +612,11 @@ FFDIEWC<Impl>::commitInsts()
                 changedDQNumEntries = true;
 
                 // Set the doneSeqNum to the youngest committed instruction.
-                toNextCycle->commitInfo.doneSeqNum = head_inst->seqNum;
+                toNextCycle->diewc2diewc.doneSeqNum = head_inst->seqNum;
 
                 canHandleInterrupts =  (!head_inst->isDelayedCommit()) &&
                                        ((THE_ISA != ALPHA_ISA) ||
-                                         (!(pc[0].instAddr() & 0x3)));
+                                         (!(pc.instAddr() & 0x3)));
 
                 // at this point store conditionals should either have
                 // been completed or predicated false
@@ -651,9 +651,9 @@ FFDIEWC<Impl>::commitInsts()
                         // Last architectually committed instruction.
                         // Squash the pipeline, stall fetch, and use
                         // drainImminent to disable interrupts
-                        DPRINTF(Drain, "Draining: %i:%s\n", tid, pc[tid]);
+                        DPRINTF(Drain, "Draining: %s\n", pc);
                         squashAfter(head_inst);
-                        cpu->commitDrained();
+                        cpu->commitDrained(DummyTid);
                         drainImminent = true;
                     }
                 }
@@ -694,8 +694,8 @@ FFDIEWC<Impl>::commitInsts()
                     squashAfter(head_inst);
             } else {
                 DPRINTF(Commit, "Unable to commit head instruction PC:%s "
-                        "[tid:%i] [sn:%i].\n",
-                        head_inst->pcState(), tid ,head_inst->seqNum);
+                        "[sn:%i].\n",
+                        head_inst->pcState(), head_inst->seqNum);
 
                 skipThisCycle = true;
                 continue;
@@ -723,8 +723,8 @@ typename FFDIEWC<Impl>::DynInstPtr &FFDIEWC<Impl>::getHeadInst() {
 
 template<class Impl>
 void FFDIEWC<Impl>::squashAfter(typename FFDIEWC<Impl>::DynInstPtr &head_inst) {
-    DPRINTF(Commit, "Executing squash after for [tid:%i] inst [sn:%lli]\n",
-            tid, head_inst->seqNum);
+    DPRINTF(Commit, "Executing squash after for inst [sn:%lli]\n",
+            head_inst->seqNum);
 
     assert(!squashAfterInst || squashAfterInst == head_inst);
     commitStatus = SquashAfterPending;
@@ -745,25 +745,24 @@ void FFDIEWC<Impl>::handleSquash() {
         squashFromSquashAfter();
     }
 
-    if (fromLastCycle->squash &&
+    if (fromLastCycle->diewc2diewc.squash &&
         commitStatus != TrapPending &&
-        fromLastCycle->squashSeqNum <= youngestSeqNum) {
-        if (fromLastCycle->mispredictInst) {
+        fromLastCycle->diewc2diewc.squashedSeqNum <= youngestSeqNum) {
+        if (fromLastCycle->diewc2diewc.mispredictInst) {
             DPRINTF(Commit,
-                    "[tid:%i]: Squashing due to branch mispred PC:%#x [sn:%i]\n",
-                    tid,
-                    fromIEW->mispredictInst[tid]->instAddr(),
-                    fromIEW->squashedSeqNum[tid]);
+                    "Squashing due to branch mispred PC:%#x [sn:%i]\n",
+                    fromLastCycle->diewc2diewc.mispredictInst->instAddr(),
+                    fromLastCycle->diewc2diewc.squashedSeqNum);
         } else {
             DPRINTF(Commit,
-                    "[tid:%i]: Squashing due to order violation [sn:%i]\n",
-                    tid, fromIEW->squashedSeqNum[tid]);
+                    "Squashing due to order violation [sn:%i]\n",
+                    fromLastCycle->diewc2diewc.squashedSeqNum);
         }
         commitStatus = DQSquashing;
 
-        InstSeqNum squashed_inst = fromLastCycle->squashedSeqNum;
+        InstSeqNum squashed_inst = fromLastCycle->diewc2diewc.squashedSeqNum;
 
-        if (fromLastCycle->includeSquashInst) {
+        if (fromLastCycle->diewc2diewc.includeSquashInst) {
             squashed_inst--;
         }
 
@@ -772,22 +771,496 @@ void FFDIEWC<Impl>::handleSquash() {
         dq.squash(squashed_inst);
         changedDQNumEntries = true;
 
-        toNextCycle->commitInfo.doneSeqNum = squashed_inst;
-        toNextCycle->commitInfo.squash = true;
-        toNextCycle->commitInfo.dqSquashing = true;
-        toNextCycle->commitInfo.mispredictInst = fromLastCycle->mispredictInst;
-        toNextCycle->commitInfo.branchTaken = fromLastCycle->branchTaken;
-        toNextCycle->commitInfo.squashInst = dq.findInst(squashed_inst);
+        toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
+        toNextCycle->diewc2diewc.squash = true;
+        toNextCycle->diewc2diewc.dqSquashing = true;
+        toNextCycle->diewc2diewc.mispredictInst =
+                fromLastCycle->diewc2diewc.mispredictInst;
+        toNextCycle->diewc2diewc.branchTaken =
+                fromLastCycle->diewc2diewc.branchTaken;
+        toNextCycle->diewc2diewc.squashInst = dq.findInst(squashed_inst);
 
-        if (toNextCycle->commitInfo.mispredict) {
-            if (toNextCycle->commitInfo.mispredictInst->isUncondCtrl()) {
-                toNextCycle->commitInfo.branchTaken = true;
+        if (toNextCycle->diewc2diewc.mispredictInst) {
+            if (toNextCycle->diewc2diewc.mispredictInst->isUncondCtrl()) {
+                toNextCycle->diewc2diewc.branchTaken = true;
             }
             ++branchMispredicts;
         }
 
-        toNextCycle->commitInfo.pc = fromLastCycle->pc;
+        toNextCycle->diewc2diewc.pc =
+                fromLastCycle->diewc2diewc.pc;
     }
 }
 
-};
+template<class Impl>
+void FFDIEWC<Impl>::squashFromTrap() {
+    squashAll();
+
+    DPRINTF(Commit, "Squashing from trap, restarting at PC %s\n", pc);
+    thread->trapPending = false;
+    thread->noSquashFromTC = false;
+    trapInFlight = false;
+
+    trapSquash = false;
+
+    commitStatus = DQSquashing;
+    cpu->activityThisCycle();
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::squashFromTC() {
+    squashAll();
+
+    DPRINTF(Commit, "Squashing from TC, restarting at PC %s\n", pc);
+
+    thread->noSquashFromTC = false;
+    assert(!thread->trapPending);
+
+    commitStatus = DQSquashing;
+    cpu->activityThisCycle();
+
+    tcSquash = false;
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::squashFromSquashAfter() {
+    DPRINTF(Commit, "Squashing after squash after request, "
+                    "restarting at PC %s\n", pc);
+
+    squashAll();
+    // Make sure to inform the fetch stage of which instruction caused
+    // the squash. It'll try to re-fetch an instruction executing in
+    // microcode unless this is set.
+    toNextCycle->diewc2diewc.squashInst = squashAfterInst;
+    squashAfterInst = nullptr;
+
+    commitStatus = DQSquashing;
+    cpu->activityThisCycle();
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::squashAll() {
+    InstSeqNum squashed_inst = dq.isEmpty() ?
+            lastCommitedSeqNum : dq.getHead()->seqNum - 1;
+
+    youngestSeqNum = lastCommitedSeqNum;
+    dq.squash(squashed_inst);
+
+    changedDQNumEntries = true;
+
+    toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
+    toNextCycle->diewc2diewc.squash = true;
+    toNextCycle->diewc2diewc.dqSquashing = true;
+    toNextCycle->diewc2diewc.mispredictInst = nullptr;
+    toNextCycle->diewc2diewc.squashInst = nullptr;
+    toNextCycle->diewc2diewc.pc = pc;
+}
+
+template<class Impl>
+FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
+        :
+        cpu(cpu),
+        freeEntries{params->numDQBanks * params->DQDepth,
+                    params->LQEntries, params->SQEntries},
+        serializeOnNextInst(false),
+        dq(params),
+        archState(params),
+        fuWrapper(),
+        ldstQueue(cpu, this, params), // todo: WTF fix it !!!!!!!
+        fetchRedirect(false),
+        dqSqushing(false),
+        dispatchWidth(params->dispatchWidth),
+        skidBufferMax(0),  // todo: fix
+        width(params->numDQBanks),
+        trapInFlight(false),
+        trapSquash(false),
+        trapLatency(params->trapLatency),
+        drainPending(false),
+        drainImminent(false),
+        skipThisCycle(false),
+        avoidQuiesceLiveLock(),  //todo: fix
+        squashAfterInst(nullptr),
+        tcSquash(false)
+{
+}
+
+template<class Impl>
+void
+FFDIEWC<Impl>::squashInFlight()
+{
+    DPRINTF(IEW, "Squashing all instructions.\n");
+
+    // Tell the IQ to start squashing.
+    // todo: we don't need this in forwardflow?
+
+    // Tell the LDSTQ to start squashing.
+    ldstQueue.squash(fromLastCycle->diewc2diewc.doneSeqNum, DummyTid);
+    updatedQueues = true;
+
+    // Clear the skid buffer in case it has any data in it.
+    DPRINTF(IEW, "Removing skidbuffer instructions until [sn:%i].\n",
+            fromLastCycle->diewc2diewc.doneSeqNum);
+
+    while (!skidBuffer.empty()) {
+        if (skidBuffer.front()->isLoad()) {
+            toAllocation->diewcInfo.dispatchedToLQ++;
+        }
+        if (skidBuffer.front()->isStore()) {
+            toAllocation->diewcInfo.dispatchedToSQ++;
+        }
+
+        toAllocation->diewcInfo.dispatched++;
+
+        skidBuffer.pop();
+    }
+
+    clearAllocatedInsts();
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::clearAllocatedInsts() {
+    DPRINTF(IEW, "Removing incoming allocated instructions\n");
+
+    InstQueue &insts = insts_from_allocation;
+
+    while (!insts.empty()) {
+
+        if (insts.front()->isLoad()) {
+            toAllocation->diewcInfo.dispatchedToLQ++;
+        }
+        if (insts.front()->isStore()) {
+            toAllocation->diewcInfo.dispatchedToSQ++;
+        }
+
+        toAllocation->diewcInfo.dispatched++;
+
+        insts.pop();
+    }
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &ffdiewc) {
+
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::insertPointerPairs(std::list<PointerPair> pairs) {
+    for (const auto &pair: pairs) {
+        pointerPackets.push(pair);
+    }
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::rescheduleMemInst(DynInstPtr &inst)
+{
+    dq.rescheduleMemInst(inst);
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::replayMemInst(DynInstPtr &inst)
+{
+    dq.replayMemInst(inst);
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::cacheUnblocked()
+{
+    dq.cacheUnblocked();
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::blockMemInst(DynInstPtr &inst)
+{
+    dq.blockMemInst(inst);
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::wakeCPU()
+{
+    cpu->wakeCPU();
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
+{
+    assert(inst->isLoad());
+    inst->sfuWrapper->markWb();
+}
+
+template<class Impl>
+std::string FFDIEWC<Impl>::name() const
+{
+    return cpu->name() + ".iew";
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::activityThisCycle()
+{
+    cpu->activityThisCycle();
+}
+
+template<class Impl>
+unsigned FFDIEWC<Impl>::numInWindow()
+{
+    return dq.numInDQ();
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::takeOverFrom()
+{
+    _status = Active;
+    dispatchStatus = Running;
+    commitStatus = CommitRunning;
+
+    dq.takeOverFrom();
+    ldstQueue.takeOverFrom();
+
+    startupStage();
+    cpu->activityThisCycle();
+
+    updateLSQNextCycle = false;
+    fetchRedirect = false;
+
+    //todo: advance time buffers?
+
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::startupStage()
+{
+    toAllocation->diewcInfo.usedDQ = true;
+    toAllocation->diewcInfo.freeDQEntries = dq.numFree();
+
+    toAllocation->diewcInfo.usedLSQ = true;
+    toAllocation->diewcInfo.freeLQEntries = ldstQueue.numFreeLoadEntries(DummyTid);
+    toAllocation->diewcInfo.freeSQEntries = ldstQueue.numFreeStoreEntries(DummyTid);
+
+    toAllocation->diewcInfo.dqHead = dq.getHeadPtr();
+    toAllocation->diewcInfo.dqTail = dq.getTailPtr();
+
+    if (cpu->checker) {
+        cpu->checker->setDcachePort(&cpu->getDataPort());
+
+        cpu->activateStage(XFFCPU::IEWCIdx);
+    }
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::drainSanityCheck() const
+{
+    assert(isDrained());
+    dq.drainSanityCheck();
+    ldstQueue.drainSanityCheck();
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::drain()
+{
+    drainPending = true;
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::drainResume()
+{
+    drainPending = false;
+    drainImminent = false;
+}
+
+template<class Impl>
+bool FFDIEWC<Impl>::isDrained() const
+{
+    return dq.getHeadPtr() == dq.getTailPtr() && interrupt == NoFault;
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::resetEntries()
+{
+    dq.resetEntries();
+    ldstQueue.resetEntries();
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::regProbePoints()
+{
+    ppDispatch = new ProbePointArg<DynInstPtr>(
+            cpu->getProbeManager(), "Dispatch");
+
+    ppMispredict = new ProbePointArg<DynInstPtr>(
+            cpu->getProbeManager(), "Mispredict");
+    /**
+     * Probe point with dynamic instruction as the argument used to probe when
+     * an instruction starts to execute.
+     */
+    ppExecute = new ProbePointArg<DynInstPtr>(
+            cpu->getProbeManager(), "Execute");
+    /**
+     * Probe point with dynamic instruction as the argument used to probe when
+     * an instruction execution completes and it is marked ready to commit.
+     */
+    ppToCommit = new ProbePointArg<DynInstPtr>(
+            cpu->getProbeManager(), "ToCommit");
+
+    ppCommit = new ProbePointArg<DynInstPtr>(
+            cpu->getProbeManager(), "Commit");
+    ppCommitStall = new ProbePointArg<DynInstPtr>(
+            cpu->getProbeManager(), "CommitStall");
+    ppSquash = new ProbePointArg<DynInstPtr>(
+            cpu->getProbeManager(), "Squash");
+}
+
+template<class Impl>
+typename Impl::DynInstPtr FFDIEWC<Impl>::readHeadInst(ThreadID tid)
+{
+    return dq.getHead();
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::checkMisprediction(DynInstPtr &inst)
+{
+    if (!fetchRedirect ||
+        !toNextCycle->diewc2diewc.squash ||
+        toNextCycle->diewc2diewc.squashedSeqNum > inst->seqNum) {
+
+        if (inst->mispredicted()) {
+            fetchRedirect = true;
+
+            DPRINTF(IEW, "Execute: Branch mispredict detected.\n");
+            DPRINTF(IEW, "Predicted target was PC:%#x, NPC:%#x.\n",
+                    inst->predInstAddr(), inst->predNextInstAddr());
+            DPRINTF(IEW, "Execute: Redirecting fetch to PC: %#x,"
+                    " NPC: %#x.\n", inst->nextInstAddr(),
+                    inst->nextInstAddr());
+            // If incorrect, then signal the ROB that it must be squashed.
+            squashDueToBranch(inst);
+
+            if (inst->readPredTaken()) {
+                predictedTakenIncorrect++;
+            } else {
+                predictedNotTakenIncorrect++;
+            }
+        }
+    }
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::squashDueToBranch(DynInstPtr &inst)
+{
+    if (!toNextCycle->diewc2diewc.squash ||
+            inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum) {
+        toNextCycle->diewc2diewc.squash = true;
+        toNextCycle->diewc2diewc.squashedSeqNum = inst->seqNum;
+        toNextCycle->diewc2diewc.pc = inst->pcState();
+        toNextCycle->diewc2diewc.mispredictInst = nullptr;
+        toNextCycle->diewc2diewc.includeSquashInst = true;
+        wroteToTimeBuffer = true;
+    }
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::generateTCEvent(ThreadID tid)
+{
+    assert(!trapInFlight);
+    tcSquash = true;
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::setActiveThreads(std::list<ThreadID> *at_ptr)
+{
+//    activeThreads = at_ptr;
+//    nothing todo
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::setThreads(vector<FFDIEWC::Thread *> &threads)
+{
+    thread = threads[DummyTid];
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::deactivateThread(ThreadID tid)
+{
+//    nothing todo
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::setTimeBuffer(TimeBuffer<TimeStruct> *tb_ptr)
+{
+    backwardTB = tb_ptr;
+
+    toNextCycle = backwardTB->getWire(0);
+
+    toFetch = backwardTB->getWire(0);
+
+    fromLastCycle = backwardTB->getWire(-1);
+
+    toAllocation = backwardTB->getWire(0);
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::setFetchQueue(TimeBuffer<FetchStruct> *fq_ptr)
+{
+//    nothing todo
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::regStats()
+{
+    dispSquashedInsts
+        .name(name() + "dispSquashedInsts")
+        .desc("dispSquashedInsts");
+    dqFullEvents
+        .name(name() + "dqFullEvents")
+        .desc("dqFullEvents");
+    lqFullEvents
+        .name(name() + "lqFullEvents")
+        .desc("lqFullEvents");
+    sqFullEvents
+        .name(name() + "sqFullEvents")
+        .desc("sqFullEvents");
+    dispaLoads
+        .name(name() + "dispaLoads")
+        .desc("dispaLoads");
+    dispStores
+        .name(name() + "dispStores")
+        .desc("dispStores");
+    dispNonSpecInsts
+        .name(name() + "dispNonSpecInsts")
+        .desc("dispNonSpecInsts");
+    dispatchedInsts
+        .name(name() + "dispatchedInsts")
+        .desc("dispatchedInsts");
+    blockCycles
+        .name(name() + "blockCycles")
+        .desc("blockCycles");
+    squashCycles
+        .name(name() + "squashCycles")
+        .desc("squashCycles");
+    runningCycles
+        .name(name() + "runningCycles")
+        .desc("runningCycles");
+    unblockCycles
+        .name(name() + "unblockCycles")
+        .desc("unblockCycles");
+    commitNonSpecStalls
+        .name(name() + "commitNonSpecStalls")
+        .desc("commitNonSpecStalls");
+    commitSquashedInsts
+        .name(name() + "commitSquashedInsts")
+        .desc("commitSquashedInsts");
+    branchMispredicts
+        .name(name() + "branchMispredicts")
+        .desc("branchMispredicts");
+    predictedTakenIncorrect
+        .name(name() + "predictedTakenIncorrect")
+        .desc("predictedTakenIncorrect");
+    predictedNotTakenIncorrect
+        .name(name() + "predictedNotTakenIncorrect")
+        .desc("predictedNotTakenIncorrect");
+}
+
+}
+
+#include "cpu/forwardflow/isa_specific.hh"
+
+template class FF::FFDIEWC<FFCPUImpl>;
+

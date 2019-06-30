@@ -43,7 +43,6 @@
  *          Korey Sewell
  *          Rick Strong
  */
-
 #include "cpu/forwardflow/cpu.hh"
 
 #include "arch/generic/traits.hh"
@@ -151,30 +150,17 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
       removeInstsThisCycle(false),
       fetch(this, params),
       decode(this, params),
-      rename(this, params),
-      iew(this, params),
-      commit(this, params),
+      allocation(this, params),
+      diewc(this, params),
 
       /* It is mandatory that all SMT threads use the same renaming mode as
        * they are sharing registers and rename */
       vecMode(initRenameMode<TheISA::ISA>::mode(params->isa[0])),
-      regFile(params->numPhysIntRegs,
-              params->numPhysFloatRegs,
-              params->numPhysVecRegs,
-              params->numPhysCCRegs,
-              vecMode),
-
-      freeList(name() + ".freelist", &regFile),
-
-      rob(this, params),
-
-      scoreboard(name() + ".scoreboard",
-                 regFile.totalNumPhysRegs()),
 
       isa(numThreads, NULL),
 
       icachePort(&fetch, this),
-      dcachePort(&iew.ldstQueue, this),
+      dcachePort(&diewc.ldstQueue, this),
 
       timeBuffer(params->backComSize, params->forwardComSize),
       fetchQueue(params->backComSize, params->forwardComSize),
@@ -216,32 +202,19 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
     // Set up Pointers to the activeThreads list for each stage
     fetch.setActiveThreads(&activeThreads);
     decode.setActiveThreads(&activeThreads);
-    rename.setActiveThreads(&activeThreads);
-    iew.setActiveThreads(&activeThreads);
-    commit.setActiveThreads(&activeThreads);
+    diewc.setActiveThreads(&activeThreads);
 
     // Give each of the stages the time buffer they will use.
     fetch.setTimeBuffer(&timeBuffer);
     decode.setTimeBuffer(&timeBuffer);
-    rename.setTimeBuffer(&timeBuffer);
-    iew.setTimeBuffer(&timeBuffer);
-    commit.setTimeBuffer(&timeBuffer);
+    diewc.setTimeBuffer(&timeBuffer);
 
     // Also setup each of the stages' queues.
     fetch.setFetchQueue(&fetchQueue);
     decode.setFetchQueue(&fetchQueue);
-    commit.setFetchQueue(&fetchQueue);
+    diewc.setFetchQueue(&fetchQueue);
     decode.setDecodeQueue(&decodeQueue);
-    rename.setDecodeQueue(&decodeQueue);
-    rename.setRenameQueue(&renameQueue);
-    iew.setRenameQueue(&renameQueue);
-    iew.setIEWQueue(&iewQueue);
-    commit.setIEWQueue(&iewQueue);
-    commit.setRenameQueue(&renameQueue);
-
-    commit.setIEWStage(&iew);
-    rename.setIEWStage(&iew);
-    rename.setCommitStage(&commit);
+//    diewc.setIEWQueue(&iewQueue); // todo: set self-to-self queue
 
     ThreadID active_threads;
     if (FullSystem) {
@@ -255,91 +228,6 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
                   "or edit your workload size.");
         }
     }
-
-    //Make Sure That this a Valid Architeture
-    assert(params->numPhysIntRegs   >= numThreads * TheISA::NumIntRegs);
-    assert(params->numPhysFloatRegs >= numThreads * TheISA::NumFloatRegs);
-    assert(params->numPhysVecRegs >= numThreads * TheISA::NumVecRegs);
-    assert(params->numPhysCCRegs >= numThreads * TheISA::NumCCRegs);
-
-    rename.setScoreboard(&scoreboard);
-    iew.setScoreboard(&scoreboard);
-
-    // Setup the rename map for whichever stages need it.
-    for (ThreadID tid = 0; tid < numThreads; tid++) {
-        isa[tid] = params->isa[tid];
-        assert(initRenameMode<TheISA::ISA>::equals(isa[tid], isa[0]));
-
-        // Only Alpha has an FP zero register, so for other ISAs we
-        // use an invalid FP register index to avoid special treatment
-        // of any valid FP reg.
-        RegIndex invalidFPReg = TheISA::NumFloatRegs + 1;
-        RegIndex fpZeroReg =
-            (THE_ISA == ALPHA_ISA) ? TheISA::ZeroReg : invalidFPReg;
-
-        commitRenameMap[tid].init(&regFile, TheISA::ZeroReg, fpZeroReg,
-                                  &freeList,
-                                  vecMode);
-
-        renameMap[tid].init(&regFile, TheISA::ZeroReg, fpZeroReg,
-                            &freeList, vecMode);
-    }
-
-    // Initialize rename map to assign physical registers to the
-    // architectural registers for active threads only.
-    for (ThreadID tid = 0; tid < active_threads; tid++) {
-        for (RegIndex ridx = 0; ridx < TheISA::NumIntRegs; ++ridx) {
-            // Note that we can't use the rename() method because we don't
-            // want special treatment for the zero register at this point
-            PhysRegIdPtr phys_reg = freeList.getIntReg();
-            renameMap[tid].setEntry(RegId(IntRegClass, ridx), phys_reg);
-            commitRenameMap[tid].setEntry(RegId(IntRegClass, ridx), phys_reg);
-        }
-
-        for (RegIndex ridx = 0; ridx < TheISA::NumFloatRegs; ++ridx) {
-            PhysRegIdPtr phys_reg = freeList.getFloatReg();
-            renameMap[tid].setEntry(RegId(FloatRegClass, ridx), phys_reg);
-            commitRenameMap[tid].setEntry(
-                    RegId(FloatRegClass, ridx), phys_reg);
-        }
-
-        /* Here we need two 'interfaces' the 'whole register' and the
-         * 'register element'. At any point only one of them will be
-         * active. */
-        if (vecMode == Enums::Full) {
-            /* Initialize the full-vector interface */
-            for (RegIndex ridx = 0; ridx < TheISA::NumVecRegs; ++ridx) {
-                RegId rid = RegId(VecRegClass, ridx);
-                PhysRegIdPtr phys_reg = freeList.getVecReg();
-                renameMap[tid].setEntry(rid, phys_reg);
-                commitRenameMap[tid].setEntry(rid, phys_reg);
-            }
-        } else {
-            /* Initialize the vector-element interface */
-            for (RegIndex ridx = 0; ridx < TheISA::NumVecRegs; ++ridx) {
-                for (ElemIndex ldx = 0; ldx < TheISA::NumVecElemPerVecReg;
-                        ++ldx) {
-                    RegId lrid = RegId(VecElemClass, ridx, ldx);
-                    PhysRegIdPtr phys_elem = freeList.getVecElem();
-                    renameMap[tid].setEntry(lrid, phys_elem);
-                    commitRenameMap[tid].setEntry(lrid, phys_elem);
-                }
-            }
-        }
-
-        for (RegIndex ridx = 0; ridx < TheISA::NumCCRegs; ++ridx) {
-            PhysRegIdPtr phys_reg = freeList.getCCReg();
-            renameMap[tid].setEntry(RegId(CCRegClass, ridx), phys_reg);
-            commitRenameMap[tid].setEntry(RegId(CCRegClass, ridx), phys_reg);
-        }
-    }
-
-    rename.setRenameMap(renameMap);
-    commit.setRenameMap(commitRenameMap);
-    rename.setFreeList(&freeList);
-
-    // Setup the ROB for whichever stages need it.
-    commit.setROB(&rob);
 
     lastActivatedCycle = 0;
 #if 0
@@ -434,9 +322,7 @@ FFCPU<Impl>::regProbePoints()
             getProbeManager(), "DataAccessComplete");
 
     fetch.regProbePoints();
-    rename.regProbePoints();
-    iew.regProbePoints();
-    commit.regProbePoints();
+    diewc.regProbePoints();
 }
 
 template <class Impl>
@@ -506,10 +392,7 @@ FFCPU<Impl>::regStats()
 
     this->fetch.regStats();
     this->decode.regStats();
-    this->rename.regStats();
-    this->iew.regStats();
-    this->commit.regStats();
-    this->rob.regStats();
+    this->diewc.regStats();
 
     intRegfileReads
         .name(name() + ".int_regfile_reads")
@@ -580,11 +463,7 @@ FFCPU<Impl>::tick()
 
     decode.tick();
 
-    rename.tick();
-
-    iew.tick();
-
-    commit.tick();
+    diewc.tick();
 
     // Now advance the time buffers
     timeBuffer.advance();
@@ -592,7 +471,7 @@ FFCPU<Impl>::tick()
     fetchQueue.advance();
     decodeQueue.advance();
     renameQueue.advance();
-    iewQueue.advance();
+//    iewQueue.advance();  //todo: advance diewc queue
 
     activityRec.advance();
 
@@ -646,7 +525,7 @@ FFCPU<Impl>::init()
     for (int tid = 0; tid < numThreads; ++tid)
         thread[tid]->noSquashFromTC = false;
 
-    commit.setThreads(thread);
+    diewc.setThreads(thread);
 }
 
 template <class Impl>
@@ -659,9 +538,7 @@ FFCPU<Impl>::startup()
 
     fetch.startupStage();
     decode.startupStage();
-    iew.startupStage();
-    rename.startupStage();
-    commit.startupStage();
+    diewc.startupStage();
 }
 
 template <class Impl>
@@ -700,7 +577,7 @@ FFCPU<Impl>::deactivateThread(ThreadID tid)
     }
 
     fetch.deactivateThread(tid);
-    commit.deactivateThread(tid);
+    diewc.deactivateThread(tid);
 }
 
 template <class Impl>
@@ -816,31 +693,6 @@ FFCPU<Impl>::insertThread(ThreadID tid)
     else
         src_tc = tcBase(tid);
 
-    //Bind Int Regs to Rename Map
-
-    for (RegId reg_id(IntRegClass, 0); reg_id.index() < TheISA::NumIntRegs;
-         reg_id.index()++) {
-        PhysRegIdPtr phys_reg = freeList.getIntReg();
-        renameMap[tid].setEntry(reg_id, phys_reg);
-        scoreboard.setReg(phys_reg);
-    }
-
-    //Bind Float Regs to Rename Map
-    for (RegId reg_id(FloatRegClass, 0); reg_id.index() < TheISA::NumFloatRegs;
-         reg_id.index()++) {
-        PhysRegIdPtr phys_reg = freeList.getFloatReg();
-        renameMap[tid].setEntry(reg_id, phys_reg);
-        scoreboard.setReg(phys_reg);
-    }
-
-    //Bind condition-code Regs to Rename Map
-    for (RegId reg_id(CCRegClass, 0); reg_id.index() < TheISA::NumCCRegs;
-         reg_id.index()++) {
-        PhysRegIdPtr phys_reg = freeList.getCCReg();
-        renameMap[tid].setEntry(reg_id, phys_reg);
-        scoreboard.setReg(phys_reg);
-    }
-
     //Copy Thread Data Into RegFile
     //this->copyFromTC(tid);
 
@@ -852,8 +704,7 @@ FFCPU<Impl>::insertThread(ThreadID tid)
     activateContext(tid);
 
     //Reset ROB/IQ/LSQ Entries
-    commit.rob->resetEntries();
-    iew.resetEntries();
+    diewc.resetEntries();
 }
 
 template <class Impl>
@@ -871,43 +722,17 @@ FFCPU<Impl>::removeThread(ThreadID tid)
     // here to alleviate the case for double-freeing registers
     // in SMT workloads.
 
-    // Unbind Int Regs from Rename Map
-    for (RegId reg_id(IntRegClass, 0); reg_id.index() < TheISA::NumIntRegs;
-         reg_id.index()++) {
-        PhysRegIdPtr phys_reg = renameMap[tid].lookup(reg_id);
-        scoreboard.unsetReg(phys_reg);
-        freeList.addReg(phys_reg);
-    }
-
-    // Unbind Float Regs from Rename Map
-    for (RegId reg_id(FloatRegClass, 0); reg_id.index() < TheISA::NumFloatRegs;
-         reg_id.index()++) {
-        PhysRegIdPtr phys_reg = renameMap[tid].lookup(reg_id);
-        scoreboard.unsetReg(phys_reg);
-        freeList.addReg(phys_reg);
-    }
-
-    // Unbind condition-code Regs from Rename Map
-    for (RegId reg_id(CCRegClass, 0); reg_id.index() < TheISA::NumCCRegs;
-         reg_id.index()++) {
-        PhysRegIdPtr phys_reg = renameMap[tid].lookup(reg_id);
-        scoreboard.unsetReg(phys_reg);
-        freeList.addReg(phys_reg);
-    }
-
     // Squash Throughout Pipeline
-    DynInstPtr inst = commit.rob->readHeadInst(tid);
+    DynInstPtr inst = diewc.readHeadInst(tid);
     InstSeqNum squash_seq_num = inst->seqNum;
     fetch.squash(0, squash_seq_num, inst, tid);
     decode.squash(tid);
-    rename.squash(squash_seq_num, tid);
-    iew.squash(tid);
-    iew.ldstQueue.squash(squash_seq_num, tid);
-    commit.rob->squash(squash_seq_num, tid);
+    diewc.squashInFlight();  // todo: check sanity
+    diewc.ldstQueue.squash(squash_seq_num, tid);
 
 
-    assert(iew.instQueue.getCount(tid) == 0);
-    assert(iew.ldstQueue.getCount(tid) == 0);
+    assert(diewc.numInWindow() == 0);
+    assert(diewc.ldstQueue.getCount(tid) == 0);
 
     // Reset ROB/IQ/LSQ Entries
 
@@ -918,7 +743,7 @@ FFCPU<Impl>::removeThread(ThreadID tid)
 /*
     if (activeThreads.size() >= 1) {
         commit.rob->resetEntries();
-        iew.resetEntries();
+        diewc.resetEntries();
     }
 */
 }
@@ -1051,7 +876,7 @@ FFCPU<Impl>::drain()
     // squash the rest of the instructions in the pipeline and force
     // the fetch stage to stall. The pipeline will be drained once all
     // in-flight instructions have retired.
-    commit.drain();
+    diewc.drain();
 
     // Wake the CPU and record activity so everything can drain out if
     // the CPU was not able to immediately drain.
@@ -1118,9 +943,7 @@ FFCPU<Impl>::drainSanityCheck() const
     assert(isDrained());
     fetch.drainSanityCheck();
     decode.drainSanityCheck();
-    rename.drainSanityCheck();
-    iew.drainSanityCheck();
-    commit.drainSanityCheck();
+    diewc.drainSanityCheck();
 }
 
 template <class Impl>
@@ -1144,18 +967,8 @@ FFCPU<Impl>::isDrained() const
         drained = false;
     }
 
-    if (!rename.isDrained()) {
-        DPRINTF(Drain, "Rename not drained.\n");
-        drained = false;
-    }
-
-    if (!iew.isDrained()) {
-        DPRINTF(Drain, "IEW not drained.\n");
-        drained = false;
-    }
-
-    if (!commit.isDrained()) {
-        DPRINTF(Drain, "Commit not drained.\n");
+    if (!diewc.isDrained()) {
+        DPRINTF(Drain, "DIEWC not drained.\n");
         drained = false;
     }
 
@@ -1180,7 +993,7 @@ FFCPU<Impl>::drainResume()
     verifyMemoryMode();
 
     fetch.drainResume();
-    commit.drainResume();
+    diewc.drainResume();
 
     _status = Idle;
     for (ThreadID i = 0; i < thread.size(); i++) {
@@ -1222,9 +1035,7 @@ FFCPU<Impl>::takeOverFrom(BaseCPU *oldCPU)
 
     fetch.takeOverFrom();
     decode.takeOverFrom();
-    rename.takeOverFrom();
-    iew.takeOverFrom();
-    commit.takeOverFrom();
+    diewc.takeOverFrom();
 
     assert(!tickEvent.scheduled());
 
@@ -1278,132 +1089,23 @@ FFCPU<Impl>::setMiscReg(int misc_reg,
     this->isa[tid]->setMiscReg(misc_reg, val, tcBase(tid));
 }
 
-template <class Impl>
-uint64_t
-FFCPU<Impl>::readIntReg(PhysRegIdPtr phys_reg)
-{
-    intRegfileReads++;
-    return regFile.readIntReg(phys_reg);
-}
-
-template <class Impl>
-FloatReg
-FFCPU<Impl>::readFloatReg(PhysRegIdPtr phys_reg)
-{
-    fpRegfileReads++;
-    return regFile.readFloatReg(phys_reg);
-}
-
-template <class Impl>
-FloatRegBits
-FFCPU<Impl>::readFloatRegBits(PhysRegIdPtr phys_reg)
-{
-    fpRegfileReads++;
-    return regFile.readFloatRegBits(phys_reg);
-}
-
-template <class Impl>
-auto
-FFCPU<Impl>::readVecReg(PhysRegIdPtr phys_reg) const
-        -> const VecRegContainer&
-{
-    vecRegfileReads++;
-    return regFile.readVecReg(phys_reg);
-}
-
-template <class Impl>
-auto
-FFCPU<Impl>::getWritableVecReg(PhysRegIdPtr phys_reg)
-        -> VecRegContainer&
-{
-    vecRegfileWrites++;
-    return regFile.getWritableVecReg(phys_reg);
-}
-
-template <class Impl>
-auto
-FFCPU<Impl>::readVecElem(PhysRegIdPtr phys_reg) const -> const VecElem&
-{
-    vecRegfileReads++;
-    return regFile.readVecElem(phys_reg);
-}
-
-template <class Impl>
-CCReg
-FFCPU<Impl>::readCCReg(PhysRegIdPtr phys_reg)
-{
-    ccRegfileReads++;
-    return regFile.readCCReg(phys_reg);
-}
-
-template <class Impl>
-void
-FFCPU<Impl>::setIntReg(PhysRegIdPtr phys_reg, uint64_t val)
-{
-    intRegfileWrites++;
-    regFile.setIntReg(phys_reg, val);
-}
-
-template <class Impl>
-void
-FFCPU<Impl>::setFloatReg(PhysRegIdPtr phys_reg, FloatReg val)
-{
-    fpRegfileWrites++;
-    regFile.setFloatReg(phys_reg, val);
-}
-
-template <class Impl>
-void
-FFCPU<Impl>::setFloatRegBits(PhysRegIdPtr phys_reg, FloatRegBits val)
-{
-    fpRegfileWrites++;
-    regFile.setFloatRegBits(phys_reg, val);
-}
-
-template <class Impl>
-void
-FFCPU<Impl>::setVecReg(PhysRegIdPtr phys_reg, const VecRegContainer& val)
-{
-    vecRegfileWrites++;
-    regFile.setVecReg(phys_reg, val);
-}
-
-template <class Impl>
-void
-FFCPU<Impl>::setVecElem(PhysRegIdPtr phys_reg, const VecElem& val)
-{
-    vecRegfileWrites++;
-    regFile.setVecElem(phys_reg, val);
-}
-
-template <class Impl>
-void
-FFCPU<Impl>::setCCReg(PhysRegIdPtr phys_reg, CCReg val)
-{
-    ccRegfileWrites++;
-    regFile.setCCReg(phys_reg, val);
-}
 
 template <class Impl>
 uint64_t
 FFCPU<Impl>::readArchIntReg(int reg_idx, ThreadID tid)
 {
     intRegfileReads++;
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-            RegId(IntRegClass, reg_idx));
 
-    return regFile.readIntReg(phys_reg);
+    return archState->readIntReg(reg_idx);
 }
 
 template <class Impl>
-float
+double
 FFCPU<Impl>::readArchFloatReg(int reg_idx, ThreadID tid)
 {
     fpRegfileReads++;
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-        RegId(FloatRegClass, reg_idx));
 
-    return regFile.readFloatReg(phys_reg);
+    return archState->readFloatReg(reg_idx);
 }
 
 template <class Impl>
@@ -1411,10 +1113,8 @@ uint64_t
 FFCPU<Impl>::readArchFloatRegInt(int reg_idx, ThreadID tid)
 {
     fpRegfileReads++;
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-        RegId(FloatRegClass, reg_idx));
 
-    return regFile.readFloatRegBits(phys_reg);
+    return archState->readFloatRegBits(reg_idx);
 }
 
 template <class Impl>
@@ -1422,9 +1122,7 @@ auto
 FFCPU<Impl>::readArchVecReg(int reg_idx, ThreadID tid) const
         -> const VecRegContainer&
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-                RegId(VecRegClass, reg_idx));
-    return readVecReg(phys_reg);
+    panic("No Vec support in RV-ForwardFlow");
 }
 
 template <class Impl>
@@ -1432,9 +1130,7 @@ auto
 FFCPU<Impl>::getWritableArchVecReg(int reg_idx, ThreadID tid)
         -> VecRegContainer&
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-                RegId(VecRegClass, reg_idx));
-    return getWritableVecReg(phys_reg);
+    panic("No Vec support in RV-ForwardFlow");
 }
 
 template <class Impl>
@@ -1442,20 +1138,14 @@ auto
 FFCPU<Impl>::readArchVecElem(const RegIndex& reg_idx, const ElemIndex& ldx,
                                  ThreadID tid) const -> const VecElem&
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-                                RegId(VecRegClass, reg_idx, ldx));
-    return readVecElem(phys_reg);
+    panic("No Vec support in RV-ForwardFlow");
 }
 
 template <class Impl>
 CCReg
 FFCPU<Impl>::readArchCCReg(int reg_idx, ThreadID tid)
 {
-    ccRegfileReads++;
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-        RegId(CCRegClass, reg_idx));
-
-    return regFile.readCCReg(phys_reg);
+    panic("No CC support in RV-ForwardFlow");
 }
 
 template <class Impl>
@@ -1463,10 +1153,8 @@ void
 FFCPU<Impl>::setArchIntReg(int reg_idx, uint64_t val, ThreadID tid)
 {
     intRegfileWrites++;
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-            RegId(IntRegClass, reg_idx));
 
-    regFile.setIntReg(phys_reg, val);
+    archState->setIntReg(reg_idx, val);
 }
 
 template <class Impl>
@@ -1474,10 +1162,8 @@ void
 FFCPU<Impl>::setArchFloatReg(int reg_idx, float val, ThreadID tid)
 {
     fpRegfileWrites++;
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-            RegId(FloatRegClass, reg_idx));
 
-    regFile.setFloatReg(phys_reg, val);
+    archState->setFloatReg(reg_idx, val);
 }
 
 template <class Impl>
@@ -1485,10 +1171,8 @@ void
 FFCPU<Impl>::setArchFloatRegInt(int reg_idx, uint64_t val, ThreadID tid)
 {
     fpRegfileWrites++;
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-            RegId(FloatRegClass, reg_idx));
 
-    regFile.setFloatRegBits(phys_reg, val);
+    archState->setFloatRegBits(reg_idx, val);
 }
 
 template <class Impl>
@@ -1496,9 +1180,8 @@ void
 FFCPU<Impl>::setArchVecReg(int reg_idx, const VecRegContainer& val,
                                ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-                RegId(VecRegClass, reg_idx));
-    setVecReg(phys_reg, val);
+
+    panic("No Vec support in RV-ForwardFlow");
 }
 
 template <class Impl>
@@ -1506,55 +1189,49 @@ void
 FFCPU<Impl>::setArchVecElem(const RegIndex& reg_idx, const ElemIndex& ldx,
                                 const VecElem& val, ThreadID tid)
 {
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-                RegId(VecRegClass, reg_idx, ldx));
-    setVecElem(phys_reg, val);
+    panic("No Vec support in RV-ForwardFlow");
 }
 
 template <class Impl>
 void
 FFCPU<Impl>::setArchCCReg(int reg_idx, CCReg val, ThreadID tid)
 {
-    ccRegfileWrites++;
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-            RegId(CCRegClass, reg_idx));
-
-    regFile.setCCReg(phys_reg, val);
+    panic("No CC support in RV-ForwardFlow");
 }
 
 template <class Impl>
 TheISA::PCState
 FFCPU<Impl>::pcState(ThreadID tid)
 {
-    return commit.pcState(tid);
+    return diewc.pcState();
 }
 
 template <class Impl>
 void
 FFCPU<Impl>::pcState(const TheISA::PCState &val, ThreadID tid)
 {
-    commit.pcState(val, tid);
+    diewc.pcState(val);
 }
 
 template <class Impl>
 Addr
 FFCPU<Impl>::instAddr(ThreadID tid)
 {
-    return commit.instAddr(tid);
+    return diewc.instAddr();
 }
 
 template <class Impl>
 Addr
 FFCPU<Impl>::nextInstAddr(ThreadID tid)
 {
-    return commit.nextInstAddr(tid);
+    return diewc.nextInstAddr();
 }
 
 template <class Impl>
 MicroPC
 FFCPU<Impl>::microPC(ThreadID tid)
 {
-    return commit.microPC(tid);
+    return diewc.microPC();
 }
 
 template <class Impl>
@@ -1562,7 +1239,7 @@ void
 FFCPU<Impl>::squashFromTC(ThreadID tid)
 {
     this->thread[tid]->noSquashFromTC = true;
-    this->commit.generateTCEvent(tid);
+    this->diewc.generateTCEvent(tid);
 }
 
 template <class Impl>
@@ -1621,14 +1298,15 @@ FFCPU<Impl>::removeInstsNotInROB(ThreadID tid)
 
     bool rob_empty = false;
 
+    // todo: fix in FF
     if (instList.empty()) {
         return;
-    } else if (rob.isEmpty(tid)) {
+    } else if (dq->isEmpty()) {
         DPRINTF(FFCPU, "ROB is empty, squashing all insts.\n");
         end_it = instList.begin();
         rob_empty = true;
     } else {
-        end_it = (rob.readTailInst(tid))->getInstListIt();
+        end_it = (dq->getTail())->getInstListIt();
         DPRINTF(FFCPU, "ROB is not empty, squashing insts not in ROB.\n");
     }
 
@@ -1751,14 +1429,7 @@ FFCPU<Impl>::dumpInsts()
         ++num;
     }
 }
-/*
-template <class Impl>
-void
-FFCPU<Impl>::wakeDependents(DynInstPtr &inst)
-{
-    iew.wakeDependents(inst);
-}
-*/
+
 template <class Impl>
 void
 FFCPU<Impl>::wakeCPU()
@@ -1824,6 +1495,48 @@ FFCPU<Impl>::updateThreadPriority()
         activeThreads.push_back(high_thread);
     }
 }
+
+template<class Impl>
+uint64_t FFCPU<Impl>::readIntReg(DQPointer ptr) {
+    FFRegValue val = dq->readReg(ptr);
+    return val.i;
+}
+
+template<class Impl>
+double FFCPU<Impl>::readFloatReg(DQPointer ptr) {
+    FFRegValue val = dq->readReg(ptr);
+    return val.f;
+}
+
+template<class Impl>
+uint64_t FFCPU<Impl>::readFloatRegBits(DQPointer ptr) {
+    FFRegValue val = dq->readReg(ptr);
+    return val.i;
+}
+
+template<class Impl>
+void FFCPU<Impl>::setIntReg(DQPointer ptr, uint64_t val_) {
+    FFRegValue val;
+    val.i = val_;
+    dq->setReg(ptr, val);
+}
+
+template<class Impl>
+void FFCPU<Impl>::setFloatReg(DQPointer ptr, double val_) {
+    FFRegValue val;
+    val.f = val_;
+    dq->setReg(ptr, val);
+}
+
+template<class Impl>
+void FFCPU<Impl>::setFloatRegBits(DQPointer ptr, uint64_t val_) {
+    FFRegValue val;
+    val.i = val_;
+    dq->setReg(ptr, val);
+}
+
+ThreadID DummyTid = 0;
+
 }
 // Forward declaration of FFCPU.
 template class FF::FFCPU<FFCPUImpl>;

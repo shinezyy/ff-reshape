@@ -24,8 +24,6 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
 
     DQPointer &dest = inst->pointers[0];
     if (dest.valid) {
-
-
         // schedule wake up
         if (wrapper.isSingleCycle) {
             // schedule wb port
@@ -52,6 +50,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
             wrapper.writtenThisCycle = true;
         }
     }
+    return true;
 }
 
 template<class Impl>
@@ -104,7 +103,7 @@ template<class Impl>
 void FUWrapper<Impl>::advance() {
     for (auto &pair: wrappers) {
         SingleFUWrapper &wrapper = pair.second;
-        if (wrapper.isLongLatency) {
+        if (wrapper.isLongLatency && !wrapper.isLSU) {
             wrapper.cycleLeft = std::max(wrapper.cycleLeft + 1, (unsigned) 0);
             if (wrapper.cycleLeft <= 1 && !wbScheduledNext[1]) {
                 wbScheduledNext[1] = true;
@@ -131,4 +130,26 @@ FUWrapper<Impl>::FUWrapper() {
     inv.valid = false;
 }
 
+void
+SingleFUWrapper::init(
+        bool pipe, bool single_cycle, bool long_lat,
+        unsigned _latency, unsigned max_pipe_lat)
+{
+    DQPointer inv;
+    inv.valid = false;
+
+    isPipelined = pipe;
+    isSingleCycle = single_cycle;
+    isLongLatency = long_lat;
+    latency = _latency;
+    MaxPipeLatency = max_pipe_lat;
+    for (unsigned i = 0; i < MaxPipeLatency; i++) {
+        pipelinedPointers.push(inv);
+    }
 }
+
+}
+
+#include "cpu/forwardflow/isa_specific.hh"
+
+template class FF::FUWrapper<FFCPUImpl>;

@@ -5,9 +5,13 @@
 #ifndef __FF_FU_WRAPPER_HH__
 #define __FF_FU_WRAPPER_HH__
 
+#include <queue>
+#include <unordered_map>
+
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/dq_pointer.hh"
-#include "cpu/forwardflow/dyn_inst.hh"
+
+//#include "cpu/forwardflow/dyn_inst.hh"
 #include "cpu/func_unit.hh"
 
 namespace FF{
@@ -16,6 +20,7 @@ struct SingleFUWrapper {
     bool isPipelined;
     bool isSingleCycle;
     bool isLongLatency;
+    bool isLSU;
     bool writtenThisCycle;
 
     unsigned latency;
@@ -26,21 +31,14 @@ struct SingleFUWrapper {
     DQPointer longLatencyPointer;
     DQPointer oneCyclePointer;
 
-    SingleFUWrapper(bool pipe, bool single_cycle, bool long_lat,
-                    unsigned latency,
-                    unsigned max_pipe_lat):
-            isPipelined(pipe),
-            isSingleCycle(single_cycle),
-            isLongLatency(long_lat),
-            latency(latency),
-            MaxPipeLatency(max_pipe_lat){
-        DQPointer inv;
-        inv.valid = false;
+    void init(bool pipe, bool single_cycle, bool long_lat,
+                    unsigned latency, unsigned max_pipe_lat);
 
-        for (unsigned i = 0; i < MaxPipeLatency; i++) {
-            pipelinedPointers.push(inv);
-        }
-    };
+    void markWb() {
+        assert(isLongLatency);
+        assert(isLSU);
+        cycleLeft = 1;
+    }
 };
 
 
@@ -48,15 +46,15 @@ template<class Impl>
 class FUWrapper {
     FuncUnit fu;
 public:
-    using DynInstPtr = BaseO3DynInst<Impl>*;
-//    typedef typename Impl::DynInstPtr DynInstPtr;
+//    using DynInstPtr = BaseO3DynInst<Impl>*;
+    typedef typename Impl::DynInstPtr DynInstPtr;
 
     bool canServe(DynInstPtr &inst);
 
     bool consume(DynInstPtr &inst);
 
-    bool transferPointer();
-    bool transferValue();
+//    bool transferPointer();
+//    bool transferValue();
 
     void tick();
     // tick will
@@ -74,27 +72,23 @@ public:
 
     void startCycle();
 
-    void setPtrQueue(Queue);
-
-    void setValueQueue(Queue);
-
     DQPointer toWakeup;
 
     FUWrapper();
+
 private:
 
     std::unordered_map<OpClass, SingleFUWrapper> wrappers;
 
 //    std::vector<Value> buffer(num_fu);
 
-    std::vector<unsigned> opLat{Num_OpClasses};
-    std::vector<bool> canPipelined{Num_OpClasses};
+    std::vector<unsigned> opLat; // {Num_OpClasses};
+    std::vector<bool> canPipelined; // {Num_OpClasses};
 
     std::bitset<Num_OpClasses> capabilityList;
 
-    unsigned MaxLatency{6};
-    std::bitset<MaxLatency> wbScheduled;
-    std::bitset<MaxLatency> wbScheduledNext;
+    std::bitset<Impl::MaxOpLatency> wbScheduled;
+    std::bitset<Impl::MaxOpLatency> wbScheduledNext;
 
     void setWakeup();
 

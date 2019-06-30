@@ -37,12 +37,15 @@
 
 // Forward declarations.
 namespace FF {
-    template <class Impl>
-    class BaseO3DynInst;
+template <class Impl>
+class BaseO3DynInst;
 
-    template<class Impl>
-    class FFCPU;
+template<class Impl>
+class FFCPU;
 }
+
+using FF::BaseO3DynInst;
+using FF::FFCPU;
 
 /** Implementation specific struct that defines several key types to the
  *  CPU, the stages within the CPU, the time buffers, and the DynInst.
@@ -58,7 +61,7 @@ struct FFCPUImpl
     typedef TheISA::MachInst MachInst;
 
     /** The CPU policy to be used, which defines all of the CPU stages. */
-    typedef FF::SimpleCPUPolicy<FFCPUImpl> CPUPol;
+    typedef FFSimpleCPUPolicy<FFCPUImpl> CPUPol;
 
     /** The DynInst type to be used. */
     typedef FF::BaseO3DynInst<FFCPUImpl> DynInst;
@@ -86,6 +89,9 @@ struct FFCPUImpl
         MaxGroups = 2,
         MaxBanks = 8,
         MaxOps = 4
+    };
+    enum {
+        MaxOpLatency = 6
     };
 };
 

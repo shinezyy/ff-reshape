@@ -5,8 +5,14 @@
 #ifndef __FF_ALLOCATION_HH__
 #define __FF_ALLOCATION_HH__
 
+#include <deque>
+#include <unordered_map>
+
 #include "base/statistics.hh"
-#include "dyn_inst.hh"
+#include "cpu/timebuf.hh"
+#include "dq_pointer.hh"
+
+//#include "dyn_inst.hh"
 
 struct DerivFFCPUParams;
 
@@ -19,8 +25,8 @@ class Allocation
     typedef typename Impl::CPUPol CPUPol;
     typedef typename Impl::O3CPU O3CPU;
 
-//    typedef typename Impl::DynInstPtr DynInstPtr;
-    using DynInstPtr = BaseO3DynInst<Impl>;
+    typedef typename Impl::DynInstPtr DynInstPtr;
+//    using DynInstPtr = BaseO3DynInst<Impl>;
 
     typedef typename Impl::CPUPol::FFDecodeStruct DecodeStruct;
     typedef typename Impl::CPUPol::FFAllocationStruct AllocationStruct;
@@ -33,7 +39,6 @@ private:
     /** Calculates the number of free DQ entries. */
     inline int calcFreeDQEntries();
 
-
     /** Calculates the number of free LQ entries. */
     inline int calcFreeLQEntries();
 
@@ -41,7 +46,6 @@ private:
     inline int calcFreeSQEntries();
     /** Pointer to CPU. */
     O3CPU *cpu;
-
 
     typedef typename CPUPol::TimeStruct TimeStruct;
 
@@ -190,13 +194,17 @@ public:
 public:
     void regStats();
 
+    explicit Allocation(O3CPU*, DerivFFCPUParams*);
+
+    std::string name() const;
+
 private:
     unsigned flatHead, flatTail;
 
     DQPointer PositionfromUint(unsigned);
 
-    const unsigned int indexMask;
     const unsigned int indexWidth;
+    const unsigned int indexMask;
     const unsigned int bankMask;
     const unsigned int dqSize;
 
@@ -207,6 +215,11 @@ private:
         unsigned lqEntries;
         unsigned sqEntries;
     } freeEntries;
+
+    void incrFullStat(FullSource source);
+
+    void serializeAfter(InstQueue &deque);
+
 };
 
 

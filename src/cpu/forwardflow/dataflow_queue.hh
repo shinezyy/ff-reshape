@@ -10,8 +10,9 @@
 #include <vector>
 
 #include "cpu/forwardflow/comm.hh"
-#include "cpu/forwardflow/dyn_inst.hh"
+//#include "cpu/forwardflow/dyn_inst.hh"
 #include "cpu/forwardflow/network.hh"
+#include "cpu/timebuf.hh"
 
 struct DerivFFCPUParams;
 
@@ -21,8 +22,10 @@ namespace FF{
 template <class Impl>
 class DataflowQueueBank{
 
-//    using DynInstPtr = RefCountingPtr<BaseO3DynInst<Impl>>;
     typedef typename Impl::DynInstPtr DynInstPtr;
+//    using DynInstPtr = BaseO3DynInst<Impl>*;
+
+    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
 
     const unsigned nOps{4};
 
@@ -33,7 +36,6 @@ class DataflowQueueBank{
 
     std::vector<DynInstPtr> instArray;
 
-
     // instructions that waiting for only one operands
     boost::dynamic_bitset<> nearlyWakeup;
 
@@ -42,6 +44,7 @@ class DataflowQueueBank{
     std::vector<DQPointer> pendingWakeupPointers;
     bool anyPending;
 
+    std::vector<unsigned> readyIndices;
 
     // input forward pointers
     std::vector<DQPointer> inputPointers;
@@ -52,24 +55,36 @@ class DataflowQueueBank{
 
     // output forward pointers
     // init according to nops
+
     std::vector<DQPointer> outputPointers;
 
 public:
-    DataflowQueueBank(DerivFFCPUParams *params);
+    explicit DataflowQueueBank(DerivFFCPUParams *params);
 
     bool canServeNew();
 
     bool wakeup(DQPointer pointer);
 
-    std::tuple<bool, DynInstPtr &> wakeupInstsFromBank();
+    std::tuple<bool, DynInstPtr> wakeupInstsFromBank();
 
     const std::vector<DQPointer> readPointersFromBank();
 
     DynInstPtr &readInstsFromBank(DQPointer pointer);
 
+    void writeInstsToBank(DQPointer pointer, DynInstPtr& inst);
+
+    void checkReadiness(DQPointer pointer);
+
+    DynInstPtr findInst(InstSeqNum) const;
+
     bool instGranted;
 
     void tick();
+
+    std::vector<std::array<DQPointer, 4>> prematureFwPointers;
+
+    void resetState();
+
 };
 
 
@@ -82,28 +97,28 @@ private:
 public:
     typedef typename Impl::O3CPU O3CPU;
 
-//    typedef typename Impl::DynInstPtr DynInstPtr;
-    using DynInstPtr = BaseO3DynInst<Impl>*;
+    typedef typename Impl::DynInstPtr DynInstPtr;
+//    using DynInstPtr = BaseO3DynInst<Impl>*;
 
-    typedef typename Impl::CPUPol::IEW IEW;
+    typedef typename Impl::CPUPol::DIEWC DIEWC;
     typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
     typedef typename Impl::CPUPol::DQStruct DQStruct;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
 
-//    typedef typename Impl::CPUPol::DataflowQueueBank DataflowQueueBank;
-    using XDataflowQueueBank = DataflowQueueBank<Impl>;
+    typedef typename Impl::CPUPol::DataflowQueueBank XDataflowQueueBank;
+//    using XDataflowQueueBank = DataflowQueueBank<Impl>;
 
     const unsigned WritePorts, ReadPorts;
 
     unsigned writes, reads;
 
-    bool insert(DynInstPtr &ptr);
+    bool insert(DynInstPtr &inst);
 
     void tick();
 
     void clear();
 
-    DataflowQueues(DerivFFCPUParams *);
+    explicit DataflowQueues(DerivFFCPUParams *);
 
 private:
     // init from params
@@ -111,9 +126,13 @@ private:
     const unsigned nOps;
     const unsigned nFUGroups;
 
-    std::vector<std::queue<DQPointer>> wake_queues;
+    const unsigned depth;
 
-    std::vector<std::queue<Packet<PointerPair>>> forwardPointerQueue;
+    const unsigned queueSize;
+
+    std::vector<std::queue<WKPointer>> wakeQueues;
+
+    std::vector<std::queue<DQPacket<PointerPair>>> forwardPointerQueue;
 
     std::vector<XDataflowQueueBank> dqs;
 
@@ -122,8 +141,8 @@ private:
     typename TimeBuffer<DQStruct>::wire toNextCycle;
     typename TimeBuffer<DQStruct>::wire fromLastCycle;
 
-    std::vector<bost> wakenValids;
-    std::vector<DynInstPtr> wakenInsts;
+//    std::vector<bool> wakenValids;
+//    std::vector<DynInstPtr> wakenInsts;
 
     OmegaNetwork<DynInstPtr> bankFUNet;
 
@@ -131,51 +150,130 @@ private:
 
     OmegaNetwork<PointerPair> pointerQueueBankNet;
 
-    std::vector<Packet<DynInstPtr>> fu_requests;
+    std::vector<DQPacket<DynInstPtr>> fu_requests;
     std::vector<bool> fu_req_granted;
-    std::vector<Packet<DynInstPtr>*> fu_req_ptrs;
-    std::vector<Packet<DynInstPtr>*> fu_granted_ptrs;
+    std::vector<DQPacket<DynInstPtr>*> fu_req_ptrs;
+    std::vector<DQPacket<DynInstPtr>*> fu_granted_ptrs;
 
-    std::vector<Packet<DQPointer>> wakeup_requests;
+    std::vector<DQPacket<DQPointer>> wakeup_requests;
     std::vector<bool> wake_req_granted;
-    std::vector<Packet<DQPointer>*> wakeup_req_ptrs;
-    std::vector<Packet<DQPointer>*> wakeup_granted_ptrs;
+    std::vector<DQPacket<DQPointer>*> wakeup_req_ptrs;
+    std::vector<DQPacket<DQPointer>*> wakeup_granted_ptrs;
 
-    std::vector<Packet<PointerPair>> insert_requests;
+    std::vector<DQPacket<PointerPair>> insert_requests;
     std::vector<bool> insert_req_granted;
-    std::vector<Packet<PointerPair>*> insert_req_ptrs;
-    std::vector<Packet<PointerPair>*> insert_granted_ptrs;
+    std::vector<DQPacket<PointerPair>*> insert_req_ptrs;
+    std::vector<DQPacket<PointerPair>*> insert_granted_ptrs;
 
     std::vector<FUWrapper> fuWrappers;
 
-    const unsigned maxQueueDepth;
-
     boost::dynamic_bitset<> coordinateFU(DynInstPtr &inst, unsigned bank);
 
-    std::vector<std::vecotr<bool>> fuGroupCaps;
+    std::vector<std::vector<bool>> fuGroupCaps;
     std::vector<unsigned> fuPointer;
-    std::vector llBlocked;
-    std::vector llBlockedNext;
+    bool llBlocked;
+    bool llBlockedNext;
 
     boost::dynamic_bitset<> uint2Bits(unsigned);
-
-    void insertForwardPointer(PointerPair pair);
-
-    DynInstPtr getHead();
 
     unsigned head, tail;
 
     DQPointer uint2Pointer(unsigned);
 
+    unsigned pointer2uint(DQPointer);
+
 public:
+    unsigned getHeadPtr() const {return head;}
+    unsigned getTailPtr() const {return tail;}
+
     void retireHead();
 
     unsigned int indexMask;
     unsigned int indexWidth;
     unsigned int bankMask;
 
+    DynInstPtr getHead();
+
+    DynInstPtr getTail();
+
+    void squash(InstSeqNum );
+
+    bool isFull();
+
+    unsigned numInDQ();
+
+    unsigned numFree();
+
+    bool isEmpty();
+
+    void insertBarrier(DynInstPtr &inst);
+
+    void insertNonSpec(DynInstPtr &inst);
+
+//    void recordProducer(DynInstPtr &inst);
+
+    void insertForwardPointer(PointerPair pair);
+
+    bool stallToUnclog();
+
+    DynInstPtr findInst(InstSeqNum seq_to_quash) const;
+
+    FFRegValue readReg(DQPointer pointer);
+
+    void setReg(DQPointer pointer, FFRegValue val);
+
+    void addReadyMemInst(DynInstPtr);
+
+    void rescheduleMemInst(DynInstPtr &inst);
+
+    /** Re-executes all rescheduled memory instructions. */
+    void replayMemInst(DynInstPtr &inst);
+
+    /** Moves memory instruction onto the list of cache blocked instructions */
+    void blockMemInst(DynInstPtr &inst);
+
+    void cacheUnblocked();
+
+    void drainSanityCheck() const;
+
+    void takeOverFrom();
+
+    void resetState();
+
+    void resetEntries();
 private:
+
+    unsigned readyMemInstPtr;
+
     unsigned forwardPtrIndex;
+
+    /** Pointer to CPU. */
+    O3CPU *cpu;
+
+    const unsigned maxQueueDepth;
+
+
+    unsigned numPendingWakeups;
+    unsigned numPendingWakeupMax;
+    const unsigned PendingWakeupThreshold;
+    const unsigned PendingWakeupMaxThreshold;
+
+    unsigned numPendingFwPointers;
+    unsigned numPendingFwPointerMax;
+    const unsigned PendingFwPointerThreshold;
+
+    bool wakeupQueueClogging();
+    bool fwPointerQueueClogging();
+
+    std::vector<FFRegValue> regFile;
+
+    MemDepUnit memDepUnit;
+
+    void markFwPointers(std::array<DQPointer, 4> &pointers, PointerPair &pair);
+
+    std::list<DynInstPtr> blockedMemInsts;
+
+    std::list<DynInstPtr> retryMemInsts;
 };
 
 }

@@ -32,49 +32,35 @@
 #ifndef __CPU_FF_CPU_POLICY_HH__
 #define __CPU_FF_CPU_POLICY_HH__
 
+#include "cpu/forwardflow/allocation.hh"
 #include "cpu/forwardflow/arch_state.hh"
 #include "cpu/forwardflow/comm.hh"
-#include "cpu/forwardflow/commit.hh"
 #include "cpu/forwardflow/dataflow_queue.hh"
 #include "cpu/forwardflow/decode.hh"
+#include "cpu/forwardflow/diewc.hh"
 #include "cpu/forwardflow/fetch.hh"
-#include "cpu/forwardflow/free_list.hh"
 #include "cpu/forwardflow/fu_wrapper.hh"
-#include "cpu/forwardflow/iew.hh"
-#include "cpu/forwardflow/inst_queue.hh"
 #include "cpu/forwardflow/lsq.hh"
 #include "cpu/forwardflow/lsq_unit.hh"
 #include "cpu/forwardflow/mem_dep_unit.hh"
-#include "cpu/forwardflow/regfile.hh"
-#include "cpu/forwardflow/rename.hh"
-#include "cpu/forwardflow/rename_map.hh"
-#include "cpu/forwardflow/rob.hh"
 #include "cpu/forwardflow/store_set.hh"
 
 /**
  * Struct that defines the key classes to be used by the CPU.  All
  * classes use the typedefs defined here to determine what are the
- * classes of the other stages and communication buffers.  In order to
+ * classes of the other stages anda1042f344985655c0b1c3774178e33b0aa15a658 communication buffers.  In order to
  * change a structure such as the IQ, simply change the typedef here
  * to use the desired class instead, and recompile.  In order to
  * create a different CPU to be used simultaneously with this one, see
  * the alpha_impl.hh file for instructions.
  */
-namespace FF{
+//namespace FF{
 
 template<class Impl>
-struct SimpleCPUPolicy
+struct FFSimpleCPUPolicy
 {
-    /** Typedef for the freelist of registers. */
-    typedef FF::UnifiedFreeList FreeList;
-    /** Typedef for the rename map. */
-    typedef FF::UnifiedRenameMap RenameMap;
-    /** Typedef for the ROB. */
-    typedef FF::ROB<Impl> ROB;
-    /** Typedef for the instruction queue/scheduler. */
-    typedef FF::InstructionQueue<Impl> IQ;
     /** Typedef for the memory dependence unit. */
-    typedef FF::MemDepUnit<StoreSet, Impl> MemDepUnit;
+    typedef FF::MemDepUnit<FF::StoreSet, Impl> MemDepUnit;
     /** Typedef for the LSQ. */
     typedef FF::LSQ<Impl> LSQ;
     /** Typedef for the thread-specific LSQ units. */
@@ -84,12 +70,6 @@ struct SimpleCPUPolicy
     typedef FF::DefaultFetch<Impl> Fetch;
     /** Typedef for decode. */
     typedef FF::DefaultDecode<Impl> Decode;
-    /** Typedef for rename. */
-    typedef FF::DefaultRename<Impl> Rename;
-    /** Typedef for Issue/Execute/Writeback. */
-    typedef FF::DefaultIEW<Impl> IEW;
-    /** Typedef for commit. */
-    typedef FF::DefaultCommit<Impl> Commit;
 
     /** The struct for communication between fetch and decode. */
     typedef FF::DefaultFetchDefaultDecode<Impl> FetchStruct;
@@ -124,10 +104,14 @@ struct SimpleCPUPolicy
     /** The struct for communication between allocation and diewc. */
     typedef FF::Allocation2DIEWC<Impl> FFAllocationStruct;
 
-    typedef FF::DIEWC2DIEWC<Impl> DIEWC2DIEWC;
+    typedef FF::Allocation<Impl> Allocation;
+
+//    typedef FF::DIEWC2DIEWC<Impl> DIEWC2DIEWC;
 
     typedef FF::ArchState<Impl> ArchState;
+
+    typedef FF::FFDIEWC<Impl> DIEWC;
 };
 
-}
+//}
 #endif //__CPU_FF_CPU_POLICY_HH__

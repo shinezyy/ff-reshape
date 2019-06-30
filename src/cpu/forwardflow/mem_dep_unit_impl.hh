@@ -45,7 +45,6 @@
 
 #include <map>
 
-#include "cpu/forwardflow/inst_queue.hh"
 #include "cpu/forwardflow/mem_dep_unit.hh"
 #include "debug/MemDepUnit.hh"
 #include "params/DerivFFCPU.hh"
@@ -166,7 +165,7 @@ MemDepUnit<MemDepPred, Impl>::takeOverFrom()
 
 template <class MemDepPred, class Impl>
 void
-MemDepUnit<MemDepPred, Impl>::setIQ(InstructionQueue<Impl> *iq_ptr)
+MemDepUnit<MemDepPred, Impl>::setIQ(InstructionQueue *iq_ptr)
 {
     iqPtr = iq_ptr;
 }
