@@ -36,10 +36,10 @@ public:
     typedef typename CPUPol::DataflowQueues XDataflowQueues;
 //    using XDataflowQueues = DataflowQueues<Impl>;
 
-    typedef typename CPUPol::FFAllocationStruct AllocationStruct;
 //    typedef typename CPUPol::DIEWC2DIEWC DIEWC2DIEWC;
     typedef typename CPUPol::TimeStruct TimeStruct;
     typedef typename CPUPol::FetchStruct FetchStruct;
+    typedef typename CPUPol::FFAllocationStruct AllocationStruct;
     typedef typename CPUPol::ArchState ArchState;
     typedef typename CPUPol::FUWrapper FUWrapper;
 
@@ -353,6 +353,8 @@ public:
 
     void setFetchQueue(TimeBuffer<FetchStruct> *fq_ptr);
 
+    void setAllocQueue(TimeBuffer<AllocationStruct> *aq_ptr);
+
     /** Sets the list of threads. */
     void setThreads(std::vector<Thread *> &threads);
 
@@ -389,6 +391,9 @@ public:
     Stats::Scalar predictedTakenIncorrect;
     Stats::Scalar predictedNotTakenIncorrect;
 
+    ArchState *getArchState() {return &archState;};
+
+    XDataflowQueues *getDQ() {return &dq;};
 };
 
 

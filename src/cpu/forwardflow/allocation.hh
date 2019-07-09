@@ -59,7 +59,7 @@ private:
     typename TimeBuffer<TimeStruct>::wire toDecode;
 
     /** Allocation instruction queue. */
-    TimeBuffer<AllocationStruct> *renameQueue;
+    TimeBuffer<AllocationStruct> *allocationQueue;
 
     /** Wire to write any information heading to DIEWC. */
     typename TimeBuffer<AllocationStruct>::wire toDIEWC;
@@ -197,6 +197,10 @@ public:
     explicit Allocation(O3CPU*, DerivFFCPUParams*);
 
     std::string name() const;
+
+    void setDecodeQueue(TimeBuffer<DecodeStruct> *dcq);
+
+    void setAllocQueue(TimeBuffer<AllocationStruct> *alq);
 
 private:
     unsigned flatHead, flatTail;

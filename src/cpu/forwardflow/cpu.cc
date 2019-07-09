@@ -165,8 +165,8 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
       timeBuffer(params->backComSize, params->forwardComSize),
       fetchQueue(params->backComSize, params->forwardComSize),
       decodeQueue(params->backComSize, params->forwardComSize),
-      renameQueue(params->backComSize, params->forwardComSize),
-      iewQueue(params->backComSize, params->forwardComSize),
+//      renameQueue(params->backComSize, params->forwardComSize),
+//      iewQueue(params->backComSize, params->forwardComSize),
       activityRec(name(), NumStages,
                   params->backComSize + params->forwardComSize,
                   params->activity),
@@ -213,8 +213,15 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
     fetch.setFetchQueue(&fetchQueue);
     decode.setFetchQueue(&fetchQueue);
     diewc.setFetchQueue(&fetchQueue);
+
     decode.setDecodeQueue(&decodeQueue);
+    allocation.setDecodeQueue(&decodeQueue);
+
+    allocation.setAllocQueue(&allocationQueue);
+    diewc.setAllocQueue(&allocationQueue);
 //    diewc.setIEWQueue(&iewQueue); // todo: set self-to-self queue
+
+    setPointers();
 
     ThreadID active_threads;
     if (FullSystem) {
@@ -304,6 +311,7 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
 
     for (ThreadID tid = 0; tid < this->numThreads; tid++)
         this->thread[tid]->setFuncExeInst(0);
+
 }
 
 template <class Impl>
@@ -471,7 +479,6 @@ FFCPU<Impl>::tick()
 
     fetchQueue.advance();
     decodeQueue.advance();
-    renameQueue.advance();
 //    iewQueue.advance();  //todo: advance diewc queue
 
     activityRec.advance();
@@ -912,8 +919,7 @@ FFCPU<Impl>::drain()
             timeBuffer.advance();
             fetchQueue.advance();
             decodeQueue.advance();
-            renameQueue.advance();
-            iewQueue.advance();
+//            iewQueue.advance();
         }
 
         drainSanityCheck();
@@ -1534,6 +1540,13 @@ void FFCPU<Impl>::setFloatRegBits(DQPointer ptr, uint64_t val_) {
     FFRegValue val;
     val.i = val_;
     dq->setReg(ptr, val);
+}
+
+template<class Impl>
+void FFCPU<Impl>::setPointers()
+{
+    archState = diewc.getArchState();
+    dq = diewc.getDQ();
 }
 
 ThreadID DummyTid = 0;

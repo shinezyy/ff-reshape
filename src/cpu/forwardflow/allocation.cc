@@ -532,6 +532,20 @@ void Allocation<Impl>::serializeAfter(Allocation::InstQueue &insts) {
 
 }
 
+template<class Impl>
+void Allocation<Impl>::setDecodeQueue(TimeBuffer<DecodeStruct> *dcq)
+{
+    decodeQueue = dcq;
+    fromDecode = decodeQueue->getWire(-1);
+}
+
+template<class Impl>
+void Allocation<Impl>::setAllocQueue(TimeBuffer<AllocationStruct > *alq)
+{
+    allocationQueue = alq;
+    toDIEWC = allocationQueue->getWire(0);
+}
+
 }
 
 

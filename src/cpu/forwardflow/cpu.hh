@@ -592,11 +592,11 @@ class FFCPU : public BaseO3CPU
 
     typedef typename CPUPolicy::FetchStruct FetchStruct;
 
-    typedef typename CPUPolicy::DecodeStruct DecodeStruct;
+    typedef typename CPUPolicy::FFDecodeStruct DecodeStruct;
 
-    typedef typename CPUPolicy::RenameStruct RenameStruct;
+    typedef typename CPUPolicy::FFAllocationStruct AllocationStruct;
 
-    typedef typename CPUPolicy::IEWStruct IEWStruct;
+//    typedef typename CPUPolicy::IEWStruct IEWStruct;
 
     /** The main time buffer to do backwards communication. */
     TimeBuffer<TimeStruct> timeBuffer;
@@ -607,11 +607,13 @@ class FFCPU : public BaseO3CPU
     /** The decode stage's instruction queue. */
     TimeBuffer<DecodeStruct> decodeQueue;
 
+    TimeBuffer<AllocationStruct> allocationQueue;
+
     /** The rename stage's instruction queue. */
-    TimeBuffer<RenameStruct> renameQueue;
+//    TimeBuffer<RenameStruct> renameQueue;
 
     /** The IEW stage's instruction queue. */
-    TimeBuffer<IEWStruct> iewQueue;
+//    TimeBuffer<IEWStruct> iewQueue;
 
   private:
     /** The activity recorder; used to tell if the CPU has any
@@ -736,6 +738,9 @@ class FFCPU : public BaseO3CPU
     //number of misc
     Stats::Scalar miscRegfileReads;
     Stats::Scalar miscRegfileWrites;
+
+private:
+    void setPointers();
 };
 
 }

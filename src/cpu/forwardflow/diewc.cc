@@ -574,6 +574,11 @@ FFDIEWC<Impl>::commitInsts()
 
         head_inst = getHeadInst();
 
+        if (!head_inst) {
+            num_committed++;
+            continue;
+        }
+
         DPRINTF(Commit, "Trying to commit head instruction, [sn:%i]\n",
                 head_inst->seqNum);
 
@@ -1275,6 +1280,14 @@ void FFDIEWC<Impl>::regStats()
 
     dq.regStats();
     ldstQueue.regStats();
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::setAllocQueue(TimeBuffer<AllocationStruct> *aq_ptr)
+{
+    allocationQueue = aq_ptr;
+
+    fromAllocation = allocationQueue->getWire(-1);
 }
 
 }

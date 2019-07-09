@@ -70,7 +70,7 @@ class DefaultDecode
 
     // Typedefs from the CPU policy.
     typedef typename CPUPol::FetchStruct FetchStruct;
-    typedef typename CPUPol::DecodeStruct DecodeStruct;
+    typedef typename CPUPol::FFDecodeStruct DecodeStruct;
     typedef typename CPUPol::TimeStruct TimeStruct;
 
   public:
