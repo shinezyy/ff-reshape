@@ -11,6 +11,7 @@
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
 #include "params/DerivFFCPU.hh"
+#include "store_set.hh"
 
 namespace FF{
 
@@ -1256,6 +1257,24 @@ void FFDIEWC<Impl>::regStats()
     predictedNotTakenIncorrect
         .name(name() + "predictedNotTakenIncorrect")
         .desc("predictedNotTakenIncorrect");
+
+    commitEligibleSamples
+            .name(name() + "ommitEligibleSamples")
+            .desc("ommitEligibleSamples");
+
+    statCommittedInstType
+            .init(Num_OpClasses)
+            .name(name() + "statCommittedInstType")
+            .desc("statCommittedInstType");
+
+    numCommittedDist
+            .init(0, width, 1)
+            .name(name() + "numCommittedDist")
+            .desc("numCommittedDist")
+            .flags(Stats::pdf);
+
+    dq.regStats();
+    ldstQueue.regStats();
 }
 
 }

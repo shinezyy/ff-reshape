@@ -392,6 +392,7 @@ FFCPU<Impl>::regStats()
 
     this->fetch.regStats();
     this->decode.regStats();
+    this->allocation.regStats();
     this->diewc.regStats();
 
     intRegfileReads

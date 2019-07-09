@@ -241,6 +241,8 @@ public:
     void resetState();
 
     void resetEntries();
+
+    void regStats();
 private:
 
     unsigned readyMemInstPtr;

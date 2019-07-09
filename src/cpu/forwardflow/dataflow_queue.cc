@@ -678,6 +678,12 @@ void DataflowQueues<Impl>::resetEntries()
     // todo: it seems that DQ has nothing to do yet?
 }
 
+template<class Impl>
+void DataflowQueues<Impl>::regStats()
+{
+    memDepUnit.regStats();
+}
+
 }
 
 #include "cpu/forwardflow/isa_specific.hh"
