@@ -165,6 +165,8 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
       timeBuffer(params->backComSize, params->forwardComSize),
       fetchQueue(params->backComSize, params->forwardComSize),
       decodeQueue(params->backComSize, params->forwardComSize),
+      allocationQueue(params->backComSize, params->forwardComSize),
+      DQQueue(params->backComSize, params->forwardComSize),
 //      renameQueue(params->backComSize, params->forwardComSize),
 //      iewQueue(params->backComSize, params->forwardComSize),
       activityRec(name(), NumStages,
@@ -207,6 +209,7 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
     // Give each of the stages the time buffer they will use.
     fetch.setTimeBuffer(&timeBuffer);
     decode.setTimeBuffer(&timeBuffer);
+    allocation.setTimeBuffer(&timeBuffer);
     diewc.setTimeBuffer(&timeBuffer);
 
     // Also setup each of the stages' queues.
@@ -222,6 +225,8 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
 //    diewc.setIEWQueue(&iewQueue); // todo: set self-to-self queue
 
     setPointers();
+
+    dq->setTimeBuf(&DQQueue);
 
     ThreadID active_threads;
     if (FullSystem) {
@@ -472,6 +477,8 @@ FFCPU<Impl>::tick()
 
     decode.tick();
 
+    allocation.tick();
+
     diewc.tick();
 
     // Now advance the time buffers
@@ -479,7 +486,8 @@ FFCPU<Impl>::tick()
 
     fetchQueue.advance();
     decodeQueue.advance();
-//    iewQueue.advance();  //todo: advance diewc queue
+    allocationQueue.advance();
+    DQQueue.advance();
 
     activityRec.advance();
 
@@ -546,6 +554,7 @@ FFCPU<Impl>::startup()
 
     fetch.startupStage();
     decode.startupStage();
+    allocation.startupStage();
     diewc.startupStage();
 }
 
@@ -919,7 +928,8 @@ FFCPU<Impl>::drain()
             timeBuffer.advance();
             fetchQueue.advance();
             decodeQueue.advance();
-//            iewQueue.advance();
+            allocationQueue.advance();
+            DQQueue.advance();
         }
 
         drainSanityCheck();

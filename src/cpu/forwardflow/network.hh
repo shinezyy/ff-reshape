@@ -12,6 +12,8 @@
 #include <boost/dynamic_bitset.hpp>
 
 #include "base/intmath.hh"
+#include "base/trace.hh"
+#include "debug/Omega.hh"
 
 namespace FF{
 
@@ -79,6 +81,8 @@ CrossBar<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
     int direction_bit = bits - stage - 1;
 
     DQPacket<T> * inputs[2];
+    assert(input0);
+    assert(input1);
     inputs[0] = input0;
     inputs[1] = input1;
 
@@ -86,8 +90,14 @@ CrossBar<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
     bool low_granted;
     low_granted = false;
 
-    int high_demand = inputs[high]->destBits[direction_bit];
-    int low_demand = inputs[low]->destBits[direction_bit];
+    DPRINTF(Omega, "high = %d, low = %d\n", high, low);
+    DPRINTF(Omega, "destBits size = %d, direction_bit = %d\n",
+            inputs[high]->destBits.size(), direction_bit);
+
+    int high_demand = inputs[high]->valid ?
+            inputs[high]->destBits[direction_bit] : 0;
+    int low_demand = inputs[low]->valid ?
+            inputs[low]->destBits[direction_bit] : 0;
 
     if (inputs[high]->valid) {
         outputs[high_demand] = inputs[high];
@@ -97,6 +107,7 @@ CrossBar<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
         outputs[low_demand] = inputs[low];
     }
 
+    DPRINTF(Omega, "X reach 4\n");
     return make_tuple(outputs[0], outputs[1]);
 }
 
@@ -124,7 +135,9 @@ std::vector<DQPacket<T> *>
         OmegaNetwork<T>::select(std::vector<DQPacket<T> *> &_inputs)
 {
     array<vector<DQPacket<T>*>, 2> buffer;
-    fill(buffer.begin(), buffer.end(), vector<DQPacket<T>*>(size));
+//    fill(buffer.begin(), buffer.end(), vector<DQPacket<T>*>(size));
+    buffer[0] = _inputs;
+    buffer[1] = vector<DQPacket<T>*>(size);
 
     vector<DQPacket<T>*> *inputs = &buffer[0], *outputs = &buffer[1];
 //    vector<bool> grants(size, false);
@@ -133,6 +146,13 @@ std::vector<DQPacket<T> *>
         connect(inputs, outputs);
         swap(inputs, outputs);
         for (uint32_t y = 0; y < size/2; y += 2) {
+            assert(y < outputs->size());
+            assert(y + 1 < outputs->size());
+            assert(y < inputs->size());
+            assert(y + 1 < inputs->size());
+            assert(y/2 < switches.size());
+            assert(x < switches[y/2].size());
+
             tie((*outputs)[y], (*outputs)[y+1]) =
                     switches[y/2][x].cross((*inputs)[y], (*inputs)[y+1]);
         }

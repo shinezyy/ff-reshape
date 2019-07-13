@@ -42,54 +42,54 @@ from m5.SimObject import SimObject
 from m5.defines import buildEnv
 from m5.params import *
 from FuncUnit import *
+import copy
 
-class IntALU(FUDesc):
-    opList = [ OpDesc(opClass='IntAlu') ]
-    count = 4
+commonOpList = [ OpDesc(opClass='IntAlu'),
+        OpDesc(opClass='MemRead'), OpDesc(opClass='MemWrite'),
+        OpDesc(opClass='FloatMemRead'), OpDesc(opClass='FloatMemWrite')]
 
-class IntMultDiv(FUDesc):
-    opList = [ OpDesc(opClass='IntMult', opLat=3),
-               OpDesc(opClass='IntDiv', opLat=20, pipelined=False) ]
-
-    # DIV and IDIV instructions in x86 are implemented using a loop which
-    # issues division microops.  The latency of these microops should really be
-    # one (or a small number) cycle each since each of these computes one bit
-    # of the quotient.
-    if buildEnv['TARGET_ISA'] in ('x86'):
-        opList[1].opLat=1
-
-    count=2
-
-class FP_ALU(FUDesc):
-    opList = [ OpDesc(opClass='FloatAdd', opLat=2),
-               OpDesc(opClass='FloatCmp', opLat=2),
-               OpDesc(opClass='FloatCvt', opLat=2) ]
-    count = 2
-
-class FP_MultDiv(FUDesc):
-    opList = [ OpDesc(opClass='FloatMult', opLat=4),
-               OpDesc(opClass='FloatMultAcc', opLat=5),
-               OpDesc(opClass='FloatMisc', opLat=3),
-               OpDesc(opClass='FloatDiv', opLat=12, pipelined=False),
-               OpDesc(opClass='FloatSqrt', opLat=24, pipelined=False) ]
-    count = 2
-
-class ReadPort(FUDesc):
-    opList = [ OpDesc(opClass='MemRead'),
-               OpDesc(opClass='FloatMemRead') ]
-    count = 0
-
-class WritePort(FUDesc):
-    opList = [ OpDesc(opClass='MemWrite'),
-               OpDesc(opClass='FloatMemWrite') ]
-    count = 0
-
-class RdWrPort(FUDesc):
-    opList = [ OpDesc(opClass='MemRead'), OpDesc(opClass='MemWrite'),
-               OpDesc(opClass='FloatMemRead'), OpDesc(opClass='FloatMemWrite')]
-    count = 4
-
-class IprPort(FUDesc):
-    opList = [ OpDesc(opClass='IprAccess', opLat = 3, pipelined = False) ]
+class GroupCommon(FUDesc):
     count = 1
+
+class Group0(GroupCommon):
+    opList = copy.deepcopy(commonOpList)
+    # int MD
+    opList += [ OpDesc(opClass='IntMult', opLat=3),
+            OpDesc(opClass='IntDiv', opLat=20, pipelined=False) ]
+    # FP MD
+    opList += [ OpDesc(opClass='FloatMult', opLat=4),
+            OpDesc(opClass='FloatMultAcc', opLat=5),
+            OpDesc(opClass='FloatMisc', opLat=3),
+            OpDesc(opClass='FloatDiv', opLat=12, pipelined=False),
+            OpDesc(opClass='FloatSqrt', opLat=24, pipelined=False) ]
+
+class Group1(GroupCommon):
+    opList = copy.deepcopy(commonOpList)
+    # FP ALU
+    opList += [ OpDesc(opClass='FloatAdd', opLat=2),
+        OpDesc(opClass='FloatCmp', opLat=2),
+        OpDesc(opClass='FloatCvt', opLat=2) ]
+
+
+class Group2(GroupCommon):
+    opList = copy.deepcopy(commonOpList)
+    # int MD
+    opList += [ OpDesc(opClass='IntMult', opLat=3),
+            OpDesc(opClass='IntDiv', opLat=20, pipelined=False) ]
+    # FP MD
+    opList += [ OpDesc(opClass='FloatMult', opLat=4),
+            OpDesc(opClass='FloatMultAcc', opLat=5),
+            OpDesc(opClass='FloatMisc', opLat=3),
+            OpDesc(opClass='FloatDiv', opLat=12, pipelined=False),
+            OpDesc(opClass='FloatSqrt', opLat=24, pipelined=False) ]
+
+class Group3(GroupCommon):
+    opList = copy.deepcopy(commonOpList)
+    # FP ALU
+    opList += [ OpDesc(opClass='FloatAdd', opLat=2),
+            OpDesc(opClass='FloatCmp', opLat=2),
+            OpDesc(opClass='FloatCvt', opLat=2) ]
+
+    # IPR (not available in RV?)
+    opList += [ OpDesc(opClass='IprAccess', opLat = 3, pipelined = False) ]
 

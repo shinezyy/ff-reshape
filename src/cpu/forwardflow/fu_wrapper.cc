@@ -2,7 +2,17 @@
 // Created by zyy on 19-6-11.
 //
 
+#include "cpu/forwardflow/fu_wrapper.hh"
+
+#include <sstream>
+
+#include "cpu/op_class.hh"
 #include "fu_wrapper.hh"
+#include "params/FFFUPool.hh"
+#include "params/FUDesc.hh"
+#include "params/OpDesc.hh"
+#include "sim/sim_object.hh"
+
 namespace FF{
 
 template<class Impl>
@@ -126,7 +136,73 @@ void FUWrapper<Impl>::endCycle() {
 }
 
 template<class Impl>
-FUWrapper<Impl>::FUWrapper() {
+void FUWrapper<Impl>::init(const Params *p, unsigned bank)
+{
+    numFU = 0;
+    //  Iterate through the list of FUDescData structures
+    //
+    const std::vector<FUDesc *> &paramList = p->FUList;
+    FUDDiterator i = paramList.begin() + bank;
+
+    //
+    //  Don't bother with this if we're not going to create any FU's
+    //
+    if ((*i)->number) {
+        assert((*i)->number == 1);
+        //
+        //  Create the FuncUnit object from this structure
+        //   - add the capabilities listed in the FU's operation
+        //     description
+        //
+        //  We create the first unit, then duplicate it as needed
+        //
+        FuncUnit *fu = new FuncUnit;
+
+        OPDDiterator j = (*i)->opDescList.begin();
+        OPDDiterator end = (*i)->opDescList.end();
+        for (; j != end; ++j) {
+            // indicate that this pool has this capability
+            capabilityList.set((*j)->opClass);
+
+            // Add each of the FU's that will have this capability to the
+            // appropriate queue.
+            for (int k = 0; k < (*i)->number; ++k)
+                wrappers[(*j)->opClass].init(
+                        (*j)->pipelined,
+                        (*j)->opLat == 1,
+                        (*j)->opLat > 1,
+                        static_cast<unsigned int>((*j)->opLat),
+                        20
+                        ); // todo: fix
+
+            // indicate that this FU has the capability
+            fu->addCapability((*j)->opClass, (*j)->opLat, (*j)->pipelined);
+
+            // todo: check here
+
+            if (!(*j)->pipelined)
+                canPipelined[(*j)->opClass] = false;
+        }
+
+        numFU++;
+
+        //  Add the appropriate number of copies of this FU to the list
+        fu->name = (*i)->name() + "(0)";
+
+        for (int c = 1; c < (*i)->number; ++c) {
+            std::ostringstream s;
+            numFU++;
+            FuncUnit *fu2 = new FuncUnit(*fu);
+
+            s << (*i)->name() << "(" << c << ")";
+            fu2->name = s.str();
+        }
+    }
+}
+
+template<class Impl>
+FUWrapper<Impl>::FUWrapper()
+{
     inv.valid = false;
 }
 

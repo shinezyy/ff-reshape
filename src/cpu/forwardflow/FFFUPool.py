@@ -30,6 +30,7 @@ from m5.SimObject import SimObject
 from m5.params import *
 from FuncUnit import *
 from FFFuncUnitConfig import *
+from GroupedFUConfig import *
 
 class FFFUPool(SimObject):
     type = 'FFFUPool'
@@ -38,4 +39,7 @@ class FFFUPool(SimObject):
 
 class DefaultFFFUPool(FFFUPool):
     FUList = [ IntALU(), IntMultDiv(), FP_ALU(), FP_MultDiv(), ReadPort(),
-               SIMD_Unit(), WritePort(), RdWrPort(), IprPort() ]
+               WritePort(), RdWrPort(), IprPort() ]
+
+class GroupedFUPool(FFFUPool):
+    FUList = [Group0(), Group1(), Group2(), Group3()]

@@ -132,6 +132,7 @@ class FFFUPool : public SimObject
     typedef FFFUPoolParams Params;
     /** Constructs a FU pool. */
     FFFUPool(const Params *p);
+    const Params *fw;
     ~FFFUPool();
 
     static constexpr auto NoCapableFU = -2;

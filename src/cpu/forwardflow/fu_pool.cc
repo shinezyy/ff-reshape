@@ -82,7 +82,7 @@ FFFUPool::~FFFUPool()
 
 // Constructor
 FFFUPool::FFFUPool(const Params *p)
-    : SimObject(p)
+    : SimObject(p), fw(p)
 {
     numFU = 0;
 

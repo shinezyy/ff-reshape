@@ -48,7 +48,7 @@ from FFFUPool import *
 from FFChecker import FFChecker
 from BranchPredictor import *
 
-coreWidth = 3
+coreWidth = 4
 
 class DerivFFCPU(BaseCPU):
     type = 'DerivFFCPU'
@@ -92,18 +92,22 @@ class DerivFFCPU(BaseCPU):
                                     "delay")
     commitToRenameDelay = Param.Cycles(1, "Commit to rename delay")
     decodeToRenameDelay = Param.Cycles(1, "Decode to rename delay")
-    renameWidth = Param.Unsigned(coreWidth, "Rename width")
+    allocationWidth = Param.Unsigned(coreWidth, "Rename width")
 
     commitToIEWDelay = Param.Cycles(1, "Commit to "
                "Issue/Execute/Writeback delay")
     renameToIEWDelay = Param.Cycles(2, "Rename to "
                "Issue/Execute/Writeback delay")
+
+    allocationToDIEWCDelay = Param.Cycles(1, "Allocation to "
+               "Issue/Execute/Writeback delay")
+
     issueToExecuteDelay = Param.Cycles(1, "Issue to execute delay (internal "
               "to the IEW stage)")
     dispatchWidth = Param.Unsigned(coreWidth, "Dispatch width")
     issueWidth = Param.Unsigned(coreWidth, "Issue width")
     wbWidth = Param.Unsigned(coreWidth, "Writeback width")
-    fuPool = Param.FFFUPool(DefaultFFFUPool(), "Functional Unit pool")
+    fuPool = Param.FFFUPool(GroupedFUPool(), "Functional Unit pool")
 
     iewToCommitDelay = Param.Cycles(1, "Issue/Execute/Writeback to commit "
                "delay")

@@ -78,8 +78,6 @@ private:
 
     bool blockThisCycle;
 
-    int toIEWIndex;
-
     /** Whether or not rename needs to resume a serialize instruction
      * after squashing. */
     bool resumeSerialize;
@@ -161,8 +159,6 @@ public:
         NONE
     };
 
-    bool diewcStall;
-
     bool emptyDQ;
 
   private:
@@ -202,6 +198,9 @@ public:
 
     void setAllocQueue(TimeBuffer<AllocationStruct> *alq);
 
+    void setTimeBuffer(TimeBuffer<TimeStruct> *tf);
+
+    void startupStage();
 private:
     unsigned flatHead, flatTail;
 
@@ -212,7 +211,7 @@ private:
     const unsigned int bankMask;
     const unsigned int dqSize;
 
-    bool backendStall;
+    bool diewcStall;
 
     struct FreeEntries {
         unsigned dqEntries;
@@ -224,6 +223,7 @@ private:
 
     void serializeAfter(InstQueue &deque);
 
+    void resetStage();
 };
 
 

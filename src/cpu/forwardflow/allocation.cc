@@ -17,13 +17,15 @@ template<class Impl>
 void
 Allocation<Impl>::tick() {
 
+    readInsts();
+
     wroteToTimeBuffer = false;
 
     blockThisCycle = false;
 
     bool status_change = false;
 
-    toIEWIndex = 0;
+    toDIEWCIndex = 0;
 
     // Check stall and squash signals.
 
@@ -53,6 +55,12 @@ Allocation<Impl>::readInsts()
     for (int i = 0; i < insts_from_decode; ++i) {
         DynInstPtr inst = fromDecode->insts[i];
         insts.push_back(inst);
+    }
+
+    for (const auto& inst: insts) {
+        if (inst && !inst->isSquashed()) {
+            DPRINTF(DAllocation, "Inst[%d] arrived allocation\n", inst->seqNum);
+        }
     }
 }
 
@@ -145,6 +153,7 @@ bool Allocation<Impl>::checkSignalsAndUpdate() {
         return true;
     }
 
+    DPRINTF(DAllocation, "Status not changed\n");
     // If we've reached this point, we have not gotten any signals that
     // cause rename to change its status.  Allocation remains the same as before.
     return false;
@@ -178,6 +187,8 @@ bool Allocation<Impl>::checkStall() {
         ret_val = true;
     }
 
+    DPRINTF(DAllocation, "No stall detected\n");
+
     return ret_val;
 }
 
@@ -204,9 +215,11 @@ void Allocation<Impl>::allocate(bool &status_change) {
     }
 
     if (allocationStatus == Running || allocationStatus == Idle) {
+        DPRINTF(DAllocation, "Allocate on Running\n");
         allocateInsts();
 
     } else if (allocationStatus == Unblocking) {
+        DPRINTF(DAllocation, "Allocate on Unblocking\n");
         allocateInsts();
 
         if (validInsts()) {
@@ -227,6 +240,8 @@ void Allocation<Impl>::allocateInsts() {
     InstQueue &to_allocate = allocationStatus == Unblocking ?
             skidBuffer: insts;
 
+    DPRINTF(DAllocation, "num of insts available = %lu\n", inst_available);
+
     if (serializeOnNextInst) {
         if (emptyDQ && instsInProgress == 0) {
             serializeOnNextInst = false;
@@ -244,11 +259,13 @@ void Allocation<Impl>::allocateInsts() {
         if (inst->isSquashed()) {
             ++allocatedSquashInsts;
             --inst_available;
+            DPRINTF(DAllocation, "skip because squashed\n");
             continue;
         }
 
         if (!canAllocate()) {
             ++allocationDQFullEvents;
+            DPRINTF(DAllocation, "break because cannot allocate anymore\n");
             break;
         }
 
@@ -291,7 +308,7 @@ void Allocation<Impl>::allocateInsts() {
         toDIEWC->insts[toDIEWCIndex] = inst;
         ++(toDIEWC->size);
 
-        ++toIEWIndex;
+        ++toDIEWCIndex;
         --inst_available;
     }
 
@@ -302,6 +319,7 @@ void Allocation<Impl>::allocateInsts() {
     if (toDIEWCIndex) {
         wroteToTimeBuffer = true;
     }
+    DPRINTF(DAllocation, "to DIEWC index: %d\n", toDIEWCIndex);
 
     if (inst_available) {
         blockThisCycle = true;
@@ -317,9 +335,13 @@ template<class Impl>
 bool Allocation<Impl>::canAllocate() {
     if (flatHead > flatTail) {
         return !(flatTail == 0 && flatHead == dqSize - 1);
+    } else if (flatTail != flatHead) {
+        return flatTail - flatHead > 1;
+    } else {
+        // initiated just now (tail == head)
+        return true;
     }
 
-    return flatTail - flatHead > 1;
 }
 
 template<class Impl>
@@ -327,9 +349,9 @@ void Allocation<Impl>::skidInsert() {
     DynInstPtr inst = nullptr;
     while (!insts.empty()) {
         inst = insts.front();
-        insts.pop_front();
         ++allocationSkidInsts;
         skidBuffer.push_back(inst);
+        insts.pop_front();
     }
 
     if (skidBuffer.size() > skidBufferMax) {
@@ -465,12 +487,16 @@ void Allocation<Impl>::readFreeEntries() {
 template<class Impl>
 void Allocation<Impl>::readStallSignals() {
     if (fromDIEWC->diewcBlock) {
-        backendStall = true;
+        DPRINTF(DAllocation, "received block from DIEWC\n");
+        diewcStall = true;
     }
 
     if (fromDIEWC->diewcUnblock) {
-        assert(backendStall);
-        backendStall = false;
+        assert(diewcStall);
+        if (fromDIEWC->diewcBlock) {
+            DPRINTF(DAllocation, "Unblock from DIEWC override Blocking\n");
+        }
+        diewcStall = false;
     }
 }
 
@@ -501,7 +527,6 @@ Allocation<Impl>::Allocation(O3CPU* cpu, DerivFFCPUParams *params)
           instsInProgress(0),
           loadsInProgress(0),
           storesInProgress(0),
-          diewcStall(false),
           emptyDQ(false),
           serializeInst(nullptr),
           serializeOnNextInst(false),
@@ -510,7 +535,8 @@ Allocation<Impl>::Allocation(O3CPU* cpu, DerivFFCPUParams *params)
           indexWidth((unsigned) ceilLog2(params->DQDepth)),
           indexMask((unsigned) (1 << indexWidth) - 1),
           bankMask((unsigned) (1 << ceilLog2(params->numDQBanks)) - 1),
-          dqSize((unsigned) params->DQDepth * params->numDQBanks)
+          dqSize( params->DQDepth * params->numDQBanks),
+          diewcStall(false)
 {
 
     skidBufferMax = static_cast<unsigned int>(
@@ -544,6 +570,42 @@ void Allocation<Impl>::setAllocQueue(TimeBuffer<AllocationStruct > *alq)
 {
     allocationQueue = alq;
     toDIEWC = allocationQueue->getWire(0);
+}
+
+template<class Impl>
+void Allocation<Impl>::setTimeBuffer(TimeBuffer<TimeStruct> *tf)
+{
+    timeBuffer = tf;
+    fromDIEWC = tf->getWire(-1);
+    toDecode = tf->getWire(0);
+}
+
+template<class Impl>
+void Allocation<Impl>::startupStage()
+{
+    resetStage();
+}
+
+template<class Impl>
+void Allocation<Impl>::resetStage()
+{
+    overallStatus = Inactive;
+
+    resumeSerialize = false;
+    resumeUnblocking = false;
+
+    allocationStatus = Idle;
+
+    //todo: init freeEntries with a conservative value is just OK?
+    freeEntries.dqEntries = 8;
+    freeEntries.lqEntries = 8;
+    freeEntries.sqEntries = 8;
+
+    serializeInst = nullptr;
+    instsInProgress = 0;
+    loadsInProgress = 0;
+    storesInProgress = 0;
+    serializeOnNextInst = false;
 }
 
 }

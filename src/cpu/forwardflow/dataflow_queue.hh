@@ -13,6 +13,7 @@
 //#include "cpu/forwardflow/dyn_inst.hh"
 #include "cpu/forwardflow/network.hh"
 #include "cpu/timebuf.hh"
+#include "fu_pool.hh"
 
 struct DerivFFCPUParams;
 
@@ -41,13 +42,13 @@ class DataflowQueueBank{
 
     // instructions that waiting for only one operands
     // and the wakeup pointer has already arrived
-    std::vector<DQPointer> pendingWakeupPointers;
+    std::vector<WKPointer> pendingWakeupPointers;
     bool anyPending;
 
     std::vector<unsigned> readyIndices;
 
     // input forward pointers
-    std::vector<DQPointer> inputPointers;
+    std::vector<WKPointer> inputPointers;
 
     // inst rejected by FU
     DynInstPtr pendingInst;
@@ -63,7 +64,7 @@ public:
 
     bool canServeNew();
 
-    bool wakeup(DQPointer pointer);
+    bool wakeup(WKPointer pointer);
 
     std::tuple<bool, DynInstPtr> wakeupInstsFromBank();
 
@@ -93,6 +94,7 @@ class DataflowQueues
 {
 private:
     const DQPointer nullDQPointer;
+    const WKPointer nullWKPointer;
 
 public:
     typedef typename Impl::O3CPU O3CPU;
@@ -146,7 +148,7 @@ private:
 
     OmegaNetwork<DynInstPtr> bankFUNet;
 
-    OmegaNetwork<DQPointer> wakeupQueueBankNet;
+    OmegaNetwork<WKPointer> wakeupQueueBankNet;
 
     OmegaNetwork<PointerPair> pointerQueueBankNet;
 
@@ -155,10 +157,10 @@ private:
     std::vector<DQPacket<DynInstPtr>*> fu_req_ptrs;
     std::vector<DQPacket<DynInstPtr>*> fu_granted_ptrs;
 
-    std::vector<DQPacket<DQPointer>> wakeup_requests;
+    std::vector<DQPacket<WKPointer>> wakeup_requests;
     std::vector<bool> wake_req_granted;
-    std::vector<DQPacket<DQPointer>*> wakeup_req_ptrs;
-    std::vector<DQPacket<DQPointer>*> wakeup_granted_ptrs;
+    std::vector<DQPacket<WKPointer>*> wakeup_req_ptrs;
+    std::vector<DQPacket<WKPointer>*> wakeup_granted_ptrs;
 
     std::vector<DQPacket<PointerPair>> insert_requests;
     std::vector<bool> insert_req_granted;
@@ -166,6 +168,8 @@ private:
     std::vector<DQPacket<PointerPair>*> insert_granted_ptrs;
 
     std::vector<FUWrapper> fuWrappers;
+
+    FFFUPool *fuPool;
 
     boost::dynamic_bitset<> coordinateFU(DynInstPtr &inst, unsigned bank);
 
@@ -276,6 +280,11 @@ private:
     std::list<DynInstPtr> blockedMemInsts;
 
     std::list<DynInstPtr> retryMemInsts;
+
+    void readQueueHeads();
+
+public:
+    void setTimeBuf(TimeBuffer<DQStruct>* dqtb);
 };
 
 }

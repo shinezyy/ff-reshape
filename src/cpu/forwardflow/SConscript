@@ -35,6 +35,7 @@ Import('*')
 if 'FFCPU' in env['CPU_MODELS']:
     SimObject('FFFUPool.py')
     SimObject('FFFuncUnitConfig.py')
+    SimObject('GroupedFUConfig.py')
     SimObject('FFCPU.py')
 
     Source('base_dyn_inst.cc')
@@ -72,6 +73,9 @@ if 'FFCPU' in env['CPU_MODELS']:
     # DebugFlag('DLarge')
     DebugFlag('FFCPU')
     DebugFlag('DAllocation')
+    DebugFlag('DIEWC')
+    DebugFlag('DQ')
+    DebugFlag('Omega')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',

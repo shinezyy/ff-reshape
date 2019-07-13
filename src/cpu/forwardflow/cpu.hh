@@ -596,6 +596,8 @@ class FFCPU : public BaseO3CPU
 
     typedef typename CPUPolicy::FFAllocationStruct AllocationStruct;
 
+    typedef typename CPUPolicy::DQStruct DQStruct;
+
 //    typedef typename CPUPolicy::IEWStruct IEWStruct;
 
     /** The main time buffer to do backwards communication. */
@@ -608,6 +610,8 @@ class FFCPU : public BaseO3CPU
     TimeBuffer<DecodeStruct> decodeQueue;
 
     TimeBuffer<AllocationStruct> allocationQueue;
+
+    TimeBuffer<DQStruct> DQQueue;
 
     /** The rename stage's instruction queue. */
 //    TimeBuffer<RenameStruct> renameQueue;

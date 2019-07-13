@@ -6,6 +6,7 @@
 #include "arch/utility.hh"
 #include "debug/Commit.hh"
 #include "debug/CommitRate.hh"
+#include "debug/DIEWC.hh"
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
 #include "debug/IEW.hh"
@@ -26,9 +27,6 @@ void FFDIEWC<Impl>::tick() {
     commit();
 
 
-    // todo: DQ tick
-    // part DQ tick: should not read values from part bring value part route pointer in the same cycle
-
     // todo: read from DQ head To Simulate that DQ is a RAM instead of combinational.
     // part DQCR
     writeCommitQueue();
@@ -37,6 +35,7 @@ void FFDIEWC<Impl>::tick() {
     // todo: Execute ready insts
     execute();
 
+    dq.clear();
 
 
     // todo read allocated instructions from allocation stage
@@ -68,6 +67,10 @@ void FFDIEWC<Impl>::tick() {
     //  - timebuffers inside DQ
     advanceQueues();
 
+    // todo: DQ tick
+    // part DQ tick: should not read values from part bring value part route pointer in the same cycle
+    dq.tick();
+
 }
 
 template<class Impl>
@@ -98,6 +101,7 @@ void FFDIEWC<Impl>::checkSignalsAndUpdate() {
         wroteToTimeBuffer = true;
     }
     if (checkStall()){
+        DPRINTF(DIEWC, "block after checkStall\n");
         block();
         dispatchStatus = Blocked;
         return;
@@ -115,7 +119,9 @@ void FFDIEWC<Impl>::checkSignalsAndUpdate() {
 
 template<class Impl>
 void FFDIEWC<Impl>::readInsts() {
+    DPRINTF(DIEWC, "here\n");
     int num = fromAllocation->size;
+    DPRINTF(DIEWC, "num is %d\n", num);
     for (int i = 0; i < num; ++i) {
         DynInstPtr inst = fromAllocation->insts[i];
         insts_from_allocation.push(inst);
@@ -152,6 +158,7 @@ void FFDIEWC<Impl>::dispatch() {
         }
 
         if (dq.isFull()) {
+            DPRINTF(DIEWC, "block because DQ is full\n");
             block();
             toAllocation->diewcUnblock = false;
             ++dqFullEvents;
@@ -165,6 +172,7 @@ void FFDIEWC<Impl>::dispatch() {
             } else {
                 ++sqFullEvents;
             }
+            DPRINTF(DIEWC, "block because LSQ is full\n");
             block();
             toAllocation->diewcUnblock = false;
             break;
@@ -231,6 +239,7 @@ void FFDIEWC<Impl>::dispatch() {
     }
 
     if (!to_dispatch.empty()) {
+        DPRINTF(DIEWC, "block because instruction not used up\n");
         block();
         toAllocation->diewcUnblock = false;
     }
@@ -284,10 +293,12 @@ void FFDIEWC<Impl>::commit() {
 
 template<class Impl>
 bool FFDIEWC<Impl>::checkStall() {
+    // todo: tix mysterious stall
     if (dqSqushing) {
         return true;
     }
     if (dq.stallToUnclog()) {
+        DPRINTF(DIEWC, "block because dq unclogging\n");
         return true;
     }
     return false;
@@ -296,11 +307,12 @@ bool FFDIEWC<Impl>::checkStall() {
 template<class Impl>
 void FFDIEWC<Impl>::block() {
     if (dispatchStatus != Blocked &&
-    dispatchStatus != Unblocking) {
+            dispatchStatus != Unblocking) {
         toAllocation->diewcBlock = true;
         wroteToTimeBuffer = true;
     }
 
+    DPRINTF(DIEWC, "skidInsert in func block\n");
     skidInsert();
     dispatchStatus = Blocked;
 }
@@ -336,6 +348,7 @@ void FFDIEWC<Impl>::tryDispatch() {
             dispatch();
             ++unblockCycles;
             if (validInstsFromAllocation())  {
+                DPRINTF(DIEWC, "skidInsert after dispatch in Unblocking\n");
                 skidInsert();
             }
             break;
@@ -358,6 +371,7 @@ void FFDIEWC<Impl>::skidInsert() {
     DynInstPtr inst = nullptr;
     while (!insts_from_allocation.empty()) {
         inst = insts_from_allocation.front();
+        DPRINTF(DIEWC, "skidInsert inst[%i]\n", inst->seqNum);
         insts_from_allocation.pop();
         skidBuffer.push(inst);
     }
@@ -876,8 +890,7 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         fetchRedirect(false),
         dqSqushing(false),
         dispatchWidth(params->dispatchWidth),
-        skidBufferMax(0),  // todo: fix
-        width(params->numDQBanks),
+        width(params->allocationWidth),
         trapInFlight(false),
         trapSquash(false),
         trapLatency(params->trapLatency),
@@ -886,8 +899,10 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         skipThisCycle(false),
         avoidQuiesceLiveLock(),  //todo: fix
         squashAfterInst(nullptr),
-        tcSquash(false)
+        tcSquash(false),
+        allocationToDIEWCDelay(params->allocationToDIEWCDelay)
 {
+    skidBufferMax = (allocationToDIEWCDelay + 1)*width;
 }
 
 template<class Impl>

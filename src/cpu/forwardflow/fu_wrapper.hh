@@ -13,6 +13,7 @@
 
 //#include "cpu/forwardflow/dyn_inst.hh"
 #include "cpu/func_unit.hh"
+#include "params/FFFUPool.hh"
 
 namespace FF{
 
@@ -74,17 +75,19 @@ public:
 
     DQPointer toWakeup;
 
+    typedef FFFUPoolParams Params;
+
     FUWrapper();
 
+    void init(const Params *p, unsigned bank_id);
 private:
 
     std::unordered_map<OpClass, SingleFUWrapper> wrappers;
 
 //    std::vector<Value> buffer(num_fu);
 
-    std::vector<unsigned> opLat; // {Num_OpClasses};
-    std::vector<bool> canPipelined; // {Num_OpClasses};
-
+    std::array<unsigned, Num_OpClasses> opLat; // {Num_OpClasses};
+    std::array<bool, Num_OpClasses> canPipelined; // {Num_OpClasses};
     std::bitset<Num_OpClasses> capabilityList;
 
     std::bitset<Impl::MaxOpLatency> wbScheduled;
@@ -97,6 +100,8 @@ private:
     void endCycle();
 
     DQPointer inv;
+    unsigned numFU;
+
 };
 
 }

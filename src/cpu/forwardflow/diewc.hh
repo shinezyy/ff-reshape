@@ -371,6 +371,8 @@ private:
     void squashDueToBranch(DynInstPtr &ffdiewc);
 
     std::list <ThreadID> *activeThreads;
+
+    unsigned allocationToDIEWCDelay;
 public:
     // stats
     Stats::Scalar dispSquashedInsts;
