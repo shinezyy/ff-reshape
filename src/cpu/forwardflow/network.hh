@@ -56,6 +56,10 @@ public:
     void connect(std::vector<DQPacket<T>*>*, std::vector<DQPacket<T>*>*);
 
     void swap(std::vector<DQPacket<T>*>*&, std::vector<DQPacket<T>*>*&);
+
+    void dumpPackets(std::vector<DQPacket<T>*> &v);
+
+    const std::string name() {return "OmegaNet";}
 };
 
 }
@@ -87,8 +91,8 @@ CrossBar<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
     inputs[1] = input1;
 
     DQPacket<T> * outputs[2];
-    bool low_granted;
-    low_granted = false;
+//    bool low_granted;
+//    low_granted = false;
 
     DPRINTF(Omega, "high = %d, low = %d\n", high, low);
     DPRINTF(Omega, "destBits size = %d, direction_bit = %d\n",
@@ -96,18 +100,14 @@ CrossBar<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
 
     int high_demand = inputs[high]->valid ?
             inputs[high]->destBits[direction_bit] : 0;
-    int low_demand = inputs[low]->valid ?
-            inputs[low]->destBits[direction_bit] : 0;
+//    int low_demand = inputs[low]->valid ?
+//            inputs[low]->destBits[direction_bit] : 0;
 
-    if (inputs[high]->valid) {
-        outputs[high_demand] = inputs[high];
-        low_granted = high_demand != low_demand;
-    }
-    if (low_granted || !inputs[high]->valid) {
-        outputs[low_demand] = inputs[low];
-    }
+    outputs[high_demand] = inputs[high];
+    outputs[1 - high_demand] = inputs[low];
 
     DPRINTF(Omega, "X reach 4\n");
+    DPRINTF(Omega, "outputs: %p %p\n", outputs[0], outputs[1]);
     return make_tuple(outputs[0], outputs[1]);
 }
 
@@ -143,9 +143,18 @@ std::vector<DQPacket<T> *>
 //    vector<bool> grants(size, false);
 
     for (uint32_t x = 0; x < ceilLog2(size); x++) {
+        DPRINTF(Omega, "connected:\n");
+        dumpPackets(*inputs);
         connect(inputs, outputs);
+        dumpPackets(*outputs);
+
+        DPRINTF(Omega, "swapped:\n");
         swap(inputs, outputs);
-        for (uint32_t y = 0; y < size/2; y += 2) {
+        dumpPackets(*inputs);
+        dumpPackets(*outputs);
+
+        DPRINTF(Omega, "crossing layer = %d:\n", x);
+        for (uint32_t y = 0; y < size; y += 2) {
             assert(y < outputs->size());
             assert(y + 1 < outputs->size());
             assert(y < inputs->size());
@@ -153,9 +162,15 @@ std::vector<DQPacket<T> *>
             assert(y/2 < switches.size());
             assert(x < switches[y/2].size());
 
+            DPRINTF(Omega, "crossed y = %d/%d:\n", y, size);
             tie((*outputs)[y], (*outputs)[y+1]) =
                     switches[y/2][x].cross((*inputs)[y], (*inputs)[y+1]);
+            dumpPackets(*inputs);
+            dumpPackets(*outputs);
         }
+        DPRINTF(Omega, "crossed layer = %d:\n", x);
+        dumpPackets(*inputs);
+        dumpPackets(*outputs);
         swap(inputs, outputs);
     }
 
@@ -189,6 +204,22 @@ OmegaNetwork<T>::swap(vector<DQPacket<T> *> *&l, vector<DQPacket<T> *> *&r)
     auto tmp = l;
     l = r;
     r = tmp;
+}
+
+template<class T>
+void OmegaNetwork<T>::dumpPackets(vector<DQPacket<T>*> &v)
+{
+    for (auto& pkt: v) {
+        assert(pkt);
+        DPRINTF(Omega, "&pkt: %p, ", pkt);
+        if (!pkt) {
+            DPRINTFR(Omega, "\n");
+            continue;
+        }
+        DPRINTFR(Omega, "v: %d, dest: %lu, src: %d\n",
+                pkt->valid, pkt->destBits.to_ulong(), pkt->source);
+//        DPRINTF(Omega, " &payload: %p\n", (void *)pkt->payload);
+    }
 }
 
 }

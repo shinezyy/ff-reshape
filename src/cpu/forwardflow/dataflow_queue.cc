@@ -3,7 +3,6 @@
 //
 
 #include "cpu/forwardflow/dataflow_queue.hh"
-
 #include "debug/DQ.hh"
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
@@ -224,7 +223,10 @@ void DataflowQueues<Impl>::tick()
     //  FU should ensure that this is no write port hazard next cycle
     //      If FU grant an inst, pass its direct child pointer to this FU's corresponding Pointer Queue
     //      to wake up the child one cycle before its value arrived
+
+    dumpInstPackets(fu_req_ptrs);
     fu_granted_ptrs = bankFUNet.select(fu_req_ptrs);
+    dumpInstPackets(fu_granted_ptrs);
     for (unsigned b = 0; b < nBanks; b++) {
         assert(fu_granted_ptrs[b]);
         if (!fu_granted_ptrs[b]->valid || !fu_granted_ptrs[b]->payload) {
@@ -763,6 +765,18 @@ void DataflowQueues<Impl>::setTimeBuf(TimeBuffer<DQStruct> *dqtb)
     DQTS = dqtb;
     fromLastCycle = dqtb->getWire(-1);
     toNextCycle = dqtb->getWire(0);
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::dumpInstPackets(vector<DQPacket<DynInstPtr> *> &v)
+{
+    for (auto& pkt: v) {
+        assert(pkt);
+        DPRINTF(DQ, "&pkt: %p, ", pkt);
+        DPRINTFR(DQ, "v: %d, dest: %lu, src: %d,",
+                pkt->valid, pkt->destBits.to_ulong(), pkt->source);
+        DPRINTFR(DQ, " inst: %p\n", pkt->payload);
+    }
 }
 
 }

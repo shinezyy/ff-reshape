@@ -6,7 +6,9 @@
 
 #include <sstream>
 
+#include "base/trace.hh"
 #include "cpu/op_class.hh"
+#include "debug/FUW.hh"
 #include "fu_wrapper.hh"
 #include "params/FFFUPool.hh"
 #include "params/FUDesc.hh"
@@ -17,9 +19,14 @@ namespace FF{
 
 template<class Impl>
 bool FUWrapper<Impl>::canServe(DynInstPtr &inst) {
+    assert(inst);
+    DPRINTF(FUW, "FUW reach 0, opclass:%d\n", inst->opClass());
     auto lat = opLat[inst->opClass()];
+    DPRINTF(FUW, "FUW reach 1\n");
     auto has_capability = capabilityList[inst->opClass()];
+    DPRINTF(FUW, "FUW reach 2\n");
     auto wb_port_already_scheduled = wbScheduled[lat];
+    DPRINTF(FUW, "FUW reach 3\n");
     return has_capability && !wb_port_already_scheduled;
 }
 
@@ -163,6 +170,7 @@ void FUWrapper<Impl>::init(const Params *p, unsigned bank)
         for (; j != end; ++j) {
             // indicate that this pool has this capability
             capabilityList.set((*j)->opClass);
+            opLat[(*j)->opClass] = static_cast<unsigned int>((*j)->opLat);
 
             // Add each of the FU's that will have this capability to the
             // appropriate queue.
@@ -198,6 +206,7 @@ void FUWrapper<Impl>::init(const Params *p, unsigned bank)
             fu2->name = s.str();
         }
     }
+    wbScheduledNext = 0;
 }
 
 template<class Impl>

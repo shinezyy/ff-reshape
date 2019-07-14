@@ -283,6 +283,7 @@ private:
 
     void readQueueHeads();
 
+    void dumpInstPackets(std::vector<DQPacket<DynInstPtr>*>&);
 public:
     void setTimeBuf(TimeBuffer<DQStruct>* dqtb);
 };

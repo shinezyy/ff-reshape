@@ -80,6 +80,8 @@ public:
     FUWrapper();
 
     void init(const Params *p, unsigned bank_id);
+
+    const std::string name() { return "FUWrapper";}
 private:
 
     std::unordered_map<OpClass, SingleFUWrapper> wrappers;

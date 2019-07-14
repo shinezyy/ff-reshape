@@ -76,6 +76,7 @@ if 'FFCPU' in env['CPU_MODELS']:
     DebugFlag('DIEWC')
     DebugFlag('DQ')
     DebugFlag('Omega')
+    DebugFlag('FUW')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',
