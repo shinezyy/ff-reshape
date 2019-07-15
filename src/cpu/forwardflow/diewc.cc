@@ -159,6 +159,9 @@ void FFDIEWC<Impl>::dispatch() {
 
             if (inst->isLoad()) {
                 toAllocation->diewcInfo.dispatchedToLQ++;
+                DPRINTF(DIEWC, "backward disp to LQ inc by inst[%d], "
+                               "to LQ = %d",
+                        inst->seqNum, toAllocation->diewcInfo.dispatchedToLQ);
             }
             if (inst->isStore()) {
                 toAllocation->diewcInfo.dispatchedToSQ++;
@@ -196,6 +199,9 @@ void FFDIEWC<Impl>::dispatch() {
             ldstQueue.insertLoad(inst);
             ++dispaLoads;
             normally_add_to_dq = true;
+            DPRINTF(DIEWC, "backward disp to LQ inc by inst[%d], "
+                           "to LQ = %d\n",
+                    inst->seqNum, toAllocation->diewcInfo.dispatchedToLQ);
             toAllocation->diewcInfo.dispatchedToLQ++;
 
         } else if (inst->isStore()) {
@@ -205,7 +211,7 @@ void FFDIEWC<Impl>::dispatch() {
                 panic("There should not be store conditional in Risc-V\n");
             }
             normally_add_to_dq = true;
-            toAllocation->diewcInfo.dispatchedToLQ++;
+            toAllocation->diewcInfo.dispatchedToSQ++;
 
         } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
             inst->setCanCommit();

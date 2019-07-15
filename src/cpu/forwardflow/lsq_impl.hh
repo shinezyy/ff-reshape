@@ -571,21 +571,16 @@ template<class Impl>
 bool
 LSQ<Impl>::lqFull()
 {
-    DPRINTF(LSQ, "reach 1\n");
     list<ThreadID>::iterator threads = activeThreads->begin();
     list<ThreadID>::iterator end = activeThreads->end();
-    DPRINTF(LSQ, "reach 2\n");
 
     while (threads != end) {
-        DPRINTF(LSQ, "reach 3\n");
         ThreadID tid = *threads++;
 
         if (!thread[tid].lqFull()) {
-            DPRINTF(LSQ, "reach 4\n");
             return false;
         }
     }
-    DPRINTF(LSQ, "reach 5\n");
 
     return true;
 }

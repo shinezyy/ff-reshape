@@ -296,6 +296,8 @@ void Allocation<Impl>::allocateInsts() {
 
         if (inst->isLoad()) {
             loadsInProgress++;
+            DPRINTF(DAllocation, "loads in process: %d after inc by inst[%d]\n",
+                    loadsInProgress, inst->seqNum);
         }
         if (inst->isStore()) {
             storesInProgress++;
@@ -464,8 +466,11 @@ void Allocation<Impl>::updateStatus() {
 template<class Impl>
 void Allocation<Impl>::updateInProgress() {
     instsInProgress -= fromDIEWC->diewcInfo.dispatched;
+    DPRINTF(DAllocation, "loads in process: %d\n",loadsInProgress);
     loadsInProgress -= fromDIEWC->diewcInfo.dispatchedToLQ;
+    DPRINTF(DAllocation, "loads in process: %d after read from DIEWC\n",loadsInProgress);
     storesInProgress -= fromDIEWC->diewcInfo.dispatchedToSQ;
+
     assert(instsInProgress >= 0);
     assert(loadsInProgress >= 0);
     assert(storesInProgress >= 0);
