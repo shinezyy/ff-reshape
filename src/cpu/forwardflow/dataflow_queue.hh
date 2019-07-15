@@ -66,7 +66,7 @@ public:
 
     bool wakeup(WKPointer pointer);
 
-    std::tuple<bool, DynInstPtr> wakeupInstsFromBank();
+    DynInstPtr wakeupInstsFromBank();
 
     const std::vector<DQPointer> readPointersFromBank();
 

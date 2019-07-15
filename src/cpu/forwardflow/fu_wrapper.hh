@@ -81,6 +81,8 @@ public:
 
     void init(const Params *p, unsigned bank_id);
 
+    void fillMyBitMap(std::vector<std::vector<bool>> &v, unsigned bank);
+
     const std::string name() { return "FUWrapper";}
 private:
 

@@ -215,6 +215,15 @@ FUWrapper<Impl>::FUWrapper()
     inv.valid = false;
 }
 
+template<class Impl>
+void FUWrapper<Impl>::fillMyBitMap(std::vector<std::vector<bool>> &v,
+        unsigned bank)
+{
+    for (unsigned i = 0; i < Num_OpClasses; i++) {
+        v[i][bank] = capabilityList[i];
+    }
+}
+
 void
 SingleFUWrapper::init(
         bool pipe, bool single_cycle, bool long_lat,

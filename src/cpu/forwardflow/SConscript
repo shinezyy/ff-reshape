@@ -75,6 +75,7 @@ if 'FFCPU' in env['CPU_MODELS']:
     DebugFlag('DAllocation')
     DebugFlag('DIEWC')
     DebugFlag('DQ')
+    DebugFlag('DQB')
     DebugFlag('Omega')
     DebugFlag('FUW')
 

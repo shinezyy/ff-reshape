@@ -4,6 +4,7 @@
 
 #include "cpu/forwardflow/dataflow_queue.hh"
 #include "debug/DQ.hh"
+#include "debug/DQB.hh"  // DQ bank
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
 
@@ -14,11 +15,11 @@ using namespace std;
 using boost::dynamic_bitset;
 
 template<class Impl>
-tuple<bool, typename DataflowQueueBank<Impl>::DynInstPtr>
+typename Impl::DynInstPtr
 DataflowQueueBank<Impl>::wakeupInstsFromBank()
 {
     if (pendingInstValid) {
-        return make_tuple(true, pendingInst);
+        return pendingInst;
     }
 
     DynInstPtr first = nullptr;
@@ -55,7 +56,11 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
     pendingInst = first; // if it's rejected, then marks valid in tick()
 
-    return make_tuple(!!first, first);
+    if (first) {
+        DPRINTF(DQB, "Wakeup valid inst: %p\n", first);
+    }
+
+    return first;
 }
 
 template<class Impl>
@@ -101,7 +106,7 @@ bool DataflowQueueBank<Impl>::wakeup(WKPointer pointer)
 template<class Impl>
 void DataflowQueueBank<Impl>::tick()
 {
-    if (!instGranted) {
+    if (pendingInst && !instGranted) {
         pendingInstValid = true;
     }
 }
@@ -184,17 +189,20 @@ void DataflowQueues<Impl>::tick()
     DPRINTF(Omega, "DQ tick reach 1\n");
     // todo: write insts from bank to time buffer!
     for (unsigned i = 0; i < nBanks; i++) {
-        bool wake_valid;
         DynInstPtr inst;
 
-        tie(wake_valid, inst) = dqs[i].wakeupInstsFromBank();
+        inst = dqs[i].wakeupInstsFromBank();
 
         // read fu requests from banks
         //  and set fields for packets
         //  fu_req_ptrs = xxx
         //  update valid, dest bits and payload only (source need not be changed)
-        toNextCycle->instValids[i] = wake_valid;
+        toNextCycle->instValids[i] = !!inst;
         toNextCycle->insts[i] = inst;
+        if (toNextCycle->instValids[i]) {
+            DPRINTF(Omega, "notNext cycle inst[%d] valid, &inst: %p\n",
+                    i, toNextCycle->insts[i]);
+        }
     }
 
     DPRINTF(Omega, "DQ tick reach 2\n");
@@ -212,6 +220,10 @@ void DataflowQueues<Impl>::tick()
     for (unsigned i = 0; i < nBanks; i++) {
         fu_requests[i].valid = fromLastCycle->instValids[i];
         if (fromLastCycle->instValids[i]) {
+
+            DPRINTF(Omega, "inst[%d] valid, &inst: %p\n",
+                    i, fromLastCycle->insts[i]);
+
             fu_requests[i].payload = fromLastCycle->insts[i];
             fu_requests[i].destBits = coordinateFU(fromLastCycle->insts[i], i);
         }
@@ -271,6 +283,9 @@ void DataflowQueues<Impl>::tick()
         if (dqs[b].canServeNew()) {
             for (unsigned op = 1; op <= 3; op++) {
                 const auto &pkt = wakeup_granted_ptrs[b * nOps + op];
+                if (!pkt->valid) {
+                    continue;
+                }
                 WKPointer &ptr = pkt->payload;
                 wake_req_granted[pkt->source] = true;
                 assert(dqs[b].wakeup(ptr));
@@ -287,6 +302,10 @@ void DataflowQueues<Impl>::tick()
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op <= 3; op++) {
             const auto &pkt = insert_granted_ptrs[b * nOps + op];
+            if (!pkt->valid || !pkt->payload.dest.valid ||
+                !pkt->payload.payload.valid) {
+                continue;
+            }
             PointerPair &pair = pkt->payload;
             insert_req_granted[pkt->source] = true;
 
@@ -366,6 +385,9 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
 
         fuWrappers(nBanks), // todo: fix it
         fuPool(params->fuPool),
+        fuGroupCaps(Num_OpClasses, vector<bool>(nBanks)),
+        fuPointer(nBanks),
+
         maxQueueDepth(params->pendingQueueDepth),
         PendingWakeupThreshold(params->PendingWakeupThreshold),
         PendingWakeupMaxThreshold(params->PendingWakeupMaxThreshold),
@@ -393,6 +415,8 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
             insert_req_ptrs[index] = &insert_requests[index];
         }
         fuWrappers[b].init(fuPool->fw, b);
+        // initiate fu bit map here
+        fuWrappers[b].fillMyBitMap(fuGroupCaps, b);
     }
 }
 
