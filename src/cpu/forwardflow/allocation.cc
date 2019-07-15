@@ -187,8 +187,6 @@ bool Allocation<Impl>::checkStall() {
         ret_val = true;
     }
 
-    DPRINTF(DAllocation, "No stall detected\n");
-
     return ret_val;
 }
 
@@ -406,10 +404,10 @@ void Allocation<Impl>::regStats() {
 
 template<class Impl>
 DQPointer Allocation<Impl>::PositionfromUint(unsigned u) {
-    unsigned index = u & indexMask;
-    unsigned bank = (u >> indexWidth) & bankMask;
+    unsigned bank = u & bankMask;
+    unsigned index = (u & indexMask) >> bankWidth;
     unsigned group = 0; //todo group is not supported yet
-    return DQPointer(true, group, bank, index, 0);
+    return {true, group, bank, index, 0};
 }
 
 template<class Impl>
@@ -532,9 +530,10 @@ Allocation<Impl>::Allocation(O3CPU* cpu, DerivFFCPUParams *params)
           serializeOnNextInst(false),
           flatHead(0),
           flatTail(0),
+          bankWidth((unsigned) ceilLog2(params->numDQBanks)),
+          bankMask((unsigned) (1 << bankWidth) - 1),
           indexWidth((unsigned) ceilLog2(params->DQDepth)),
-          indexMask((unsigned) (1 << indexWidth) - 1),
-          bankMask((unsigned) (1 << ceilLog2(params->numDQBanks)) - 1),
+          indexMask((unsigned) ((1 << indexWidth) - 1) << bankWidth),
           dqSize( params->DQDepth * params->numDQBanks),
           diewcStall(false)
 {

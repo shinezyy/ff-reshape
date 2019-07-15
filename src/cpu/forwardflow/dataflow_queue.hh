@@ -286,6 +286,8 @@ private:
     void dumpInstPackets(std::vector<DQPacket<DynInstPtr>*>&);
 public:
     void setTimeBuf(TimeBuffer<DQStruct>* dqtb);
+
+    const std::string name() {return "dataflow_queue";}
 };
 
 }

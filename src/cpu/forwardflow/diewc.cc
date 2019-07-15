@@ -40,8 +40,11 @@ void FFDIEWC<Impl>::tick() {
 
     // todo read allocated instructions from allocation stage
     // part receive
+//    DPRINTF(DIEWC, "tick reach 0\n");
     readInsts();
+//    DPRINTF(DIEWC, "tick reach 1\n");
     checkSignalsAndUpdate();
+//    DPRINTF(DIEWC, "tick reach 2\n");
     // todo insert these insts into LSQ until full
     // if no LSQ entry allocated for an LD/ST inst, it and further insts should not be insert into DQ (block)
 
@@ -52,6 +55,7 @@ void FFDIEWC<Impl>::tick() {
     // part bring value
     tryDispatch();
 
+//    DPRINTF(DIEWC, "tick reach 3\n");
     // todo: forward pointers should be calculated
     //  - source operand forward pointer (if any sibling)
     //  - dest operand forward pointer
@@ -60,16 +64,19 @@ void FFDIEWC<Impl>::tick() {
     // part route pointer
 
     forward();
+//    DPRINTF(DIEWC, "tick reach 4\n");
 
     // todo: remember to advance
     //  - issue to execution queue
     //  - commit queue
     //  - timebuffers inside DQ
     advanceQueues();
+//    DPRINTF(DIEWC, "tick reach 5\n");
 
     // todo: DQ tick
     // part DQ tick: should not read values from part bring value part route pointer in the same cycle
     dq.tick();
+//    DPRINTF(DIEWC, "tick reach 6\n");
 
 }
 
@@ -119,9 +126,8 @@ void FFDIEWC<Impl>::checkSignalsAndUpdate() {
 
 template<class Impl>
 void FFDIEWC<Impl>::readInsts() {
-    DPRINTF(DIEWC, "here\n");
     int num = fromAllocation->size;
-    DPRINTF(DIEWC, "num is %d\n", num);
+    DPRINTF(DIEWC, "num from Allocation is %d\n", num);
     for (int i = 0; i < num; ++i) {
         DynInstPtr inst = fromAllocation->insts[i];
         insts_from_allocation.push(inst);
@@ -130,15 +136,20 @@ void FFDIEWC<Impl>::readInsts() {
 
 template<class Impl>
 void FFDIEWC<Impl>::dispatch() {
+
+//    DPRINTF(DIEWC, "dispatch reach 0\n");
     InstQueue &to_dispatch = dispatchStatus == Unblocking ?
             skidBuffer : insts_from_allocation;
     int num_insts_to_disp = static_cast<int>(to_dispatch.size());
     DynInstPtr inst = nullptr;
     bool normally_add_to_dq = false;
     int dispatched = 0;
+
+//    DPRINTF(DIEWC, "dispatch reach 1\n");
     for (; dispatched < num_insts_to_disp &&
            dispatched < dispatchWidth;
            ++dispatched) {
+//        DPRINTF(DIEWC, "dispatch reach 2\n");
         inst = to_dispatch.front();
         assert(inst);
 
@@ -157,6 +168,7 @@ void FFDIEWC<Impl>::dispatch() {
             continue;
         }
 
+//        DPRINTF(DIEWC, "dispatch reach 3\n");
         if (dq.isFull()) {
             DPRINTF(DIEWC, "block because DQ is full\n");
             block();
@@ -165,6 +177,7 @@ void FFDIEWC<Impl>::dispatch() {
             break;
         }
 
+//        DPRINTF(DIEWC, "dispatch reach 4\n");
         if ((inst->isLoad() && ldstQueue.lqFull()) ||
             (inst->isStore() && ldstQueue.sqFull())) {
             if (inst->isLoad()) {
@@ -178,6 +191,7 @@ void FFDIEWC<Impl>::dispatch() {
             break;
         }
 
+//        DPRINTF(DIEWC, "dispatch reach 5\n");
         if (inst->isLoad()) {
             ldstQueue.insertLoad(inst);
             ++dispaLoads;
@@ -214,6 +228,7 @@ void FFDIEWC<Impl>::dispatch() {
             normally_add_to_dq = true;
         }
 
+//        DPRINTF(DIEWC, "dispatch reach 6\n");
         if (normally_add_to_dq && inst->isNonSpeculative()) {
             inst->setCanCommit();
 
@@ -224,11 +239,16 @@ void FFDIEWC<Impl>::dispatch() {
             normally_add_to_dq = false;
         }
 
+//        DPRINTF(DIEWC, "dispatch reach 7\n");
         if (normally_add_to_dq) {
+//            DPRINTF(DIEWC, "dispatch reach 7.1\n");
             insertPointerPairs(archState.recordAndUpdateMap(inst));
+//            DPRINTF(DIEWC, "dispatch reach 7.2\n");
             dq.insert(inst);
+//            DPRINTF(DIEWC, "dispatch reach 7.3\n");
         }
 
+//        DPRINTF(DIEWC, "dispatch reach 8\n");
         to_dispatch.pop();
         toAllocation->diewcInfo.dispatched++;
         ++dispatchedInsts;
@@ -238,6 +258,7 @@ void FFDIEWC<Impl>::dispatch() {
         ppDispatch->notify(inst);
     }
 
+//    DPRINTF(DIEWC, "dispatch reach 8\n");
     if (!to_dispatch.empty()) {
         DPRINTF(DIEWC, "block because instruction not used up\n");
         block();
@@ -1011,7 +1032,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
 template<class Impl>
 std::string FFDIEWC<Impl>::name() const
 {
-    return cpu->name() + ".iew";
+    return cpu->name() + ".diewc";
 }
 
 template<class Impl>
@@ -1187,8 +1208,7 @@ void FFDIEWC<Impl>::generateTCEvent(ThreadID tid)
 template<class Impl>
 void FFDIEWC<Impl>::setActiveThreads(std::list<ThreadID> *at_ptr)
 {
-//    activeThreads = at_ptr;
-//    nothing todo
+    ldstQueue.setActiveThreads(at_ptr);
 }
 
 template<class Impl>

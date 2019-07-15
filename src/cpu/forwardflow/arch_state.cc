@@ -4,6 +4,7 @@
 
 #include "cpu/forwardflow/arch_state.hh"
 
+#include "base/trace.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Rename.hh"
 #include "params/DerivFFCPU.hh"
@@ -45,12 +46,27 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             assert(renameMap.count(src_reg));
             pairs.push_back({renameMap[src_reg], inst->dqPosition});
         }
+        auto old = renameMap[src_reg];
+
+        renameMap[src_reg] = inst->dqPosition;
+        renameMap[src_reg].op = static_cast<unsigned int>(src_idx) + 1;
+        auto new_ = renameMap[src_reg];
+
+        DPRINTF(Rename, "Inst[%i] forward reg[%s %d]from (%d %d)(%d) "
+                    "to (%d %d)(%d)\n",
+                    inst->seqNum, src_reg.className(), src_reg.index(),
+                    old.bank, old.index, old.op,
+                    new_.bank, new_.index, new_.op);
+
     }
 
     const RegId& dest_reg = inst->destRegIdx(0);
     scoreboard[dest_reg] = false;
     renameMap[dest_reg] = inst->dqPosition;
-
+    auto &m = renameMap[dest_reg];
+    DPRINTF(Rename, "Inst[%i] define reg[%s %d] int (%d %d)(%d)\n",
+                    inst->seqNum, dest_reg.className(), dest_reg.index(),
+                    m.bank, m.index, m.op);
     return pairs;
 }
 

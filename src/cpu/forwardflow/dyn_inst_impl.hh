@@ -126,6 +126,13 @@ BaseO3DynInst<Impl>::initVars()
     commitTick = -1;
     storeTick = -1;
 #endif
+
+    for (auto &ptr: pointers) {
+        ptr.valid = false;
+    }
+    dqPosition.valid = false;
+    std::fill(hasOp.begin(), hasOp.end(), false);
+    std::fill(opReady.begin(), opReady.end(), false);
 }
 
 template <class Impl>

@@ -206,9 +206,10 @@ private:
 
     DQPointer PositionfromUint(unsigned);
 
+    const unsigned int bankWidth;
+    const unsigned int bankMask;
     const unsigned int indexWidth;
     const unsigned int indexMask;
-    const unsigned int bankMask;
     const unsigned int dqSize;
 
     bool diewcStall;
