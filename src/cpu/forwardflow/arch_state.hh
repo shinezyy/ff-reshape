@@ -85,6 +85,8 @@ public:
 
     uint64_t readFloatRegBits(int reg_idx);
     void setFloatRegBits(int reg_idx, uint64_t);
+
+    const std::string name() {return "arch_state";}
 };
 
 }

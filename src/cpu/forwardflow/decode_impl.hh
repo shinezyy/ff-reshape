@@ -225,7 +225,7 @@ DefaultDecode<Impl>::checkStall(ThreadID tid) const
     bool ret_val = false;
 
     if (stalls[tid].rename) {
-        DPRINTF(Decode,"[tid:%i]: Stall fom Rename stage detected.\n", tid);
+        DPRINTF(Decode, "[tid:%i]: Stall from Allocation stage detected.\n", tid);
         ret_val = true;
     }
 

@@ -39,6 +39,8 @@ struct WKPointer{
     WKPointer() = default;;
 
     explicit WKPointer(DQPointer &dqPointer);
+
+    explicit WKPointer(DQPointer &&dqPointer);
 };
 
 

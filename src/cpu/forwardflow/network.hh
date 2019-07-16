@@ -98,13 +98,23 @@ CrossBar<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
     DPRINTF(Omega, "destBits size = %d, direction_bit = %d\n",
             inputs[high]->destBits.size(), direction_bit);
 
-    int high_demand = inputs[high]->valid ?
-            inputs[high]->destBits[direction_bit] : 0;
-//    int low_demand = inputs[low]->valid ?
-//            inputs[low]->destBits[direction_bit] : 0;
+    int high_demand, low_demand;
 
-    outputs[high_demand] = inputs[high];
-    outputs[1 - high_demand] = inputs[low];
+
+    if (inputs[high]->valid) {
+        high_demand = inputs[high]->destBits[direction_bit];
+        outputs[high_demand] = inputs[high];
+        outputs[1 - high_demand] = inputs[low];
+
+    } else if (inputs[low]->valid) {
+        low_demand = inputs[low]->destBits[direction_bit];
+        outputs[low_demand] = inputs[low];
+        outputs[1 - low_demand] = inputs[high];
+
+    } else {
+        outputs[0] = input0;
+        outputs[1] = input1;
+    }
 
     DPRINTF(Omega, "X reach 4\n");
     DPRINTF(Omega, "outputs: %p %p\n", outputs[0], outputs[1]);

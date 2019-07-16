@@ -393,9 +393,15 @@ public:
     Stats::Scalar predictedTakenIncorrect;
     Stats::Scalar predictedNotTakenIncorrect;
 
-    ArchState *getArchState() {return &archState;};
+    Stats::Scalar memOrderViolationEvents;
 
-    XDataflowQueues *getDQ() {return &dq;};
+    ArchState *getArchState() {return &archState;}
+
+    XDataflowQueues *getDQ() {return &dq;}
+
+    void executeInst(DynInstPtr &inst);
+
+    void squashDueToMemOrder(DynInstPtr &inst);
 };
 
 

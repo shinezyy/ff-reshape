@@ -91,6 +91,7 @@ bool Allocation<Impl>::checkSignalsAndUpdate() {
     }
 
     if (checkStall()) {
+        DPRINTF(DAllocation, "Allocation block due to checkStall\n");
         return block();
     }
 
@@ -201,10 +202,12 @@ void Allocation<Impl>::allocate(bool &status_change) {
 
         if (resumeSerialize) {
             resumeSerialize = false;
+            DPRINTF(DAllocation, "Allocation block due to resumeSerialize\n");
             block();
             toDecode->renameUnblock[DummyTid] = false;
         } else if (allocationStatus == Unblocking) {
             if (resumeUnblocking) {
+                DPRINTF(DAllocation, "Allocation block due to resumeUb\n");
                 block();
                 resumeUnblocking = false;
                 toDecode->renameUnblock[DummyTid] = false;
@@ -251,6 +254,7 @@ void Allocation<Impl>::allocateInsts() {
     int allocated = 0;
 
     while (inst_available > 0 && toDIEWCIndex < allocationWidth) {
+        DPRINTF(DAllocation, "insts available: %d\n", inst_available);
         inst = to_allocate.front();
         to_allocate.pop_front();
 
@@ -269,6 +273,7 @@ void Allocation<Impl>::allocateInsts() {
 
         if ((inst->isIprAccess() || inst->isSerializeBefore()) &&
                 !inst->isSerializeHandled()) {
+            DPRINTF(DAllocation, "Serialize before instruction encountered.\n");
             if (!inst->isTempSerializeBefore()) {
                 allocatedSerilizing++;
                 inst->setSerializeHandled();
@@ -311,6 +316,7 @@ void Allocation<Impl>::allocateInsts() {
         ++toDIEWCIndex;
         --inst_available;
     }
+    DPRINTF(DAllocation, "insts available: %d after loop\n", inst_available);
 
     instsInProgress += allocated;
 
@@ -326,6 +332,7 @@ void Allocation<Impl>::allocateInsts() {
     }
 
     if (blockThisCycle) {
+        DPRINTF(DAllocation, "Allocation block due to rest instructions\n");
         block();
         toDecode->renameUnblock[DummyTid] = false;
     }
@@ -424,6 +431,7 @@ bool Allocation<Impl>::block() {
         if (resumeUnblocking || allocationStatus != Unblocking) {
             toDecode->renameBlock[DummyTid] = true;
             toDecode->renameUnblock[DummyTid] = false;
+            DPRINTF(DAllocation, "send block to Decode\n");
             wroteToTimeBuffer = true;
         }
         if (allocationStatus != SerializeStall) {
@@ -438,6 +446,7 @@ template<class Impl>
 bool Allocation<Impl>::unblock() {
     if (skidBuffer.empty() && allocationStatus != SerializeStall) {
         toDecode->renameUnblock[DummyTid] = true;
+        DPRINTF(DAllocation, "send unblock to Decode\n");
         wroteToTimeBuffer = true;
         allocationStatus = Running;
         return true;
@@ -527,6 +536,7 @@ int Allocation<Impl>::calcFreeSQEntries() {
 template<class Impl>
 Allocation<Impl>::Allocation(O3CPU* cpu, DerivFFCPUParams *params)
         : cpu(cpu),
+          allocationWidth(params->numDQBanks),
           instsInProgress(0),
           loadsInProgress(0),
           storesInProgress(0),

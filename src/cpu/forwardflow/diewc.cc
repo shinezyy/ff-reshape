@@ -4,6 +4,7 @@
 #include "cpu/forwardflow/diewc.hh"
 
 #include "arch/utility.hh"
+#include "cpu/forwardflow/store_set.hh"
 #include "debug/Commit.hh"
 #include "debug/CommitRate.hh"
 #include "debug/DIEWC.hh"
@@ -12,7 +13,6 @@
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
 #include "params/DerivFFCPU.hh"
-#include "store_set.hh"
 
 namespace FF{
 
@@ -77,7 +77,31 @@ void FFDIEWC<Impl>::tick() {
     // part DQ tick: should not read values from part bring value part route pointer in the same cycle
     dq.tick();
 //    DPRINTF(DIEWC, "tick reach 6\n");
+    ldstQueue.writebackStores();
 
+    // commit from LSQ
+    if (fromLastCycle->diewc2diewc.doneSeqNum &&
+        !fromLastCycle->diewc2diewc.squash &&
+        !fromLastCycle->diewc2diewc.dqSquashing) {
+        ldstQueue.commitStores(fromLastCycle->diewc2diewc.doneSeqNum, DummyTid);
+        ldstQueue.commitLoads(fromLastCycle->diewc2diewc.doneSeqNum, DummyTid);
+
+        updateLSQNextCycle = true;
+    }
+
+    // handle non spec instructions
+#define tbuf fromLastCycle->diewc2diewc
+
+    if (tbuf.nonSpecSeqNum != 0) {
+        if (tbuf.strictlyOrdered) {
+            dq.replayMemInst(tbuf.strictlyOrderedLoad);
+            tbuf.strictlyOrderedLoad->setAtCommit();
+        } else {
+            assert(tbuf.nonSpecSeqNum == dq.getHead());
+            dq.scheduleNonSpec();
+        }
+    }
+#undef tbuf
 }
 
 template<class Impl>
@@ -208,9 +232,18 @@ void FFDIEWC<Impl>::dispatch() {
             ldstQueue.insertStore(inst);
             ++dispStores;
             if (inst->isStoreConditional()) {
-                panic("There should not be store conditional in Risc-V\n");
+                DPRINTF(DIEWC, "Store cond: %s\n",
+                        inst->staticInst->disassemble(inst->instAddr()));
+//                panic("There should not be store conditional in Risc-V\n");
+                inst->setCanCommit();
+
+                dq.insertNonSpec(inst);
+
+                normally_add_to_dq = false;
+
+            } else {
+                normally_add_to_dq = true;
             }
-            normally_add_to_dq = true;
             toAllocation->diewcInfo.dispatchedToSQ++;
 
         } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
@@ -239,6 +272,7 @@ void FFDIEWC<Impl>::dispatch() {
             inst->setCanCommit();
 
             insertPointerPairs(archState.recordAndUpdateMap(inst));
+
             dq.insertNonSpec(inst);
 
             ++dispNonSpecInsts;
@@ -408,6 +442,7 @@ void FFDIEWC<Impl>::skidInsert() {
 template<class Impl>
 void FFDIEWC<Impl>::execute() {
     fuWrapper.tick();
+
 }
 
 template <class Impl>
@@ -930,6 +965,8 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         allocationToDIEWCDelay(params->allocationToDIEWCDelay)
 {
     skidBufferMax = (allocationToDIEWCDelay + 1)*width;
+    dq.setLSQ(&ldstQueue);
+    dq.setDIEWC(this);
 }
 
 template<class Impl>
@@ -961,6 +998,7 @@ FFDIEWC<Impl>::squashInFlight()
 
         skidBuffer.pop();
     }
+
 
     clearAllocatedInsts();
 }
@@ -1329,6 +1367,172 @@ void FFDIEWC<Impl>::setAllocQueue(TimeBuffer<AllocationStruct> *aq_ptr)
     allocationQueue = aq_ptr;
 
     fromAllocation = allocationQueue->getWire(-1);
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
+{
+    if (inst->isSquashed()) {
+        inst->setExecuted();
+        inst->setCanCommit();
+        return;
+    }
+
+    Fault fault = NoFault;
+
+    if (inst->isMemRef()) {
+        if (inst->isLoad()) {
+            fault = ldstQueue.executeLoad(inst);
+
+            if (inst->isTranslationDelayed() &&
+                fault == NoFault) {
+                // A hw page table walk is currently going on; the
+                // instruction must be deferred.
+                DPRINTF(IEW, "Execute: Delayed translation, deferring "
+                             "load.\n");
+                dq.deferMemInst(inst); // todo ???
+                return;;
+            }
+
+            if (inst->isDataPrefetch() || inst->isInstPrefetch()) {
+                inst->fault = NoFault;
+            }
+        } else if (inst->isStore()) {
+            fault = ldstQueue.executeStore(inst);
+
+            if (inst->isTranslationDelayed() &&
+                fault == NoFault) {
+                // A hw page table walk is currently going on; the
+                // instruction must be deferred.
+                DPRINTF(IEW, "Execute: Delayed translation, deferring "
+                             "store.\n");
+                dq.deferMemInst(inst);
+                return;
+            }
+
+            // If the store had a fault then it may not have a mem req
+            if (fault != NoFault || !inst->readPredicate() ||
+                !inst->isStoreConditional()) {
+                // If the instruction faulted, then we need to send it along
+                // to commit without the instruction completing.
+                // Send this instruction to commit, also make sure iew stage
+                // realizes there is activity.
+                if (!inst->readPredicate()) {
+                    panic("readPredicate not handled in RV\n");
+                }
+                inst->setExecuted();
+                activityThisCycle();
+            }
+
+            // Store conditionals will mark themselves as
+            // executed, and their writeback event will add the
+            // instruction to the queue to commit.
+        } else {
+            panic("Unexpected memory type!\n");
+        }
+    } else {
+        if (inst->getFault() == NoFault) {
+            inst->execute();
+            if (!inst->readPredicate())
+                panic("readPredicate not handled in RV\n");
+        }
+        inst->setExecuted();
+
+    }
+
+    if (!fetchRedirect ||
+        !toNextCycle->diewc2diewc.squash ||
+        toNextCycle->diewc2diewc.squashedSeqNum > inst->seqNum) {
+
+        // Prevent testing for misprediction on load instructions,
+        // that have not been executed.
+        bool loadNotExecuted = !inst->isExecuted() && inst->isLoad();
+
+        if (inst->mispredicted() && !loadNotExecuted) {
+            fetchRedirect = true;
+
+            DPRINTF(IEW, "Execute: Branch mispredict detected.\n");
+            DPRINTF(IEW, "Predicted target was PC: %s.\n",
+                    inst->readPredTarg());
+            DPRINTF(IEW, "Execute: Redirecting fetch to PC: %s.\n",
+                    inst->pcState());
+            // If incorrect, then signal the ROB that it must be squashed.
+            squashDueToBranch(inst);
+
+            ppMispredict->notify(inst);
+
+            if (inst->readPredTaken()) {
+                predictedTakenIncorrect++;
+            } else {
+                predictedNotTakenIncorrect++;
+            }
+        } else if (ldstQueue.violation(DummyTid)) {
+            assert(inst->isMemRef());
+            // If there was an ordering violation, then get the
+            // DynInst that caused the violation.  Note that this
+            // clears the violation signal.
+            DynInstPtr violator;
+            violator = ldstQueue.getMemDepViolator(DummyTid);
+
+            DPRINTF(IEW, "LDSTQ detected a violation. Violator PC: %s "
+                         "[sn:%lli], inst PC: %s [sn:%lli]. Addr is: %#x.\n",
+                    violator->pcState(), violator->seqNum,
+                    inst->pcState(), inst->seqNum, inst->physEffAddrLow);
+
+            fetchRedirect = true;
+
+            // Tell the instruction queue that a violation has occured.
+            dq.violation(inst, violator);
+
+            // Squash.
+            squashDueToMemOrder(violator);
+
+            ++memOrderViolationEvents;
+        }
+    } else {
+        // Reset any state associated with redirects that will not
+        // be used.
+        if (ldstQueue.violation(DummyTid)) {
+            assert(inst->isMemRef());
+
+            DynInstPtr violator = ldstQueue.getMemDepViolator(DummyTid);
+
+            DPRINTF(IEW, "LDSTQ detected a violation.  Violator PC: "
+                         "%s, inst PC: %s.  Addr is: %#x.\n",
+                    violator->pcState(), inst->pcState(),
+                    inst->physEffAddrLow);
+            DPRINTF(IEW, "Violation will not be handled because "
+                         "already squashing\n");
+
+            ++memOrderViolationEvents;
+        }
+    }
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &inst)
+{
+    DPRINTF(DIEWC, "Memory violation, squashing violator and younger "
+                 "insts, PC: %s [sn:%i].\n", inst->pcState(), inst->seqNum);
+    // Need to include inst->seqNum in the following comparison to cover the
+    // corner case when a branch misprediction and a memory violation for the
+    // same instruction (e.g. load PC) are detected in the same cycle.  In this
+    // case the memory violator should take precedence over the branch
+    // misprediction because it requires the violator itself to be included in
+    // the squash.
+    if (!toNextCycle->diewc2diewc.squash ||
+        inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum) {
+        toNextCycle->diewc2diewc.squash = true;
+
+        toNextCycle->diewc2diewc.squashedSeqNum = inst->seqNum;
+        toNextCycle->diewc2diewc.pc = inst->pcState();
+        toNextCycle->diewc2diewc.mispredictInst = nullptr;
+
+        // Must include the memory violator in the squash.
+        toNextCycle->diewc2diewc.includeSquashInst = true;
+
+        wroteToTimeBuffer = true;
+    }
 }
 
 }

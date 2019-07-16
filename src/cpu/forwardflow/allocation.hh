@@ -66,7 +66,7 @@ private:
 
     unsigned toDIEWCIndex;
 
-    unsigned allocationWidth;
+    const unsigned allocationWidth;
 
     /** Decode instruction queue interface. */
     TimeBuffer<DecodeStruct> *decodeQueue;

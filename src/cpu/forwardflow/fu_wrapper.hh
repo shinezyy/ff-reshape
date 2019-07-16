@@ -45,10 +45,32 @@ struct SingleFUWrapper {
 
 template<class Impl>
 class FUWrapper {
-    FuncUnit fu;
 public:
+
 //    using DynInstPtr = BaseO3DynInst<Impl>*;
     typedef typename Impl::DynInstPtr DynInstPtr;
+
+    typedef typename Impl::CPUPol::LSQ LSQ;
+
+    typedef typename Impl::CPUPol::DataflowQueues DQ;
+
+    typedef typename Impl::CPUPol::DIEWC Exec;
+
+private:
+    FuncUnit fu;
+
+    LSQ *ldstQueue;
+
+    DQ *dq;
+
+    Exec *exec;
+
+public:
+    void setLSQ(LSQ *lsq);
+
+    void setDQ(DQ *_dq);
+
+    void setExec(Exec *_exec);
 
     bool canServe(DynInstPtr &inst);
 
@@ -87,6 +109,7 @@ public:
 private:
 
     std::unordered_map<OpClass, SingleFUWrapper> wrappers;
+    std::unordered_map<OpClass, DynInstPtr> insts;
 
 //    std::vector<Value> buffer(num_fu);
 
@@ -105,6 +128,8 @@ private:
 
     DQPointer inv;
     unsigned numFU;
+
+    void executeInsts();
 
 };
 

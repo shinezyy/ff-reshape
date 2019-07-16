@@ -414,6 +414,8 @@ struct TimeBufStruct {
         /// schedule a non-speculative instruction.
         InstSeqNum nonSpecSeqNum; // *I
 
+        DQPointer nonSpecPointer;
+
         /// Represents the instruction that has either been retired or
         /// squashed.  Similar to having a single bus that broadcasts the
         /// retired or squashed sequence number.

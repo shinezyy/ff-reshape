@@ -23,11 +23,13 @@ namespace FF{
 template <class Impl>
 class DataflowQueueBank{
 
+public:
     typedef typename Impl::DynInstPtr DynInstPtr;
 //    using DynInstPtr = BaseO3DynInst<Impl>*;
 
     typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
 
+private:
     const unsigned nOps{4};
 
 
@@ -106,6 +108,8 @@ public:
     typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
     typedef typename Impl::CPUPol::DQStruct DQStruct;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
+
+    typedef typename Impl::CPUPol::LSQ LSQ;
 
     typedef typename Impl::CPUPol::DataflowQueueBank XDataflowQueueBank;
 //    using XDataflowQueueBank = DataflowQueueBank<Impl>;
@@ -247,9 +251,13 @@ public:
     void resetEntries();
 
     void regStats();
+
+    void scheduleNonSpec();
 private:
 
-    unsigned readyMemInstPtr;
+    unsigned nonSpecBankPtr;
+
+    void incNonSpecBankPtr();
 
     unsigned forwardPtrIndex;
 
@@ -284,10 +292,25 @@ private:
     void readQueueHeads();
 
     void dumpInstPackets(std::vector<DQPacket<DynInstPtr>*>&);
+
+    void dumpPairPackets(std::vector<DQPacket<PointerPair>*>&);
+
+    std::list<DynInstPtr> deferredMemInsts;
+
 public:
+    void deferMemInst(DynInstPtr &inst);
+
+    DynInstPtr getDeferredMemInstToExecute();
+
     void setTimeBuf(TimeBuffer<DQStruct>* dqtb);
 
+    void setLSQ(LSQ *lsq);
+
+    void setDIEWC(DIEWC *diewc);
+
     const std::string name() {return "dataflow_queue";}
+
+    void violation(DynInstPtr store, DynInstPtr violator);
 };
 
 }

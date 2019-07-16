@@ -72,6 +72,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
 
 template<class Impl>
 void FUWrapper<Impl>::tick() {
+    executeInsts();
     setWakeup();
 }
 
@@ -222,6 +223,34 @@ void FUWrapper<Impl>::fillMyBitMap(std::vector<std::vector<bool>> &v,
     for (unsigned i = 0; i < Num_OpClasses; i++) {
         v[i][bank] = capabilityList[i];
     }
+}
+
+template<class Impl>
+void FUWrapper<Impl>::executeInsts()
+{
+    for (auto &pair: wrappers) {
+//        SingleFUWrapper &sfu = pair.second;
+        DynInstPtr &inst = insts[pair.first];
+        exec->executeInst(inst);
+    }
+}
+
+template<class Impl>
+void FUWrapper<Impl>::setLSQ(typename Impl::CPUPol::LSQ *lsq)
+{
+    ldstQueue = lsq;
+}
+
+template<class Impl>
+void FUWrapper<Impl>::setDQ(DQ *_dq)
+{
+    dq = _dq;
+}
+
+template<class Impl>
+void FUWrapper<Impl>::setExec(Exec *_exec)
+{
+    exec = _exec;
 }
 
 void
