@@ -241,7 +241,7 @@ private:
 
     void handleInterrupt();
 
-    DynInstPtr &getHeadInst();
+    DynInstPtr &getTailInst();
 
 
     bool changedDQNumEntries;
@@ -361,7 +361,7 @@ public:
     /** Deschedules a thread from scheduling */
     void deactivateThread(ThreadID tid);
 
-    DynInstPtr readHeadInst(ThreadID tid);
+    DynInstPtr readTailInst(ThreadID tid);
 
 private:
     void updateComInstStats(DynInstPtr &ffdiewc);

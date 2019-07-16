@@ -97,7 +97,7 @@ void FFDIEWC<Impl>::tick() {
             dq.replayMemInst(tbuf.strictlyOrderedLoad);
             tbuf.strictlyOrderedLoad->setAtCommit();
         } else {
-            assert(tbuf.nonSpecSeqNum == dq.getHead());
+            assert(tbuf.nonSpecSeqNum == dq.getTail());
             dq.scheduleNonSpec();
         }
     }
@@ -164,10 +164,10 @@ void FFDIEWC<Impl>::dispatch() {
 //    DPRINTF(DIEWC, "dispatch reach 0\n");
     InstQueue &to_dispatch = dispatchStatus == Unblocking ?
             skidBuffer : insts_from_allocation;
-    int num_insts_to_disp = static_cast<int>(to_dispatch.size());
+    unsigned num_insts_to_disp = to_dispatch.size();
     DynInstPtr inst = nullptr;
     bool normally_add_to_dq = false;
-    int dispatched = 0;
+    unsigned dispatched = 0;
 
 //    DPRINTF(DIEWC, "dispatch reach 1\n");
     for (; dispatched < num_insts_to_disp &&
@@ -327,12 +327,15 @@ void FFDIEWC<Impl>::advanceQueues() {
 
 template<class Impl>
 void FFDIEWC<Impl>::writeCommitQueue() {
+    auto heads = dq.getBankTails();
     for (unsigned i = 0; i < width; i++) {
-        DynInstPtr inst = dq.getHead();
+        auto &inst = heads.front();
         if (!inst) {
             break;
         }
         toNextCycle->diewc2diewc.commitQueue[i] = inst;
+        DPRINTF(Commit, "Write inst[%d] to next cycle\n", inst->seqNum);
+        heads.pop_front();
     }
 }
 
@@ -340,7 +343,11 @@ template<class Impl>
 void FFDIEWC<Impl>::commit() {
     // read insts
     for (unsigned i = 0; i < width; i++) {
-        insts_to_commit.push(fromLastCycle->diewc2diewc.commitQueue[i]);
+        auto &inst = fromLastCycle->diewc2diewc.commitQueue[i];
+        insts_to_commit.push(inst);
+        if (inst) {
+            DPRINTF(Commit, "read inst[%d] to last cycle\n", inst->seqNum);
+        }
     }
 
     handleSquash();
@@ -648,7 +655,7 @@ FFDIEWC<Impl>::commitInsts()
         if (interrupt != NoFault)
             handleInterrupt();
 
-        head_inst = getHeadInst();
+        head_inst = getTailInst(); // head_inst: olddest inst/ tail in DQ
 
         if (!head_inst) {
             num_committed++;
@@ -799,7 +806,7 @@ void FFDIEWC<Impl>::handleInterrupt() {
 }
 
 template<class Impl>
-typename FFDIEWC<Impl>::DynInstPtr &FFDIEWC<Impl>::getHeadInst() {
+typename FFDIEWC<Impl>::DynInstPtr &FFDIEWC<Impl>::getTailInst() {
     return insts_to_commit.front();
 }
 
@@ -923,7 +930,7 @@ void FFDIEWC<Impl>::squashFromSquashAfter() {
 template<class Impl>
 void FFDIEWC<Impl>::squashAll() {
     InstSeqNum squashed_inst = dq.isEmpty() ?
-            lastCommitedSeqNum : dq.getHead()->seqNum - 1;
+            lastCommitedSeqNum : dq.getTail()->seqNum - 1;
 
     youngestSeqNum = lastCommitedSeqNum;
     dq.squash(squashed_inst);
@@ -1195,9 +1202,9 @@ void FFDIEWC<Impl>::regProbePoints()
 }
 
 template<class Impl>
-typename Impl::DynInstPtr FFDIEWC<Impl>::readHeadInst(ThreadID tid)
+typename Impl::DynInstPtr FFDIEWC<Impl>::readTailInst(ThreadID tid)
 {
-    return dq.getHead();
+    return dq.getTail();
 }
 
 template<class Impl>

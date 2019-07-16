@@ -3,9 +3,12 @@
 //
 
 #include "cpu/forwardflow/dataflow_queue.hh"
+#include "dataflow_queue.hh"
 #include "debug/DQ.hh"
 #include "debug/DQB.hh"  // DQ bank
 #include "debug/DQOmega.hh"
+#include "debug/DQRead.hh"  // DQ read
+#include "debug/DQWrite.hh"  // DQ write
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
 
@@ -160,7 +163,7 @@ void
 DataflowQueueBank<Impl>::writeInstsToBank(
         DQPointer pointer, DataflowQueueBank::DynInstPtr &inst)
 {
-    DPRINTF(DQB, "insert inst[%d] to (%d %d)\n",
+    DPRINTF(DQWrite, "insert inst[%d] to (%d %d)\n",
             inst->seqNum, pointer.bank, pointer.index);
     auto index = pointer.index;
     assert(!instArray[index]);
@@ -423,6 +426,11 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         fuGroupCaps(Num_OpClasses, vector<bool>(nBanks)),
         fuPointer(nBanks),
 
+        bankWidth((unsigned) ceilLog2(params->numDQBanks)),
+        bankMask((unsigned) (1 << bankWidth) - 1),
+        indexWidth((unsigned) ceilLog2(params->DQDepth)),
+        indexMask((unsigned) ((1 << indexWidth) - 1) << bankWidth),
+
         maxQueueDepth(params->pendingQueueDepth),
         PendingWakeupThreshold(params->PendingWakeupThreshold),
         PendingWakeupMaxThreshold(params->PendingWakeupMaxThreshold),
@@ -474,8 +482,8 @@ template<class Impl>
 DQPointer
 DataflowQueues<Impl>::uint2Pointer(unsigned u)
 {
-    unsigned index = u & indexMask;
-    unsigned bank = (u >> indexWidth) & bankMask;
+    unsigned bank = u & bankMask;
+    unsigned index = (u & indexMask) >> bankWidth;
     unsigned group = 0; //todo group is not supported yet
     return DQPointer{true, group, bank, index, 0};
 }
@@ -930,6 +938,46 @@ template<class Impl>
 void DataflowQueues<Impl>::incNonSpecBankPtr()
 {
     nonSpecBankPtr = (nonSpecBankPtr + 1) % nBanks;
+}
+
+template<class Impl>
+list<typename Impl::DynInstPtr>
+DataflowQueues<Impl>::getBankHeads()
+{
+    list<DynInstPtr> heads;
+    auto ptr_i = head;
+    for (unsigned count = 0; count < nBanks; count++) {
+        auto ptr = uint2Pointer(ptr_i);
+        DynInstPtr inst = dqs[ptr.bank].readInstsFromBank(ptr);
+        if (inst) {
+            DPRINTF(DQRead, "read inst[%d] from DQ\n", inst->seqNum);
+        } else {
+            DPRINTF(DQRead, "inst@[%d] is null\n", ptr_i);
+        }
+        heads.push_back(inst);
+        ptr_i = (ptr_i + 1) % queueSize;
+    }
+    return heads;
+}
+
+template<class Impl>
+list<typename Impl::DynInstPtr>
+DataflowQueues<Impl>::getBankTails()
+{
+    list<DynInstPtr> tails;
+    auto ptr_i = tail;
+    for (unsigned count = 0; count < nBanks; count++) {
+        auto ptr = uint2Pointer(ptr_i);
+        DynInstPtr inst = dqs[ptr.bank].readInstsFromBank(ptr);
+        if (inst) {
+            DPRINTF(DQRead, "read inst[%d] from DQ\n", inst->seqNum);
+        } else {
+            DPRINTF(DQRead, "inst@[%d] is null\n", ptr_i);
+        }
+        tails.push_back(inst);
+        ptr_i = (ptr_i + 1) % queueSize;
+    }
+    return tails;
 }
 
 }

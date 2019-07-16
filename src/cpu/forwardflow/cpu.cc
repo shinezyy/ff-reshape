@@ -740,7 +740,7 @@ FFCPU<Impl>::removeThread(ThreadID tid)
     // in SMT workloads.
 
     // Squash Throughout Pipeline
-    DynInstPtr inst = diewc.readHeadInst(tid);
+    DynInstPtr inst = diewc.readTailInst(tid);
     InstSeqNum squash_seq_num = inst->seqNum;
     fetch.squash(0, squash_seq_num, inst, tid);
     decode.squash(tid);

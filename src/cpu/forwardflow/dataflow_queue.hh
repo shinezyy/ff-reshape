@@ -190,17 +190,22 @@ private:
 
     unsigned pointer2uint(DQPointer);
 
+    const unsigned int bankWidth;
+    const unsigned int bankMask;
+    const unsigned int indexWidth;
+    const unsigned int indexMask;
+
 public:
     unsigned getHeadPtr() const {return head;}
     unsigned getTailPtr() const {return tail;}
 
     void retireHead();
 
-    unsigned int indexMask;
-    unsigned int indexWidth;
-    unsigned int bankMask;
-
     DynInstPtr getHead();
+
+    std::list<DynInstPtr> getBankHeads();
+
+    std::list<DynInstPtr> getBankTails();
 
     DynInstPtr getTail();
 
