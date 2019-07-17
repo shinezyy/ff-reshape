@@ -262,7 +262,6 @@ class BaseDynInst : public ExecContext, public RefCounted
      */
     std::array<DQPointer, TheISA::MaxInstSrcRegs> _srcInstPointer;
 
-
   public:
     /** Records changes to result? */
     void recordResult(bool f) { instFlags[RecordResult] = f; }

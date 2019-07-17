@@ -5,6 +5,9 @@
 #ifndef __FF_DQ_POINTER_HH__
 #define __FF_DQ_POINTER_HH__
 
+#include <cstddef>
+#include <functional>
+
 struct WKPointer;
 
 struct DQPointer{
@@ -21,6 +24,13 @@ struct DQPointer{
     explicit DQPointer(WKPointer&);
 
     explicit DQPointer(WKPointer);
+
+    bool operator==(const DQPointer& that) const {
+        return group == that.group &&
+            bank == that.bank &&
+            index == that.index &&
+            op == that.op;
+    }
 };
 
 struct WKPointer{
@@ -48,5 +58,20 @@ struct PointerPair{
     DQPointer dest;
     DQPointer payload;
 };
+
+namespace std
+{
+template<>
+struct hash<DQPointer>
+{
+    size_t operator()(const DQPointer& ptr) const
+    {
+        const size_t g = ptr.group << 16; // no more that 2^16 entry in a group
+        const size_t i = ptr.index << 5; // 32 bank max
+        const size_t b = ptr.bank;
+        return g | i | b;
+    }
+};
+}
 
 #endif //__FF_DQ_POINTER_HH__

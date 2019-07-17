@@ -595,8 +595,8 @@ FFDIEWC<Impl>::
     }
 
     // Update the commit rename map
-    archState.commitInst(head_inst);
-    dq.retireHead();
+    auto v = archState.commitInst(head_inst);
+    dq.retireHead(false, v);
 
 #if TRACING_ON
     if (DTRACE(O3PipeView)) {
@@ -684,7 +684,7 @@ FFDIEWC<Impl>::commitInsts()
             DPRINTF(Commit, "Retiring squashed instruction from "
                     "ROB.\n");
 
-            dq.retireHead();
+            dq.retireHead(true, FFRegValue());
 
             ++commitSquashedInsts;
             // Notify potential listeners that this instruction is squashed

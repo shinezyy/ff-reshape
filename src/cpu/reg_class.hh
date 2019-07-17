@@ -229,6 +229,27 @@ struct hash<RegId>
         return concatenated_hash;
     }
 };
+
+template<>
+struct hash<std::pair<RegClass, RegIndex>>
+{
+    size_t operator()(const std::pair<RegClass, RegIndex>& pair) const
+    {
+
+        const size_t shifted_class_num = pair.first << (sizeof(RegIndex) << 3);
+        // Concatenate the class_num to the end of the flat_index, in order to
+        // maximize information retained.
+        const size_t concatenated_hash = pair.second | shifted_class_num;
+
+        // If RegIndex is larger than size_t, then class_num will not be
+        // considered by this hash function, so we may wish to perform a
+        // different operation to include that information in the hash.
+        static_assert(sizeof(RegIndex) < sizeof(size_t),
+            "sizeof(RegIndex) should be less than sizeof(size_t)");
+
+        return concatenated_hash;
+    }
+};
 }
 
 #endif // __CPU__REG_CLASS_HH__

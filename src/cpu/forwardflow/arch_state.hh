@@ -43,10 +43,16 @@ private:
     std::unordered_map<int, FFRegValue> floatArchRF;
 
     using RenameMap = std::unordered_map<RegId, DQPointer>;
-    RenameMap renameMap;
+    RenameMap renameMap; // forward
 
-    using Scoreboard = std::unordered_map<RegId, bool>;
+    RenameMap defMap; // backward
+
+    using SBIndex = std::pair<RegClass, RegIndex>;
+    using Scoreboard = std::unordered_map<SBIndex, bool>;
     Scoreboard scoreboard;
+
+    using ReverseTable = std::unordered_map<SBIndex, DQPointer>;
+    ReverseTable reverseTable; // indicate that sb xx is clear by dq xxx
 
     struct Checkpoint {
         RenameMap renameMap;
@@ -58,7 +64,7 @@ private:
 
     O3CPU *cpu;
 public:
-    bool commitInst(DynInstPtr &inst);
+    FFRegValue commitInst(DynInstPtr &inst);
 
     // todo: update map to tell its parent or sibling where to forward
     std::list<PointerPair> recordAndUpdateMap(DynInstPtr &inst);

@@ -59,6 +59,7 @@
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
 #include "debug/FFCPU.hh"
+#include "debug/FFInit.hh"
 #include "debug/Quiesce.hh"
 #include "enums/MemoryMode.hh"
 #include "sim/core.hh"
@@ -1170,6 +1171,7 @@ void
 FFCPU<Impl>::setArchIntReg(int reg_idx, uint64_t val, ThreadID tid)
 {
     intRegfileWrites++;
+    DPRINTF(FFInit, "write %llu to int reg(%i)\n", val, reg_idx);
 
     archState->setIntReg(reg_idx, val);
 }
@@ -1179,6 +1181,7 @@ void
 FFCPU<Impl>::setArchFloatReg(int reg_idx, float val, ThreadID tid)
 {
     fpRegfileWrites++;
+    DPRINTF(FFInit, "write %f to float reg(%i)\n", val, reg_idx);
 
     archState->setFloatReg(reg_idx, val);
 }
@@ -1188,6 +1191,7 @@ void
 FFCPU<Impl>::setArchFloatRegInt(int reg_idx, uint64_t val, ThreadID tid)
 {
     fpRegfileWrites++;
+    DPRINTF(FFInit, "write %llu to float reg(%i)\n", val, reg_idx);
 
     archState->setFloatRegBits(reg_idx, val);
 }

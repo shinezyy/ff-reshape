@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <queue>
+#include <unordered_map>
 #include <vector>
 
 #include "cpu/forwardflow/comm.hh"
@@ -204,7 +205,9 @@ public:
     unsigned getHeadPtr() const {return head;}
     unsigned getTailPtr() const {return tail;}
 
-    void retireHead();
+    void retireHead(bool isSquashed, FFRegValue v);
+
+    std::unordered_map<DQPointer, FFRegValue> committedValues;
 
     DynInstPtr getHead();
 

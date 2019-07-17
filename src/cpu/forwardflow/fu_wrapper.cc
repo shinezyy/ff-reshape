@@ -99,8 +99,10 @@ void FUWrapper<Impl>::tick() {
 template<class Impl>
 void FUWrapper<Impl>::setWakeup() {
     bool set_wb_this_cycle = false;
-    int count = 0;
+    int count_overall = 0;
     for (auto &pair: wrappers) {
+        int count = 0;
+        DPRINTF(FUW, "waking in wrapper (%d, %d)\n", wrapperID, pair.first);
         SingleFUWrapper &wrapper = pair.second;
 
         if (wrapper.isSingleCycle && wrapper.hasPendingInst) {
@@ -127,11 +129,12 @@ void FUWrapper<Impl>::setWakeup() {
             opToWakeup = pair.first;
             toExec = true;
         }
+        count_overall += 1;
     }
     if (wbScheduled[0]) {
         DPRINTF(FUW, "one instruction should be executed and its children"
                 " should be waken up\n");
-        assert(count > 0);
+        assert(count_overall > 0);
     } else {
         DPRINTF(FUSched, "wbScheduled[0]: %d, wbScheduled now: ", wbScheduled[0]);
         if (Debug::FUSched) {
@@ -297,6 +300,7 @@ void FUWrapper<Impl>::executeInsts()
 {
     if (toExec) {
         DPRINTF(FUW, "toExec is valid, execute now!\n");
+        assert(insts[opToWakeup]);
         exec->executeInst(insts[opToWakeup]);
     }
     DPRINTF(FUSched, "wbScheduled at end: ");

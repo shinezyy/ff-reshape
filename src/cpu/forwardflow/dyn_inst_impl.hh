@@ -134,6 +134,7 @@ BaseO3DynInst<Impl>::initVars()
     std::fill(hasOp.begin(), hasOp.end(), false);
     std::fill(opReady.begin(), opReady.end(), false);
     fuGranted = false;
+    std::fill(srcTakenWithInst.begin(), srcTakenWithInst.end(), false);
 }
 
 template <class Impl>

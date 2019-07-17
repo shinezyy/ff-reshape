@@ -12,6 +12,8 @@
 namespace FF
 {
 
+using namespace std;
+
 template<class Impl>
 std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 {
@@ -38,14 +40,25 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
         inst->renameSrcReg(src_idx, renamed_reg);
 
-        // See if the register is ready or not.
-        if (scoreboard[src_reg]) {
+        auto sb_index = make_pair(src_reg.classValue(), src_reg.index());
+
+        if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
+            if (inst->isFloating()) {
+                inst->srcValues[src_idx] = floatArchRF[src_reg.index()];
+            } else if (inst->isInteger()) {
+                inst->srcValues[src_idx] = intArchRF[src_reg.index()];
+            } else {
+                panic("Unexpected reg type\n");
+            }
+            inst->srcTakenWithInst[src_idx] = true;
+
             inst->markSrcRegReady(src_idx);
             pairs.push_back(invalid_pair);
         } else {
             assert(renameMap.count(src_reg));
             pairs.push_back({renameMap[src_reg], inst->dqPosition});
         }
+
         auto old = renameMap[src_reg];
 
         renameMap[src_reg] = inst->dqPosition;
@@ -61,8 +74,11 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
     }
 
     const RegId& dest_reg = inst->destRegIdx(0);
-    scoreboard[dest_reg] = false;
+    auto dest_idx = make_pair(dest_reg.classValue(), dest_reg.index());
+    scoreboard[dest_idx] = false;
+    reverseTable[dest_idx] = inst->dqPosition;
     renameMap[dest_reg] = inst->dqPosition;
+    // defMap[dest_reg] = inst->dqPosition;
     auto &m = renameMap[dest_reg];
     DPRINTF(Rename, "Inst[%i] define reg[%s %d] int (%d %d)(%d)\n",
                     inst->seqNum, dest_reg.className(), dest_reg.index(),
@@ -73,18 +89,21 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 template<class Impl>
 void ArchState<Impl>::setIntReg(int reg_idx, uint64_t val)
 {
+    scoreboard[make_pair(IntRegClass, reg_idx)] = true;
     intArchRF[reg_idx].i = val;
 }
 
 template<class Impl>
 void ArchState<Impl>::setFloatReg(int reg_idx, double val)
 {
+    scoreboard[make_pair(FloatRegClass, reg_idx)] = true;
     floatArchRF[reg_idx].f = val;
 }
 
 template<class Impl>
 void ArchState<Impl>::setFloatRegBits(int reg_idx, uint64_t val)
 {
+    scoreboard[make_pair(FloatRegClass, reg_idx)] = true;
     floatArchRF[reg_idx].i = val;
 }
 
@@ -154,7 +173,7 @@ bool ArchState<Impl>::checkpointsFull()
 }
 
 template<class Impl>
-bool ArchState<Impl>::commitInst(DynInstPtr &inst)
+FFRegValue ArchState<Impl>::commitInst(DynInstPtr &inst)
 {
     InstSeqNum num = inst->seqNum;
 
@@ -175,7 +194,18 @@ bool ArchState<Impl>::commitInst(DynInstPtr &inst)
     } else {
         panic("not ready for other instructions!");
     }
-    return true;
+
+    SBIndex idx = make_pair(inst->staticInst->destRegIdx(0).classValue(),
+            inst->staticInst->destRegIdx(0).index());
+    if (!scoreboard.count(idx)) {
+        scoreboard[idx] = true;
+    }
+    if (!scoreboard[idx] && (reverseTable.count(idx) &&
+                reverseTable[idx] == inst->dqPosition)) {
+        scoreboard[idx] = true;
+    }
+
+    return val;
 }
 
 }

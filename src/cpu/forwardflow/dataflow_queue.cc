@@ -601,11 +601,14 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::retireHead()
+void DataflowQueues<Impl>::retireHead(bool isSquashed, FFRegValue v)
 {
     assert(tail != head);
     DQPointer head_ptr = uint2Pointer(tail);
     DynInstPtr head_inst = dqs[head_ptr.bank].readInstsFromBank(head_ptr);
+    if (!isSquashed) {
+        committedValues[head_inst->dqPosition] = v;
+    }
     dqs[head_ptr.bank].advanceTail();
     head_inst->clearInDQ();
     cpu->removeFrontInst(head_inst);

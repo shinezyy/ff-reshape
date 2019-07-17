@@ -235,16 +235,28 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
     IntReg readIntRegOperand(const StaticInst *si, int idx)
     {
+        assert(idx < 3);
+        if (srcTakenWithInst[idx]) {
+            return srcValues[idx].i;
+        }
         return this->cpu->readIntReg(this->_srcInstPointer[idx]);
     }
 
     FloatReg readFloatRegOperand(const StaticInst *si, int idx)
     {
+        assert(idx < 3);
+        if (srcTakenWithInst[idx]) {
+            return srcValues[idx].f;
+        }
         return this->cpu->readFloatReg(this->_srcInstPointer[idx]);
     }
 
     FloatRegBits readFloatRegOperandBits(const StaticInst *si, int idx)
     {
+        assert(idx < 3);
+        if (srcTakenWithInst[idx]) {
+            return srcValues[idx].f;
+        }
         return this->cpu->readFloatRegBits(this->_srcInstPointer[idx]);
     }
 
@@ -411,6 +423,10 @@ public:
     SingleFUWrapper *sfuWrapper;
 
     bool fuGranted;
+
+    std::array<FFRegValue, 3> srcValues;
+
+    std::array<bool, 3> srcTakenWithInst;
 };
 
 }
