@@ -343,10 +343,11 @@ template<class Impl>
 void FFDIEWC<Impl>::commit() {
     // read insts
     for (unsigned i = 0; i < width; i++) {
-        auto &inst = fromLastCycle->diewc2diewc.commitQueue[i];
-        insts_to_commit.push(inst);
+        DynInstPtr inst = fromLastCycle->diewc2diewc.commitQueue[i];
         if (inst) {
-            DPRINTF(Commit, "read inst[%d] to last cycle\n", inst->seqNum);
+            // push only non null pointers
+            insts_to_commit.push(inst);
+            DPRINTF(Commit, "read inst[%d] from last cycle\n", inst->seqNum);
         }
     }
 
@@ -468,34 +469,39 @@ FFDIEWC<Impl>::
 
         // Make sure we are only trying to commit un-executed instructions we
         // think are possible.
-        assert(head_inst->isNonSpeculative() || head_inst->isStoreConditional()
+        // In FF, we keeps to read from the DQ, so speculative instructions
+        // can also reach here before executed
+        if (head_inst->isNonSpeculative() || head_inst->isStoreConditional()
                || head_inst->isMemBarrier() || head_inst->isWriteBarrier() ||
-               (head_inst->isLoad() && head_inst->strictlyOrdered()));
+               (head_inst->isLoad() && head_inst->strictlyOrdered())) {
 
-        DPRINTF(Commit, "Encountered a barrier or non-speculative "
-                "instruction [sn:%lli] at the head of the ROB, PC %s.\n",
-                head_inst->seqNum, head_inst->pcState());
-
-        if (inst_num > 0 || hasStoresToWB) {
-            DPRINTF(Commit, "Waiting for all stores to writeback.\n");
-            return false;
-        }
-
-        toNextCycle->diewc2diewc.nonSpecSeqNum = head_inst->seqNum;
-
-        // Change the instruction so it won't try to commit again until
-        // it is executed.
-        head_inst->clearCanCommit();
-
-        if (head_inst->isLoad() && head_inst->strictlyOrdered()) {
-            DPRINTF(Commit, "[sn:%lli]: Strictly ordered load, PC %s.\n",
+            DPRINTF(Commit, "Encountered a barrier or non-speculative "
+                    "instruction [sn:%lli] at the head of the ROB, PC %s.\n",
                     head_inst->seqNum, head_inst->pcState());
-            toNextCycle->diewc2diewc.strictlyOrdered = true;
-            toNextCycle->diewc2diewc.strictlyOrderedLoad = head_inst;
-        } else {
-            ++commitNonSpecStalls;
-        }
 
+            if (inst_num > 0 || hasStoresToWB) {
+                DPRINTF(Commit, "Waiting for all stores to writeback.\n");
+                return false;
+            }
+
+            toNextCycle->diewc2diewc.nonSpecSeqNum = head_inst->seqNum;
+
+            // Change the instruction so it won't try to commit again until
+            // it is executed.
+            head_inst->clearCanCommit();
+
+            if (head_inst->isLoad() && head_inst->strictlyOrdered()) {
+                DPRINTF(Commit, "[sn:%lli]: Strictly ordered load, PC %s.\n",
+                        head_inst->seqNum, head_inst->pcState());
+                toNextCycle->diewc2diewc.strictlyOrdered = true;
+                toNextCycle->diewc2diewc.strictlyOrderedLoad = head_inst;
+            } else {
+                ++commitNonSpecStalls;
+            }
+        } else {
+            DPRINTF(Commit, "Normal inst[%d] has not been executed yet\n",
+                    head_inst->seqNum);
+        }
         return false;
     }
 
@@ -641,7 +647,7 @@ FFDIEWC<Impl>::commitInsts()
 {
     // Can't commit and squash things at the same time...
 
-    DPRINTF(Commit, "Trying to commit instructions in the ROB.\n");
+    DPRINTF(Commit, "Trying to commit instructions in the DQ.\n");
 
     unsigned num_committed = 0;
 
@@ -658,8 +664,13 @@ FFDIEWC<Impl>::commitInsts()
         head_inst = getTailInst(); // head_inst: olddest inst/ tail in DQ
 
         if (!head_inst) {
+            DPRINTF(Commit, "Olddest inst is null\n");
             num_committed++;
-            continue;
+            break;
+        }
+        if (!head_inst->readyToCommit()) {
+            DPRINTF(Commit, "Olddest inst is not ready to commit\n");
+            break;
         }
 
         DPRINTF(Commit, "Trying to commit head instruction, [sn:%i]\n",
@@ -668,6 +679,7 @@ FFDIEWC<Impl>::commitInsts()
         // If the head instruction is squashed, it is ready to retire
         // (be removed from the ROB) at any time.
         if (head_inst->isSquashed()) {
+            DPRINTF(Commit, "commit reach 0\n");
 
             DPRINTF(Commit, "Retiring squashed instruction from "
                     "ROB.\n");
@@ -688,10 +700,12 @@ FFDIEWC<Impl>::commitInsts()
             // Hack for now: it really shouldn't happen until after the
             // commit is deemed to be successful, but this count is needed
             // for syscalls.
+            DPRINTF(Commit, "commit reach 1\n");
             thread->funcExeInst++;
 
             // Try to commit the head instruction.
             bool commit_success = commitHead(head_inst, num_committed);
+            DPRINTF(Commit, "commit reach 2\n");
 
             if (commit_success) {
                 ++num_committed;
@@ -806,8 +820,9 @@ void FFDIEWC<Impl>::handleInterrupt() {
 }
 
 template<class Impl>
-typename FFDIEWC<Impl>::DynInstPtr &FFDIEWC<Impl>::getTailInst() {
-    return insts_to_commit.front();
+typename FFDIEWC<Impl>::DynInstPtr FFDIEWC<Impl>::getTailInst() {
+    DynInstPtr n = nullptr;
+    return insts_to_commit.empty() ? n : insts_to_commit.front();
 }
 
 template<class Impl>
@@ -1077,6 +1092,7 @@ template<class Impl>
 void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
 {
     assert(inst->isLoad());
+    inst->setCanCommit();
     inst->sfuWrapper->markWb();
 }
 
@@ -1379,6 +1395,9 @@ void FFDIEWC<Impl>::setAllocQueue(TimeBuffer<AllocationStruct> *aq_ptr)
 template<class Impl>
 void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
 {
+    assert(inst);
+    DPRINTF(DIEWC, "Executing inst[%d]\n", inst->seqNum);
+
     if (inst->isSquashed()) {
         inst->setExecuted();
         inst->setCanCommit();
@@ -1428,6 +1447,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
                     panic("readPredicate not handled in RV\n");
                 }
                 inst->setExecuted();
+                inst->setCanCommit();
                 activityThisCycle();
             }
 
@@ -1444,6 +1464,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
                 panic("readPredicate not handled in RV\n");
         }
         inst->setExecuted();
+        inst->setCanCommit();
 
     }
 

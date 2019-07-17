@@ -409,6 +409,8 @@ public:
     FFRegValue getDestValue();
 
     SingleFUWrapper *sfuWrapper;
+
+    bool fuGranted;
 };
 
 }

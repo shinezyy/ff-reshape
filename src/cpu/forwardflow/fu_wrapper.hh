@@ -24,11 +24,16 @@ struct SingleFUWrapper {
     bool isLSU;
     bool writtenThisCycle;
 
+
     unsigned latency;
     unsigned cycleLeft;  // for long latency
     unsigned MaxPipeLatency;
 
+    bool hasPendingInst;
+    InstSeqNum seq;
+
     std::queue<DQPointer> pipelinedPointers;
+    std::queue<bool> pipelinedValid;
     DQPointer longLatencyPointer;
     DQPointer oneCyclePointer;
 
@@ -97,6 +102,10 @@ public:
 
     DQPointer toWakeup;
 
+    bool toExec;
+
+    OpClass opToWakeup;
+
     typedef FFFUPoolParams Params;
 
     FUWrapper();
@@ -105,7 +114,9 @@ public:
 
     void fillMyBitMap(std::vector<std::vector<bool>> &v, unsigned bank);
 
-    const std::string name() { return "FUWrapper";}
+    const std::string name() { return _name;}
+
+    std::string _name;
 private:
 
     std::unordered_map<OpClass, SingleFUWrapper> wrappers;
@@ -122,9 +133,14 @@ private:
 
     void setWakeup();
 
+    unsigned wrapperID;
+
+public:
     void advance();
 
     void endCycle();
+
+private:
 
     DQPointer inv;
     unsigned numFU;

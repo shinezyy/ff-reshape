@@ -61,7 +61,10 @@ private:
 
     std::vector<DQPointer> outputPointers;
 
+    unsigned tail;
 public:
+    void advanceTail();
+
     explicit DataflowQueueBank(DerivFFCPUParams *params);
 
     bool canServeNew();
@@ -87,6 +90,8 @@ public:
     std::vector<std::array<DQPointer, 4>> prematureFwPointers;
 
     void resetState();
+
+    DynInstPtr tryWakeTail();
 
 };
 

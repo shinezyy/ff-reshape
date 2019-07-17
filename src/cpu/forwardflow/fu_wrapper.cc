@@ -8,6 +8,8 @@
 
 #include "base/trace.hh"
 #include "cpu/op_class.hh"
+#include "debug/FUPipe.hh"
+#include "debug/FUSched.hh"
 #include "debug/FUW.hh"
 #include "fu_wrapper.hh"
 #include "params/FFFUPool.hh"
@@ -15,7 +17,10 @@
 #include "params/OpDesc.hh"
 #include "sim/sim_object.hh"
 
+
 namespace FF{
+
+using namespace std;
 
 template<class Impl>
 bool FUWrapper<Impl>::canServe(DynInstPtr &inst) {
@@ -35,64 +40,83 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
 
     auto lat = opLat[inst->opClass()];
     SingleFUWrapper &wrapper = wrappers[inst->opClass()];
-    assert(!wrapper.writtenThisCycle);
     assert(lat == wrapper.latency);
-    wrapper.writtenThisCycle = true;
+
+    insts[inst->opClass()] = inst;
+    inst->fuGranted = true;
+
+    DPRINTF(FUW, "Consuming inst[%d]\n", inst->seqNum);
 
     DQPointer &dest = inst->pointers[0];
-    if (dest.valid) {
-        // schedule wake up
-        if (wrapper.isSingleCycle) {
-            // schedule wb port
-            assert(!wbScheduledNext[lat]);
-            wbScheduledNext[lat] = true;
 
-            wrapper.oneCyclePointer = dest;
-            assert(!wrapper.writtenThisCycle);
-            wrapper.writtenThisCycle = true;
-
-        } else if (wrapper.isPipelined) {
-            // schedule wb port
-            assert(!wbScheduledNext[lat]);
-            wbScheduledNext[lat] = true;
-
-            wrapper.pipelinedPointers.push(dest);
-            assert(!wrapper.writtenThisCycle);
-            wrapper.writtenThisCycle = true;
-
-        } else {
-            assert(wrapper.isLongLatency);
-            wrapper.longLatencyPointer = dest;
-            assert(!wrapper.writtenThisCycle);
-            wrapper.writtenThisCycle = true;
+    wrapper.seq = inst->seqNum;
+    wrapper.hasPendingInst = true;
+    // schedule wake up
+    if (wrapper.isSingleCycle) {
+        // schedule wb port
+        assert(!wbScheduledNext[0]);
+        wbScheduledNext[0] = true;
+        DPRINTF(FUW, "wbScheduledNext: ");
+        if (Debug::FUW) {
+            cout << wbScheduledNext << endl;
         }
+
+        wrapper.oneCyclePointer = dest;
+        DPRINTF(FUW, "add inst[%i] into 1-cycle wrapper (%i, %i)\n",
+                inst->seqNum, wrapperID, inst->opClass());
+
+    } else if (wrapper.isPipelined) {
+        // schedule wb port
+        assert(!wbScheduledNext[lat]);
+        wbScheduledNext[lat] = true;
+
+        DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will push\n",
+                wrapperID, inst->opClass(), wrapper.pipelinedPointers.size());
+        wrapper.pipelinedPointers.push(dest);
+        wrapper.pipelinedValid.push(true);
+        assert(!wrapper.writtenThisCycle);
+        wrapper.writtenThisCycle = true;
+
+
+        DPRINTF(FUW, "add inst[%i] into pipelined wrapper (%i, %i)\n",
+                inst->seqNum, wrapperID, inst->opClass());
+    } else {
+        assert(wrapper.isLongLatency);
+        wrapper.longLatencyPointer = dest;
+        DPRINTF(FUW, "add inst[%i] into LL wrapper (%i, %i)\n",
+                inst->seqNum, wrapperID, inst->opClass());
     }
+
     return true;
 }
 
 template<class Impl>
 void FUWrapper<Impl>::tick() {
-    executeInsts();
     setWakeup();
+    executeInsts();
 }
 
 template<class Impl>
 void FUWrapper<Impl>::setWakeup() {
     bool set_wb_this_cycle = false;
+    int count = 0;
     for (auto &pair: wrappers) {
         SingleFUWrapper &wrapper = pair.second;
 
-        int count = 0;
-        if (wrapper.isSingleCycle && wrapper.oneCyclePointer.valid) {
+        if (wrapper.isSingleCycle && wrapper.hasPendingInst) {
+            DPRINTF(FUW, "Wakeing up one cycle inst[%d]\n", wrapper.seq);
             toWakeup = wrapper.oneCyclePointer;
             count += 1;
         }
-        if (wrapper.isLongLatency && wrapper.cycleLeft == 1 &&
+        if (wrapper.isLongLatency && wrapper.hasPendingInst &&
+                wrapper.cycleLeft == 1 &&
                 wrapper.longLatencyPointer.valid) {
+            DPRINTF(FUW, "Wakeing up LL inst[%d]\n", wrapper.seq);
             toWakeup = wrapper.longLatencyPointer;
             count += 1;
         }
-        if (wrapper.isPipelined && wrapper.pipelinedPointers.front().valid) {
+        if (wrapper.isPipelined && wrapper.pipelinedValid.front()) {
+            DPRINTF(FUW, "Wakeing up pipelined inst[%d]\n", wrapper.seq);
             toWakeup = wrapper.pipelinedPointers.front();
             count += 1;
         }
@@ -100,6 +124,18 @@ void FUWrapper<Impl>::setWakeup() {
         if (count) {
             assert(!set_wb_this_cycle);
             set_wb_this_cycle = true;
+            opToWakeup = pair.first;
+            toExec = true;
+        }
+    }
+    if (wbScheduled[0]) {
+        DPRINTF(FUW, "one instruction should be executed and its children"
+                " should be waken up\n");
+        assert(count > 0);
+    } else {
+        DPRINTF(FUSched, "wbScheduled[0]: %d, wbScheduled now: ", wbScheduled[0]);
+        if (Debug::FUSched) {
+            cout << wbScheduled << endl;
         }
     }
 }
@@ -107,8 +143,17 @@ void FUWrapper<Impl>::setWakeup() {
 template<class Impl>
 void FUWrapper<Impl>::startCycle() {
     toWakeup.valid = false;
+    toExec = false;
     wbScheduled = wbScheduledNext;
-    wbScheduledNext = wbScheduled << 1;  // expect false shifted in
+    wbScheduledNext = wbScheduled >> 1;  // expect false shifted in
+    DPRINTF(FUSched, "wbScheduled at start: ");
+    if (Debug::FUSched) {
+        cout << wbScheduled << endl;
+    }
+    DPRINTF(FUSched, "wbScheduledNext at start: ");
+    if (Debug::FUSched) {
+        cout << wbScheduledNext << endl;
+    }
     for (auto &pair: wrappers) {
         SingleFUWrapper &wrapper = pair.second;
         wrapper.writtenThisCycle = false;
@@ -121,14 +166,18 @@ template<class Impl>
 void FUWrapper<Impl>::advance() {
     for (auto &pair: wrappers) {
         SingleFUWrapper &wrapper = pair.second;
-        if (wrapper.isLongLatency && !wrapper.isLSU) {
+        if (wrapper.isLongLatency && wrapper.hasPendingInst && !wrapper.isLSU) {
             wrapper.cycleLeft = std::max(wrapper.cycleLeft + 1, (unsigned) 0);
             if (wrapper.cycleLeft <= 1 && !wbScheduledNext[1]) {
                 wbScheduledNext[1] = true;
             }
         }
         if (wrapper.isPipelined) {
+            DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will pop\n",
+                    wrapperID, pair.first, wrapper.pipelinedPointers.size());
+            assert(wrapper.pipelinedPointers.size() == wrapper.MaxPipeLatency);
             wrapper.pipelinedPointers.pop();
+            wrapper.pipelinedValid.pop();
         }
     }
 }
@@ -137,8 +186,16 @@ template<class Impl>
 void FUWrapper<Impl>::endCycle() {
     for (auto &pair: wrappers) {
         SingleFUWrapper &wrapper = pair.second;
-        if (wrapper.isPipelined && !wrapper.writtenThisCycle) {
-            wrapper.pipelinedPointers.push(inv);
+        if (wrapper.isPipelined) {
+            if (!wrapper.writtenThisCycle) {
+                DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will push\n",
+                        wrapperID, pair.first, wrapper.pipelinedPointers.size());
+                wrapper.pipelinedPointers.push(inv);
+                wrapper.pipelinedValid.push(false);
+            } else {
+                DPRINTF(FUPipe, "wrapper(%i, %i) has been written, size:%u, will not push\n",
+                        wrapperID, pair.first, wrapper.pipelinedPointers.size());
+            }
         }
     }
 }
@@ -147,6 +204,13 @@ template<class Impl>
 void FUWrapper<Impl>::init(const Params *p, unsigned bank)
 {
     numFU = 0;
+
+    wrapperID = bank;
+
+    std::ostringstream s;
+    s << "fuWrapper" << bank;
+    _name = s.str();
+
     //  Iterate through the list of FUDescData structures
     //
     const std::vector<FUDesc *> &paramList = p->FUList;
@@ -177,7 +241,7 @@ void FUWrapper<Impl>::init(const Params *p, unsigned bank)
             // appropriate queue.
             for (int k = 0; k < (*i)->number; ++k)
                 wrappers[(*j)->opClass].init(
-                        (*j)->pipelined,
+                        (*j)->pipelined && (!((*j)->opLat == 1)),
                         (*j)->opLat == 1,
                         (*j)->opLat > 1,
                         static_cast<unsigned int>((*j)->opLat),
@@ -196,18 +260,21 @@ void FUWrapper<Impl>::init(const Params *p, unsigned bank)
         numFU++;
 
         //  Add the appropriate number of copies of this FU to the list
-        fu->name = (*i)->name() + "(0)";
+        std::ostringstream s;
+        s << (*i)->name() + "(" << bank << ",0)";
+        fu->name = s.str();
 
         for (int c = 1; c < (*i)->number; ++c) {
-            std::ostringstream s;
             numFU++;
             FuncUnit *fu2 = new FuncUnit(*fu);
+            std::ostringstream s;
 
-            s << (*i)->name() << "(" << c << ")";
+            s << (*i)->name() << "(" << bank << "," << c << ")";
             fu2->name = s.str();
         }
     }
     wbScheduledNext = 0;
+    wbScheduled = 0;
 }
 
 template<class Impl>
@@ -228,10 +295,17 @@ void FUWrapper<Impl>::fillMyBitMap(std::vector<std::vector<bool>> &v,
 template<class Impl>
 void FUWrapper<Impl>::executeInsts()
 {
-    for (auto &pair: wrappers) {
-//        SingleFUWrapper &sfu = pair.second;
-        DynInstPtr &inst = insts[pair.first];
-        exec->executeInst(inst);
+    if (toExec) {
+        DPRINTF(FUW, "toExec is valid, execute now!\n");
+        exec->executeInst(insts[opToWakeup]);
+    }
+    DPRINTF(FUSched, "wbScheduled at end: ");
+    if (Debug::FUSched) {
+        cout << wbScheduled << endl;
+    }
+    DPRINTF(FUSched, "wbScheduledNext at end: ");
+    if (Debug::FUSched) {
+        cout << wbScheduledNext << endl;
     }
 }
 
@@ -261,6 +335,7 @@ SingleFUWrapper::init(
     DQPointer inv;
     inv.valid = false;
 
+    seq = 0;
     isPipelined = pipe;
     isSingleCycle = single_cycle;
     isLongLatency = long_lat;
@@ -268,6 +343,7 @@ SingleFUWrapper::init(
     MaxPipeLatency = max_pipe_lat;
     for (unsigned i = 0; i < MaxPipeLatency; i++) {
         pipelinedPointers.push(inv);
+        pipelinedValid.push(false);
     }
 }
 

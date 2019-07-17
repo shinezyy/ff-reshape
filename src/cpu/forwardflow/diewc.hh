@@ -241,7 +241,7 @@ private:
 
     void handleInterrupt();
 
-    DynInstPtr &getTailInst();
+    DynInstPtr getTailInst();
 
 
     bool changedDQNumEntries;

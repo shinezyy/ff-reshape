@@ -298,6 +298,8 @@ void Allocation<Impl>::allocateInsts() {
         }
 
         inst->dqPosition = allocateDQEntry();
+        DPRINTF(DAllocation, "Inst[%d] allocated @ (%d %d)\n",
+                inst->seqNum, inst->dqPosition.bank, inst->dqPosition.index);
 
         if (inst->isLoad()) {
             loadsInProgress++;

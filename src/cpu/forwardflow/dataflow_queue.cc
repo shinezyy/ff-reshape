@@ -8,6 +8,7 @@
 #include "debug/DQB.hh"  // DQ bank
 #include "debug/DQOmega.hh"
 #include "debug/DQRead.hh"  // DQ read
+#include "debug/DQWake.hh"  // DQ wakeup
 #include "debug/DQWrite.hh"  // DQ write
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
@@ -17,6 +18,40 @@ namespace FF {
 using namespace std;
 
 using boost::dynamic_bitset;
+
+
+template<class Impl>
+void
+DataflowQueueBank<Impl>::advanceTail()
+{
+    instArray.at(tail) = nullptr;
+    tail = (tail + 1) % depth;
+}
+
+template<class Impl>
+typename Impl::DynInstPtr
+DataflowQueueBank<Impl>::tryWakeTail()
+{
+    DynInstPtr tail_inst = instArray.at(tail);
+    if (!tail_inst) {
+        return nullptr;
+    }
+
+    if (tail_inst->fuGranted) {
+        return nullptr;
+    }
+    for (unsigned op = 1; op < nOps; op++) {
+        if (tail_inst->hasOp[op] && !tail_inst->opReady[op]) {
+            return nullptr;
+        }
+    }
+    if (!tail_inst->memOpFulfilled() || !tail_inst->miscOpFulfilled()) {
+        return nullptr;
+    }
+    DPRINTF(DQWake, "inst[%d] is ready but not wakeup!,"
+            " and is waken up by head checker\n", tail_inst->seqNum);
+    return tail_inst;
+}
 
 template<class Impl>
 typename Impl::DynInstPtr
@@ -52,6 +87,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         }
     }
 
+
     // if any pending then inputPointers are all invalid, vise versa (they are mutex)
     // todo ! this function must be called after readPointersFromBank(),
     //  because of the following lines
@@ -60,6 +96,9 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
     pendingInst = first; // if it's rejected, then marks valid in tick()
 
+    if (wakeup_count == 0) {
+        first = tryWakeTail();
+    }
     if (first) {
         DPRINTF(DQB, "Wakeup valid inst: %p\n", first);
     }
@@ -128,6 +167,7 @@ DataflowQueueBank<Impl>::DataflowQueueBank(DerivFFCPUParams *params)
           pendingInst(nullptr),
           pendingInstValid(false),
           outputPointers(nOps, nullDQPointer),
+          tail(0),
           prematureFwPointers(depth)
 {
     for (auto &line: prematureFwPointers) {
@@ -199,6 +239,11 @@ void DataflowQueues<Impl>::tick()
 {
     clear();
 
+    // fu preparation
+    for (auto &wrapper: fuWrappers) {
+        wrapper.startCycle();
+    }
+
     readQueueHeads();
 
 //    DPRINTF(Omega, "DQ tick reach 1\n");
@@ -258,15 +303,13 @@ void DataflowQueues<Impl>::tick()
             continue;
         }
         DynInstPtr &inst = fu_granted_ptrs[b]->payload;
+
+        DPRINTF(DQWake, "Inst[%d] selected\n", inst->seqNum);
+
         bool can_accept = fuWrappers[b].canServe(inst);
         if (can_accept) {
             fu_req_granted[fu_granted_ptrs[b]->source] = true;
             fuWrappers[b].consume(inst);
-
-            // todo: check this line of code
-            wakeQueues[b * nOps].push(WKPointer(fuWrappers[b].toWakeup));
-
-            assert(wakeQueues[b * nOps].size() <= maxQueueDepth);
         }
     }
 
@@ -283,7 +326,18 @@ void DataflowQueues<Impl>::tick()
             auto &ptr = fromLastCycle->pointers[b * nOps + op];
             if (ptr.valid) {
                 wakeQueues[b * nOps + op].push(WKPointer(ptr));
+                assert(wakeQueues[b * nOps + op].size() <= maxQueueDepth);
             }
+        }
+
+        // todo: check this line of code
+        if (fuWrappers[b].toWakeup.valid) {
+            DPRINTF(DQWake, "Got wakeup pointer to (%d %d)(%d)\n",
+                    fuWrappers[b].toWakeup.bank,
+                    fuWrappers[b].toWakeup.index,
+                    fuWrappers[b].toWakeup.op);
+            wakeQueues[b * nOps].push(WKPointer(fuWrappers[b].toWakeup));
+            assert(wakeQueues[b * nOps].size() <= maxQueueDepth);
         }
     }
 
@@ -374,6 +428,11 @@ void DataflowQueues<Impl>::tick()
         bank.tick();
     }
 //    DPRINTF(Omega, "DQ tick reach 10\n");
+
+    for (auto &wrapper: fuWrappers) {
+        wrapper.tick();
+        wrapper.endCycle();
+    }
 }
 
 template<class Impl>
@@ -545,8 +604,9 @@ template<class Impl>
 void DataflowQueues<Impl>::retireHead()
 {
     assert(tail != head);
-    DQPointer head_ptr = uint2Pointer(head);
+    DQPointer head_ptr = uint2Pointer(tail);
     DynInstPtr head_inst = dqs[head_ptr.bank].readInstsFromBank(head_ptr);
+    dqs[head_ptr.bank].advanceTail();
     head_inst->clearInDQ();
     cpu->removeFrontInst(head_inst);
 }
