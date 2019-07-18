@@ -44,7 +44,6 @@
  *          Rick Strong
  */
 #include "cpu/forwardflow/cpu.hh"
-
 #include "arch/generic/traits.hh"
 #include "arch/kernel_stats.hh"
 #include "config/the_isa.hh"
@@ -59,6 +58,7 @@
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
 #include "debug/FFCPU.hh"
+#include "debug/FFCommit.hh"
 #include "debug/FFInit.hh"
 #include "debug/Quiesce.hh"
 #include "enums/MemoryMode.hh"
@@ -1298,9 +1298,9 @@ template <class Impl>
 void
 FFCPU<Impl>::removeFrontInst(DynInstPtr &inst)
 {
-    DPRINTF(FFCPU, "Removing committed instruction [tid:%i] PC %s "
+    DPRINTF(FFCommit, "Removing committed instruction PC %s "
             "[sn:%lli]\n",
-            inst->threadNumber, inst->pcState(), inst->seqNum);
+            inst->pcState(), inst->seqNum);
 
     removeInstsThisCycle = true;
 

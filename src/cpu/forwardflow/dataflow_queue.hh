@@ -266,6 +266,7 @@ public:
     void regStats();
 
     void scheduleNonSpec();
+
 private:
 
     unsigned nonSpecBankPtr;
@@ -320,6 +321,8 @@ public:
     void setLSQ(LSQ *lsq);
 
     void setDIEWC(DIEWC *diewc);
+
+    void setCPU(O3CPU *_cpu) {cpu = _cpu;};
 
     const std::string name() {return "dataflow_queue";}
 

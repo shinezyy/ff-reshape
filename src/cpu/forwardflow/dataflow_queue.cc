@@ -10,6 +10,7 @@
 #include "debug/DQRead.hh"  // DQ read
 #include "debug/DQWake.hh"  // DQ wakeup
 #include "debug/DQWrite.hh"  // DQ write
+#include "debug/FFCommit.hh"
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
 
@@ -601,17 +602,26 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::retireHead(bool isSquashed, FFRegValue v)
+void DataflowQueues<Impl>::retireHead(bool result_valid, FFRegValue v)
 {
     assert(tail != head);
     DQPointer head_ptr = uint2Pointer(tail);
+    DPRINTF(FFCommit, "Position of inst to commit:(%d %d)\n",
+            head_ptr.bank, head_ptr.index);
     DynInstPtr head_inst = dqs[head_ptr.bank].readInstsFromBank(head_ptr);
-    if (!isSquashed) {
+    assert(head_inst);
+    if (result_valid) {
         committedValues[head_inst->dqPosition] = v;
+    } else {
+        // this instruciton produce not value,
+        // and previous owner's children show never read from here!.
+        committedValues.erase(head_inst->dqPosition);
     }
-    dqs[head_ptr.bank].advanceTail();
     head_inst->clearInDQ();
+    DPRINTF(FFCommit, "head inst sn: %llu\n", head_inst->seqNum);
+    DPRINTF(FFCommit, "head inst pc: %s\n", head_inst->pcState());
     cpu->removeFrontInst(head_inst);
+    dqs[head_ptr.bank].advanceTail();
 }
 
 template<class Impl>
@@ -705,7 +715,16 @@ bool DataflowQueues<Impl>::fwPointerQueueClogging()
 template<class Impl>
 FFRegValue DataflowQueues<Impl>::readReg(DQPointer ptr)
 {
-    FFRegValue result = regFile[pointer2uint(ptr)];
+    auto b = ptr.bank;
+    auto inst = dqs[b].readInstsFromBank(ptr);
+    FFRegValue result;
+    if (inst) {
+        // not committed yet
+        result = inst->getDestValue();
+    } else {
+        assert(committedValues.count(ptr));
+        result = committedValues[ptr];
+    }
     return result;
 }
 

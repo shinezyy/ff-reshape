@@ -64,7 +64,7 @@ private:
 
     O3CPU *cpu;
 public:
-    FFRegValue commitInst(DynInstPtr &inst);
+    std::pair<bool, FFRegValue> commitInst(DynInstPtr &inst);
 
     // todo: update map to tell its parent or sibling where to forward
     std::list<PointerPair> recordAndUpdateMap(DynInstPtr &inst);

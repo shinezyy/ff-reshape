@@ -173,7 +173,7 @@ bool ArchState<Impl>::checkpointsFull()
 }
 
 template<class Impl>
-FFRegValue ArchState<Impl>::commitInst(DynInstPtr &inst)
+pair<bool, FFRegValue> ArchState<Impl>::commitInst(DynInstPtr &inst)
 {
     InstSeqNum num = inst->seqNum;
 
@@ -186,26 +186,35 @@ FFRegValue ArchState<Impl>::commitInst(DynInstPtr &inst)
             it++;
         }
     }
-    FFRegValue val = inst->getDestValue();
-    if (inst->isInteger()) {
-        intArchRF[inst->staticInst->destRegIdx(0).index()] = val;
-    } else if (inst->isInteger()) {
-        floatArchRF[inst->staticInst->destRegIdx(0).index()] = val;
+    bool valid = true;
+    FFRegValue val = FFRegValue();
+    if (inst->numDestRegs() > 0) {
+        // in RV it must be 1
+        assert (inst->numDestRegs() == 1);
+
+        val = inst->getDestValue();
+        if (inst->isInteger()) {
+            intArchRF[inst->staticInst->destRegIdx(0).index()] = val;
+        } else if (inst->isInteger()) {
+            floatArchRF[inst->staticInst->destRegIdx(0).index()] = val;
+        } else {
+            panic("not ready for other instructions!");
+        }
+
+        SBIndex idx = make_pair(inst->staticInst->destRegIdx(0).classValue(),
+                inst->staticInst->destRegIdx(0).index());
+        if (!scoreboard.count(idx)) {
+            scoreboard[idx] = true;
+        }
+        if (!scoreboard[idx] && (reverseTable.count(idx) &&
+                    reverseTable[idx] == inst->dqPosition)) {
+            scoreboard[idx] = true;
+        }
     } else {
-        panic("not ready for other instructions!");
+        valid = false;
     }
 
-    SBIndex idx = make_pair(inst->staticInst->destRegIdx(0).classValue(),
-            inst->staticInst->destRegIdx(0).index());
-    if (!scoreboard.count(idx)) {
-        scoreboard[idx] = true;
-    }
-    if (!scoreboard[idx] && (reverseTable.count(idx) &&
-                reverseTable[idx] == inst->dqPosition)) {
-        scoreboard[idx] = true;
-    }
-
-    return val;
+    return make_pair(valid, val);
 }
 
 }

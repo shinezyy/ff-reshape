@@ -281,16 +281,10 @@ bool BaseO3DynInst<Impl>::miscOpFulfilled()
 template<class Impl>
 FFRegValue BaseO3DynInst<Impl>::getDestValue()
 {
-    FFRegValue val;
-    if (this->isFloating()) {
-        val.i = this->cpu->readFloatReg(dqPosition);
-
-    } else if (this->isInteger()) {
-        val.i = this->cpu->readIntReg(dqPosition);
-    } else {
-        panic("not ready for other instructions!");
+    if (this->isExecuted()) {
+        return destValue;
     }
-    return val;
+    panic("requesting dest value of inst [%llu] when it has not been executed", this->seqNum);
 }
 
 }

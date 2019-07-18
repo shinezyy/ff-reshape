@@ -10,6 +10,7 @@
 #include "debug/DIEWC.hh"
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
+#include "debug/FFCommit.hh"
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
 #include "params/DerivFFCPU.hh"
@@ -342,6 +343,8 @@ void FFDIEWC<Impl>::writeCommitQueue() {
 template<class Impl>
 void FFDIEWC<Impl>::commit() {
     // read insts
+    InstQueue empty;
+    std::swap(insts_to_commit, empty);
     for (unsigned i = 0; i < width; i++) {
         DynInstPtr inst = fromLastCycle->diewc2diewc.commitQueue[i];
         if (inst) {
@@ -580,8 +583,9 @@ FFDIEWC<Impl>::
     if (FullSystem) {
         panic("FF does not consider FullSystem yet\n");
     }
-    DPRINTF(Commit, "Committing instruction with [sn:%lli] PC %s\n",
-            head_inst->seqNum, head_inst->pcState());
+    DPRINTF(Commit, "Committing instruction with [sn:%lli] PC %s @DQ(%d %d)\n",
+            head_inst->seqNum, head_inst->pcState(),
+            head_inst->dqPosition.bank, head_inst->dqPosition.index);
     if (head_inst->traceData) {
         head_inst->traceData->setFetchSeq(head_inst->seqNum);
         head_inst->traceData->setCPSeq(thread->numOp);
@@ -590,13 +594,15 @@ FFDIEWC<Impl>::
         head_inst->traceData = NULL;
     }
     if (head_inst->isReturn()) {
-        DPRINTF(Commit,"Return Instruction Committed [sn:%lli] PC %s \n",
+        DPRINTF(FFCommit, "Return Instruction Committed [sn:%lli] PC %s\n",
                         head_inst->seqNum, head_inst->pcState());
     }
 
     // Update the commit rename map
-    auto v = archState.commitInst(head_inst);
-    dq.retireHead(false, v);
+    bool valid;
+    FFRegValue value;
+    tie(valid, value) = archState.commitInst(head_inst);
+    dq.retireHead(valid, value);
 
 #if TRACING_ON
     if (DTRACE(O3PipeView)) {
@@ -684,7 +690,7 @@ FFDIEWC<Impl>::commitInsts()
             DPRINTF(Commit, "Retiring squashed instruction from "
                     "ROB.\n");
 
-            dq.retireHead(true, FFRegValue());
+            dq.retireHead(false, FFRegValue());
 
             ++commitSquashedInsts;
             // Notify potential listeners that this instruction is squashed
@@ -795,6 +801,8 @@ FFDIEWC<Impl>::commitInsts()
                 if (!interrupt && avoidQuiesceLiveLock &&
                     onInstBoundary && cpu->checkInterrupts(cpu->tcBase(0)))
                     squashAfter(head_inst);
+
+                insts_to_commit.pop();
             } else {
                 DPRINTF(Commit, "Unable to commit head instruction PC:%s "
                         "[sn:%i].\n",
@@ -989,6 +997,7 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
     skidBufferMax = (allocationToDIEWCDelay + 1)*width;
     dq.setLSQ(&ldstQueue);
     dq.setDIEWC(this);
+    dq.setCPU(cpu);
 }
 
 template<class Impl>

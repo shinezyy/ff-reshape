@@ -83,8 +83,10 @@ if 'FFCPU' in env['CPU_MODELS']:
     DebugFlag('DQOmega')
     DebugFlag('FUW')
     DebugFlag('FUPipe')
+    DebugFlag('FFCommit')
     DebugFlag('FUSched')
     DebugFlag('FFInit')
+    DebugFlag('FFReg')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',
