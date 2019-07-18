@@ -1405,7 +1405,8 @@ template<class Impl>
 void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
 {
     assert(inst);
-    DPRINTF(DIEWC, "Executing inst[%d]\n", inst->seqNum);
+    DPRINTF(DIEWC, "Executing inst[%d] %s\n", inst->seqNum,
+            inst->staticInst->disassemble(inst->instAddr()));
 
     if (inst->isSquashed()) {
         inst->setExecuted();

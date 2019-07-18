@@ -13,6 +13,7 @@
 
 //#include "cpu/forwardflow/dyn_inst.hh"
 #include "cpu/func_unit.hh"
+#include "cpu/timebuf.hh"
 #include "params/FFFUPool.hh"
 
 namespace FF{
@@ -26,19 +27,38 @@ struct SingleFUWrapper {
 
 
     unsigned latency;
-    unsigned cycleLeft;  // for long latency
     unsigned MaxPipeLatency;
 
     bool hasPendingInst;
     InstSeqNum seq;
 
-    std::queue<DQPointer> pipelinedPointers;
-    std::queue<bool> pipelinedValid;
+    struct PipelineStruct {
+        bool valid;
+        DQPointer pointer;
+        InstSeqNum seq;
+    };
+
+    std::queue<PipelineStruct> pipelineQueue;
+
     DQPointer longLatencyPointer;
+    unsigned cycleLeft;  // for long latency
+
     DQPointer oneCyclePointer;
 
     void init(bool pipe, bool single_cycle, bool long_lat,
                     unsigned latency, unsigned max_pipe_lat);
+
+    struct SFUTimeReg {
+        bool hasPendingInst;
+        InstSeqNum seq;
+        DQPointer oneCyclePointer;
+        DQPointer longLatencyPointer;
+        unsigned cycleLeft;
+    };
+
+    TimeBuffer<SFUTimeReg> *timeStruct;
+    typename TimeBuffer<SFUTimeReg>::wire toNextCycle;
+    typename TimeBuffer<SFUTimeReg>::wire fromLastCycle;
 
     void markWb() {
         assert(isLongLatency);
@@ -104,7 +124,7 @@ public:
 
     bool toExec;
 
-    OpClass opToWakeup;
+    InstSeqNum seqToExec;
 
     typedef FFFUPoolParams Params;
 
@@ -120,7 +140,7 @@ public:
 private:
 
     std::unordered_map<OpClass, SingleFUWrapper> wrappers;
-    std::unordered_map<OpClass, DynInstPtr> insts;
+    std::unordered_map<InstSeqNum, DynInstPtr> insts;
 
 //    std::vector<Value> buffer(num_fu);
 

@@ -35,14 +35,18 @@ DataflowQueueBank<Impl>::tryWakeTail()
 {
     DynInstPtr tail_inst = instArray.at(tail);
     if (!tail_inst) {
+        DPRINTF(DQWake, "Tail[%d] is null, skip\n", tail);
         return nullptr;
     }
 
     if (tail_inst->fuGranted) {
+        DPRINTF(DQWake, "Tail[%d] has been granted, skip\n", tail);
         return nullptr;
     }
     for (unsigned op = 1; op < nOps; op++) {
         if (tail_inst->hasOp[op] && !tail_inst->opReady[op]) {
+            DPRINTF(DQWake, "inst[%d] has op [%d] not ready and cannot commit\n",
+                    tail_inst->seqNum, op);
             return nullptr;
         }
     }
@@ -156,7 +160,7 @@ void DataflowQueueBank<Impl>::tick()
 }
 
 template<class Impl>
-DataflowQueueBank<Impl>::DataflowQueueBank(DerivFFCPUParams *params)
+DataflowQueueBank<Impl>::DataflowQueueBank(DerivFFCPUParams *params, unsigned bankID)
         : nOps(params->numOperands),
           depth(params->DQDepth),
           nullDQPointer(DQPointer{false, 0, 0, 0, 0}),
@@ -176,6 +180,9 @@ DataflowQueueBank<Impl>::DataflowQueueBank(DerivFFCPUParams *params)
             ptr.valid = false;
         }
     }
+    std::ostringstream s;
+    s << "DQBank[" << bankID << "]";
+    _name = s.str();
 }
 
 template<class Impl>
@@ -248,25 +255,6 @@ void DataflowQueues<Impl>::tick()
     readQueueHeads();
 
 //    DPRINTF(Omega, "DQ tick reach 1\n");
-    // todo: write insts from bank to time buffer!
-    for (unsigned i = 0; i < nBanks; i++) {
-        DynInstPtr inst;
-
-        inst = dqs[i].wakeupInstsFromBank();
-
-        // read fu requests from banks
-        //  and set fields for packets
-        //  fu_req_ptrs = xxx
-        //  update valid, dest bits and payload only (source need not be changed)
-        toNextCycle->instValids[i] = !!inst;
-        toNextCycle->insts[i] = inst;
-        if (toNextCycle->instValids[i]) {
-            DPRINTF(Omega, "notNext cycle inst[%d] valid, &inst: %p\n",
-                    i, toNextCycle->insts[i]);
-        }
-    }
-
-//    DPRINTF(Omega, "DQ tick reach 2\n");
     // todo: write forward pointers from bank to time buffer!
     for (unsigned b = 0; b < nBanks; b++) {
         const std::vector<DQPointer> forward_ptrs = dqs[b].readPointersFromBank();
@@ -434,6 +422,24 @@ void DataflowQueues<Impl>::tick()
         wrapper.tick();
         wrapper.endCycle();
     }
+
+    // todo: write insts from bank to time buffer!
+    for (unsigned i = 0; i < nBanks; i++) {
+        DynInstPtr inst;
+
+        inst = dqs[i].wakeupInstsFromBank();
+
+        // read fu requests from banks
+        //  and set fields for packets
+        //  fu_req_ptrs = xxx
+        //  update valid, dest bits and payload only (source need not be changed)
+        toNextCycle->instValids[i] = !!inst && !inst->fuGranted;
+        toNextCycle->insts[i] = inst;
+        if (toNextCycle->instValids[i]) {
+            DPRINTF(Omega, "notNext cycle inst[%d] valid, &inst: %p\n",
+                    i, toNextCycle->insts[i]);
+        }
+    }
 }
 
 template<class Impl>
@@ -459,7 +465,6 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         queueSize(nBanks * depth),
         wakeQueues(nBanks * nOps),
         forwardPointerQueue(nBanks * nOps),
-        dqs(nBanks, XDataflowQueueBank(params)),
 //        wakenValids(nBanks, false),
 //        wakenInsts(nBanks, nullptr),
         bankFUNet(nBanks, true),
@@ -521,6 +526,8 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         // initiate fu bit map here
         fuWrappers[b].fillMyBitMap(fuGroupCaps, b);
         fuWrappers[b].setDQ(this);
+
+        dqs.push_back(XDataflowQueueBank(params, b));
     }
     memDepUnit.init(params, DummyTid);
     memDepUnit.setIQ(this);

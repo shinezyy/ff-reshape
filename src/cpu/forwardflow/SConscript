@@ -82,6 +82,7 @@ if 'FFCPU' in env['CPU_MODELS']:
     DebugFlag('Omega')
     DebugFlag('DQOmega')
     DebugFlag('FUW')
+    DebugFlag('FUW2')
     DebugFlag('FUPipe')
     DebugFlag('FFCommit')
     DebugFlag('FUSched')

@@ -66,7 +66,7 @@ private:
 public:
     void advanceTail();
 
-    explicit DataflowQueueBank(DerivFFCPUParams *params);
+    explicit DataflowQueueBank(DerivFFCPUParams *params, unsigned bankID);
 
     bool canServeNew();
 
@@ -94,6 +94,9 @@ public:
 
     DynInstPtr tryWakeTail();
 
+    std::string _name;
+
+    const std::string name() {return _name;}
 };
 
 

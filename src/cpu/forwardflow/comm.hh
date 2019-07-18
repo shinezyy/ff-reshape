@@ -468,11 +468,6 @@ struct DQOut {
 
 };
 
-/** Struct that defines the information passed from DIEWC to DIEWC. */
-//template<class Impl>
-//struct DIEWC2DIEWC{
-//};
-
 
 
 }
