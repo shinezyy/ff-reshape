@@ -86,6 +86,7 @@ if 'FFCPU' in env['CPU_MODELS']:
     DebugFlag('FUPipe')
     DebugFlag('FFCommit')
     DebugFlag('FUSched')
+    DebugFlag('FFSquash')
     DebugFlag('FFInit')
     DebugFlag('FFReg')
 

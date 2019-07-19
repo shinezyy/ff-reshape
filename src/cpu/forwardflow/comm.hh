@@ -421,6 +421,8 @@ struct TimeBufStruct {
         /// retired or squashed sequence number.
         InstSeqNum doneSeqNum; // *F, I
 
+        DQPointer donePointer;
+
         /// Tell Rename how many free entries it has in the DQ
         unsigned freeDQEntries; // *R
 
@@ -447,6 +449,8 @@ struct TimeBufStruct {
         DynInstPtr commitQueue[Impl::MaxWidth];
 
         InstSeqNum squashedSeqNum;
+
+        DQPointer squashedPointer;
 
         bool canCommit[Impl::MaxWidth];
 

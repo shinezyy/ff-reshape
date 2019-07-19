@@ -33,7 +33,6 @@ public:
 private:
     const unsigned nOps{4};
 
-
     const unsigned depth;
 
     const DQPointer nullDQPointer;
@@ -63,6 +62,7 @@ private:
     std::vector<DQPointer> outputPointers;
 
     unsigned tail;
+
 public:
     void advanceTail();
 
@@ -97,6 +97,10 @@ public:
     std::string _name;
 
     const std::string name() {return _name;}
+
+    void clear();
+
+    void erase(DQPointer);
 };
 
 
@@ -220,7 +224,7 @@ public:
 
     DynInstPtr getTail();
 
-    void squash(InstSeqNum );
+    void squash(DQPointer p, bool all);
 
     bool isFull();
 
@@ -314,6 +318,14 @@ private:
 
     std::list<DynInstPtr> deferredMemInsts;
 
+    bool logicallyLT(unsigned left, unsigned right);
+
+    bool validPosition(unsigned u);
+
+    bool logicallyLET(unsigned left, unsigned right);
+
+    unsigned dec(unsigned u);
+    unsigned inc(unsigned u);
 public:
     void deferMemInst(DynInstPtr &inst);
 
@@ -330,6 +342,8 @@ public:
     const std::string name() {return "dataflow_queue";}
 
     void violation(DynInstPtr store, DynInstPtr violator);
+
+
 };
 
 }

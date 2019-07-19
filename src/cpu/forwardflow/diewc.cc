@@ -11,6 +11,7 @@
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
 #include "debug/FFCommit.hh"
+#include "debug/FFSquash.hh"
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
 #include "params/DerivFFCPU.hh"
@@ -21,17 +22,6 @@ using namespace std;
 
 template<class Impl>
 void FFDIEWC<Impl>::tick() {
-
-    // todo: commit from DQ
-    // part DQC
-    // part DQC should not read from DQCR in the same cycle
-    commit();
-
-
-    // todo: read from DQ head To Simulate that DQ is a RAM instead of combinational.
-    // part DQCR
-    writeCommitQueue();
-
 
     // todo: Execute ready insts
     execute();
@@ -78,7 +68,17 @@ void FFDIEWC<Impl>::tick() {
     // part DQ tick: should not read values from part bring value part route pointer in the same cycle
     dq.tick();
 //    DPRINTF(DIEWC, "tick reach 6\n");
+//
     ldstQueue.writebackStores();
+
+    // todo: commit from DQ
+    // part DQC
+    // part DQC should not read from DQCR in the same cycle
+    commit();
+
+    // todo: read from DQ head To Simulate that DQ is a RAM instead of combinational.
+    // part DQCR
+    writeCommitQueue();
 
     // commit from LSQ
     if (fromLastCycle->diewc2diewc.doneSeqNum &&
@@ -125,6 +125,7 @@ void FFDIEWC<Impl>::checkSignalsAndUpdate() {
         }
         dispatchStatus = Squashing;
         fetchRedirect = false;
+        DPRINTF(DIEWC, "Turn to squashing\n");
         return;
     }
     if (dqSqushing) {
@@ -286,6 +287,7 @@ void FFDIEWC<Impl>::dispatch() {
             insertPointerPairs(archState.recordAndUpdateMap(inst));
 //            DPRINTF(DIEWC, "dispatch reach 7.2\n");
             dq.insert(inst);
+            youngestSeqNum = inst->seqNum;
 //            DPRINTF(DIEWC, "dispatch reach 7.3\n");
         }
 
@@ -722,6 +724,7 @@ FFDIEWC<Impl>::commitInsts()
 
                 // Set the doneSeqNum to the youngest committed instruction.
                 toNextCycle->diewc2diewc.doneSeqNum = head_inst->seqNum;
+                toNextCycle->diewc2diewc.donePointer = head_inst->dqPosition;
 
                 canHandleInterrupts =  (!head_inst->isDelayedCommit()) &&
                                        ((THE_ISA != ALPHA_ISA) ||
@@ -845,6 +848,7 @@ void FFDIEWC<Impl>::squashAfter(typename FFDIEWC<Impl>::DynInstPtr &head_inst) {
 
 template<class Impl>
 void FFDIEWC<Impl>::handleSquash() {
+    DPRINTF(FFSquash, "handleSquash entry\n");
     if (trapSquash) {
         assert(!tcSquash);
         squashFromTrap();
@@ -857,16 +861,22 @@ void FFDIEWC<Impl>::handleSquash() {
         squashFromSquashAfter();
     }
 
+    if (fromLastCycle->diewc2diewc.squash) {
+        DPRINTF(FFSquash, "squashedSeqNum: %llu youngestSeqNum: %llu\n",
+                fromLastCycle->diewc2diewc.squashedSeqNum,
+                youngestSeqNum);
+    }
     if (fromLastCycle->diewc2diewc.squash &&
         commitStatus != TrapPending &&
         fromLastCycle->diewc2diewc.squashedSeqNum <= youngestSeqNum) {
+
         if (fromLastCycle->diewc2diewc.mispredictInst) {
-            DPRINTF(Commit,
+            DPRINTF(FFCommit,
                     "Squashing due to branch mispred PC:%#x [sn:%i]\n",
                     fromLastCycle->diewc2diewc.mispredictInst->instAddr(),
                     fromLastCycle->diewc2diewc.squashedSeqNum);
         } else {
-            DPRINTF(Commit,
+            DPRINTF(FFCommit,
                     "Squashing due to order violation [sn:%i]\n",
                     fromLastCycle->diewc2diewc.squashedSeqNum);
         }
@@ -879,18 +889,20 @@ void FFDIEWC<Impl>::handleSquash() {
         }
 
         youngestSeqNum = squashed_inst;
-
-        dq.squash(squashed_inst);
+        auto p = fromLastCycle->diewc2diewc.squashedPointer;
+        DPRINTF(FFSquash, "Olddest inst ptr to squash: (%i %i)\n", p.bank, p.index);
+        dq.squash(fromLastCycle->diewc2diewc.squashedPointer, false);
         changedDQNumEntries = true;
 
-        toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
-        toNextCycle->diewc2diewc.squash = true;
-        toNextCycle->diewc2diewc.dqSquashing = true;
-        toNextCycle->diewc2diewc.mispredictInst =
-                fromLastCycle->diewc2diewc.mispredictInst;
-        toNextCycle->diewc2diewc.branchTaken =
-                fromLastCycle->diewc2diewc.branchTaken;
-        toNextCycle->diewc2diewc.squashInst = dq.findInst(squashed_inst);
+        // todo: following LOCs will cause loop?
+        // toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
+        // toNextCycle->diewc2diewc.squash = true;
+        // toNextCycle->diewc2diewc.dqSquashing = true;
+        // toNextCycle->diewc2diewc.mispredictInst =
+        //         fromLastCycle->diewc2diewc.mispredictInst;
+        // toNextCycle->diewc2diewc.branchTaken =
+        //         fromLastCycle->diewc2diewc.branchTaken;
+        // toNextCycle->diewc2diewc.squashInst = dq.findInst(squashed_inst);
 
         if (toNextCycle->diewc2diewc.mispredictInst) {
             if (toNextCycle->diewc2diewc.mispredictInst->isUncondCtrl()) {
@@ -956,11 +968,13 @@ void FFDIEWC<Impl>::squashAll() {
             lastCommitedSeqNum : dq.getTail()->seqNum - 1;
 
     youngestSeqNum = lastCommitedSeqNum;
-    dq.squash(squashed_inst);
+    DQPointer dont_care;
+    dq.squash(dont_care, true);
 
     changedDQNumEntries = true;
 
     toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
+    toNextCycle->diewc2diewc.donePointer = dq.getTail()->dqPosition;
     toNextCycle->diewc2diewc.squash = true;
     toNextCycle->diewc2diewc.dqSquashing = true;
     toNextCycle->diewc2diewc.mispredictInst = nullptr;
@@ -1010,7 +1024,9 @@ FFDIEWC<Impl>::squashInFlight()
     // todo: we don't need this in forwardflow?
 
     // Tell the LDSTQ to start squashing.
+    // todo: check this LOCs
     ldstQueue.squash(fromLastCycle->diewc2diewc.doneSeqNum, DummyTid);
+    // dq.squash(fromLastCycle->diewc2diewc.donePointer, false);
     updatedQueues = true;
 
     // Clear the skid buffer in case it has any data in it.
@@ -1267,9 +1283,11 @@ void FFDIEWC<Impl>::squashDueToBranch(DynInstPtr &inst)
             inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum) {
         toNextCycle->diewc2diewc.squash = true;
         toNextCycle->diewc2diewc.squashedSeqNum = inst->seqNum;
+        toNextCycle->diewc2diewc.squashedPointer = inst->dqPosition;
         toNextCycle->diewc2diewc.pc = inst->pcState();
-        toNextCycle->diewc2diewc.mispredictInst = nullptr;
-        toNextCycle->diewc2diewc.includeSquashInst = true;
+        toNextCycle->diewc2diewc.mispredictInst = inst;
+        toNextCycle->diewc2diewc.includeSquashInst = false;
+        toNextCycle->diewc2diewc.branchTaken = inst->pcState().branching();
         wroteToTimeBuffer = true;
     }
 }
@@ -1563,6 +1581,7 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &inst)
         toNextCycle->diewc2diewc.squash = true;
 
         toNextCycle->diewc2diewc.squashedSeqNum = inst->seqNum;
+        toNextCycle->diewc2diewc.squashedPointer = inst->dqPosition;
         toNextCycle->diewc2diewc.pc = inst->pcState();
         toNextCycle->diewc2diewc.mispredictInst = nullptr;
 

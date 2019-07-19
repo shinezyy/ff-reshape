@@ -11,6 +11,7 @@
 #include "debug/DQWake.hh"  // DQ wakeup
 #include "debug/DQWrite.hh"  // DQ write
 #include "debug/FFCommit.hh"
+#include "debug/FFSquash.hh"
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
 
@@ -20,12 +21,27 @@ using namespace std;
 
 using boost::dynamic_bitset;
 
+template<class Impl>
+void
+DataflowQueueBank<Impl>::clear()
+{
+    for (auto &inst: instArray) {
+        inst = nullptr;
+    }
+}
+
+template<class Impl>
+void
+DataflowQueueBank<Impl>::erase(DQPointer p)
+{
+    instArray[p.index] = nullptr;
+}
 
 template<class Impl>
 void
 DataflowQueueBank<Impl>::advanceTail()
 {
-    instArray.at(tail) = nullptr;
+    instArray[tail] = nullptr;
     tail = (tail + 1) % depth;
 }
 
@@ -216,6 +232,9 @@ DataflowQueueBank<Impl>::writeInstsToBank(
     auto index = pointer.index;
     assert(!instArray[index]);
     instArray[index] = inst;
+    if (!instArray[tail]) {
+        tail = index;
+    }
 }
 
 template<class Impl>
@@ -559,7 +578,7 @@ DataflowQueues<Impl>::uint2Pointer(unsigned u)
 template<class Impl>
 unsigned DataflowQueues<Impl>::pointer2uint(DQPointer ptr)
 {
-    return ptr.index + ptr.bank * depth;
+    return (ptr.index << bankWidth) | ptr.bank;
 }
 
 template<class Impl>
@@ -753,9 +772,26 @@ void DataflowQueues<Impl>::addReadyMemInst(DynInstPtr inst)
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::squash(InstSeqNum seqNum)
+void DataflowQueues<Impl>::squash(DQPointer p, bool all)
 {
+    DPRINTF(FFSquash, "DQ squash here\n");
 
+    if (all) {
+        for (auto &bank: dqs) {
+            bank.clear();
+        }
+        head = 0;
+        tail = 0;
+        return;
+    }
+
+    unsigned u = pointer2uint(p);
+    while (validPosition(u) && logicallyLET(u, head)) {
+        auto ptr = uint2Pointer(u);
+        auto &bank = dqs.at(ptr.bank);
+        bank.erase(ptr);
+        u = inc(u);
+    }
 }
 
 template<class Impl>
@@ -1044,7 +1080,7 @@ DataflowQueues<Impl>::getBankHeads()
             DPRINTF(DQRead, "inst@[%d] is null\n", ptr_i);
         }
         heads.push_back(inst);
-        ptr_i = (ptr_i + 1) % queueSize;
+        ptr_i = dec(ptr_i);
     }
     return heads;
 }
@@ -1064,10 +1100,70 @@ DataflowQueues<Impl>::getBankTails()
             DPRINTF(DQRead, "inst@[%d] is null\n", ptr_i);
         }
         tails.push_back(inst);
-        ptr_i = (ptr_i + 1) % queueSize;
+        ptr_i = inc(ptr_i);
     }
     return tails;
 }
+
+template<class Impl>
+bool
+DataflowQueues<Impl>::logicallyLET(unsigned x, unsigned y)
+{
+    return logicallyLT(x, y) || x == y;
+}
+
+template<class Impl>
+bool
+DataflowQueues<Impl>::logicallyLT(unsigned x, unsigned y)
+{
+    DPRINTF(FFSquash, "head: %i tail: %i x: %i y: %i\n", head, tail, x, y);
+    if (head >= tail) {
+        assert(head >= x);
+        assert(head >= y);
+        assert(x >= tail);
+        assert(y >= tail);
+
+        return x < y;
+
+    } else {
+        assert(!(x > head && x < tail));
+        assert(!(y > head && y < tail));
+
+        if ((x <= head && y <= head) ||
+                (x >= tail && y >= tail)) {
+            return x < y;
+        } else {
+            // 大的小，小的大
+            return x > y;
+        }
+    }
+}
+
+template<class Impl>
+bool
+DataflowQueues<Impl>::validPosition(unsigned u)
+{
+    if (head >= tail) {
+        return (u <= head && u >= tail);
+    } else {
+        return (u <= head || u >= tail);
+    }
+}
+
+template<class Impl>
+unsigned
+DataflowQueues<Impl>::inc(unsigned u)
+{
+    return (u+1) % queueSize;
+}
+
+template<class Impl>
+unsigned
+DataflowQueues<Impl>::dec(unsigned u)
+{
+    return u == 0 ? queueSize : u - 1;
+}
+
 
 }
 
