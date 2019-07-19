@@ -6,6 +6,7 @@
 
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
+#include "debug/FFSquash.hh"
 #include "debug/Rename.hh"
 #include "params/DerivFFCPU.hh"
 
@@ -28,6 +29,10 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
     PointerPair invalid_pair{};
     invalid_pair.payload.valid = false;
     invalid_pair.dest.valid = false;
+
+    if (inst->isControl()) {
+        takeCheckpoint(inst);
+    }
 
     for (int src_idx = 0; src_idx < num_src_regs; src_idx++) {
         const RegId& src_reg = inst->srcRegIdx(src_idx);
@@ -129,10 +134,13 @@ uint64_t ArchState<Impl>::readFloatRegBits(int reg_idx)
 }
 
 template<class Impl>
-bool ArchState<Impl>::makeCheckPoint(DynInstPtr &inst)
+bool ArchState<Impl>::takeCheckpoint(DynInstPtr &inst)
 {
+    DPRINTF(FFSquash, "Take checkpoint on inst[%llu] %s pc:%s\n",
+            inst->seqNum, inst->staticInst->disassemble(inst->instAddr()),
+            inst->pcState());
     assert(!cpts.count(inst->seqNum));
-    cpts[inst->seqNum] = {renameMap, scoreboard};
+    cpts[inst->seqNum] = {renameMap, scoreboard, reverseTable};
     return true;
 }
 
@@ -145,6 +153,7 @@ void ArchState<Impl>::recoverCPT(DynInstPtr &inst)
 template<class Impl>
 void ArchState<Impl>::recoverCPT(InstSeqNum &num)
 {
+    DPRINTF(FFSquash, "Recovery checkpoint from inst[%llu]\n", num);
     assert(cpts.count(num));
     Checkpoint &cpt = cpts[num];
     renameMap = cpt.renameMap;

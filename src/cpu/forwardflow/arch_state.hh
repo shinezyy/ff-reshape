@@ -57,6 +57,7 @@ private:
     struct Checkpoint {
         RenameMap renameMap;
         Scoreboard scoreboard;
+        ReverseTable reverseTable;
     };
     std::unordered_map<InstSeqNum, Checkpoint> cpts;
 
@@ -75,7 +76,7 @@ public:
 
     bool checkpointsFull();
 
-    bool makeCheckPoint(DynInstPtr &inst);
+    bool takeCheckpoint(DynInstPtr &inst);
 
     void recoverCPT(DynInstPtr &inst);
 

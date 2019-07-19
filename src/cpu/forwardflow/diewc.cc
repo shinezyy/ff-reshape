@@ -891,7 +891,8 @@ void FFDIEWC<Impl>::handleSquash() {
         youngestSeqNum = squashed_inst;
         auto p = fromLastCycle->diewc2diewc.squashedPointer;
         DPRINTF(FFSquash, "Olddest inst ptr to squash: (%i %i)\n", p.bank, p.index);
-        dq.squash(fromLastCycle->diewc2diewc.squashedPointer, false);
+        dq.squash(fromLastCycle->diewc2diewc.squashedPointer, false , false);
+        archState.recoverCPT(squashed_inst);
         changedDQNumEntries = true;
 
         // todo: following LOCs will cause loop?
@@ -969,7 +970,8 @@ void FFDIEWC<Impl>::squashAll() {
 
     youngestSeqNum = lastCommitedSeqNum;
     DQPointer dont_care;
-    dq.squash(dont_care, true);
+    bool dont_care_either = false;
+    dq.squash(dont_care, true, dont_care_either);
 
     changedDQNumEntries = true;
 

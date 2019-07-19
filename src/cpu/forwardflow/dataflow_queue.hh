@@ -224,7 +224,7 @@ public:
 
     DynInstPtr getTail();
 
-    void squash(DQPointer p, bool all);
+    void squash(DQPointer p, bool all, bool including);
 
     bool isFull();
 

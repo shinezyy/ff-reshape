@@ -772,7 +772,7 @@ void DataflowQueues<Impl>::addReadyMemInst(DynInstPtr inst)
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::squash(DQPointer p, bool all)
+void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
 {
     DPRINTF(FFSquash, "DQ squash here\n");
 
@@ -786,12 +786,21 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all)
     }
 
     unsigned u = pointer2uint(p);
+    unsigned head_next;
+    if (including) {
+        head_next = dec(u);  // move head backward
+    } else { // mispredicted branch should not be squashed
+        head_next = u;
+        u = inc(u);  // squash first mis-fetched instruction
+    }
+
     while (validPosition(u) && logicallyLET(u, head)) {
         auto ptr = uint2Pointer(u);
         auto &bank = dqs.at(ptr.bank);
         bank.erase(ptr);
         u = inc(u);
     }
+    head = head_next;
 }
 
 template<class Impl>
