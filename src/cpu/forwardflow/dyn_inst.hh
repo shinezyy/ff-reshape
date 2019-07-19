@@ -137,10 +137,10 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     int32_t renameTick;  // instruction enters rename phase
     int32_t dispatchTick;
     int32_t issueTick;
-    int32_t completeTick;
     int32_t commitTick;
     int32_t storeTick;
 #endif
+    int32_t completeTick;
 
     /** Reads a misc. register, including any side-effects the read
      * might have as defined by the architecture.

@@ -23,6 +23,8 @@ using namespace std;
 template<class Impl>
 void FFDIEWC<Impl>::tick() {
 
+    clear();
+
     // todo: Execute ready insts
     execute();
 
@@ -103,6 +105,8 @@ void FFDIEWC<Impl>::tick() {
         }
     }
 #undef tbuf
+
+    sendBackwardInfo();
 }
 
 template<class Impl>
@@ -220,7 +224,9 @@ void FFDIEWC<Impl>::dispatch() {
             break;
         }
 
-//        DPRINTF(DIEWC, "dispatch reach 5\n");
+        DPRINTF(DIEWC, "Dispatching inst[%llu] %s PC: %s\n",
+                inst->seqNum, inst->staticInst->disassemble(inst->instAddr()),
+                inst->pcState());
         if (inst->isLoad()) {
             ldstQueue.insertLoad(inst);
             ++dispaLoads;
@@ -301,6 +307,10 @@ void FFDIEWC<Impl>::dispatch() {
         ppDispatch->notify(inst);
     }
 
+    if (dispatched) {
+        toAllocation->diewcInfo.usedDQ = true;
+    }
+
 //    DPRINTF(DIEWC, "dispatch reach 8\n");
     if (!to_dispatch.empty()) {
         DPRINTF(DIEWC, "block because instruction not used up\n");
@@ -360,6 +370,8 @@ void FFDIEWC<Impl>::commit() {
 
     if (commitStatus != DQSquashing) {
         commitInsts();
+    } else {
+        DPRINTF(FFSquash, "DQ is squashing\n");
     }
 
     // todo: ppStall here?
@@ -508,6 +520,15 @@ FFDIEWC<Impl>::
                     head_inst->seqNum);
         }
         return false;
+    }
+
+    if (head_inst->completeTick == curTick() - head_inst->fetchTick) {
+        DPRINTF(FFCommit, "Inst[%llu] must not be committed and executed in "
+                "the same cycle\n", head_inst->seqNum);
+        return false;
+    } else {
+        DPRINTF(FFCommit, "comp tick: %u, curTick: %llu, fetch tick: %llu\n",
+                head_inst->completeTick, curTick(), head_inst->fetchTick);
     }
 
     if (head_inst->isThreadSync()) {
@@ -663,7 +684,7 @@ FFDIEWC<Impl>::commitInsts()
 
     // Commit as many instructions as possible until the commit bandwidth
     // limit is reached, or it becomes impossible to commit any more.
-    while (num_committed < width) {
+    while (num_committed < width && !skipThisCycle) {
         // Check for any interrupt that we've already squashed for
         // and start processing it.
         if (interrupt != NoFault)
@@ -687,19 +708,18 @@ FFDIEWC<Impl>::commitInsts()
         // If the head instruction is squashed, it is ready to retire
         // (be removed from the ROB) at any time.
         if (head_inst->isSquashed()) {
-            DPRINTF(Commit, "commit reach 0\n");
+            DPRINTF(Commit, "Retiring squashed instruction from DQ.\n");
 
-            DPRINTF(Commit, "Retiring squashed instruction from "
-                    "ROB.\n");
-
-            dq.retireHead(false, FFRegValue());
+            head_inst->clearInDQ();
+            cpu->removeFrontInst(head_inst);
 
             ++commitSquashedInsts;
             // Notify potential listeners that this instruction is squashed
             ppSquash->notify(head_inst);
+            ++num_committed;
+            insts_to_commit.pop();
+            continue;
 
-            // Record that the number of ROB entries has changed.
-            changedDQNumEntries = true;
         } else {
             pc = head_inst->pcState();
 
@@ -806,6 +826,7 @@ FFDIEWC<Impl>::commitInsts()
                     squashAfter(head_inst);
 
                 insts_to_commit.pop();
+                toAllocation->diewcInfo.usedDQ = true;
             } else {
                 DPRINTF(Commit, "Unable to commit head instruction PC:%s "
                         "[sn:%i].\n",
@@ -880,7 +901,6 @@ void FFDIEWC<Impl>::handleSquash() {
                     "Squashing due to order violation [sn:%i]\n",
                     fromLastCycle->diewc2diewc.squashedSeqNum);
         }
-        commitStatus = DQSquashing;
 
         InstSeqNum squashed_inst = fromLastCycle->diewc2diewc.squashedSeqNum;
 
@@ -892,8 +912,11 @@ void FFDIEWC<Impl>::handleSquash() {
         auto p = fromLastCycle->diewc2diewc.squashedPointer;
         DPRINTF(FFSquash, "Olddest inst ptr to squash: (%i %i)\n", p.bank, p.index);
         dq.squash(fromLastCycle->diewc2diewc.squashedPointer, false , false);
+        toAllocation->diewcInfo.usedDQ = true;
         archState.recoverCPT(squashed_inst);
         changedDQNumEntries = true;
+
+        commitStatus = CommitRunning;
 
         // todo: following LOCs will cause loop?
         // toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
@@ -972,6 +995,7 @@ void FFDIEWC<Impl>::squashAll() {
     DQPointer dont_care;
     bool dont_care_either = false;
     dq.squash(dont_care, true, dont_care_either);
+    toAllocation->diewcInfo.usedDQ = true;
 
     changedDQNumEntries = true;
 
@@ -1430,6 +1454,8 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
 
     if (inst->isSquashed()) {
         inst->setExecuted();
+        inst->completeTick = curTick() - inst->fetchTick;
+        DPRINTF(DIEWC, "set completeTick to %u\n", inst->completeTick);
         inst->setCanCommit();
         return;
     }
@@ -1477,6 +1503,8 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
                     panic("readPredicate not handled in RV\n");
                 }
                 inst->setExecuted();
+                inst->completeTick = curTick() - inst->fetchTick;
+                DPRINTF(DIEWC, "set completeTick to %u\n", inst->completeTick);
                 inst->setCanCommit();
                 activityThisCycle();
             }
@@ -1494,8 +1522,9 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
                 panic("readPredicate not handled in RV\n");
         }
         inst->setExecuted();
+        inst->completeTick = curTick() - inst->fetchTick;
+        DPRINTF(DIEWC, "set completeTick to %u\n", inst->completeTick);
         inst->setCanCommit();
-
     }
 
     if (!fetchRedirect ||
@@ -1592,6 +1621,20 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &inst)
 
         wroteToTimeBuffer = true;
     }
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::clear()
+{
+    skipThisCycle = false;
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::sendBackwardInfo()
+{
+    toAllocation->diewcInfo.dqHead = dq.getHeadPtr();
+    toAllocation->diewcInfo.dqTail = dq.getTailPtr();
+    toAllocation->diewcInfo.freeDQEntries = dq.numFree();
 }
 
 }

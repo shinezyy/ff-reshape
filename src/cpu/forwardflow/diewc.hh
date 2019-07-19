@@ -373,6 +373,8 @@ private:
     std::list <ThreadID> *activeThreads;
 
     unsigned allocationToDIEWCDelay;
+
+    void clear();
 public:
     // stats
     Stats::Scalar dispSquashedInsts;
@@ -402,6 +404,9 @@ public:
     void executeInst(DynInstPtr &inst);
 
     void squashDueToMemOrder(DynInstPtr &inst);
+
+private:
+    void sendBackwardInfo();
 };
 
 

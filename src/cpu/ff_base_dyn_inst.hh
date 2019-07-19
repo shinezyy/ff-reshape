@@ -250,7 +250,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Flattened register index of the destination registers of this
      *  instruction.
      */
-     std::array<RegId, TheISA::MaxInstDestRegs> _flatDestRegIdx;
+    std::array<RegId, TheISA::MaxInstDestRegs> _flatDestRegIdx;
 
     /** Physical register index of the destination registers of this
      *  instruction.

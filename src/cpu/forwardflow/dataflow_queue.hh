@@ -76,7 +76,7 @@ public:
 
     const std::vector<DQPointer> readPointersFromBank();
 
-    DynInstPtr &readInstsFromBank(DQPointer pointer);
+    DynInstPtr readInstsFromBank(DQPointer pointer) const;
 
     void writeInstsToBank(DQPointer pointer, DynInstPtr& inst);
 
@@ -96,11 +96,11 @@ public:
 
     std::string _name;
 
-    const std::string name() {return _name;}
+    const std::string name() const {return _name;}
 
-    void clear();
+    void clear(bool markSquashed);
 
-    void erase(DQPointer);
+    void erase(DQPointer p, bool markSquashed);
 };
 
 
@@ -199,9 +199,9 @@ private:
 
     unsigned head, tail;
 
-    DQPointer uint2Pointer(unsigned);
+    DQPointer uint2Pointer(unsigned) const;
 
-    unsigned pointer2uint(DQPointer);
+    unsigned pointer2uint(DQPointer) const;
 
     const unsigned int bankWidth;
     const unsigned int bankMask;
@@ -216,7 +216,7 @@ public:
 
     std::unordered_map<DQPointer, FFRegValue> committedValues;
 
-    DynInstPtr getHead();
+    DynInstPtr getHead() const;
 
     std::list<DynInstPtr> getBankHeads();
 
@@ -226,13 +226,13 @@ public:
 
     void squash(DQPointer p, bool all, bool including);
 
-    bool isFull();
+    bool isFull() const;
 
-    unsigned numInDQ();
+    unsigned numInDQ() const;
 
-    unsigned numFree();
+    unsigned numFree() const;
 
-    bool isEmpty();
+    bool isEmpty() const;
 
     void insertBarrier(DynInstPtr &inst);
 
@@ -242,7 +242,7 @@ public:
 
     void insertForwardPointer(PointerPair pair);
 
-    bool stallToUnclog();
+    bool stallToUnclog() const;
 
     DynInstPtr findInst(InstSeqNum seq_to_quash) const;
 
@@ -297,8 +297,8 @@ private:
     unsigned numPendingFwPointerMax;
     const unsigned PendingFwPointerThreshold;
 
-    bool wakeupQueueClogging();
-    bool fwPointerQueueClogging();
+    bool wakeupQueueClogging() const;
+    bool fwPointerQueueClogging() const;
 
     std::vector<FFRegValue> regFile;
 
@@ -318,11 +318,11 @@ private:
 
     std::list<DynInstPtr> deferredMemInsts;
 
-    bool logicallyLT(unsigned left, unsigned right);
+    bool logicallyLT(unsigned left, unsigned right) const;
 
-    bool validPosition(unsigned u);
+    bool validPosition(unsigned u) const;
 
-    bool logicallyLET(unsigned left, unsigned right);
+    bool logicallyLET(unsigned left, unsigned right) const;
 
     unsigned dec(unsigned u);
     unsigned inc(unsigned u);
@@ -339,7 +339,7 @@ public:
 
     void setCPU(O3CPU *_cpu) {cpu = _cpu;};
 
-    const std::string name() {return "dataflow_queue";}
+    const std::string name() const {return "dataflow_queue";}
 
     void violation(DynInstPtr store, DynInstPtr violator);
 

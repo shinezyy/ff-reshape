@@ -491,6 +491,8 @@ void Allocation<Impl>::updateInProgress() {
 template<class Impl>
 void Allocation<Impl>::readFreeEntries() {
     if (fromDIEWC->diewcInfo.usedDQ) {
+        flatHead = fromDIEWC->diewcInfo.dqHead;
+        flatTail = fromDIEWC->diewcInfo.dqTail;
         freeEntries.dqEntries = fromDIEWC->diewcInfo.freeDQEntries;
     }
     if (fromDIEWC->diewcInfo.usedLSQ) {

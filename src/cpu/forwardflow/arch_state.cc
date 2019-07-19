@@ -30,10 +30,6 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
     invalid_pair.payload.valid = false;
     invalid_pair.dest.valid = false;
 
-    if (inst->isControl()) {
-        takeCheckpoint(inst);
-    }
-
     for (int src_idx = 0; src_idx < num_src_regs; src_idx++) {
         const RegId& src_reg = inst->srcRegIdx(src_idx);
         DQPointer renamed_reg = map[tc->flattenRegId(src_reg)];
@@ -47,6 +43,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
         auto sb_index = make_pair(src_reg.classValue(), src_reg.index());
 
+        inst->hasOp[src_idx + 1] = true;
+
         if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
             if (inst->isFloating()) {
                 inst->srcValues[src_idx] = floatArchRF[src_reg.index()];
@@ -57,24 +55,30 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             }
             inst->srcTakenWithInst[src_idx] = true;
 
-            inst->markSrcRegReady(src_idx);
+            // inst->markSrcRegReady(src_idx);
             pairs.push_back(invalid_pair);
+
+            DPRINTF(Rename,"Inst[%llu] read reg[%s %d] directly from arch RF\n",
+                    inst->seqNum, src_reg.className(), src_reg.index());
+
+            inst->opReady[src_idx + 1] = true;
+
         } else {
             assert(renameMap.count(src_reg));
             pairs.push_back({renameMap[src_reg], inst->dqPosition});
-        }
 
-        auto old = renameMap[src_reg];
+            auto old = renameMap[src_reg];
 
-        renameMap[src_reg] = inst->dqPosition;
-        renameMap[src_reg].op = static_cast<unsigned int>(src_idx) + 1;
-        auto new_ = renameMap[src_reg];
+            renameMap[src_reg] = inst->dqPosition;
+            renameMap[src_reg].op = static_cast<unsigned int>(src_idx) + 1;
+            auto new_ = renameMap[src_reg];
 
-        DPRINTF(Rename, "Inst[%i] forward reg[%s %d]from (%d %d)(%d) "
+            DPRINTF(Rename, "Inst[%i] forward reg[%s %d]from (%d %d)(%d) "
                     "to (%d %d)(%d)\n",
                     inst->seqNum, src_reg.className(), src_reg.index(),
                     old.bank, old.index, old.op,
                     new_.bank, new_.index, new_.op);
+        }
 
     }
 
@@ -88,6 +92,11 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
     DPRINTF(Rename, "Inst[%i] define reg[%s %d] int (%d %d)(%d)\n",
                     inst->seqNum, dest_reg.className(), dest_reg.index(),
                     m.bank, m.index, m.op);
+
+    if (inst->isControl()) {
+        takeCheckpoint(inst);
+    }
+
     return pairs;
 }
 

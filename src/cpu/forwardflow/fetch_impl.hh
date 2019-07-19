@@ -1327,11 +1327,12 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             ppFetch->notify(instruction);
             numInst++;
 
-#if TRACING_ON
-            if (DTRACE(O3PipeView)) {
-                instruction->fetchTick = curTick();
-            }
-#endif
+// #if TRACING_ON
+//             if (DTRACE(O3PipeView)) {
+//                 instruction->fetchTick = curTick();
+//             }
+// #endif
+            instruction->fetchTick = curTick();
 
             nextPC = thisPC;
 
