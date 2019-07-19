@@ -830,7 +830,7 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst)
     assert(!isFull());
 
     DQPointer allocated = inst->dqPosition;
-    DPRINTF(DQ, "allocated bank: %d\n", allocated.bank);
+    DPRINTF(DQ, "allocated @(%d %d)\n", allocated.bank, allocated.index);
     assert(!dqs[allocated.bank].readInstsFromBank(allocated));
 //    DPRINTF(DQ, "insert reach 1\n");
     dqs[allocated.bank].writeInstsToBank(allocated, inst);

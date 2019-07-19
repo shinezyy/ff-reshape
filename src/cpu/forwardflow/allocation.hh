@@ -225,6 +225,8 @@ private:
     void serializeAfter(InstQueue &deque);
 
     void resetStage();
+
+    void squash();
 };
 
 

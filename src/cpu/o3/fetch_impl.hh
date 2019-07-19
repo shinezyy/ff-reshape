@@ -871,7 +871,8 @@ DefaultFetch<Impl>::squash(const TheISA::PCState &newPC,
                            const InstSeqNum seq_num, DynInstPtr squashInst,
                            ThreadID tid)
 {
-    DPRINTF(Fetch, "[tid:%u]: Squash from commit.\n", tid);
+    DPRINTF(Fetch, "Squash from commit on inst[%llu] PC: %s\n",
+            squashInst->seqNum, squashInst->pcState());
 
     doSquash(newPC, squashInst, tid);
 

@@ -60,6 +60,7 @@
 #include "debug/FFCPU.hh"
 #include "debug/FFCommit.hh"
 #include "debug/FFInit.hh"
+#include "debug/FFSquash.hh"
 #include "debug/Quiesce.hh"
 #include "enums/MemoryMode.hh"
 #include "sim/core.hh"
@@ -1298,9 +1299,9 @@ template <class Impl>
 void
 FFCPU<Impl>::removeFrontInst(DynInstPtr &inst)
 {
-    DPRINTF(FFCommit, "Removing committed instruction PC %s "
-            "[sn:%lli]\n",
-            inst->pcState(), inst->seqNum);
+    DPRINTF(FFCommit, "Adding committed instruction PC %s "
+            "[sn:%lli] to remove list @addr: %p\n",
+            inst->pcState(), inst->seqNum, inst.get());
 
     removeInstsThisCycle = true;
 
@@ -1312,7 +1313,7 @@ template <class Impl>
 void
 FFCPU<Impl>::removeInstsNotInROB(ThreadID tid)
 {
-    DPRINTF(FFCPU, "Thread %i: Deleting instructions from instruction"
+    DPRINTF(FFCommit, "Thread %i: Deleting instructions from instruction"
             " list.\n", tid);
 
     ListIt end_it;
@@ -1323,12 +1324,12 @@ FFCPU<Impl>::removeInstsNotInROB(ThreadID tid)
     if (instList.empty()) {
         return;
     } else if (dq->isEmpty()) {
-        DPRINTF(FFCPU, "ROB is empty, squashing all insts.\n");
+        DPRINTF(FFCommit, "ROB is empty, squashing all insts.\n");
         end_it = instList.begin();
         rob_empty = true;
     } else {
-        end_it = (dq->getTail())->getInstListIt();
-        DPRINTF(FFCPU, "ROB is not empty, squashing insts not in ROB.\n");
+        end_it = (dq->getHead())->getInstListIt();
+        DPRINTF(FFCommit, "ROB is not empty, squashing insts not in ROB.\n");
     }
 
     removeInstsThisCycle = true;
@@ -1366,7 +1367,7 @@ FFCPU<Impl>::removeInstsUntil(const InstSeqNum &seq_num, ThreadID tid)
 
     inst_iter--;
 
-    DPRINTF(FFCPU, "Deleting instructions from instruction "
+    DPRINTF(FFCommit, "Deleting instructions from instruction "
             "list that are from [tid:%i] and above [sn:%lli] (end=%lli).\n",
             tid, seq_num, (*inst_iter)->seqNum);
 
@@ -1388,7 +1389,7 @@ inline void
 FFCPU<Impl>::squashInstIt(const ListIt &instIt, ThreadID tid)
 {
     if ((*instIt)->threadNumber == tid) {
-        DPRINTF(FFCPU, "Squashing instruction, "
+        DPRINTF(FFSquash, "Squashing instruction, "
                 "[tid:%i] [sn:%lli] PC %s\n",
                 (*instIt)->threadNumber,
                 (*instIt)->seqNum,
@@ -1409,7 +1410,9 @@ void
 FFCPU<Impl>::cleanUpRemovedInsts()
 {
     while (!removeList.empty()) {
-        DPRINTF(FFCPU, "Removing instruction, "
+        DPRINTF(FFCommit, "Removing instruction @addr: %p\n",
+                (*removeList.front()).get());
+        DPRINTF(FFCommit, "Removing instruction, "
                 "[tid:%i] [sn:%lli] PC %s\n",
                 (*removeList.front())->threadNumber,
                 (*removeList.front())->seqNum,

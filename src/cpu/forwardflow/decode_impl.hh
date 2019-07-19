@@ -507,7 +507,7 @@ DefaultDecode<Impl>::checkSignalsAndUpdate(ThreadID tid)
     readStallSignals(tid);
 
     // Check squash signals from commit.
-    if (fromCommit->commitInfo[tid].squash) {
+    if (fromCommit->diewc2diewc.squash) {
 
         DPRINTF(Decode, "[tid:%u]: Squashing instructions due to squash "
                 "from commit.\n", tid);

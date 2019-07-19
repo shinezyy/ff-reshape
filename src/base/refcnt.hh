@@ -31,6 +31,8 @@
 #ifndef __BASE_REFCNT_HH__
 #define __BASE_REFCNT_HH__
 
+#include <cstdio>
+
 /**
  * @file base/refcnt.hh
  *
@@ -66,7 +68,8 @@ class RefCounted
      * @attention A memory leak will occur if you never assign a newly
      * constructed object to a reference counting pointer.
      */
-    RefCounted() : count(0) {}
+    RefCounted() : count(0) {
+    }
 
     /**
      * We make the destructor virtual because we're likely to have
@@ -80,11 +83,17 @@ class RefCounted
     virtual ~RefCounted() {}
 
     /// Increment the reference count
-    void incref() { ++count; }
+    void incref() {
+        ++count;
+    }
 
     /// Decrement the reference count and destroy the object if all
     /// references are gone.
-    void decref() { if (--count <= 0) delete this; }
+    void decref() {
+        if (--count <= 0) {
+            delete this;
+        }
+    }
 };
 
 /**

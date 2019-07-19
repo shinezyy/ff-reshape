@@ -355,8 +355,6 @@ void FFDIEWC<Impl>::writeCommitQueue() {
 template<class Impl>
 void FFDIEWC<Impl>::commit() {
     // read insts
-    InstQueue empty;
-    std::swap(insts_to_commit, empty);
     for (unsigned i = 0; i < width; i++) {
         DynInstPtr inst = fromLastCycle->diewc2diewc.commitQueue[i];
         if (inst) {
@@ -1310,10 +1308,16 @@ void FFDIEWC<Impl>::squashDueToBranch(DynInstPtr &inst)
         toNextCycle->diewc2diewc.squash = true;
         toNextCycle->diewc2diewc.squashedSeqNum = inst->seqNum;
         toNextCycle->diewc2diewc.squashedPointer = inst->dqPosition;
-        toNextCycle->diewc2diewc.pc = inst->pcState();
+
+        TheISA::PCState pc = inst->pcState();
+        // TheISA::advancePC(pc, inst->staticInst);
+        toNextCycle->diewc2diewc.pc = pc;
+
         toNextCycle->diewc2diewc.mispredictInst = inst;
+        toNextCycle->diewc2diewc.squashInst = inst;
         toNextCycle->diewc2diewc.includeSquashInst = false;
         toNextCycle->diewc2diewc.branchTaken = inst->pcState().branching();
+
         wroteToTimeBuffer = true;
     }
 }
@@ -1627,6 +1631,9 @@ template<class Impl>
 void FFDIEWC<Impl>::clear()
 {
     skipThisCycle = false;
+    while (!insts_to_commit.empty()) {
+        insts_to_commit.pop();
+    }
 }
 
 template<class Impl>

@@ -86,7 +86,7 @@ bool Allocation<Impl>::checkSignalsAndUpdate() {
                 "commit.\n");
 
         // todo: squash
-        // squash(fromCommit->diewc2diewc[tid].doneSeqNum, tid);
+        squash();
 
         return true;
     }
@@ -625,6 +625,46 @@ void Allocation<Impl>::resetStage()
     loadsInProgress = 0;
     storesInProgress = 0;
     serializeOnNextInst = false;
+}
+
+template<class Impl>
+void Allocation<Impl>::squash()
+{
+        if (allocationStatus == Blocked ||
+        allocationStatus == Unblocking) {
+        toDecode->renameUnblock[DummyTid] = true;
+
+        resumeSerialize = false;
+        serializeInst = NULL;
+    } else if (allocationStatus == SerializeStall) {
+        if (serializeInst->seqNum <= fromDIEWC->diewc2diewc.squashedSeqNum) {
+            DPRINTF(DAllocation, "Allocation will resume serializing after squash\n");
+            resumeSerialize = true;
+            assert(serializeInst);
+        } else {
+            resumeSerialize = false;
+            toDecode->renameUnblock[DummyTid] = true;
+
+            serializeInst = nullptr;
+        }
+    }
+
+    // Set the status to Squashing.
+    allocationStatus = Squashing;
+
+    // Squash any instructions from decode.
+    for (int i=0; i<fromDecode->size; i++) {
+        assert(fromDecode->insts[i]->seqNum > fromDIEWC->diewc2diewc.squashedSeqNum);
+        fromDecode->insts[i]->setSquashed();
+        wroteToTimeBuffer = true;
+    }
+
+    // Clear the instruction list and skid buffer in case they have any
+    // insts in them.
+    insts.clear();
+
+    // Clear the skid buffer in case it has any data in it.
+    skidBuffer.clear();
 }
 
 }

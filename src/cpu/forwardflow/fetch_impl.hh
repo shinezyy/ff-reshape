@@ -874,7 +874,8 @@ DefaultFetch<Impl>::squash(const TheISA::PCState &newPC,
                            const InstSeqNum seq_num, DynInstPtr squashInst,
                            ThreadID tid)
 {
-    DPRINTF(Fetch, "[tid:%u]: Squash from commit.\n", tid);
+    DPRINTF(Fetch, "Squash from commit on inst[%llu] PC: %s\n",
+            squashInst->seqNum, squashInst->pcState());
 
     doSquash(newPC, squashInst, tid);
 
@@ -908,11 +909,11 @@ DefaultFetch<Impl>::tick()
     DPRINTF(Fetch, "Running stage.\n");
 
     if (FullSystem) {
-        if (fromCommit->commitInfo[0].interruptPending) {
+        if (fromCommit->diewc2diewc.interruptPending) {
             interruptPending = true;
         }
 
-        if (fromCommit->commitInfo[0].clearInterrupt) {
+        if (fromCommit->diewc2diewc.clearInterrupt) {
             interruptPending = false;
         }
     }
@@ -1000,34 +1001,34 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
     }
 
     // Check squash signals from commit.
-    if (fromCommit->commitInfo[tid].squash) {
+    if (fromCommit->diewc2diewc.squash) {
 
         DPRINTF(Fetch, "[tid:%u]: Squashing instructions due to squash "
                 "from commit.\n",tid);
         // In any case, squash.
-        squash(fromCommit->commitInfo[tid].pc,
-               fromCommit->commitInfo[tid].doneSeqNum,
-               fromCommit->commitInfo[tid].squashInst, tid);
+        squash(fromCommit->diewc2diewc.pc,
+               fromCommit->diewc2diewc.doneSeqNum,
+               fromCommit->diewc2diewc.squashInst, tid);
 
         // If it was a branch mispredict on a control instruction, update the
         // branch predictor with that instruction, otherwise just kill the
         // invalid state we generated in after sequence number
-        if (fromCommit->commitInfo[tid].mispredictInst &&
-            fromCommit->commitInfo[tid].mispredictInst->isControl()) {
-            branchPred->squash(fromCommit->commitInfo[tid].doneSeqNum,
-                              fromCommit->commitInfo[tid].pc,
-                              fromCommit->commitInfo[tid].branchTaken,
+        if (fromCommit->diewc2diewc.mispredictInst &&
+            fromCommit->diewc2diewc.mispredictInst->isControl()) {
+            branchPred->squash(fromCommit->diewc2diewc.doneSeqNum,
+                              fromCommit->diewc2diewc.pc,
+                              fromCommit->diewc2diewc.branchTaken,
                               tid);
         } else {
-            branchPred->squash(fromCommit->commitInfo[tid].doneSeqNum,
+            branchPred->squash(fromCommit->diewc2diewc.doneSeqNum,
                               tid);
         }
 
         return true;
-    } else if (fromCommit->commitInfo[tid].doneSeqNum) {
+    } else if (fromCommit->diewc2diewc.doneSeqNum) {
         // Update the branch predictor if it wasn't a squashed instruction
         // that was broadcasted.
-        branchPred->update(fromCommit->commitInfo[tid].doneSeqNum, tid);
+        branchPred->update(fromCommit->diewc2diewc.doneSeqNum, tid);
     }
 
     // Check squash signals from decode.
@@ -1108,8 +1109,8 @@ DefaultFetch<Impl>::buildInst(ThreadID tid, StaticInstPtr staticInst,
     instruction->setThreadState(cpu->thread[tid]);
 
     DPRINTF(Fetch, "[tid:%i]: Instruction PC %#x (%d) created "
-            "[sn:%lli].\n", tid, thisPC.instAddr(),
-            thisPC.microPC(), seq);
+            "[sn:%lli]. @ addr:%p\n", tid, thisPC.instAddr(),
+            thisPC.microPC(), seq, instruction.get());
 
     DPRINTF(Fetch, "[tid:%i]: Instruction is: %s\n", tid,
             instruction->staticInst->
