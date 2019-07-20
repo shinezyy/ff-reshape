@@ -337,7 +337,7 @@ DefaultDecode<Impl>::squash(DynInstPtr &inst, ThreadID tid)
     }
 
     // Squash instructions up until this one
-    cpu->removeInstsUntil(squash_seq_num, tid);
+    // cpu->removeInstsUntil(squash_seq_num, tid);
 }
 
 template<class Impl>

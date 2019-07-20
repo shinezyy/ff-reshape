@@ -789,14 +789,14 @@ void DataflowQueues<Impl>::addReadyMemInst(DynInstPtr inst)
 template<class Impl>
 void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
 {
-    DPRINTF(FFSquash, "DQ squash here\n");
-
     if (all) {
+        DPRINTF(FFSquash, "DQ: squash ALL instructions\n");
         for (auto &bank: dqs) {
             bank.clear(true);
         }
         head = 0;
         tail = 0;
+        memDepUnit.squash(0, DummyTid);
         return;
     }
 
@@ -812,6 +812,16 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
         head_next = u;
         u = inc(u);  // squash first mis-fetched instruction
     }
+
+    auto head_next_p = uint2Pointer(head_next);
+
+    auto head_inst_next = dqs[head_next_p.bank].readInstsFromBank(head_next_p);
+    assert(head_inst_next || head_next == tail);
+    DPRINTF(FFSquash, "DQ: squash all instruction after inst[%llu]\n",
+            head_inst_next->seqNum);
+
+    memDepUnit.squash(head_inst_next->seqNum, DummyTid);
+    cpu->removeInstsUntil(head_inst_next->seqNum, DummyTid);
 
     while (validPosition(u) && logicallyLET(u, head)) {
         auto ptr = uint2Pointer(u);

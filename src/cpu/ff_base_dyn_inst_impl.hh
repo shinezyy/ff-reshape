@@ -116,12 +116,12 @@ BaseDynInst<Impl>::initVars()
 #ifndef NDEBUG
     ++cpu->instcount;
 
-    if (cpu->instcount > 3000) {
+    if (cpu->instcount > 1500) {
 #ifdef DEBUG
         cpu->dumpInsts();
         dumpSNList();
 #endif
-        assert(cpu->instcount <= 3000);
+        assert(cpu->instcount <= 1500);
     }
 
     DPRINTF(DynInst,
@@ -232,6 +232,25 @@ BaseDynInst<Impl>::eaSrcsReady()
 
     return true;
 }
+
+// template <class Impl>
+// void
+// BaseDynInst<Impl>::incref() {
+//     DPRINTF(DynInst, "inc ref of inst[%llu] from %d to %d\n",
+//             seqNum, count, count + 1);
+//     ++count;
+// }
+//
+// template <class Impl>
+// void
+// BaseDynInst<Impl>::decref() {
+//     DPRINTF(DynInst, "dec ref of inst[%llu] from %d to %d\n",
+//             seqNum, count, count - 1);
+//     if (--count <= 0) {
+//         delete this;
+//     }
+// }
+
 }
 
 #endif//__CPU_BASE_DYN_INST_IMPL_HH__

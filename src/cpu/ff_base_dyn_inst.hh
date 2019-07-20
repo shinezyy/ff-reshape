@@ -893,6 +893,11 @@ class BaseDynInst : public ExecContext, public RefCounted
     { return cpu->mwaitAtomic(threadNumber, tc, cpu->dtb); }
     AddressMonitor *getAddrMonitor()
     { return cpu->getCpuAddrMonitor(threadNumber); }
+
+  public:
+    // void incref() override;
+
+    // void decref() override;
 };
 
 template<class Impl>

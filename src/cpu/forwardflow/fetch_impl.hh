@@ -880,7 +880,7 @@ DefaultFetch<Impl>::squash(const TheISA::PCState &newPC,
     doSquash(newPC, squashInst, tid);
 
     // Tell the CPU to remove any instructions that are not in the ROB.
-    cpu->removeInstsNotInROB(tid);
+    // cpu->removeInstsNotInROB(tid);
 }
 
 template <class Impl>

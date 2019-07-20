@@ -131,7 +131,12 @@ void FFDIEWC<Impl>::checkSignalsAndUpdate() {
         fetchRedirect = false;
         DPRINTF(DIEWC, "Turn to squashing\n");
         return;
+    } else {
+        if (commitStatus == DQSquashing) {
+            commitStatus = CommitRunning;
+        }
     }
+
     if (dqSqushing) {
         dispatchStatus = Squashing;
         clearAllocatedInsts();
@@ -377,7 +382,7 @@ void FFDIEWC<Impl>::commit() {
 
 template<class Impl>
 bool FFDIEWC<Impl>::checkStall() {
-    // todo: tix mysterious stall
+    // todo: fix mysterious stall
     if (dqSqushing) {
         return true;
     }
@@ -914,7 +919,8 @@ void FFDIEWC<Impl>::handleSquash() {
         archState.recoverCPT(squashed_inst);
         changedDQNumEntries = true;
 
-        commitStatus = CommitRunning;
+        commitStatus = DQSquashing;
+        toNextCycle->diewc2diewc.squash = false;
 
         // todo: following LOCs will cause loop?
         // toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
@@ -1310,7 +1316,7 @@ void FFDIEWC<Impl>::squashDueToBranch(DynInstPtr &inst)
         toNextCycle->diewc2diewc.squashedPointer = inst->dqPosition;
 
         TheISA::PCState pc = inst->pcState();
-        // TheISA::advancePC(pc, inst->staticInst);
+        TheISA::advancePC(pc, inst->staticInst);
         toNextCycle->diewc2diewc.pc = pc;
 
         toNextCycle->diewc2diewc.mispredictInst = inst;
