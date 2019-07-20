@@ -830,6 +830,7 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
         u = inc(u);
     }
     head = head_next;
+    DPRINTF(FFSquash, "DQ head becomes %d, tail is %d\n", head, tail);
 }
 
 template<class Impl>
@@ -844,6 +845,9 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst)
     assert(!dqs[allocated.bank].readInstsFromBank(allocated));
 //    DPRINTF(DQ, "insert reach 1\n");
     dqs[allocated.bank].writeInstsToBank(allocated, inst);
+    if (isEmpty()) {
+        tail = pointer2uint(allocated); //keep them together
+    }
     head = pointer2uint(allocated);
 //    DPRINTF(DQ, "insert reach 2\n");
 

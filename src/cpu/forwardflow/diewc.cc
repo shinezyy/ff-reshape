@@ -1645,8 +1645,11 @@ void FFDIEWC<Impl>::clear()
 template<class Impl>
 void FFDIEWC<Impl>::sendBackwardInfo()
 {
-    toAllocation->diewcInfo.dqHead = dq.getHeadPtr();
-    toAllocation->diewcInfo.dqTail = dq.getTailPtr();
+    if (fromLastCycle->diewc2diewc.squash) {
+        toAllocation->diewcInfo.updateDQPointer = true;
+        toAllocation->diewcInfo.dqHead = dq.getHeadPtr() + 1; // p+1 to allocation
+        toAllocation->diewcInfo.dqTail = dq.getTailPtr();
+    }
     toAllocation->diewcInfo.freeDQEntries = dq.numFree();
 }
 

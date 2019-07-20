@@ -8,6 +8,7 @@
 #include "cpu/forwardflow/comm.hh"
 #include "debug/Activity.hh"
 #include "debug/DAllocation.hh"
+#include "debug/FFSquash.hh"
 #include "params/DerivFFCPU.hh"
 
 namespace FF
@@ -491,9 +492,13 @@ void Allocation<Impl>::updateInProgress() {
 template<class Impl>
 void Allocation<Impl>::readFreeEntries() {
     if (fromDIEWC->diewcInfo.usedDQ) {
+        freeEntries.dqEntries = fromDIEWC->diewcInfo.freeDQEntries;
+    }
+    if (fromDIEWC->diewcInfo.updateDQPointer) {
         flatHead = fromDIEWC->diewcInfo.dqHead;
         flatTail = fromDIEWC->diewcInfo.dqTail;
-        freeEntries.dqEntries = fromDIEWC->diewcInfo.freeDQEntries;
+        DPRINTF(FFSquash, "read head (%d) tail (%d) form DIEWC\n",
+                flatHead, flatTail);
     }
     if (fromDIEWC->diewcInfo.usedLSQ) {
         freeEntries.lqEntries = fromDIEWC->diewcInfo.freeLQEntries;
