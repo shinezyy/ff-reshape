@@ -100,30 +100,55 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
     auto &pointers = anyPending ? pendingWakeupPointers : inputPointers;
 
     if (anyPending) {
-        // todo: fill here
+        DPRINTF(DQWake, "Select pendingWakeupPointers\n");
     } else {
-
+        DPRINTF(DQWake, "Select inputPointers\n");
     }
 
     for (unsigned op = 1; op < nOps; op++) {
         auto &ptr = pointers[op];
         if (!ptr.valid) continue;
-
-        wakeup_count++;
-        if (nearlyWakeup[ptr.index] && !first) {
-            first = instArray[ptr.index];
-            first_index = ptr.index;
+        if (!instArray.at(ptr.index)) {
+            DPRINTF(DQWake, "Wakeup ignores null inst @%d", ptr.index);
+            continue;
         }
+
+        auto &inst = instArray[ptr.index];
+
+        inst->opReady[ptr.op] = true;
+
+        if (nearlyWakeup[ptr.index]) {
+            DPRINTF(DQWake, "inst [%llu] is nearly waken up", inst->seqNum);
+            wakeup_count++;
+            if (!first) {
+                DPRINTF(DQWake, "inst [%llu] is the gifted one in this bank", inst->seqNum);
+                first = inst;
+                first_index = ptr.index;
+            }
+        } else {
+            unsigned busy_count = 0;
+            for (unsigned op1 = 1; op1 <= 3; op1++) {
+                if (!inst->opFulfilled(op1)) {
+                    busy_count += 1;
+                }
+            }
+            if (busy_count == 1) {
+                DPRINTF(DQWake, "inst [%llu] becomes nearly waken up", inst->seqNum);
+                nearlyWakeup.set(ptr.index);
+            }
+        }
+        DPRINTF(DQWake, "Waking up op[%d] of inst [%llu]\n", op, inst->seqNum);
     }
     if (wakeup_count > 1) {
         for (unsigned op = 1; op < nOps; op++) {
             auto &ptr = pointers[op];
             if (ptr.index != first_index) {
+                DPRINTF(DQWake, "Pointer (%i %i) (%i) becomes pending",
+                        ptr.bank, ptr.index, ptr.op);
                 pendingWakeupPointers[op] = ptr;
             }
         }
     }
-
 
     // if any pending then inputPointers are all invalid, vise versa (they are mutex)
     // todo ! this function must be called after readPointersFromBank(),
@@ -273,7 +298,7 @@ void DataflowQueueBank<Impl>::checkReadiness(DQPointer pointer)
     unsigned busy_count = 0;
     for (unsigned op = 1; op <= 3; op++) {
         ready &= inst->opFulfilled(op);
-        if (inst->opFulfilled(op)) {
+        if (!inst->opFulfilled(op)) {
             busy_count += 1;
         }
     }
@@ -401,8 +426,8 @@ void DataflowQueues<Impl>::tick()
     for (auto &ptr : wakeup_granted_ptrs) {
         if (ptr->valid) {
             DPRINTF(DQWake, "WakePtr[%d] (pointer(%d) (%d %d)(%d)) granted\n",
-                    ptr->source, ptr->payload.dest.valid,
-                    ptr->payload.dest.bank, ptr->payload.dest.index, ptr->payload.dest.op);
+                    ptr->source, ptr->payload.valid,
+                    ptr->payload.bank, ptr->payload.index, ptr->payload.op);
         }
     }
     // check whether each bank can really accept
