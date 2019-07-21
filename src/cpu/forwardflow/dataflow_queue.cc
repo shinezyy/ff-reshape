@@ -71,12 +71,14 @@ DataflowQueueBank<Impl>::tryWakeTail()
     }
     for (unsigned op = 1; op < nOps; op++) {
         if (tail_inst->hasOp[op] && !tail_inst->opReady[op]) {
-            DPRINTF(DQWake, "inst[%d] has op [%d] not ready and cannot commit\n",
+            DPRINTF(DQWake, "inst[%d] has op [%d] not ready and cannot execute\n",
                     tail_inst->seqNum, op);
             return nullptr;
         }
     }
     if (!tail_inst->memOpFulfilled() || !tail_inst->miscOpFulfilled()) {
+        DPRINTF(DQWake, "inst[%d] has mem/misc op not ready and cannot execute\n",
+                tail_inst->seqNum);
         return nullptr;
     }
     DPRINTF(DQWake, "inst[%d] is ready but not wakeup!,"
@@ -109,7 +111,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         auto &ptr = pointers[op];
         if (!ptr.valid) continue;
         if (!instArray.at(ptr.index)) {
-            DPRINTF(DQWake, "Wakeup ignores null inst @%d", ptr.index);
+            DPRINTF(DQWake, "Wakeup ignores null inst @%d\n", ptr.index);
             continue;
         }
 
@@ -118,32 +120,27 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         inst->opReady[ptr.op] = true;
 
         if (nearlyWakeup[ptr.index]) {
-            DPRINTF(DQWake, "inst [%llu] is nearly waken up", inst->seqNum);
+            DPRINTF(DQWake, "inst [%llu] is nearly waken up\n", inst->seqNum);
             wakeup_count++;
             if (!first) {
-                DPRINTF(DQWake, "inst [%llu] is the gifted one in this bank", inst->seqNum);
+                DPRINTF(DQWake, "inst [%llu] is the gifted one in this bank\n", inst->seqNum);
                 first = inst;
                 first_index = ptr.index;
             }
         } else {
-            unsigned busy_count = 0;
-            for (unsigned op1 = 1; op1 <= 3; op1++) {
-                if (!inst->opFulfilled(op1)) {
-                    busy_count += 1;
-                }
-            }
+            unsigned busy_count = inst->numBusyOps();
             if (busy_count == 1) {
-                DPRINTF(DQWake, "inst [%llu] becomes nearly waken up", inst->seqNum);
+                DPRINTF(DQWake, "inst [%llu] becomes nearly waken up\n", inst->seqNum);
                 nearlyWakeup.set(ptr.index);
             }
         }
-        DPRINTF(DQWake, "Waking up op[%d] of inst [%llu]\n", op, inst->seqNum);
+        DPRINTF(DQWake, "Mark op[%d] of inst [%llu] ready\n", op, inst->seqNum);
     }
     if (wakeup_count > 1) {
         for (unsigned op = 1; op < nOps; op++) {
             auto &ptr = pointers[op];
             if (ptr.index != first_index) {
-                DPRINTF(DQWake, "Pointer (%i %i) (%i) becomes pending",
+                DPRINTF(DQWake, "Pointer (%i %i) (%i) becomes pending\n",
                         ptr.bank, ptr.index, ptr.op);
                 pendingWakeupPointers[op] = ptr;
             }
@@ -294,15 +291,9 @@ void DataflowQueueBank<Impl>::checkReadiness(DQPointer pointer)
     assert(instArray[index]);
     DynInstPtr &inst = instArray[index];
 
-    bool ready = inst->memDepReady && inst->miscDepReady;
-    unsigned busy_count = 0;
-    for (unsigned op = 1; op <= 3; op++) {
-        ready &= inst->opFulfilled(op);
-        if (!inst->opFulfilled(op)) {
-            busy_count += 1;
-        }
-    }
-    if (ready) {
+    unsigned busy_count = inst->numBusyOps();
+
+    if (busy_count == 0) {
         readyIndices.push_back(pointer.index);
     }
     if (busy_count == 1) {
@@ -906,6 +897,9 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst)
 //    DPRINTF(DQ, "insert reach 3\n");
     if (inst->isMemRef()) {
         memDepUnit.insert(inst);
+        if (inst->isLoad()) {
+            inst->hasMemDep = true;
+        }
     }
 //    DPRINTF(DQ, "insert reach 4\n");
     dqs[allocated.bank].checkReadiness(allocated);
@@ -1340,6 +1334,18 @@ void DataflowQueues<Impl>::digestForwardPointer()
     }
 }
 
+template<class Impl>
+void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
+{
+    WKPointer wk(inst->pointers[0]);
+    DPRINTF(DQWake, "Sending pointer to (%i %i) (%i) that depends on"
+            "load[%llu] (%i %i)\n", wk.bank, wk.index, wk.op,
+            inst->seqNum,
+            inst->dqPosition.bank, inst->dqPosition.index);
+    wakeQueues[nonSpecBankPtr * nOps + 3].push(wk);
+    numPendingWakeups++;
+    incNonSpecBankPtr();
+}
 
 }
 

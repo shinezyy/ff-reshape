@@ -437,6 +437,8 @@ public:
     std::array<bool, 3> srcTakenWithInst;
 
     FFRegValue destValue;
+
+    unsigned numBusyOps();
 };
 
 }

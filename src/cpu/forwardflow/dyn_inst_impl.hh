@@ -135,6 +135,11 @@ BaseO3DynInst<Impl>::initVars()
     std::fill(opReady.begin(), opReady.end(), false);
     fuGranted = false;
     std::fill(srcTakenWithInst.begin(), srcTakenWithInst.end(), false);
+    hasMemDep = false;
+    hasMiscDep = false;
+    miscDepReady = false;
+    memDepReady = false;
+    sfuWrapper = nullptr;
 }
 
 template <class Impl>
@@ -285,6 +290,17 @@ FFRegValue BaseO3DynInst<Impl>::getDestValue()
         return destValue;
     }
     panic("requesting dest value of inst [%llu] when it has not been executed", this->seqNum);
+}
+
+template<class Impl>
+unsigned BaseO3DynInst<Impl>::numBusyOps()
+{
+    unsigned busy = 0;
+    for (unsigned op = 1; op <= 3; op++) {
+        busy += !opFulfilled(op);
+    }
+    busy += !miscOpFulfilled();
+    return busy;
 }
 
 }

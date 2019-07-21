@@ -1163,7 +1163,9 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
 {
     assert(inst->isLoad());
     inst->setCanCommit();
-    inst->sfuWrapper->markWb();
+    // assert(inst->sfuWrapper);
+    // inst->sfuWrapper->markWb();
+    dq.writebackLoad(inst);
 }
 
 template<class Impl>

@@ -357,6 +357,8 @@ public:
     void tryFastCleanup();
 
     unsigned numInFlightFw();
+
+    void writebackLoad(DynInstPtr &inst);
 };
 
 }

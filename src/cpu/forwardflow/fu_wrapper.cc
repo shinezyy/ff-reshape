@@ -61,7 +61,11 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
         assert(!wbScheduled[0]);
         wbScheduled[0] = true;
 
-        wrapper.oneCyclePointer = dest;
+        if (!inst->isLoad()) {
+            wrapper.oneCyclePointer = dest;
+        } else {
+            wrapper.oneCyclePointer.valid = false;
+        }
         DPRINTF(FUW, "Add inst[%i] into 1-cycle wrapper (%i, %i)",
                 inst->seqNum, wrapperID, inst->opClass());
         if (dest.valid) {
