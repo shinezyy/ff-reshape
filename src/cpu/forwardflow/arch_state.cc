@@ -18,7 +18,6 @@ using namespace std;
 template<class Impl>
 std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 {
-    auto &map = renameMap;
     unsigned num_src_regs = inst->numSrcRegs();
 
     // Get the architectual register numbers from the source and
@@ -65,8 +64,9 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             inst->opReady[src_idx + 1] = true;
 
         } else {
-            assert(renameMap.count(src_reg));
-            DQPointer renamed_ptr = map[src_reg];
+            assert(parentMap.count(src_reg)); // to parents only
+            assert(renameMap.count(src_reg)); // to parents or siblings
+            DQPointer renamed_ptr = parentMap[src_reg];
 
             DPRINTF(Rename, "Looking up %s arch reg %i"
                     ", got pointer (%i %i)\n",
@@ -103,8 +103,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
         auto dest_idx = make_pair(dest_reg.classValue(), dest_reg.index());
         scoreboard[dest_idx] = false;
         reverseTable[dest_idx] = inst->dqPosition;
+        parentMap[dest_reg] = inst->dqPosition;
         renameMap[dest_reg] = inst->dqPosition;
-        // defMap[dest_reg] = inst->dqPosition;
         auto &m = renameMap[dest_reg];
         DPRINTF(Rename, "Inst[%i] define reg[%s %d] int (%d %d)(%d)\n",
                 inst->seqNum, dest_reg.className(), dest_reg.index(),
@@ -167,7 +167,7 @@ bool ArchState<Impl>::takeCheckpoint(DynInstPtr &inst)
             inst->seqNum, inst->staticInst->disassemble(inst->instAddr()),
             inst->pcState());
     assert(!cpts.count(inst->seqNum));
-    cpts[inst->seqNum] = {renameMap, scoreboard, reverseTable};
+    cpts[inst->seqNum] = {renameMap, parentMap, scoreboard, reverseTable};
     return true;
 }
 
@@ -184,6 +184,7 @@ void ArchState<Impl>::recoverCPT(InstSeqNum &num)
     assert(cpts.count(num));
     Checkpoint &cpt = cpts[num];
     renameMap = cpt.renameMap;
+    parentMap = cpt.parentMap;
     scoreboard = cpt.scoreboard;
 
     auto it = cpts.begin();

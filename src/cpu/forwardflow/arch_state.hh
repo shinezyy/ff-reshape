@@ -46,7 +46,7 @@ private:
     using RenameMap = std::unordered_map<RegId, DQPointer>;
     RenameMap renameMap; // forward
 
-    RenameMap defMap; // backward
+    RenameMap parentMap; // forward
 
     using SBIndex = std::pair<RegClass, RegIndex>;
     using Scoreboard = std::unordered_map<SBIndex, bool>;
@@ -57,6 +57,7 @@ private:
 
     struct Checkpoint {
         RenameMap renameMap;
+        RenameMap parentMap;
         Scoreboard scoreboard;
         ReverseTable reverseTable;
     };

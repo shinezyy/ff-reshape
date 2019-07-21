@@ -182,9 +182,14 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                         ptr.bank, ptr.index, ptr.op);
                 optr.valid = false;
             } else {
-                optr = instArray[ptr.index]->pointers[op];
-                DPRINTF(FFSquash, "Put forwarding wakeup Pointer (%i %i) (%i) to outputPointers\n",
-                        optr.bank, optr.index, optr.op);
+                if (instArray[ptr.index]->pointers[op].valid) {
+                    optr = instArray[ptr.index]->pointers[op];
+                    DPRINTF(FFSquash, "Put forwarding wakeup Pointer (%i %i) (%i)"
+                            " to outputPointers\n",
+                            optr.bank, optr.index, optr.op);
+                } else {
+                    optr.valid = false;
+                }
             }
         }
     }
