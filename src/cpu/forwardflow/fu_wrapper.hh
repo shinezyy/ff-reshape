@@ -151,8 +151,6 @@ private:
     std::bitset<Impl::MaxOpLatency> wbScheduled;
     std::bitset<Impl::MaxOpLatency> wbScheduledNext;
 
-    void setWakeup();
-
     unsigned wrapperID;
 
 public:
@@ -160,13 +158,14 @@ public:
 
     void endCycle();
 
+    void executeInsts();
+
+    void setWakeup();
+
 private:
 
     DQPointer inv;
     unsigned numFU;
-
-    void executeInsts();
-
 };
 
 }

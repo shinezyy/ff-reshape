@@ -18,7 +18,6 @@ using namespace std;
 template<class Impl>
 std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 {
-    ThreadContext *tc = inst->tcBase();
     auto &map = renameMap;
     unsigned num_src_regs = inst->numSrcRegs();
 
@@ -30,20 +29,23 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
     invalid_pair.payload.valid = false;
     invalid_pair.dest.valid = false;
 
-    for (int src_idx = 0; src_idx < num_src_regs; src_idx++) {
+    for (unsigned src_idx = 0; src_idx < num_src_regs; src_idx++) {
         const RegId& src_reg = inst->srcRegIdx(src_idx);
-        DQPointer renamed_reg = map[tc->flattenRegId(src_reg)];
+        inst->hasOp[src_idx + 1] = true;
 
-        DPRINTF(Rename, "Looking up %s arch reg %i"
-                ", got pointer [%i,%i]\n",
-                src_reg.className(), src_reg.index(),
-                renamed_reg.bank, renamed_reg.index);
-
-        inst->renameSrcReg(src_idx, renamed_reg);
+        if (src_reg.isZeroReg()) {
+            DPRINTF(Rename, "Skip zero reg\n");
+            FFRegValue v;
+            v.i = 0;
+            inst->srcValues[src_idx] = v;
+            inst->srcTakenWithInst[src_idx] = true;
+            inst->opReady[src_idx + 1] = true;
+            pairs.push_back(invalid_pair);
+            continue;
+        }
 
         auto sb_index = make_pair(src_reg.classValue(), src_reg.index());
 
-        inst->hasOp[src_idx + 1] = true;
 
         if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
             if (inst->isFloating()) {
@@ -54,7 +56,6 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                 panic("Unexpected reg type\n");
             }
             inst->srcTakenWithInst[src_idx] = true;
-
             // inst->markSrcRegReady(src_idx);
             pairs.push_back(invalid_pair);
 
@@ -65,13 +66,24 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
         } else {
             assert(renameMap.count(src_reg));
-            pairs.push_back({renameMap[src_reg], inst->dqPosition});
+            DQPointer renamed_ptr = map[src_reg];
+
+            DPRINTF(Rename, "Looking up %s arch reg %i"
+                    ", got pointer (%i %i)\n",
+                    src_reg.className(), src_reg.index(),
+                    renamed_ptr.bank, renamed_ptr.index);
+
+            inst->renameSrcReg(src_idx, renamed_ptr);
+
+            diewc->setOldestFw(renameMap[src_reg]);
 
             auto old = renameMap[src_reg];
 
             renameMap[src_reg] = inst->dqPosition;
             renameMap[src_reg].op = static_cast<unsigned int>(src_idx) + 1;
             auto new_ = renameMap[src_reg];
+
+            pairs.push_back({old, new_});
 
             DPRINTF(Rename, "Inst[%i] forward reg[%s %d]from (%d %d)(%d) "
                     "to (%d %d)(%d)\n",
@@ -83,15 +95,21 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
     }
 
     const RegId& dest_reg = inst->destRegIdx(0);
-    auto dest_idx = make_pair(dest_reg.classValue(), dest_reg.index());
-    scoreboard[dest_idx] = false;
-    reverseTable[dest_idx] = inst->dqPosition;
-    renameMap[dest_reg] = inst->dqPosition;
-    // defMap[dest_reg] = inst->dqPosition;
-    auto &m = renameMap[dest_reg];
-    DPRINTF(Rename, "Inst[%i] define reg[%s %d] int (%d %d)(%d)\n",
-                    inst->seqNum, dest_reg.className(), dest_reg.index(),
-                    m.bank, m.index, m.op);
+    if (dest_reg.isZeroReg()) {
+        DPRINTF(Rename, "Skip zero dest reg\n");
+        inst->hasOp[0] = false;
+
+    } else {
+        auto dest_idx = make_pair(dest_reg.classValue(), dest_reg.index());
+        scoreboard[dest_idx] = false;
+        reverseTable[dest_idx] = inst->dqPosition;
+        renameMap[dest_reg] = inst->dqPosition;
+        // defMap[dest_reg] = inst->dqPosition;
+        auto &m = renameMap[dest_reg];
+        DPRINTF(Rename, "Inst[%i] define reg[%s %d] int (%d %d)(%d)\n",
+                inst->seqNum, dest_reg.className(), dest_reg.index(),
+                m.bank, m.index, m.op);
+    }
 
     if (inst->isControl()) {
         takeCheckpoint(inst);
@@ -233,6 +251,12 @@ pair<bool, FFRegValue> ArchState<Impl>::commitInst(DynInstPtr &inst)
     }
 
     return make_pair(valid, val);
+}
+
+template<class Impl>
+void ArchState<Impl>::setDIEWC(DIEWC *_diewc)
+{
+    diewc = _diewc;
 }
 
 }

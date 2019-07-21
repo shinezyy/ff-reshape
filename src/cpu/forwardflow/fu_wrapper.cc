@@ -62,8 +62,14 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
         wbScheduled[0] = true;
 
         wrapper.oneCyclePointer = dest;
-        DPRINTF(FUW, "add inst[%i] into 1-cycle wrapper (%i, %i)\n",
+        DPRINTF(FUW, "Add inst[%i] into 1-cycle wrapper (%i, %i)",
                 inst->seqNum, wrapperID, inst->opClass());
+        if (dest.valid) {
+            DPRINTFR(FUW,"to wake up (%i %i) (%i)\n",
+                    dest.bank, dest.index, dest.op);
+        } else {
+            DPRINTFR(FUW,"but wake up nobody\n");
+        }
 
     } else if (wrapper.isPipelined) {
         // schedule wb port
@@ -98,8 +104,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
 
 template<class Impl>
 void FUWrapper<Impl>::tick() {
-    setWakeup();
-    executeInsts();
+    panic("should not be called!\n");
 }
 
 template<class Impl>
@@ -153,6 +158,10 @@ void FUWrapper<Impl>::setWakeup() {
     if (wbScheduled[0]) {
         DPRINTF(FUW, "one instruction should be executed and its children"
                 " should be waken up\n");
+        if (toWakeup.valid) {
+            DPRINTF(FUW, "To wakeup: (%i %i) (%i)\n",
+                    toWakeup.bank, toWakeup.index, toWakeup.op);
+        }
         assert(count_overall > 0);
     } else {
         DPRINTF(FUSched, "wbScheduled now: ");

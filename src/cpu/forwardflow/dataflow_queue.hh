@@ -66,6 +66,8 @@ private:
 public:
     void advanceTail();
 
+    void setTail(unsigned t);
+
     explicit DataflowQueueBank(DerivFFCPUParams *params, unsigned bankID);
 
     bool canServeNew();
@@ -101,6 +103,8 @@ public:
     void clear(bool markSquashed);
 
     void erase(DQPointer p, bool markSquashed);
+
+    void cycleStart();
 };
 
 
@@ -135,7 +139,7 @@ public:
 
     void tick();
 
-    void clear();
+    void cycleStart();
 
     explicit DataflowQueues(DerivFFCPUParams *);
 
@@ -199,16 +203,16 @@ private:
 
     unsigned head, tail;
 
-    DQPointer uint2Pointer(unsigned) const;
-
-    unsigned pointer2uint(DQPointer) const;
-
     const unsigned int bankWidth;
     const unsigned int bankMask;
     const unsigned int indexWidth;
     const unsigned int indexMask;
 
 public:
+    DQPointer uint2Pointer(unsigned) const;
+
+    unsigned pointer2uint(DQPointer) const;
+
     unsigned getHeadPtr() const {return head;}
     unsigned getTailPtr() const {return tail;}
 
@@ -241,6 +245,9 @@ public:
 //    void recordProducer(DynInstPtr &inst);
 
     void insertForwardPointer(PointerPair pair);
+
+    void digestForwardPointer();
+
 
     bool stallToUnclog() const;
 
@@ -318,15 +325,19 @@ private:
 
     std::list<DynInstPtr> deferredMemInsts;
 
+    DIEWC *diewc;
+
+public:
     bool logicallyLT(unsigned left, unsigned right) const;
 
     bool validPosition(unsigned u) const;
 
     bool logicallyLET(unsigned left, unsigned right) const;
 
-    unsigned dec(unsigned u);
-    unsigned inc(unsigned u);
-public:
+    unsigned dec(unsigned u) const;
+
+    unsigned inc(unsigned u) const;
+
     void deferMemInst(DynInstPtr &inst);
 
     DynInstPtr getDeferredMemInstToExecute();
@@ -343,7 +354,9 @@ public:
 
     void violation(DynInstPtr store, DynInstPtr violator);
 
+    void tryFastCleanup();
 
+    unsigned numInFlightFw();
 };
 
 }

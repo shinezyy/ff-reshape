@@ -31,6 +31,8 @@ DataflowQueueBank<Impl>::clear(bool markSquashed)
         }
         inst = nullptr;
     }
+    nearlyWakeup.reset();
+    readyIndices.clear();
 }
 
 template<class Impl>
@@ -41,6 +43,7 @@ DataflowQueueBank<Impl>::erase(DQPointer p, bool markSquashed)
         instArray[p.index]->setSquashed();
     }
     instArray[p.index] = nullptr;
+    nearlyWakeup.reset(p.index);
 }
 
 template<class Impl>
@@ -48,6 +51,7 @@ void
 DataflowQueueBank<Impl>::advanceTail()
 {
     instArray[tail] = nullptr;
+    nearlyWakeup.reset(tail);
     tail = (tail + 1) % depth;
 }
 
@@ -94,6 +98,12 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
     unsigned wakeup_count = 0;
 
     auto &pointers = anyPending ? pendingWakeupPointers : inputPointers;
+
+    if (anyPending) {
+        // todo: fill here
+    } else {
+
+    }
 
     for (unsigned op = 1; op < nOps; op++) {
         auto &ptr = pointers[op];
@@ -145,7 +155,13 @@ DataflowQueueBank<Impl>::readPointersFromBank()
         if (!ptr.valid) {
             optr.valid = false;
         } else {
-            optr = instArray[ptr.index]->pointers[op];
+            if (!instArray[ptr.index]) {
+                DPRINTF(FFSquash, "Ignore forwarded pointer to (%i %i) (%i) (squashed)\n",
+                        ptr.bank, ptr.index, ptr.op);
+                optr.valid = false;
+            } else {
+                optr = instArray[ptr.index]->pointers[op];
+            }
         }
     }
     return outputPointers;
@@ -167,6 +183,8 @@ bool DataflowQueueBank<Impl>::canServeNew()
 template<class Impl>
 bool DataflowQueueBank<Impl>::wakeup(WKPointer pointer)
 {
+    DPRINTF(DQWake, "Waking up: (%i %i) (%i)\n",
+            pointer.bank, pointer.index, pointer.op);
     auto op = pointer.op;
     assert(!inputPointers[op].valid);
     inputPointers[op] = pointer;
@@ -238,6 +256,7 @@ DataflowQueueBank<Impl>::writeInstsToBank(
     auto index = pointer.index;
     assert(!instArray[index]);
     instArray[index] = inst;
+
     if (!instArray[tail]) {
         tail = index;
     }
@@ -251,11 +270,18 @@ void DataflowQueueBank<Impl>::checkReadiness(DQPointer pointer)
     DynInstPtr &inst = instArray[index];
 
     bool ready = inst->memDepReady && inst->miscDepReady;
-    for (unsigned op = 1; op < 4; op++) {
+    unsigned busy_count = 0;
+    for (unsigned op = 1; op <= 3; op++) {
         ready &= inst->opFulfilled(op);
+        if (inst->opFulfilled(op)) {
+            busy_count += 1;
+        }
     }
     if (ready) {
         readyIndices.push_back(pointer.index);
+    }
+    if (busy_count == 1) {
+        nearlyWakeup.set(index);
     }
 }
 
@@ -265,12 +291,31 @@ void DataflowQueueBank<Impl>::resetState()
     for (auto &it: instArray) {
         it = nullptr;
     }
+    nearlyWakeup.reset();
+    cycleStart();
+}
+
+template<class Impl>
+void DataflowQueueBank<Impl>::setTail(unsigned t)
+{
+    tail = t;
+}
+
+template<class Impl>
+void DataflowQueueBank<Impl>::cycleStart()
+{
+    for (auto &p: inputPointers) {
+        p.valid = false;
+    }
+    for (auto &p: outputPointers) {
+        p.valid = false;
+    }
 }
 
 template<class Impl>
 void DataflowQueues<Impl>::tick()
 {
-    clear();
+    cycleStart();
 
     // fu preparation
     for (auto &wrapper: fuWrappers) {
@@ -279,7 +324,8 @@ void DataflowQueues<Impl>::tick()
 
     readQueueHeads();
 
-//    DPRINTF(Omega, "DQ tick reach 1\n");
+    digestForwardPointer();
+
     // todo: write forward pointers from bank to time buffer!
     for (unsigned b = 0; b < nBanks; b++) {
         const std::vector<DQPointer> forward_ptrs = dqs[b].readPointersFromBank();
@@ -288,21 +334,21 @@ void DataflowQueues<Impl>::tick()
         }
     }
 
-//    DPRINTF(Omega, "DQ tick reach 3\n");
+    DPRINTF(DQ, "DQ tick reach 3\n");
     // For each bank
     //  get ready instructions produced by last tick from time struct
     for (unsigned i = 0; i < nBanks; i++) {
         fu_requests[i].valid = fromLastCycle->instValids[i];
         if (fromLastCycle->instValids[i]) {
 
-            DPRINTF(Omega, "inst[%d] valid, &inst: %p\n",
+            DPRINTF(DQ, "inst[%d] valid, &inst: %p\n",
                     i, fromLastCycle->insts[i]);
 
             fu_requests[i].payload = fromLastCycle->insts[i];
             fu_requests[i].destBits = coordinateFU(fromLastCycle->insts[i], i);
         }
     }
-//    DPRINTF(Omega, "DQ tick reach 4\n");
+    DPRINTF(DQ, "DQ tick reach 4\n");
     // For each bank
 
     //  For each valid ready instruction compete for a FU via the omega network
@@ -327,38 +373,38 @@ void DataflowQueues<Impl>::tick()
         }
     }
 
-//    DPRINTF(Omega, "DQ tick reach 5\n");
+    DPRINTF(DQ, "DQ tick reach 5\n");
     // mark it for banks
     for (unsigned b = 0; b < nBanks; b++) {
         dqs[b].instGranted = fu_req_granted[b];
     }
 
-//    DPRINTF(Omega, "DQ tick reach 6\n");
+    DPRINTF(DQ, "DQ tick reach 6\n");
     // push forward pointers to queues
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 1; op <= 3; op++) {
             auto &ptr = fromLastCycle->pointers[b * nOps + op];
             if (ptr.valid) {
                 wakeQueues[b * nOps + op].push(WKPointer(ptr));
+                numPendingWakeups++;
                 assert(wakeQueues[b * nOps + op].size() <= maxQueueDepth);
             }
         }
 
-        // todo: check this line of code
-        if (fuWrappers[b].toWakeup.valid) {
-            DPRINTF(DQWake, "Got wakeup pointer to (%d %d)(%d)\n",
-                    fuWrappers[b].toWakeup.bank,
-                    fuWrappers[b].toWakeup.index,
-                    fuWrappers[b].toWakeup.op);
-            wakeQueues[b * nOps].push(WKPointer(fuWrappers[b].toWakeup));
-            assert(wakeQueues[b * nOps].size() <= maxQueueDepth);
-        }
     }
 
-//    DPRINTF(Omega, "DQ tick reach 7\n");
+    DPRINTF(DQ, "DQ tick reach 7\n");
     // For each bank: check status: whether I can consume from queue this cycle?
     // record the state
     wakeup_granted_ptrs = wakeupQueueBankNet.select(wakeup_req_ptrs);
+
+    for (auto &ptr : wakeup_granted_ptrs) {
+        if (ptr->valid) {
+            DPRINTF(DQWake, "WakePtr[%d] (pointer(%d) (%d %d)(%d)) granted\n",
+                    ptr->source, ptr->payload.dest.valid,
+                    ptr->payload.dest.bank, ptr->payload.dest.index, ptr->payload.dest.op);
+        }
+    }
     // check whether each bank can really accept
     for (unsigned b = 0; b < nBanks; b++) {
         if (dqs[b].canServeNew()) {
@@ -382,69 +428,35 @@ void DataflowQueues<Impl>::tick()
         }
     }
 
-    DPRINTF(DQ, "Pair packets before selection\n");
-    dumpPairPackets(insert_req_ptrs);
-    insert_granted_ptrs = pointerQueueBankNet.select(insert_req_ptrs);
-
-    DPRINTF(DQ, "Selected pairs:\n");
-    dumpPairPackets(insert_granted_ptrs);
-
-    DPRINTF(DQ, "Pair packets after selection\n");
-    dumpPairPackets(insert_req_ptrs);
-
-    for (auto &ptr : insert_granted_ptrs) {
-        if (ptr->valid) {
-            DPRINTF(DQ, "pair[%d] (pointer(%d) (%d %d)(%d)) granted\n",
-                    ptr->source, ptr->payload.dest.valid,
-                    ptr->payload.dest.bank, ptr->payload.dest.index, ptr->payload.dest.op);
-        }
-    }
-    for (unsigned b = 0; b < nBanks; b++) {
-        for (unsigned op = 0; op <= 3; op++) {
-            const auto &pkt = insert_granted_ptrs[b * nOps + op];
-            if (!pkt->valid || !pkt->payload.dest.valid ||
-                !pkt->payload.payload.valid) {
-                continue;
-            }
-            PointerPair &pair = pkt->payload;
-            insert_req_granted[pkt->source] = true;
-
-            DynInstPtr inst = dqs[pair.dest.bank].readInstsFromBank(pair.dest);
-
-            if (inst) {
-                DPRINTF(DQ, "Insert fw pointer (%d %d) (%d) after inst reached\n",
-                        pair.dest.bank, pair.dest.index, pair.dest.op);
-                markFwPointers(inst->pointers, pair);
-            } else {
-                DPRINTF(DQ, "Insert fw pointer (%d %d) (%d) before inst reached\n",
-                        pair.dest.bank, pair.dest.index, pair.dest.op);
-                auto &pointers =
-                        dqs[pair.dest.bank].prematureFwPointers[pair.dest.index];
-                markFwPointers(pointers, pair);
-            }
-
-            assert(!forwardPointerQueue[pkt->source].empty());
-            if (forwardPointerQueue[pkt->source].size() == numPendingFwPointerMax) {
-                numPendingFwPointerMax--;
-            }
-            forwardPointerQueue[pkt->source].pop();
-            numPendingFwPointers--;
-        }
-    }
-
 
     // For each bank, check
     //  whether there's an inst to be waken up
     //  whether there are multiple instruction to wake up, if so
     //      buffer it and reject further requests in following cycles
-//    DPRINTF(Omega, "DQ tick reach 9\n");
+    DPRINTF(DQ, "DQ tick reach 9\n");
     for (auto &bank: dqs) {
         bank.tick();
     }
-//    DPRINTF(Omega, "DQ tick reach 10\n");
+    DPRINTF(DQ, "DQ tick reach 10\n");
+    for (auto &wrapper: fuWrappers) {
+        wrapper.setWakeup();
+    }
+
+    for (unsigned b = 0; b < nBanks; b++) {
+        // todo: check this line of code
+        if (fuWrappers[b].toWakeup.valid) {
+            DPRINTF(DQWake, "Got wakeup pointer to (%d %d)(%d)\n",
+                    fuWrappers[b].toWakeup.bank,
+                    fuWrappers[b].toWakeup.index,
+                    fuWrappers[b].toWakeup.op);
+            wakeQueues[b * nOps].push(WKPointer(fuWrappers[b].toWakeup));
+            numPendingWakeups++;
+            assert(wakeQueues[b * nOps].size() <= maxQueueDepth);
+        }
+    }
 
     for (auto &wrapper: fuWrappers) {
-        wrapper.tick();
+        wrapper.executeInsts();
         wrapper.endCycle();
     }
 
@@ -468,10 +480,14 @@ void DataflowQueues<Impl>::tick()
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::clear()
+void DataflowQueues<Impl>::cycleStart()
 {
 //    fill(wakenValids.begin(), wakenValids.end(), false);
     fill(fu_req_granted.begin(), fu_req_granted.end(), false);
+    fill(wake_req_granted.begin(), wake_req_granted.end(), false);
+    for (auto &bank: dqs) {
+        bank.cycleStart();
+    }
 }
 
 template<class Impl>
@@ -614,6 +630,10 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
         pkt.payload = pair;
         pkt.destBits = uint2Bits(pair.dest.bank * nOps + pair.dest.op);
 
+        DPRINTF(DQWake, "Insert Fw Pointer (%i %i) (%i)-> (%i %i) (%i)\n",
+                pair.dest.bank, pair.dest.index, pair.dest.op,
+                pair.payload.bank, pair.payload.index, pair.payload.op);
+
         forwardPointerQueue[forwardPtrIndex].push(pkt);
 
         if (forwardPointerQueue[forwardPtrIndex].size() > maxQueueDepth) {
@@ -623,8 +643,8 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
         }
 
         assert(forwardPointerQueue[forwardPtrIndex].size() <= maxQueueDepth);
-
         numPendingFwPointers++;
+        DPRINTF(DQWake, "numPendingFwPointers: %i\n", numPendingFwPointers);
         if (forwardPointerQueue[forwardPtrIndex].size() > numPendingFwPointerMax) {
             numPendingFwPointerMax = static_cast<unsigned int>(
                     forwardPointerQueue[forwardPtrIndex].size());
@@ -660,7 +680,7 @@ void DataflowQueues<Impl>::retireHead(bool result_valid, FFRegValue v)
         tail += 1;
     }
 
-    DPRINTF(FFCommit, "Advance olddest ptr to %d\n", tail);
+    DPRINTF(FFCommit, "Advance youngest ptr to %d, olddest ptr to %d\n", head, tail);
 }
 
 template<class Impl>
@@ -783,6 +803,7 @@ void DataflowQueues<Impl>::addReadyMemInst(DynInstPtr inst)
     WKPointer wk(inst->dqPosition);
     wk.wkType = WKPointer::WKMem;
     wakeQueues[nonSpecBankPtr * nOps + 3].push(wk);
+    numPendingWakeups++;
     incNonSpecBankPtr();
 }
 
@@ -797,6 +818,7 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
         head = 0;
         tail = 0;
         memDepUnit.squash(0, DummyTid);
+        diewc->DQPointerJumped = true;
         return;
     }
 
@@ -829,8 +851,8 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
         bank.erase(ptr, true);
         u = inc(u);
     }
-    head = head_next;
-    DPRINTF(FFSquash, "DQ head becomes %d, tail is %d\n", head, tail);
+    DPRINTF(FFSquash, "DQ logic head becomes %d, physical is %d, tail is %d\n",
+            head_next, head, tail);
 }
 
 template<class Impl>
@@ -891,6 +913,8 @@ DataflowQueues<Impl>::markFwPointers(
     unsigned op = pair.dest.op;
     assert(!pointers[op].valid);
     pointers[op] = pair.payload;
+    DPRINTF(DQ, "And let it forward its value to (%d %d) (%d)\n",
+            pair.payload.bank, pair.payload.index, pair.payload.op);
 }
 
 template<class Impl>
@@ -1006,6 +1030,8 @@ void DataflowQueues<Impl>::readQueueHeads()
                 wk_pkt.valid = false;
             } else {
                 const WKPointer &ptr = q.front();
+                DPRINTF(DQWake, "Found valid wakePtr: (%i %i) (%i)\n",
+                        ptr.bank, ptr.index, ptr.op);
                 wk_pkt.valid = ptr.valid;
                 wk_pkt.payload = ptr;
                 wk_pkt.destBits = uint2Bits(ptr.bank * nOps + ptr.op);
@@ -1079,8 +1105,9 @@ DataflowQueues<Impl>::getDeferredMemInstToExecute()
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::setDIEWC(DIEWC *diewc)
+void DataflowQueues<Impl>::setDIEWC(DIEWC *_diewc)
 {
+    diewc = _diewc;
     for (auto &wrapper: fuWrappers) {
         wrapper.setExec(diewc);
     }
@@ -1098,6 +1125,7 @@ void DataflowQueues<Impl>::scheduleNonSpec()
     WKPointer wk(uint2Pointer(tail));
     wk.wkType = WKPointer::WKMisc;
     wakeQueues[nonSpecBankPtr*nOps + 3].push(wk);
+    numPendingWakeups++;
     incNonSpecBankPtr();
 }
 
@@ -1162,8 +1190,8 @@ DataflowQueues<Impl>::logicallyLT(unsigned x, unsigned y) const
     if (head >= tail) {
         assert(head >= x);
         assert(head >= y);
-        assert(x >= tail);
-        assert(y >= tail);
+        assert(inc(x) >= tail || (inc(x) == 0));
+        assert(inc(y) >= tail || (inc(y) == 0));
 
         return x < y;
 
@@ -1194,16 +1222,97 @@ DataflowQueues<Impl>::validPosition(unsigned u) const
 
 template<class Impl>
 unsigned
-DataflowQueues<Impl>::inc(unsigned u)
+DataflowQueues<Impl>::inc(unsigned u) const
 {
     return (u+1) % queueSize;
 }
 
 template<class Impl>
 unsigned
-DataflowQueues<Impl>::dec(unsigned u)
+DataflowQueues<Impl>::dec(unsigned u) const
 {
     return u == 0 ? queueSize : u - 1;
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::tryFastCleanup()
+{
+    // todo: clean bubbles left by squashed instructions
+    auto inst = getTail();
+    if (inst) {
+        DPRINTF(FFSquash, "Strangely reaching fast cleanup when DQ head is not null!\n");
+    }
+    while (!inst && !isEmpty()) {
+        auto tail_ptr = uint2Pointer(tail);
+        auto bank = dqs[tail_ptr.bank];
+        bank.setTail(tail);
+        bank.advanceTail();
+
+        tail = inc(tail);
+        inst = getTail();
+        diewc->DQPointerJumped = true;
+    }
+    DPRINTF(FFCommit, "Fastly advance youngest ptr to %d, olddest ptr to %d\n", head, tail);
+}
+
+template<class Impl>
+unsigned DataflowQueues<Impl>::numInFlightFw()
+{
+    return numPendingFwPointers;
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::digestForwardPointer()
+{
+    DPRINTF(DQ, "Pair packets before selection\n");
+    dumpPairPackets(insert_req_ptrs);
+    insert_granted_ptrs = pointerQueueBankNet.select(insert_req_ptrs);
+
+    DPRINTF(DQ, "Selected pairs:\n");
+    dumpPairPackets(insert_granted_ptrs);
+
+    DPRINTF(DQ, "Pair packets after selection\n");
+    dumpPairPackets(insert_req_ptrs);
+
+    for (auto &ptr : insert_granted_ptrs) {
+        if (ptr->valid) {
+            DPRINTF(DQ, "pair[%d] (pointer(%d) (%d %d)(%d)) granted\n",
+                    ptr->source, ptr->payload.dest.valid,
+                    ptr->payload.dest.bank, ptr->payload.dest.index, ptr->payload.dest.op);
+        }
+    }
+    for (unsigned b = 0; b < nBanks; b++) {
+        for (unsigned op = 0; op <= 3; op++) {
+            const auto &pkt = insert_granted_ptrs[b * nOps + op];
+            if (!pkt->valid || !pkt->payload.dest.valid ||
+                !pkt->payload.payload.valid) {
+                continue;
+            }
+            PointerPair &pair = pkt->payload;
+            insert_req_granted[pkt->source] = true;
+
+            DynInstPtr inst = dqs[pair.dest.bank].readInstsFromBank(pair.dest);
+
+            if (inst) {
+                DPRINTF(DQ, "Insert fw pointer (%d %d) (%d) after inst reached\n",
+                        pair.dest.bank, pair.dest.index, pair.dest.op);
+                markFwPointers(inst->pointers, pair);
+            } else {
+                DPRINTF(DQ, "Insert fw pointer (%d %d) (%d) before inst reached\n",
+                        pair.dest.bank, pair.dest.index, pair.dest.op);
+                auto &pointers =
+                        dqs[pair.dest.bank].prematureFwPointers[pair.dest.index];
+                markFwPointers(pointers, pair);
+            }
+
+            assert(!forwardPointerQueue[pkt->source].empty());
+            if (forwardPointerQueue[pkt->source].size() == numPendingFwPointerMax) {
+                numPendingFwPointerMax--;
+            }
+            forwardPointerQueue[pkt->source].pop();
+            numPendingFwPointers--;
+        }
+    }
 }
 
 

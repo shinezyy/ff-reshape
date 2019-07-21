@@ -6,6 +6,7 @@
 #define __FF_DIEWC_HH__
 
 #include <queue>
+#include <tuple>
 
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
@@ -44,6 +45,7 @@ public:
     typedef typename CPUPol::FUWrapper FUWrapper;
 
     typedef O3ThreadState<Impl> Thread;
+
 
 private:
     XFFCPU *cpu;
@@ -374,7 +376,9 @@ private:
 
     unsigned allocationToDIEWCDelay;
 
-    void clear();
+    void clearAtStart();
+
+    void clearAtEnd();
 public:
     // stats
     Stats::Scalar dispSquashedInsts;
@@ -407,6 +411,17 @@ public:
 
 private:
     void sendBackwardInfo();
+
+    unsigned oldestForwarded;
+
+public:
+    void setOldestFw(DQPointer _ptr);
+
+    void resetOldestFw();
+
+    InstSeqNum getOldestFw();
+
+    bool DQPointerJumped;
 };
 
 

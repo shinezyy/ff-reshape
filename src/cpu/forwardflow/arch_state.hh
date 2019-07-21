@@ -28,6 +28,7 @@ private:
     typedef typename Impl::DynInstPtr DynInstPtr;
 //    using DynInstPtr = BaseO3DynInst<Impl>*;
     typedef typename Impl::O3CPU O3CPU;
+    typedef typename CPUPol::DIEWC DIEWC;
 
 //    const unsigned WritePorts, ReadPorts;
 //
@@ -63,7 +64,8 @@ private:
 
     const unsigned MaxCheckpoints;
 
-    O3CPU *cpu;
+    DIEWC *diewc;
+
 public:
     std::pair<bool, FFRegValue> commitInst(DynInstPtr &inst);
 
@@ -94,6 +96,8 @@ public:
     void setFloatRegBits(int reg_idx, uint64_t);
 
     const std::string name() {return "arch_state";}
+
+    void setDIEWC(DIEWC *_diewc);
 };
 
 }

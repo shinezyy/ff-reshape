@@ -4,6 +4,7 @@
 #include "cpu/forwardflow/diewc.hh"
 
 #include "arch/utility.hh"
+#include "cpu/forwardflow/arch_state.hh"
 #include "cpu/forwardflow/store_set.hh"
 #include "debug/Commit.hh"
 #include "debug/CommitRate.hh"
@@ -23,12 +24,12 @@ using namespace std;
 template<class Impl>
 void FFDIEWC<Impl>::tick() {
 
-    clear();
+    clearAtStart();
 
     // todo: Execute ready insts
     execute();
 
-    dq.clear();
+    dq.cycleStart();
 
 
     // todo read allocated instructions from allocation stage
@@ -41,22 +42,6 @@ void FFDIEWC<Impl>::tick() {
     // todo insert these insts into LSQ until full
     // if no LSQ entry allocated for an LD/ST inst, it and further insts should not be insert into DQ (block)
 
-    // todo insert these insts into corresponding banks,
-    //  what fields should be filled:
-    //  - source operand value: stacked mask
-    //  RTL should be: Vsrc7.1 = d6 == src7.1 ? Vd6 : (d5 == src7.1 ? Vd5 : ...)
-    // part bring value
-    tryDispatch();
-
-//    DPRINTF(DIEWC, "tick reach 3\n");
-    // todo: forward pointers should be calculated
-    //  - source operand forward pointer (if any sibling)
-    //  - dest operand forward pointer
-    //  these pointers should be calculated in one cycle and write to the pointer queues
-    //  calculate newest definer and newest consumer, then route forward pointers to them
-    // part route pointer
-
-    forward();
 //    DPRINTF(DIEWC, "tick reach 4\n");
 
     // todo: remember to advance
@@ -81,6 +66,24 @@ void FFDIEWC<Impl>::tick() {
     // todo: read from DQ head To Simulate that DQ is a RAM instead of combinational.
     // part DQCR
     writeCommitQueue();
+
+    // todo insert these insts into corresponding banks,
+    //  what fields should be filled:
+    //  - source operand value: stacked mask
+    //  RTL should be: Vsrc7.1 = d6 == src7.1 ? Vd6 : (d5 == src7.1 ? Vd5 : ...)
+    // part bring value
+    tryDispatch();
+
+    //    DPRINTF(DIEWC, "tick reach 3\n");
+    // todo: forward pointers should be calculated
+    //  - source operand forward pointer (if any sibling)
+    //  - dest operand forward pointer
+    //  these pointers should be calculated in one cycle and write to the pointer queues
+    //  calculate newest definer and newest consumer, then route forward pointers to them
+    // part route pointer
+
+    forward();
+
 
     // commit from LSQ
     if (fromLastCycle->diewc2diewc.doneSeqNum &&
@@ -107,6 +110,8 @@ void FFDIEWC<Impl>::tick() {
 #undef tbuf
 
     sendBackwardInfo();
+
+    clearAtEnd();
 }
 
 template<class Impl>
@@ -469,8 +474,7 @@ void FFDIEWC<Impl>::skidInsert() {
 
 template<class Impl>
 void FFDIEWC<Impl>::execute() {
-    fuWrapper.tick();
-
+    // fuWrapper.tick();
 }
 
 template <class Impl>
@@ -532,6 +536,13 @@ FFDIEWC<Impl>::
     } else {
         DPRINTF(FFCommit, "comp tick: %u, curTick: %llu, fetch tick: %llu\n",
                 head_inst->completeTick, curTick(), head_inst->fetchTick);
+    }
+
+    if (!dq.logicallyLT(dq.pointer2uint(head_inst->dqPosition), oldestForwarded)) {
+        DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is forwarded recently,"
+                          " and cannot be committed right now\n",
+                          head_inst->seqNum, head_inst->dqPosition.bank,
+                          head_inst->dqPosition.index);
     }
 
     if (head_inst->isThreadSync()) {
@@ -698,6 +709,9 @@ FFDIEWC<Impl>::commitInsts()
         if (!head_inst) {
             DPRINTF(Commit, "Olddest inst is null\n");
             num_committed++;
+            if (!dq.isEmpty()) {
+                dq.tryFastCleanup();
+            }
             break;
         }
         if (!head_inst->readyToCommit()) {
@@ -1042,6 +1056,7 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
     dq.setLSQ(&ldstQueue);
     dq.setDIEWC(this);
     dq.setCPU(cpu);
+    archState.setDIEWC(this);
 }
 
 template<class Impl>
@@ -1199,7 +1214,7 @@ void FFDIEWC<Impl>::startupStage()
     toAllocation->diewcInfo.freeLQEntries = ldstQueue.numFreeLoadEntries(DummyTid);
     toAllocation->diewcInfo.freeSQEntries = ldstQueue.numFreeStoreEntries(DummyTid);
 
-    toAllocation->diewcInfo.dqHead = dq.getHeadPtr();
+    toAllocation->diewcInfo.dqHead = dq.getHeadPtr() + 1;
     toAllocation->diewcInfo.dqTail = dq.getTailPtr();
 
     if (cpu->checker) {
@@ -1634,18 +1649,19 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &inst)
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::clear()
+void FFDIEWC<Impl>::clearAtStart()
 {
     skipThisCycle = false;
     while (!insts_to_commit.empty()) {
         insts_to_commit.pop();
     }
+    DQPointerJumped = false;
 }
 
 template<class Impl>
 void FFDIEWC<Impl>::sendBackwardInfo()
 {
-    if (fromLastCycle->diewc2diewc.squash) {
+    if (DQPointerJumped) {
         toAllocation->diewcInfo.updateDQPointer = true;
         toAllocation->diewcInfo.dqHead = dq.getHeadPtr() + 1; // p+1 to allocation
         toAllocation->diewcInfo.dqTail = dq.getTailPtr();
@@ -1653,9 +1669,42 @@ void FFDIEWC<Impl>::sendBackwardInfo()
     toAllocation->diewcInfo.freeDQEntries = dq.numFree();
 }
 
+
+template<class Impl>
+void FFDIEWC<Impl>::setOldestFw(DQPointer _ptr)
+{
+    auto ptr = dq.pointer2uint(_ptr);
+    assert(dq.validPosition(ptr));
+    if (dq.logicallyLT(ptr, oldestForwarded)) {
+        oldestForwarded = ptr;
+        DPRINTF(FFCommit, "Setting oldest forwarded to %d\n", oldestForwarded);
+    }
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::resetOldestFw()
+{
+    // todo: use it @ no fw pointers in flight
+    oldestForwarded = dq.getHeadPtr();  // set it to the youngest inst
+    DPRINTF(FFCommit, "ReSetting oldest forwarded to %d\n", oldestForwarded);
+}
+
+template<class Impl>
+InstSeqNum FFDIEWC<Impl>::getOldestFw()
+{
+    return oldestForwarded;
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::clearAtEnd()
+{
+    if (dq.numInFlightFw() == 0) {
+        resetOldestFw();
+    }
+}
+
 }
 
 #include "cpu/forwardflow/isa_specific.hh"
 
 template class FF::FFDIEWC<FFCPUImpl>;
-
