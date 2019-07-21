@@ -183,6 +183,8 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                 optr.valid = false;
             } else {
                 optr = instArray[ptr.index]->pointers[op];
+                DPRINTF(FFSquash, "Put forwarding wakeup Pointer (%i %i) (%i) to outputPointers\n",
+                        optr.bank, optr.index, optr.op);
             }
         }
     }
@@ -342,14 +344,6 @@ void DataflowQueues<Impl>::tick()
 
     digestForwardPointer();
 
-    // todo: write forward pointers from bank to time buffer!
-    for (unsigned b = 0; b < nBanks; b++) {
-        const std::vector<DQPointer> forward_ptrs = dqs[b].readPointersFromBank();
-        for (unsigned op = 1; op <= 3; op++) {
-            toNextCycle->pointers[b * nOps + op] = forward_ptrs[op];
-        }
-    }
-
     DPRINTF(DQ, "DQ tick reach 3\n");
     // For each bank
     //  get ready instructions produced by last tick from time struct
@@ -444,6 +438,14 @@ void DataflowQueues<Impl>::tick()
         }
     }
 
+    // todo: write forward pointers from bank to time buffer!
+    for (unsigned b = 0; b < nBanks; b++) {
+        const std::vector<DQPointer> forward_ptrs = dqs[b].readPointersFromBank();
+        for (unsigned op = 1; op <= 3; op++) {
+            toNextCycle->pointers[b * nOps + op] = forward_ptrs[op];
+        }
+    }
+
 
     // For each bank, check
     //  whether there's an inst to be waken up
@@ -481,6 +483,7 @@ void DataflowQueues<Impl>::tick()
         DynInstPtr inst;
 
         inst = dqs[i].wakeupInstsFromBank();
+        // todo ! this function must be called after readPointersFromBank(),
 
         // read fu requests from banks
         //  and set fields for packets
