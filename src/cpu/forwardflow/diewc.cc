@@ -543,6 +543,7 @@ FFDIEWC<Impl>::
                           " and cannot be committed right now\n",
                           head_inst->seqNum, head_inst->dqPosition.bank,
                           head_inst->dqPosition.index);
+        return false;
     }
 
     if (head_inst->isThreadSync()) {

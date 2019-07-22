@@ -702,7 +702,7 @@ void DataflowQueues<Impl>::retireHead(bool result_valid, FFRegValue v)
     DPRINTF(FFCommit, "head inst pc: %s\n", head_inst->pcState());
     dqs[head_ptr.bank].advanceTail();
     if (head != tail) {
-        tail += 1;
+        tail = inc(tail);
     }
 
     DPRINTF(FFCommit, "Advance youngest ptr to %d, olddest ptr to %d\n", head, tail);

@@ -186,6 +186,7 @@ void ArchState<Impl>::recoverCPT(InstSeqNum &num)
     renameMap = cpt.renameMap;
     parentMap = cpt.parentMap;
     scoreboard = cpt.scoreboard;
+    reverseTable = cpt.reverseTable;
 
     auto it = cpts.begin();
     while (it != cpts.end()) {
