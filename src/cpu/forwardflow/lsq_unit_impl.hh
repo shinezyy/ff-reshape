@@ -54,6 +54,7 @@
 #include "cpu/forwardflow/lsq.hh"
 #include "cpu/forwardflow/lsq_unit.hh"
 #include "debug/Activity.hh"
+#include "debug/DIEWC.hh"
 #include "debug/IEW.hh"
 #include "debug/LSQUnit.hh"
 #include "debug/O3PipeView.hh"
@@ -130,6 +131,8 @@ LSQUnit<Impl>::completeDataAccess(PacketPtr pkt)
         if (inst->isStore()) {
             completeStore(state->idx);
         }
+    } else {
+        DPRINTF(DIEWC, "inst[%llu] has been squashed^&@$&?\n", inst->seqNum);
     }
 
     if (TheISA::HasUnalignedMemAcc && state->isSplit && state->isLoad) {

@@ -401,6 +401,17 @@ public:
 
     Stats::Scalar memOrderViolationEvents;
 
+    Stats::Scalar instsCommitted;
+    Stats::Scalar opsCommitted;
+    Stats::Scalar statComBranches;
+    Stats::Scalar statComRefs;
+    Stats::Scalar statComLoads;
+    Stats::Scalar statComMembars;
+    Stats::Scalar statComInteger;
+    Stats::Scalar statComFloating;
+    Stats::Scalar statComVector;
+    Stats::Scalar statComFunctionCalls;
+
     ArchState *getArchState() {return &archState;}
 
     XDataflowQueues *getDQ() {return &dq;}

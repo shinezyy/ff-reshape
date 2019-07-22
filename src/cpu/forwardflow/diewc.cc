@@ -1063,14 +1063,14 @@ template<class Impl>
 void
 FFDIEWC<Impl>::squashInFlight()
 {
-    DPRINTF(IEW, "Squashing all instructions.\n");
+    DPRINTF(IEW, "Squashing all in-flight instructions.\n");
 
     // Tell the IQ to start squashing.
     // todo: we don't need this in forwardflow?
 
     // Tell the LDSTQ to start squashing.
     // todo: check this LOCs
-    ldstQueue.squash(fromLastCycle->diewc2diewc.doneSeqNum, DummyTid);
+    ldstQueue.squash(fromLastCycle->diewc2diewc.squashedSeqNum, DummyTid);
     // dq.squash(fromLastCycle->diewc2diewc.donePointer, false);
     updatedQueues = true;
 
@@ -1117,8 +1117,53 @@ void FFDIEWC<Impl>::clearAllocatedInsts() {
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &ffdiewc) {
+void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
 
+    if (!inst->isMicroop() || inst->isLastMicroop())
+        instsCommitted++;
+    opsCommitted++;
+
+    // To match the old model, don't count nops and instruction
+    // prefetches towards the total commit count.
+    if (!inst->isNop() && !inst->isInstPrefetch()) {
+        cpu->instDone(DummyTid, inst);
+    }
+
+    //
+    //  Control Instructions
+    //
+    if (inst->isControl())
+        statComBranches++;
+
+        //
+    //  Memory references
+    //
+    if (inst->isMemRef()) {
+        statComRefs++;
+
+        if (inst->isLoad()) {
+            statComLoads++;
+        }
+    }
+
+    if (inst->isMemBarrier()) {
+        statComMembars++;
+    }
+
+    // Integer Instruction
+    if (inst->isInteger())
+        statComInteger++;
+
+    // Floating Point Instruction
+    if (inst->isFloating())
+        statComFloating++;
+    // Vector Instruction
+    if (inst->isVector())
+        statComVector++;
+
+    // Function Calls
+    if (inst->isCall())
+        statComFunctionCalls++;
 }
 
 template<class Impl>
@@ -1459,6 +1504,47 @@ void FFDIEWC<Impl>::regStats()
             .name(name() + "numCommittedDist")
             .desc("numCommittedDist")
             .flags(Stats::pdf);
+
+    instsCommitted
+        .name(name() + "instsCommitted")
+        .desc("instsCommitted")
+        ;
+    opsCommitted
+        .name(name() + "opsCommitted")
+        .desc("opsCommitted")
+        ;
+    statComBranches
+        .name(name() + "statComBranches")
+        .desc("statComBranches")
+        ;
+    statComRefs
+        .name(name() + "statComRefs")
+        .desc("statComRefs")
+        ;
+    statComLoads
+        .name(name() + "statComLoads")
+        .desc("statComLoads")
+        ;
+    statComMembars
+        .name(name() + "statComMembars")
+        .desc("statComMembars")
+        ;
+    statComInteger
+        .name(name() + "statComInteger")
+        .desc("statComInteger")
+        ;
+    statComFloating
+        .name(name() + "statComFloating")
+        .desc("statComFloating")
+        ;
+    statComVector
+        .name(name() + "statComVector")
+        .desc("statComVector")
+        ;
+    statComFunctionCalls
+        .name(name() + "statComFunctionCalls")
+        .desc("statComFunctionCalls")
+        ;
 
     dq.regStats();
     ldstQueue.regStats();

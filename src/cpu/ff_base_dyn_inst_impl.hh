@@ -233,6 +233,14 @@ BaseDynInst<Impl>::eaSrcsReady()
     return true;
 }
 
+template <class Impl>
+void
+BaseDynInst<Impl>::setSquashed()
+{
+    DPRINTF(DynInst, "inst[%llu] set squashed!\n", seqNum);
+    status.set(Squashed);
+}
+
 // template <class Impl>
 // void
 // BaseDynInst<Impl>::incref() {

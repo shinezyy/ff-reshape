@@ -746,7 +746,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool isCommitted() const { return status[Committed]; }
 
     /** Sets this instruction as squashed. */
-    void setSquashed() { status.set(Squashed); }
+    void setSquashed();
 
     /** Returns whether or not this instruction is squashed. */
     bool isSquashed() const { return status[Squashed]; }

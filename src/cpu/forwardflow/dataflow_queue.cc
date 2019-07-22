@@ -26,7 +26,7 @@ void
 DataflowQueueBank<Impl>::clear(bool markSquashed)
 {
     for (auto &inst: instArray) {
-        if (markSquashed) {
+        if (markSquashed && inst) {
             inst->setSquashed();
         }
         inst = nullptr;
@@ -39,7 +39,7 @@ template<class Impl>
 void
 DataflowQueueBank<Impl>::erase(DQPointer p, bool markSquashed)
 {
-    if (markSquashed) {
+    if (markSquashed && instArray[p.index]) {
         instArray[p.index]->setSquashed();
     }
     instArray[p.index] = nullptr;
@@ -804,10 +804,13 @@ FFRegValue DataflowQueues<Impl>::readReg(DQPointer ptr)
     auto b = ptr.bank;
     auto inst = dqs[b].readInstsFromBank(ptr);
     FFRegValue result;
-    if (inst) {
+    if (inst && inst->isExecuted()) {
         // not committed yet
         result = inst->getDestValue();
     } else {
+        if (!inst->isExecuted()) {
+            // assert(it is younger than currently executing instruciont);
+        }
         assert(committedValues.count(ptr));
         result = committedValues[ptr];
     }
@@ -874,6 +877,9 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
         auto ptr = uint2Pointer(u);
         auto &bank = dqs.at(ptr.bank);
         bank.erase(ptr, true);
+        if (u == head) {
+            break;
+        }
         u = inc(u);
     }
     DPRINTF(FFSquash, "DQ logic head becomes %d, physical is %d, tail is %d\n",
@@ -1352,7 +1358,7 @@ void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
 {
     WKPointer wk(inst->pointers[0]);
     DPRINTF(DQWake, "Sending pointer to (%i %i) (%i) that depends on"
-            "load[%llu] (%i %i)\n", wk.bank, wk.index, wk.op,
+            " load[%llu] (%i %i)\n", wk.bank, wk.index, wk.op,
             inst->seqNum,
             inst->dqPosition.bank, inst->dqPosition.index);
     wakeQueues[nonSpecBankPtr * nOps + 3].push(wk);
