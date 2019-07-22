@@ -105,6 +105,12 @@ CrossBar<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
         high_demand = inputs[high]->destBits[direction_bit];
         outputs[high_demand] = inputs[high];
         outputs[1 - high_demand] = inputs[low];
+        if (inputs[low]->valid) {
+            low_demand = inputs[low]->destBits[direction_bit];
+            if (high_demand == low_demand) {
+                outputs[1 - high_demand]->valid = false;
+            }
+        }
 
     } else if (inputs[low]->valid) {
         low_demand = inputs[low]->destBits[direction_bit];

@@ -105,6 +105,8 @@ public:
     void erase(DQPointer p, bool markSquashed);
 
     void cycleStart();
+
+    void clearPending();
 };
 
 

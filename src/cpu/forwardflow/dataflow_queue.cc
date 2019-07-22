@@ -92,6 +92,7 @@ typename Impl::DynInstPtr
 DataflowQueueBank<Impl>::wakeupInstsFromBank()
 {
     if (pendingInstValid) {
+        DPRINTF(DQWake, "Return pending inst[%llu]\n", pendingInst->seqNum);
         return pendingInst;
     }
 
@@ -337,6 +338,13 @@ void DataflowQueueBank<Impl>::cycleStart()
 }
 
 template<class Impl>
+void DataflowQueueBank<Impl>::clearPending()
+{
+    pendingInstValid = false;
+    pendingInst = nullptr;
+}
+
+template<class Impl>
 void DataflowQueues<Impl>::tick()
 {
     cycleStart();
@@ -386,6 +394,7 @@ void DataflowQueues<Impl>::tick()
         if (can_accept) {
             fu_req_granted[fu_granted_ptrs[b]->source] = true;
             fuWrappers[b].consume(inst);
+            dqs[fu_granted_ptrs[b]->source].clearPending();
         }
     }
 
@@ -426,6 +435,12 @@ void DataflowQueues<Impl>::tick()
         if (dqs[b].canServeNew()) {
             for (unsigned op = 1; op <= 3; op++) {
                 const auto &pkt = wakeup_granted_ptrs[b * nOps + op];
+
+                DPRINTF(DQWake, "granted[%i.%i]: dest:(%llu) (%i) (%i %i) (%i)\n",
+                        b, op, pkt->destBits.to_ulong(),
+                        pkt->valid,
+                        pkt->payload.bank, pkt->payload.index, pkt->payload.op);
+
                 if (!pkt->valid) {
                     continue;
                 }

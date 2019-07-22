@@ -150,10 +150,10 @@ void FFDIEWC<Impl>::checkSignalsAndUpdate() {
     if (checkStall()){
         DPRINTF(DIEWC, "block after checkStall\n");
         block();
-        dispatchStatus = Blocked;
         return;
     }
     if (dispatchStatus == Blocked) {
+        DPRINTF(DIEWC, "Switch to unblocking after blocked\n");
         dispatchStatus = Unblocking;
         unblock();
         return;
@@ -323,7 +323,7 @@ void FFDIEWC<Impl>::dispatch() {
 
 //    DPRINTF(DIEWC, "dispatch reach 8\n");
     if (!to_dispatch.empty()) {
-        DPRINTF(DIEWC, "block because instruction not used up\n");
+        DPRINTF(DIEWC, "block because instructions are not used up\n");
         block();
         toAllocation->diewcUnblock = false;
     }
@@ -408,15 +408,20 @@ void FFDIEWC<Impl>::block() {
 
     DPRINTF(DIEWC, "skidInsert in func block\n");
     skidInsert();
+    DPRINTF(DIEWC, "Switch to Blocked in block()\n");
     dispatchStatus = Blocked;
 }
 
 template<class Impl>
 void FFDIEWC<Impl>::unblock() {
     if (skidBuffer.empty()) {
+        DPRINTF(DIEWC, "Switch to Running in unblock()\n");
         toAllocation->diewcUnblock = true;
         wroteToTimeBuffer = true;
         dispatchStatus = Running;
+    } else {
+        DPRINTF(DIEWC, "There are %i insts remained in skidBuffer, "
+                "Status remains to be unblocking\n", skidBuffer.size());
     }
 }
 
@@ -445,6 +450,7 @@ void FFDIEWC<Impl>::tryDispatch() {
                 DPRINTF(DIEWC, "skidInsert after dispatch in Unblocking\n");
                 skidInsert();
             }
+            unblock();
             break;
         }
     }
