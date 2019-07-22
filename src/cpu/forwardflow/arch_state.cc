@@ -3,9 +3,9 @@
 //
 
 #include "cpu/forwardflow/arch_state.hh"
-
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
+#include "debug/FFCommit.hh"
 #include "debug/FFSquash.hh"
 #include "debug/Rename.hh"
 #include "params/DerivFFCPU.hh"
@@ -180,7 +180,7 @@ void ArchState<Impl>::recoverCPT(DynInstPtr &inst)
 template<class Impl>
 void ArchState<Impl>::recoverCPT(InstSeqNum &num)
 {
-    DPRINTF(FFSquash, "Recovery checkpoint from inst[%llu]\n", num);
+    DPRINTF(FFSquash, "Recover checkpoint from inst[%llu]\n", num);
     assert(cpts.count(num));
     Checkpoint &cpt = cpts[num];
     renameMap = cpt.renameMap;
@@ -229,24 +229,26 @@ pair<bool, FFRegValue> ArchState<Impl>::commitInst(DynInstPtr &inst)
         // in RV it must be 1
         assert (inst->numDestRegs() == 1);
 
+        const RegId &dest = inst->staticInst->destRegIdx(0);
         val = inst->getDestValue();
         if (inst->isInteger()) {
-            intArchRF[inst->staticInst->destRegIdx(0).index()] = val;
+            intArchRF[dest.index()] = val;
         } else if (inst->isInteger()) {
-            floatArchRF[inst->staticInst->destRegIdx(0).index()] = val;
+            floatArchRF[dest.index()] = val;
         } else {
             panic("not ready for other instructions!");
         }
 
-        SBIndex idx = make_pair(inst->staticInst->destRegIdx(0).classValue(),
-                inst->staticInst->destRegIdx(0).index());
-        if (!scoreboard.count(idx)) {
-            scoreboard[idx] = true;
+        DPRINTF(FFCommit, "CommitSB in current arch state\n");
+        commitInstInSB(inst, scoreboard, reverseTable, dest);
+        for (auto &pair: cpts) {
+            if (pair.first >= inst->seqNum) {
+                DPRINTF(FFCommit, "CommitSB in checkpoint[%llu]\n", pair.first);
+                commitInstInSB(inst, pair.second.scoreboard,
+                        pair.second.reverseTable, dest);
+            }
         }
-        if (!scoreboard[idx] && (reverseTable.count(idx) &&
-                    reverseTable[idx] == inst->dqPosition)) {
-            scoreboard[idx] = true;
-        }
+
     } else {
         valid = false;
     }
@@ -258,6 +260,42 @@ template<class Impl>
 void ArchState<Impl>::setDIEWC(DIEWC *_diewc)
 {
     diewc = _diewc;
+}
+
+template<class Impl>
+void
+ArchState<Impl>::commitInstInSB(
+        DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest)
+{
+    SBIndex idx = make_pair(dest.classValue(), dest.index());
+    if (!sb.count(idx)) {
+        DPRINTF(FFCommit,"Set reg (%s %i) for the first time\n",
+                dest.className(), dest.index());
+        sb[idx] = true;
+    } else {
+        if (!sb[idx] && (rt.count(idx) &&
+                    rt[idx] == inst->dqPosition)) {
+            DPRINTF(FFCommit,"Set reg (%s %i) cleared by inst[%llu] (%i %i)\n",
+                    dest.className(), dest.index(), inst->seqNum,
+                    inst->dqPosition.bank, inst->dqPosition.index);
+            sb[idx] = true;
+        } else {
+            if (!rt.count(idx)) {
+                DPRINTF(FFCommit,"Reg (%s %i) remains to busy because it"
+                        " was not cleared by other instructions???", // funny
+                        dest.className(), dest.index());
+            } else {
+                DPRINTF(FFCommit,"Reg (%s %i) remains to busy"
+                        " becase its was cleared by (%i %i),"
+                        " but committing inst[%llu] is @(%i %i)\n",
+                        dest.className(), dest.index(),
+                        rt[idx].bank,rt[idx].index,
+                        inst->seqNum, inst->dqPosition.bank, inst->dqPosition.index);
+
+            }
+
+        }
+    }
 }
 
 }

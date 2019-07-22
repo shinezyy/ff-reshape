@@ -67,6 +67,8 @@ private:
 
     DIEWC *diewc;
 
+    void commitInstInSB(DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest);
+
 public:
     std::pair<bool, FFRegValue> commitInst(DynInstPtr &inst);
 

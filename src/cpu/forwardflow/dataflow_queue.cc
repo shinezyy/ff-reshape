@@ -50,7 +50,8 @@ template<class Impl>
 void
 DataflowQueueBank<Impl>::advanceTail()
 {
-    instArray[tail] = nullptr;
+    DPRINTF(FFSquash, "Tail = %u\n", tail);
+    instArray.at(tail) = nullptr;
     nearlyWakeup.reset(tail);
     tail = (tail + 1) % depth;
 }
@@ -938,7 +939,10 @@ DataflowQueues<Impl>::markFwPointers(
         std::array<DQPointer, 4> &pointers, PointerPair &pair)
 {
     unsigned op = pair.dest.op;
-    assert(!pointers[op].valid);
+    if (pointers[op].valid) {
+        DPRINTF(FFSquash, "Overrding previous (squashed) sibling:(%d %d) (%d)\n",
+                pointers[op].bank, pointers[op].index, pointers[op].op);
+    }
     pointers[op] = pair.payload;
     DPRINTF(DQ, "And let it forward its value to (%d %d) (%d)\n",
             pair.payload.bank, pair.payload.index, pair.payload.op);
@@ -1240,6 +1244,7 @@ template<class Impl>
 bool
 DataflowQueues<Impl>::validPosition(unsigned u) const
 {
+    DPRINTF(DQ, "head: %i tail: %i u: %u\n", head, tail, u);
     if (head >= tail) {
         return (u <= head && u >= tail);
     } else {
@@ -1272,7 +1277,7 @@ void DataflowQueues<Impl>::tryFastCleanup()
     while (!inst && !isEmpty()) {
         auto tail_ptr = uint2Pointer(tail);
         auto bank = dqs[tail_ptr.bank];
-        bank.setTail(tail);
+        bank.setTail(uint2Pointer(tail).index);
         bank.advanceTail();
 
         tail = inc(tail);
