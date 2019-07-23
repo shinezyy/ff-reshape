@@ -432,6 +432,8 @@ public:
 
     bool fuGranted;
 
+    bool destReforward;
+
     std::array<FFRegValue, 3> srcValues;
 
     std::array<bool, 3> srcTakenWithInst;

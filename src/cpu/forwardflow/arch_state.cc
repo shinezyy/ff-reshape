@@ -219,6 +219,8 @@ pair<bool, FFRegValue> ArchState<Impl>::commitInst(DynInstPtr &inst)
     auto it = cpts.begin();
     while (it != cpts.end()) {
         if (it->first < num) {
+            DPRINTF(FFCommit, "inst[%llu] is older than cpt[%llu], erase it!\n",
+                    num, it->first);
             it = cpts.erase(it);
         } else {
             it++;
@@ -247,6 +249,9 @@ pair<bool, FFRegValue> ArchState<Impl>::commitInst(DynInstPtr &inst)
                 DPRINTF(FFCommit, "CommitSB in checkpoint[%llu]\n", pair.first);
                 commitInstInSB(inst, pair.second.scoreboard,
                         pair.second.reverseTable, dest);
+            } else {
+                DPRINTF(FFCommit, "inst[%llu] is younger than cpt[%llu], skip!\n",
+                        inst->seqNum, pair.first);
             }
         }
 
@@ -276,14 +281,14 @@ ArchState<Impl>::commitInstInSB(
     } else {
         if (!sb[idx] && (rt.count(idx) &&
                     rt[idx] == inst->dqPosition)) {
-            DPRINTF(FFCommit,"Set reg (%s %i) cleared by inst[%llu] (%i %i)\n",
+            DPRINTF(FFCommit,"Set reg (%s %i) by inst[%llu] (%i %i)\n",
                     dest.className(), dest.index(), inst->seqNum,
                     inst->dqPosition.bank, inst->dqPosition.index);
             sb[idx] = true;
         } else {
             if (!rt.count(idx)) {
                 DPRINTF(FFCommit,"Reg (%s %i) remains to busy because it"
-                        " was not cleared by other instructions???", // funny
+                        " was not cleared by other instructions???\n", // funny
                         dest.className(), dest.index());
             } else {
                 DPRINTF(FFCommit,"Reg (%s %i) remains to busy"

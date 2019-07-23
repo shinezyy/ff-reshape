@@ -140,6 +140,8 @@ BaseO3DynInst<Impl>::initVars()
     miscDepReady = false;
     memDepReady = false;
     sfuWrapper = nullptr;
+
+    destReforward = false;
 }
 
 template <class Impl>

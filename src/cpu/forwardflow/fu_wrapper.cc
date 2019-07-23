@@ -61,18 +61,26 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
         assert(!wbScheduled[0]);
         wbScheduled[0] = true;
 
-        if (!inst->isLoad()) {
-            wrapper.oneCyclePointer = dest;
-        } else {
-            wrapper.oneCyclePointer.valid = false;
-        }
         DPRINTF(FUW, "Add inst[%i] into 1-cycle wrapper (%i, %i)",
                 inst->seqNum, wrapperID, inst->opClass());
         if (dest.valid) {
-            DPRINTFR(FUW,"to wake up (%i %i) (%i)\n",
-                    dest.bank, dest.index, dest.op);
+            if (!inst->isLoad()) {
+                DPRINTFR(FUW,"to wake up (%i %i) (%i)\n",
+                         dest.bank, dest.index, dest.op);
+                wrapper.oneCyclePointer = dest;
+            } else {
+                DPRINTFR(FUW,"(let loads forget) to wake up (%i %i) (%i)\n",
+                         dest.bank, dest.index, dest.op);
+                wrapper.oneCyclePointer.valid = false;
+            }
+        } else if (inst->numDestRegs() > 0) {
+            wrapper.oneCyclePointer = inst->dqPosition;
+            inst->destReforward = true;
+            DPRINTFR(FUW,"to wake up itself "
+                         " who has children but not dispatched yet\n");
         } else {
             DPRINTFR(FUW,"but wake up nobody\n");
+            wrapper.oneCyclePointer.valid = false;
         }
 
     } else if (wrapper.isPipelined) {

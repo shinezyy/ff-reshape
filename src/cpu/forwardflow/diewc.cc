@@ -714,7 +714,7 @@ FFDIEWC<Impl>::commitInsts()
         head_inst = getTailInst(); // head_inst: olddest inst/ tail in DQ
 
         if (!head_inst) {
-            DPRINTF(Commit, "Olddest inst is null\n");
+            DPRINTF(Commit, "Oldest inst is null\n");
             num_committed++;
             if (!dq.isEmpty()) {
                 dq.tryFastCleanup();
@@ -722,7 +722,7 @@ FFDIEWC<Impl>::commitInsts()
             break;
         }
         if (!head_inst->readyToCommit()) {
-            DPRINTF(Commit, "Olddest inst is not ready to commit\n");
+            DPRINTF(Commit, "Oldest inst is not ready to commit\n");
             break;
         }
 

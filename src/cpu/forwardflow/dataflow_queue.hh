@@ -88,7 +88,7 @@ public:
 
     bool instGranted;
 
-    void tick();
+    void checkPending();
 
     std::vector<std::array<DQPointer, 4>> prematureFwPointers;
 
@@ -107,6 +107,8 @@ public:
     void cycleStart();
 
     void clearPending();
+
+    DQPointer extraWakeupPointer;
 };
 
 
@@ -285,9 +287,9 @@ public:
 
 private:
 
-    unsigned nonSpecBankPtr;
+    unsigned extraWKPtr;
 
-    void incNonSpecBankPtr();
+    void incExtraWKptr();
 
     unsigned forwardPtrIndex;
 
@@ -313,7 +315,8 @@ private:
 
     MemDepUnit memDepUnit;
 
-    void markFwPointers(std::array<DQPointer, 4> &pointers, PointerPair &pair);
+    void markFwPointers(std::array<DQPointer, 4> &pointers,
+            PointerPair &pair, DynInstPtr &inst);
 
     std::list<DynInstPtr> blockedMemInsts;
 
@@ -328,6 +331,8 @@ private:
     std::list<DynInstPtr> deferredMemInsts;
 
     DIEWC *diewc;
+
+    void extraWakeup(const WKPointer &wk);
 
 public:
     bool logicallyLT(unsigned left, unsigned right) const;

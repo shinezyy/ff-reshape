@@ -107,7 +107,32 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         DPRINTF(DQWake, "Select pendingWakeupPointers\n");
     } else {
         DPRINTF(DQWake, "Select inputPointers\n");
+
+        // todo: clear redundant code
+
+//        auto &ptr = pointers[0];
+//
+//        if (ptr.valid) {
+//            DPRINTF(DQWake, "Extra wakeup request found (%i %i) (%i)\n",
+//                    ptr.bank, ptr.index, ptr.op);
+//            auto &inst = instArray[ptr.index];
+//
+//            if (inst) {
+//                assert(inst->numDestRegs() > 0);
+//                assert(ptr.op == 0);
+//                inst->opReady[0] = true;
+//                if (instArray[ptr.index]->pointers[0].valid) {
+//                    extraWakeupPointer = instArray[ptr.index]->pointers[0];
+//                    DPRINTF(DQWake, "Set extra wake ptr (%i %i) (%i)\n",
+//                            extraWakeupPointer.bank, extraWakeupPointer.index,
+//                            extraWakeupPointer.op);
+//                }
+//            } else {
+//                DPRINTF(DQWake, "Wakeup ignores null inst @%d\n", ptr.index);
+//            }
+//        }
     }
+
 
     for (unsigned op = 1; op < nOps; op++) {
         auto &ptr = pointers[op];
@@ -117,17 +142,26 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             continue;
         }
 
+        DPRINTF(DQWake, "Pointer (%i %i) (%i) working\n",
+                ptr.bank, ptr.index, ptr.op);
         auto &inst = instArray[ptr.index];
 
         inst->opReady[ptr.op] = true;
 
         if (nearlyWakeup[ptr.index]) {
-            DPRINTF(DQWake, "inst [%llu] is nearly waken up\n", inst->seqNum);
+            DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
             wakeup_count++;
             if (!first) {
                 DPRINTF(DQWake, "inst [%llu] is the gifted one in this bank\n", inst->seqNum);
                 first = inst;
                 first_index = ptr.index;
+                if (anyPending) {
+                    DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
+                            ptr.bank, ptr.index, ptr.op);
+                    ptr.valid = false;
+                }
+            } else {
+                DPRINTF(DQWake, "inst [%llu] has no luck in this bank\n", inst->seqNum);
             }
         } else {
             unsigned busy_count = inst->numBusyOps();
@@ -155,13 +189,16 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
     pendingWakeupPointers[first_op].valid = false;
     inputPointers[first_op].valid = false;
 
-    pendingInst = first; // if it's rejected, then marks valid in tick()
+    if (first) {
+        DPRINTF(DQWake, "Setting pending inst[%llu]\n", first->seqNum);
+        pendingInst = first; // if it's rejected, then marks valid in tick()
+    }
 
     if (wakeup_count == 0) {
         first = tryWakeTail();
     }
     if (first) {
-        DPRINTF(DQB, "Wakeup valid inst: %p\n", first);
+        DPRINTF(DQWake, "Wakeup valid inst: %llu\n", first->seqNum);
     }
 
     return first;
@@ -171,8 +208,8 @@ template<class Impl>
 const std::vector<DQPointer>
 DataflowQueueBank<Impl>::readPointersFromBank()
 {
-    outputPointers[0].valid = false; // dest register should never be forwarded
-    for (unsigned op = 1; op < nOps; op++) {
+    DPRINTF(DQWake, "Reading pointers from banks\n");
+    for (unsigned op = 0; op < nOps; op++) {
         const auto &ptr = inputPointers[op];
         auto &optr = outputPointers[op];
 
@@ -184,11 +221,20 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                         ptr.bank, ptr.index, ptr.op);
                 optr.valid = false;
             } else {
+                if (op == 0 ) {
+                    outputPointers[0].valid = false; // dest register should never be forwarded
+                }
+
                 if (instArray[ptr.index]->pointers[op].valid) {
-                    optr = instArray[ptr.index]->pointers[op];
-                    DPRINTF(FFSquash, "Put forwarding wakeup Pointer (%i %i) (%i)"
-                            " to outputPointers\n",
-                            optr.bank, optr.index, optr.op);
+                    if (op != 0 || instArray[ptr.index]->destReforward) {
+                        optr = instArray[ptr.index]->pointers[op];
+                        if (op == 0 && optr.valid && instArray[ptr.index]->destReforward) {
+                            instArray[ptr.index]->destReforward = false;
+                        }
+                        DPRINTF(FFSquash, "Put forwarding wakeup Pointer (%i %i) (%i)"
+                                          " to outputPointers\n",
+                                optr.bank, optr.index, optr.op);
+                    }
                 } else {
                     optr.valid = false;
                 }
@@ -204,17 +250,27 @@ bool DataflowQueueBank<Impl>::canServeNew()
     auto flag = true;
     for (const auto &it: pendingWakeupPointers) {
         if (it.valid) {
+            DPRINTF(DQWake, "Pending pointer (%u %u) (%u)\n",
+                    it.bank, it.index, it.op);
             flag &= false;
         }
     }
+    flag &= !pendingInstValid;
+    if (pendingInstValid) {
+        assert(pendingInst);
+        DPRINTF(DQWake, "Pending inst[%llu]\n", pendingInst->seqNum);
+    }
     anyPending = !flag;
+    if (!flag) {
+        DPRINTF(DQWake, "DQ bank cannot serve new insts!\n");
+    }
     return flag;
 }
 
 template<class Impl>
 bool DataflowQueueBank<Impl>::wakeup(WKPointer pointer)
 {
-    DPRINTF(DQWake, "Waking up: (%i %i) (%i)\n",
+    DPRINTF(DQWake, "Mark waking up: (%i %i) (%i) in inputPointers\n",
             pointer.bank, pointer.index, pointer.op);
     auto op = pointer.op;
     assert(!inputPointers[op].valid);
@@ -223,9 +279,11 @@ bool DataflowQueueBank<Impl>::wakeup(WKPointer pointer)
 }
 
 template<class Impl>
-void DataflowQueueBank<Impl>::tick()
+void DataflowQueueBank<Impl>::checkPending()
 {
     if (pendingInst && !instGranted) {
+        DPRINTF(DQWake, "Setting pending inst valid because of inst[%llu]\n",
+                pendingInst->seqNum);
         pendingInstValid = true;
     }
 }
@@ -329,6 +387,7 @@ void DataflowQueueBank<Impl>::setTail(unsigned t)
 template<class Impl>
 void DataflowQueueBank<Impl>::cycleStart()
 {
+    extraWakeupPointer = nullDQPointer;
     for (auto &p: inputPointers) {
         p.valid = false;
     }
@@ -358,7 +417,7 @@ void DataflowQueues<Impl>::tick()
 
     digestForwardPointer();
 
-    DPRINTF(DQ, "DQ tick reach 3\n");
+    DPRINTF(DQ, "Setup fu requests\n");
     // For each bank
     //  get ready instructions produced by last tick from time struct
     for (unsigned i = 0; i < nBanks; i++) {
@@ -372,7 +431,6 @@ void DataflowQueues<Impl>::tick()
             fu_requests[i].destBits = coordinateFU(fromLastCycle->insts[i], i);
         }
     }
-    DPRINTF(DQ, "DQ tick reach 4\n");
     // For each bank
 
     //  For each valid ready instruction compete for a FU via the omega network
@@ -380,6 +438,7 @@ void DataflowQueues<Impl>::tick()
     //      If FU grant an inst, pass its direct child pointer to this FU's corresponding Pointer Queue
     //      to wake up the child one cycle before its value arrived
 
+    DPRINTF(DQ, "FU selecting ready insts from banks\n");
     fu_granted_ptrs = bankFUNet.select(fu_req_ptrs);
     for (unsigned b = 0; b < nBanks; b++) {
         assert(fu_granted_ptrs[b]);
@@ -398,18 +457,20 @@ void DataflowQueues<Impl>::tick()
         }
     }
 
-    DPRINTF(DQ, "DQ tick reach 5\n");
+    DPRINTF(DQ, "Tell dq banks who was granted\n");
     // mark it for banks
     for (unsigned b = 0; b < nBanks; b++) {
         dqs[b].instGranted = fu_req_granted[b];
     }
 
-    DPRINTF(DQ, "DQ tick reach 6\n");
+    DPRINTF(DQ, "Reading wk pointers from fu to wake queus\n");
     // push forward pointers to queues
     for (unsigned b = 0; b < nBanks; b++) {
-        for (unsigned op = 1; op <= 3; op++) {
+        for (unsigned op = 0; op <= 3; op++) {
             auto &ptr = fromLastCycle->pointers[b * nOps + op];
             if (ptr.valid) {
+                DPRINTF(DQWake, "Push WakePtr (%i %i) (%i) to wakequeue[%u]\n",
+                        ptr.bank, ptr.index, ptr.op, b);
                 wakeQueues[b * nOps + op].push(WKPointer(ptr));
                 numPendingWakeups++;
                 assert(wakeQueues[b * nOps + op].size() <= maxQueueDepth);
@@ -418,7 +479,7 @@ void DataflowQueues<Impl>::tick()
 
     }
 
-    DPRINTF(DQ, "DQ tick reach 7\n");
+    DPRINTF(DQ, "Selecting wakeup pointers from requests\n");
     // For each bank: check status: whether I can consume from queue this cycle?
     // record the state
     wakeup_granted_ptrs = wakeupQueueBankNet.select(wakeup_req_ptrs);
@@ -433,7 +494,7 @@ void DataflowQueues<Impl>::tick()
     // check whether each bank can really accept
     for (unsigned b = 0; b < nBanks; b++) {
         if (dqs[b].canServeNew()) {
-            for (unsigned op = 1; op <= 3; op++) {
+            for (unsigned op = 0; op <= 3; op++) {
                 const auto &pkt = wakeup_granted_ptrs[b * nOps + op];
 
                 DPRINTF(DQWake, "granted[%i.%i]: dest:(%llu) (%i) (%i %i) (%i)\n",
@@ -453,6 +514,8 @@ void DataflowQueues<Impl>::tick()
                 if (wakeQueues[pkt->source].size() == numPendingWakeupMax) {
                     numPendingWakeupMax--;
                 }
+                DPRINTF(DQWake, "Pop WakePtr (%i %i) (%i)from wakequeue[%u]\n",
+                        ptr.bank, ptr.index, ptr.op, pkt->source);
                 wakeQueues[pkt->source].pop();
                 numPendingWakeups--;
             }
@@ -462,21 +525,12 @@ void DataflowQueues<Impl>::tick()
     // todo: write forward pointers from bank to time buffer!
     for (unsigned b = 0; b < nBanks; b++) {
         const std::vector<DQPointer> forward_ptrs = dqs[b].readPointersFromBank();
-        for (unsigned op = 1; op <= 3; op++) {
+        for (unsigned op = 0; op <= 3; op++) {
             toNextCycle->pointers[b * nOps + op] = forward_ptrs[op];
         }
     }
 
-
-    // For each bank, check
-    //  whether there's an inst to be waken up
-    //  whether there are multiple instruction to wake up, if so
-    //      buffer it and reject further requests in following cycles
-    DPRINTF(DQ, "DQ tick reach 9\n");
-    for (auto &bank: dqs) {
-        bank.tick();
-    }
-    DPRINTF(DQ, "DQ tick reach 10\n");
+    DPRINTF(DQ, "Wrappers setting instructions to be waken up\n");
     for (auto &wrapper: fuWrappers) {
         wrapper.setWakeup();
     }
@@ -484,7 +538,7 @@ void DataflowQueues<Impl>::tick()
     for (unsigned b = 0; b < nBanks; b++) {
         // todo: check this line of code
         if (fuWrappers[b].toWakeup.valid) {
-            DPRINTF(DQWake, "Got wakeup pointer to (%d %d)(%d)\n",
+            DPRINTF(DQWake, "Got wakeup pointer to (%d %d)(%d), pushed to wakeQueue\n",
                     fuWrappers[b].toWakeup.bank,
                     fuWrappers[b].toWakeup.index,
                     fuWrappers[b].toWakeup.op);
@@ -506,6 +560,11 @@ void DataflowQueues<Impl>::tick()
         inst = dqs[i].wakeupInstsFromBank();
         // todo ! this function must be called after readPointersFromBank(),
 
+        // fixup for late-arrival fw pointers
+//        if (dqs[i].extraWakeupPointer.valid) {
+//            extraWakeup(WKPointer(dqs[i].extraWakeupPointer));
+//        }
+
         // read fu requests from banks
         //  and set fields for packets
         //  fu_req_ptrs = xxx
@@ -516,6 +575,15 @@ void DataflowQueues<Impl>::tick()
             DPRINTF(Omega, "notNext cycle inst[%d] valid, &inst: %p\n",
                     i, toNextCycle->insts[i]);
         }
+    }
+
+    // For each bank, check
+    //  whether there's an inst to be waken up
+    //  whether there are multiple instruction to wake up, if so
+    //      buffer it and reject further requests in following cycles
+    DPRINTF(DQ, "Bank check pending\n");
+    for (auto &bank: dqs) {
+        bank.checkPending();
     }
 }
 
@@ -845,9 +913,7 @@ void DataflowQueues<Impl>::addReadyMemInst(DynInstPtr inst)
     //  on other mem insts
     WKPointer wk(inst->dqPosition);
     wk.wkType = WKPointer::WKMem;
-    wakeQueues[nonSpecBankPtr * nOps + 3].push(wk);
-    numPendingWakeups++;
-    incNonSpecBankPtr();
+    extraWakeup(wk);
 }
 
 template<class Impl>
@@ -957,12 +1023,16 @@ void DataflowQueues<Impl>::insertNonSpec(DynInstPtr &inst)
 template<class Impl>
 void
 DataflowQueues<Impl>::markFwPointers(
-        std::array<DQPointer, 4> &pointers, PointerPair &pair)
+        std::array<DQPointer, 4> &pointers, PointerPair &pair, DynInstPtr &inst)
 {
     unsigned op = pair.dest.op;
     if (pointers[op].valid) {
-        DPRINTF(FFSquash, "Overrding previous (squashed) sibling:(%d %d) (%d)\n",
+        DPRINTF(FFSquash, "Overriding previous (squashed) sibling:(%d %d) (%d)\n",
                 pointers[op].bank, pointers[op].index, pointers[op].op);
+        if (inst && (inst->isExecuted() || inst->opReady[op])) {
+            DPRINTF(FFSquash, "And extra wakeup new sibling\n");
+            extraWakeup(WKPointer(pair.payload));
+        }
     }
     pointers[op] = pair.payload;
     DPRINTF(DQ, "And let it forward its value to (%d %d) (%d)\n",
@@ -1176,15 +1246,13 @@ void DataflowQueues<Impl>::scheduleNonSpec()
 {
     WKPointer wk(uint2Pointer(tail));
     wk.wkType = WKPointer::WKMisc;
-    wakeQueues[nonSpecBankPtr*nOps + 3].push(wk);
-    numPendingWakeups++;
-    incNonSpecBankPtr();
+    extraWakeup(wk);
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::incNonSpecBankPtr()
+void DataflowQueues<Impl>::incExtraWKptr()
 {
-    nonSpecBankPtr = (nonSpecBankPtr + 1) % nBanks;
+    extraWKPtr = (extraWKPtr + 1) % nBanks;
 }
 
 template<class Impl>
@@ -1349,13 +1417,20 @@ void DataflowQueues<Impl>::digestForwardPointer()
             if (inst) {
                 DPRINTF(DQ, "Insert fw pointer (%d %d) (%d) after inst reached\n",
                         pair.dest.bank, pair.dest.index, pair.dest.op);
-                markFwPointers(inst->pointers, pair);
+                markFwPointers(inst->pointers, pair, inst);
+
+                if (op == 0 && inst->destReforward) {
+                    // already executed but not forwarded
+                    extraWakeup(WKPointer(pair.payload));
+                    inst->destReforward = false;
+                }
+
             } else {
                 DPRINTF(DQ, "Insert fw pointer (%d %d) (%d) before inst reached\n",
                         pair.dest.bank, pair.dest.index, pair.dest.op);
                 auto &pointers =
                         dqs[pair.dest.bank].prematureFwPointers[pair.dest.index];
-                markFwPointers(pointers, pair);
+                markFwPointers(pointers, pair, inst);
             }
 
             assert(!forwardPointerQueue[pkt->source].empty());
@@ -1364,6 +1439,8 @@ void DataflowQueues<Impl>::digestForwardPointer()
             }
             forwardPointerQueue[pkt->source].pop();
             numPendingFwPointers--;
+
+            // handle the special case that inst executed before pointer reached
         }
     }
 }
@@ -1376,9 +1453,17 @@ void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
             " load[%llu] (%i %i)\n", wk.bank, wk.index, wk.op,
             inst->seqNum,
             inst->dqPosition.bank, inst->dqPosition.index);
-    wakeQueues[nonSpecBankPtr * nOps + 3].push(wk);
+    extraWakeup(wk);
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::extraWakeup(const WKPointer &wk)
+{
+    DPRINTF(DQWake, "Push Wake (extra) Ptr (%i %i) (%i) to wakequeue[%u]\n",
+            wk.bank, wk.index, wk.op, extraWKPtr * nOps + 3);
+    wakeQueues[extraWKPtr * nOps + 3].push(wk);
     numPendingWakeups++;
-    incNonSpecBankPtr();
+    incExtraWKptr();
 }
 
 }

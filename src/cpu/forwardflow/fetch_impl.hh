@@ -1015,7 +1015,7 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
         // invalid state we generated in after sequence number
         if (fromCommit->diewc2diewc.mispredictInst &&
             fromCommit->diewc2diewc.mispredictInst->isControl()) {
-            branchPred->squash(fromCommit->diewc2diewc.doneSeqNum,
+            branchPred->squash(fromCommit->diewc2diewc.squashInst,
                               fromCommit->diewc2diewc.pc,
                               fromCommit->diewc2diewc.branchTaken,
                               tid);
