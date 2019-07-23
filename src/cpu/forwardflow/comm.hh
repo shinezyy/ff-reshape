@@ -304,7 +304,8 @@ struct TimeBufStruct {
         unsigned dqHead;
         unsigned dqTail;
 
-        bool updateDQPointer;
+        bool updateDQHead;
+        bool updateDQTail;
     };
 
     diewcComm diewcInfo;

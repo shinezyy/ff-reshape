@@ -494,11 +494,13 @@ void Allocation<Impl>::readFreeEntries() {
     if (fromDIEWC->diewcInfo.usedDQ) {
         freeEntries.dqEntries = fromDIEWC->diewcInfo.freeDQEntries;
     }
-    if (fromDIEWC->diewcInfo.updateDQPointer) {
-        flatHead = fromDIEWC->diewcInfo.dqHead;
+    if (fromDIEWC->diewcInfo.updateDQTail) {
         flatTail = fromDIEWC->diewcInfo.dqTail;
-        DPRINTF(FFSquash, "read head (%d) tail (%d) form DIEWC\n",
-                flatHead, flatTail);
+        DPRINTF(FFSquash, "read tail (%d) form DIEWC\n", flatTail);
+    }
+    if (fromDIEWC->diewcInfo.updateDQHead) {
+        flatHead = fromDIEWC->diewcInfo.dqHead;
+        DPRINTF(FFSquash, "read head (%d) form DIEWC\n", flatHead);
     }
     if (fromDIEWC->diewcInfo.usedLSQ) {
         freeEntries.lqEntries = fromDIEWC->diewcInfo.freeLQEntries;
