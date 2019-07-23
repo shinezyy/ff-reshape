@@ -334,6 +334,7 @@ private:
 
     void extraWakeup(const WKPointer &wk);
 
+    void alignTails();
 public:
     bool logicallyLT(unsigned left, unsigned right) const;
 

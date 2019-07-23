@@ -17,6 +17,7 @@ namespace FF
 template<class Impl>
 void
 Allocation<Impl>::tick() {
+    DPRINTF(DAllocation, "head: %u, tail: %u\n", flatHead, flatTail);
 
     readInsts();
 
@@ -46,6 +47,7 @@ Allocation<Impl>::tick() {
     //  todo: whether FF needs to remove from history here?
 
     updateInProgress();
+    DPRINTF(DAllocation, "head: %u, tail: %u\n", flatHead, flatTail);
 }
 
 template <class Impl>
@@ -143,9 +145,9 @@ bool Allocation<Impl>::checkSignalsAndUpdate() {
         serializeInst->clearSerializeBefore();
 
         if (!skidBuffer.empty()) {
-            skidBuffer.pop_front();
+            skidBuffer.push_front(serializeInst);
         } else {
-            insts.pop_front();
+            insts.push_front(serializeInst);
         }
 
         DPRINTF(DAllocation, "Instruction must be processed by rename."
@@ -270,6 +272,7 @@ void Allocation<Impl>::allocateInsts() {
         if (!canAllocate()) {
             ++allocationDQFullEvents;
             DPRINTF(DAllocation, "break because cannot allocate anymore\n");
+            to_allocate.push_front(inst);
             break;
         }
 
@@ -425,7 +428,9 @@ DQPointer Allocation<Impl>::PositionfromUint(unsigned u) {
 
 template<class Impl>
 DQPointer Allocation<Impl>::allocateDQEntry() {
-    return PositionfromUint(flatHead++);
+    auto tmp = flatHead;
+    flatHead = (flatHead + 1)%dqSize;
+    return PositionfromUint(tmp);
 }
 
 template<class Impl>

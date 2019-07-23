@@ -766,6 +766,7 @@ void DataflowQueues<Impl>::retireHead(bool result_valid, FFRegValue v)
 {
     assert(!isEmpty());
     DQPointer head_ptr = uint2Pointer(tail);
+    alignTails();
     DPRINTF(FFCommit, "Position of inst to commit:(%d %d)\n",
             head_ptr.bank, head_ptr.index);
     DynInstPtr head_inst = dqs[head_ptr.bank].readInstsFromBank(head_ptr);
@@ -786,6 +787,7 @@ void DataflowQueues<Impl>::retireHead(bool result_valid, FFRegValue v)
     dqs[head_ptr.bank].advanceTail();
     if (head != tail) {
         tail = inc(tail);
+        DPRINTF(DQ, "tail becomes %u in retiring\n", tail);
     }
 
     DPRINTF(FFCommit, "Advance youngest ptr to %d, olddest ptr to %d\n", head, tail);
@@ -804,6 +806,7 @@ bool DataflowQueues<Impl>::isFull() const
 template<class Impl>
 bool DataflowQueues<Impl>::isEmpty() const
 {
+    DPRINTF(DQ, "head: %u, tail: %u\n", head, tail);
     return head == tail && !getHead();
 }
 
@@ -974,13 +977,22 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst)
     assert(inst);
     assert(!isFull());
 
+    bool jumped = false;
     DQPointer allocated = inst->dqPosition;
     DPRINTF(DQ, "allocated @(%d %d)\n", allocated.bank, allocated.index);
-    assert(!dqs[allocated.bank].readInstsFromBank(allocated));
+
+    auto dead_inst = dqs[allocated.bank].readInstsFromBank(allocated);
+    if (dead_inst) {
+        DPRINTF(FFCommit, "Dead inst[%llu] found unexpectedly\n", dead_inst->seqNum);
+        assert(!dqs[allocated.bank].readInstsFromBank(allocated));
+    }
 //    DPRINTF(DQ, "insert reach 1\n");
     dqs[allocated.bank].writeInstsToBank(allocated, inst);
     if (isEmpty()) {
         tail = pointer2uint(allocated); //keep them together
+        DPRINTF(DQ, "tail becomes %u to keep with head\n", tail);
+        jumped = true;
+        alignTails();
     }
     head = pointer2uint(allocated);
 //    DPRINTF(DQ, "insert reach 2\n");
@@ -1001,7 +1013,7 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst)
     dqs[allocated.bank].checkReadiness(allocated);
 //    DPRINTF(DQ, "insert reach 5\n");
 
-    return true;
+    return jumped;
 }
 
 template<class Impl>
@@ -1033,6 +1045,9 @@ DataflowQueues<Impl>::markFwPointers(
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
             extraWakeup(WKPointer(pair.payload));
         }
+    } else if (inst && inst->opReady[op]) {
+        DPRINTF(DQWake, "which has already been waken up!\n");
+        extraWakeup(WKPointer(pair.payload));
     }
     pointers[op] = pair.payload;
     DPRINTF(DQ, "And let it forward its value to (%d %d) (%d)\n",
@@ -1370,6 +1385,7 @@ void DataflowQueues<Impl>::tryFastCleanup()
         bank.advanceTail();
 
         tail = inc(tail);
+        DPRINTF(DQ, "tail becomes %u in fast clean up\n", tail);
         inst = getTail();
         diewc->DQPointerJumped = true;
     }
@@ -1464,6 +1480,16 @@ void DataflowQueues<Impl>::extraWakeup(const WKPointer &wk)
     wakeQueues[extraWKPtr * nOps + 3].push(wk);
     numPendingWakeups++;
     incExtraWKptr();
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::alignTails()
+{
+    for (unsigned count = 0; count < nBanks; count++) {
+        auto u = count + tail;
+        auto ptr = uint2Pointer(u);
+        dqs[ptr.bank].setTail(ptr.index);
+    }
 }
 
 }

@@ -302,7 +302,12 @@ void FFDIEWC<Impl>::dispatch() {
 //            DPRINTF(DIEWC, "dispatch reach 7.1\n");
             insertPointerPairs(archState.recordAndUpdateMap(inst));
 //            DPRINTF(DIEWC, "dispatch reach 7.2\n");
-            dq.insert(inst);
+            bool jumped = dq.insert(inst);
+            if (jumped) {
+                if (!dq.validPosition(oldestForwarded)) {
+                    oldestForwarded = dq.getTailPtr();
+                }
+            }
             youngestSeqNum = inst->seqNum;
 //            DPRINTF(DIEWC, "dispatch reach 7.3\n");
         }
@@ -760,6 +765,7 @@ FFDIEWC<Impl>::commitInsts()
             DPRINTF(Commit, "commit reach 2\n");
 
             if (commit_success) {
+                toAllocation->diewcInfo.updateDQTail = true;
                 ++num_committed;
                 statCommittedInstType[head_inst->opClass()]++;
                 ppCommit->notify(head_inst);
@@ -1756,13 +1762,18 @@ void FFDIEWC<Impl>::clearAtStart()
 template<class Impl>
 void FFDIEWC<Impl>::sendBackwardInfo()
 {
+    toAllocation->diewcInfo.dqTail = dq.getTailPtr();
+    toAllocation->diewcInfo.dqHead = dq.inc(dq.getHeadPtr()); // p+1 to allocation
+    DPRINTF(DIEWC, "head: %i, tail: %i\n", toAllocation->diewcInfo.dqHead,
+            toAllocation->diewcInfo.dqTail);
     if (DQPointerJumped) {
         toAllocation->diewcInfo.updateDQTail = true;
-        toAllocation->diewcInfo.dqTail = dq.getTailPtr();
+        if (!dq.validPosition(oldestForwarded)) {
+            oldestForwarded = dq.getTailPtr();
+        }
 
         if (fromLastCycle->diewc2diewc.squash) {
             toAllocation->diewcInfo.updateDQHead = true;
-            toAllocation->diewcInfo.dqHead = dq.getHeadPtr() + 1; // p+1 to allocation
         }
     }
     toAllocation->diewcInfo.freeDQEntries = dq.numFree();
