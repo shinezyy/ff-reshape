@@ -367,6 +367,10 @@ public:
     unsigned numInFlightFw();
 
     void writebackLoad(DynInstPtr &inst);
+
+    void wakeMemRelated(DynInstPtr &inst);
+
+    void completeMemInst(DynInstPtr &inst);
 };
 
 }

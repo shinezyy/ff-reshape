@@ -1470,6 +1470,7 @@ void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
             inst->seqNum,
             inst->dqPosition.bank, inst->dqPosition.index);
     extraWakeup(wk);
+    completeMemInst(inst);
 }
 
 template<class Impl>
@@ -1489,6 +1490,27 @@ void DataflowQueues<Impl>::alignTails()
         auto u = count + tail;
         auto ptr = uint2Pointer(u);
         dqs[ptr.bank].setTail(ptr.index);
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::wakeMemRelated(DynInstPtr &inst)
+{
+    if (inst->isMemRef()) {
+        memDepUnit.wakeDependents(inst);
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::completeMemInst(DynInstPtr &inst)
+{
+    if (inst->isMemRef()) {
+        // complateMemInst
+        inst->memOpDone(true);
+        memDepUnit.completed(inst);
+
+    } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
+        memDepUnit.completeBarrier(inst);
     }
 }
 
