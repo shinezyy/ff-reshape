@@ -1632,6 +1632,9 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
                 inst->completeTick = curTick() - inst->fetchTick;
                 DPRINTF(DIEWC, "set completeTick to %u\n", inst->completeTick);
                 inst->setCanCommit();
+
+                dq.wakeMemRelated(inst);
+                dq.completeMemInst(inst);
                 activityThisCycle();
             }
 
