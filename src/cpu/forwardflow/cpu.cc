@@ -1423,6 +1423,12 @@ FFCPU<Impl>::cleanUpRemovedInsts()
         removeList.pop();
     }
 
+    if (Debug::FFCommit) {
+        if (curTick() % 50000 == 0 || curTick() % 50500 == 0) {
+            dumpInsts();
+        }
+    }
+
     removeInstsThisCycle = false;
 }
 /*
@@ -1445,10 +1451,11 @@ FFCPU<Impl>::dumpInsts()
 
     while (inst_list_it != instList.end()) {
         cprintf("Instruction:%i\nPC:%#x\n[tid:%i]\n[sn:%lli]\nIssued:%i\n"
-                "Squashed:%i\n\n",
+                "Squashed:%i\n %s\n\n",
                 num, (*inst_list_it)->instAddr(), (*inst_list_it)->threadNumber,
                 (*inst_list_it)->seqNum, (*inst_list_it)->isIssued(),
-                (*inst_list_it)->isSquashed());
+                (*inst_list_it)->isSquashed(),
+                (*inst_list_it)->staticInst->disassemble((*inst_list_it)->instAddr()));
         inst_list_it++;
         ++num;
     }

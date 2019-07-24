@@ -82,7 +82,7 @@ DataflowQueueBank<Impl>::tryWakeTail()
                 tail_inst->seqNum);
         return nullptr;
     }
-    DPRINTF(DQWake, "inst[%d] is ready but not wakeup!,"
+    DPRINTF(DQWake, "inst[%d] is ready but not waken up!,"
             " and is waken up by head checker\n", tail_inst->seqNum);
     return tail_inst;
 }
@@ -107,34 +107,10 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         DPRINTF(DQWake, "Select pendingWakeupPointers\n");
     } else {
         DPRINTF(DQWake, "Select inputPointers\n");
-
-        // todo: clear redundant code
-
-//        auto &ptr = pointers[0];
-//
-//        if (ptr.valid) {
-//            DPRINTF(DQWake, "Extra wakeup request found (%i %i) (%i)\n",
-//                    ptr.bank, ptr.index, ptr.op);
-//            auto &inst = instArray[ptr.index];
-//
-//            if (inst) {
-//                assert(inst->numDestRegs() > 0);
-//                assert(ptr.op == 0);
-//                inst->opReady[0] = true;
-//                if (instArray[ptr.index]->pointers[0].valid) {
-//                    extraWakeupPointer = instArray[ptr.index]->pointers[0];
-//                    DPRINTF(DQWake, "Set extra wake ptr (%i %i) (%i)\n",
-//                            extraWakeupPointer.bank, extraWakeupPointer.index,
-//                            extraWakeupPointer.op);
-//                }
-//            } else {
-//                DPRINTF(DQWake, "Wakeup ignores null inst @%d\n", ptr.index);
-//            }
-//        }
     }
 
 
-    for (unsigned op = 1; op < nOps; op++) {
+    for (unsigned op = 0; op < nOps; op++) {
         auto &ptr = pointers[op];
         if (!ptr.valid) continue;
         if (!instArray.at(ptr.index)) {
@@ -142,35 +118,48 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             continue;
         }
 
+        auto &inst = instArray[ptr.index];
         DPRINTF(DQWake, "Pointer (%i %i) (%i) working\n",
                 ptr.bank, ptr.index, ptr.op);
-        auto &inst = instArray[ptr.index];
 
-        inst->opReady[ptr.op] = true;
+        if (op == 0 && !(ptr.wkType == WKPointer::WKMem)) {
+            DPRINTF(DQWake, "Wakeup ignores op wakeup pointer to Dest\n");
+            continue;
+        }
 
-        if (nearlyWakeup[ptr.index]) {
-            DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
-            wakeup_count++;
-            if (!first) {
-                DPRINTF(DQWake, "inst [%llu] is the gifted one in this bank\n", inst->seqNum);
-                first = inst;
-                first_index = ptr.index;
-                if (anyPending) {
-                    DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
-                            ptr.bank, ptr.index, ptr.op);
-                    ptr.valid = false;
+        if (ptr.wkType == WKPointer::WKMem) {
+            inst->memDepReady = true;
+            first = inst;
+            DPRINTF(DQWake, "Mem inst [%llu] is the gifted one in this bank\n",
+                    inst->seqNum);
+
+        } else { //  if (ptr.wkType == WKPointer::WKOp)
+            inst->opReady[ptr.op] = true;
+
+            if (nearlyWakeup[ptr.index]) {
+                DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
+                wakeup_count++;
+                if (!first) {
+                    DPRINTF(DQWake, "inst [%llu] is the gifted one in this bank\n", inst->seqNum);
+                    first = inst;
+                    first_index = ptr.index;
+                    if (anyPending) {
+                        DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
+                                ptr.bank, ptr.index, ptr.op);
+                        ptr.valid = false;
+                    }
+                } else {
+                    DPRINTF(DQWake, "inst [%llu] has no luck in this bank\n", inst->seqNum);
                 }
             } else {
-                DPRINTF(DQWake, "inst [%llu] has no luck in this bank\n", inst->seqNum);
+                unsigned busy_count = inst->numBusyOps();
+                if (busy_count == 1) {
+                    DPRINTF(DQWake, "inst [%llu] becomes nearly waken up\n", inst->seqNum);
+                    nearlyWakeup.set(ptr.index);
+                }
             }
-        } else {
-            unsigned busy_count = inst->numBusyOps();
-            if (busy_count == 1) {
-                DPRINTF(DQWake, "inst [%llu] becomes nearly waken up\n", inst->seqNum);
-                nearlyWakeup.set(ptr.index);
-            }
+            DPRINTF(DQWake, "Mark op[%d] of inst [%llu] ready\n", op, inst->seqNum);
         }
-        DPRINTF(DQWake, "Mark op[%d] of inst [%llu] ready\n", op, inst->seqNum);
     }
     if (wakeup_count > 1) {
         for (unsigned op = 1; op < nOps; op++) {
@@ -462,6 +451,8 @@ void DataflowQueues<Impl>::tick()
     for (unsigned b = 0; b < nBanks; b++) {
         dqs[b].instGranted = fu_req_granted[b];
     }
+
+    replayMemInsts();
 
     DPRINTF(DQ, "Reading wk pointers from fu to wake queus\n");
     // push forward pointers to queues
@@ -897,7 +888,11 @@ FFRegValue DataflowQueues<Impl>::readReg(DQPointer ptr)
         if (!inst->isExecuted()) {
             // assert(it is younger than currently executing instruciont);
         }
-        assert(committedValues.count(ptr));
+        if (!committedValues.count(ptr)) {
+            DPRINTF(DQ, "Reading uncommitted pointer (%i %i) (%i)!\n",
+                    ptr.bank, ptr.index, ptr.op);
+            assert(committedValues.count(ptr));
+        }
         result = committedValues[ptr];
     }
     return result;
@@ -912,8 +907,7 @@ void DataflowQueues<Impl>::setReg(DQPointer ptr, FFRegValue val)
 template<class Impl>
 void DataflowQueues<Impl>::addReadyMemInst(DynInstPtr inst)
 {
-    // todo: when dispatch mem inst, they should be marked as dependant
-    //  on other mem insts
+    DPRINTF(DQWake, "Replaying mem inst[%llu]\n", inst->seqNum);
     WKPointer wk(inst->dqPosition);
     wk.wkType = WKPointer::WKMem;
     extraWakeup(wk);
@@ -1005,9 +999,9 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst)
 //    DPRINTF(DQ, "insert reach 3\n");
     if (inst->isMemRef()) {
         memDepUnit.insert(inst);
-        if (inst->isLoad()) {
-            inst->hasMemDep = true;
-        }
+//        if (inst->isLoad()) {
+//            inst->hasMemDep = true;
+//        }
     }
 //    DPRINTF(DQ, "insert reach 4\n");
     dqs[allocated.bank].checkReadiness(allocated);
@@ -1050,7 +1044,8 @@ DataflowQueues<Impl>::markFwPointers(
         extraWakeup(WKPointer(pair.payload));
     }
     pointers[op] = pair.payload;
-    DPRINTF(DQ, "And let it forward its value to (%d %d) (%d)\n",
+    DPRINTF(DQ, "And let it forward its value to (%d) (%d %d) (%d)\n",
+            pair.payload.valid,
             pair.payload.bank, pair.payload.index, pair.payload.op);
 }
 
@@ -1075,6 +1070,8 @@ template<class Impl>
 void DataflowQueues<Impl>::cacheUnblocked()
 {
     retryMemInsts.splice(retryMemInsts.end(), blockedMemInsts);
+    DPRINTF(DQ, "blocked mem insts size: %llu, retry mem inst size: %llu\n",
+            blockedMemInsts.size(), retryMemInsts.size());
     cpu->wakeCPU();
 }
 
@@ -1085,7 +1082,13 @@ void DataflowQueues<Impl>::blockMemInst(DataflowQueues::DynInstPtr &inst)
     inst->translationCompleted(false);
     inst->clearCanIssue();
     inst->clearIssued();
+    inst->fuGranted = false;
+    inst->hasMemDep = true;
+    inst->memDepReady = false;
     blockedMemInsts.push_back(inst);
+    DPRINTF(DQWake, "Insert block mem inst[%llu] into blocked mem inst list, "
+                    "size after insert: %llu\n",
+            inst->seqNum, blockedMemInsts.size());
 }
 
 template<class Impl>
@@ -1167,8 +1170,8 @@ void DataflowQueues<Impl>::readQueueHeads()
                 wk_pkt.valid = false;
             } else {
                 const WKPointer &ptr = q.front();
-                DPRINTF(DQWake, "Found valid wakePtr: (%i %i) (%i)\n",
-                        ptr.bank, ptr.index, ptr.op);
+                DPRINTF(DQWake, "Found valid wakePtr:(%i) (%i %i) (%i)\n",
+                        ptr.valid, ptr.bank, ptr.index, ptr.op);
                 wk_pkt.valid = ptr.valid;
                 wk_pkt.payload = ptr;
                 wk_pkt.destBits = uint2Bits(ptr.bank * nOps + ptr.op);
@@ -1413,7 +1416,7 @@ void DataflowQueues<Impl>::digestForwardPointer()
 
     for (auto &ptr : insert_granted_ptrs) {
         if (ptr->valid) {
-            DPRINTF(DQ, "pair[%d] (pointer(%d) (%d %d)(%d)) granted\n",
+            DPRINTF(DQ, "pair[%d] (pointer(%d) (%d %d) (%d)) granted\n",
                     ptr->source, ptr->payload.dest.valid,
                     ptr->payload.dest.bank, ptr->payload.dest.index, ptr->payload.dest.op);
         }
@@ -1464,13 +1467,23 @@ void DataflowQueues<Impl>::digestForwardPointer()
 template<class Impl>
 void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
 {
-    WKPointer wk(inst->pointers[0]);
-    DPRINTF(DQWake, "Sending pointer to (%i %i) (%i) that depends on"
-            " load[%llu] (%i %i)\n", wk.bank, wk.index, wk.op,
-            inst->seqNum,
-            inst->dqPosition.bank, inst->dqPosition.index);
-    extraWakeup(wk);
-    completeMemInst(inst);
+//    DPRINTF(DQWake, "Original ptr: (%i) (%i %i) (%i)\n",
+//            inst->pointers[0].valid, inst->pointers[0].bank,
+//            inst->pointers[0].index, inst->pointers[0].op);
+    if (inst->pointers[0].valid) {
+        WKPointer wk(inst->pointers[0]);
+        DPRINTF(DQWake, "Sending pointer to (%i) (%i %i) (%i) that depends on"
+                        " load[%llu] (%i %i)\n", wk.valid, wk.bank, wk.index, wk.op,
+                inst->seqNum,
+                inst->dqPosition.bank, inst->dqPosition.index);
+        extraWakeup(wk);
+        completeMemInst(inst);
+    } else {
+        auto &p = inst->dqPosition;
+        DPRINTF(DQWake, "Mark itself[%llu] (%i) (%i %i) (%i) ready\n",
+                inst->seqNum, p.valid, p.bank, p.index, p.op);
+        inst->opReady[0] = true;
+    }
 }
 
 template<class Impl>
@@ -1511,6 +1524,33 @@ void DataflowQueues<Impl>::completeMemInst(DynInstPtr &inst)
 
     } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
         memDepUnit.completeBarrier(inst);
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::replayMemInsts()
+{
+    DynInstPtr inst;
+    if (inst = getDeferredMemInstToExecute()) {
+        DPRINTF(DQWake, "Replaying from deferred\n");
+        addReadyMemInst(inst);
+    } else if (inst = getBlockedMemInst()) {
+        DPRINTF(DQWake, "Replaying from blocked\n");
+        addReadyMemInst(inst);
+    }
+}
+
+template<class Impl>
+typename Impl::DynInstPtr DataflowQueues<Impl>::getBlockedMemInst()
+{
+    if (retryMemInsts.empty()) {
+        return nullptr;
+    } else {
+        auto inst = retryMemInsts.front();
+        retryMemInsts.pop_front();
+        DPRINTF(DQ, "retry mem insts size: %llu after pop\n",
+                retryMemInsts.size());
+        return inst;
     }
 }
 

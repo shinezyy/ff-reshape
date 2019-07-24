@@ -65,19 +65,25 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
                 inst->seqNum, wrapperID, inst->opClass());
         if (dest.valid) {
             if (!inst->isLoad()) {
-                DPRINTFR(FUW,"to wake up (%i %i) (%i)\n",
-                         dest.bank, dest.index, dest.op);
+                DPRINTFR(FUW,"to wake up (%i) (%i %i) (%i)\n",
+                         dest.valid, dest.bank, dest.index, dest.op);
                 wrapper.oneCyclePointer = dest;
             } else {
-                DPRINTFR(FUW,"(let loads forget) to wake up (%i %i) (%i)\n",
-                         dest.bank, dest.index, dest.op);
+                DPRINTFR(FUW,"(let loads forget) to wake up (%i) (%i %i) (%i)\n",
+                         dest.valid, dest.bank, dest.index, dest.op);
                 wrapper.oneCyclePointer.valid = false;
             }
         } else if (inst->numDestRegs() > 0) {
-            wrapper.oneCyclePointer = inst->dqPosition;
-            inst->destReforward = true;
-            DPRINTFR(FUW,"to wake up itself "
-                         " who has children but not dispatched yet\n");
+            if (!inst->isLoad()) {
+                wrapper.oneCyclePointer = inst->dqPosition;
+                inst->destReforward = true;
+                DPRINTFR(FUW, "to wake up itself "
+                              " who has children but not dispatched yet\n");
+            } else {
+                DPRINTFR(FUW,"(let loads forget) to wake up invalid ptr (%i) (%i %i) (%i)\n",
+                         dest.valid, dest.bank, dest.index, dest.op);
+                wrapper.oneCyclePointer.valid = false;
+            }
         } else {
             DPRINTFR(FUW,"but wake up nobody\n");
             wrapper.oneCyclePointer.valid = false;

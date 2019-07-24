@@ -335,6 +335,10 @@ private:
     void extraWakeup(const WKPointer &wk);
 
     void alignTails();
+
+    void replayMemInsts();
+
+    DynInstPtr getBlockedMemInst();
 public:
     bool logicallyLT(unsigned left, unsigned right) const;
 

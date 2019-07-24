@@ -58,6 +58,7 @@
 #include "config/the_isa.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/timebuf.hh"
+#include "debug/FFLSQ.hh"
 #include "debug/LSQUnit.hh"
 #include "mem/packet.hh"
 #include "mem/port.hh"
@@ -828,6 +829,7 @@ LSQUnit<Impl>::read(const RequestPtr &req,
     // If the cache was blocked, or has become blocked due to the access,
     // handle it.
     if (!successful_load) {
+        DPRINTF(FFLSQ, "Memory access is blocked!\n");
         if (!sreqLow) {
             // Packet wasn't split, just delete main packet info
             delete state;
