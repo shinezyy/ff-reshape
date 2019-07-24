@@ -26,13 +26,18 @@ using namespace std;
 template<class Impl>
 bool FUWrapper<Impl>::canServe(DynInstPtr &inst) {
     assert(inst);
-    DPRINTF(FUW2, "FUW reach 0, opclass:%d\n", inst->opClass());
+    DPRINTF(FUW2, "FUW , opclass:%d\n", inst->opClass());
     auto lat = opLat[inst->opClass()];
-    DPRINTF(FUW2, "FUW reach 1\n");
     auto has_capability = capabilityList[inst->opClass()];
-    DPRINTF(FUW2, "FUW reach 2\n");
-    auto wb_port_already_scheduled = wbScheduled[lat - 1];
-    DPRINTF(FUW2, "FUW reach 3\n");
+    auto wb_port_already_scheduled = wbScheduled[0];
+    if (lat == 1) {
+        wb_port_already_scheduled = wbScheduled[0];
+    } else {
+        wb_port_already_scheduled = wbScheduled[lat - 1];
+    }
+    if (Debug::FUSched) {
+        cout << wbScheduled << endl;
+    }
     return has_capability && !wb_port_already_scheduled;
 }
 
@@ -57,6 +62,9 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
         wrapper.hasPendingInst = true;  // execute in one cycle
         wrapper.seq = inst->seqNum;
 
+        if (Debug::FUSched) {
+            cout << wbScheduled << endl;
+        }
         // schedule wb port
         assert(!wbScheduled[0]);
         wbScheduled[0] = true;
@@ -91,8 +99,8 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
 
     } else if (wrapper.isPipelined) {
         // schedule wb port
-        assert(!wbScheduledNext[lat-1]);
-        wbScheduledNext[lat-1] = true;
+        assert(!wbScheduledNext[lat-2]);
+        wbScheduledNext[lat-2] = true;
 
         DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will push\n",
                 wrapperID, inst->opClass(), wrapper.pipelineQueue.size());
@@ -101,8 +109,8 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
         assert(!wrapper.writtenThisCycle);
         wrapper.writtenThisCycle = true;
 
-        DPRINTF(FUW, "add inst[%i] into pipelined wrapper (%i, %i)\n",
-                inst->seqNum, wrapperID, inst->opClass());
+        DPRINTF(FUW, "add inst[%i] into pipelined wrapper (%i, %i) with lat %u\n",
+                inst->seqNum, wrapperID, inst->opClass(), wrapper.latency);
 
     } else {
         assert(wrapper.isLongLatency);
@@ -127,7 +135,6 @@ void FUWrapper<Impl>::tick() {
 
 template<class Impl>
 void FUWrapper<Impl>::setWakeup() {
-    bool set_wb_this_cycle = false;
     int count_overall = 0;
     for (auto &pair: wrappers) {
         int count = 0;
@@ -160,15 +167,18 @@ void FUWrapper<Impl>::setWakeup() {
 
 
         if (wrapper.isPipelined && wrapper.pipelineQueue.front().valid) {
-            DPRINTF(FUW, "Waking up children of pipelined inst[%d]\n", wrapper.seq);
+            DPRINTF(FUW, "Waking up children of pipelined inst[%d]\n",
+                    wrapper.pipelineQueue.front().seq);
+            if (Debug::FUSched) {
+                cout << wbScheduled << endl;
+            }
             toWakeup = wrapper.pipelineQueue.front().pointer;
             seqToExec = wrapper.pipelineQueue.front().seq;
             count += 1;
         }
         assert(count <= 1);
         if (count) {
-            assert(!set_wb_this_cycle);
-            set_wb_this_cycle = true;
+            assert(!count_overall);
             toExec = true;
         }
         count_overall += count;
@@ -236,7 +246,7 @@ void FUWrapper<Impl>::startCycle() {
         if (wrapper.isPipelined) {
             DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will pop\n",
                     wrapperID, pair.first, wrapper.pipelineQueue.size());
-            assert(wrapper.pipelineQueue.size() == wrapper.MaxPipeLatency);
+            assert(wrapper.pipelineQueue.size() == wrapper.latency);
             // pop to prepare for incoming pointers
             wrapper.pipelineQueue.pop();
         }
@@ -415,7 +425,7 @@ SingleFUWrapper::init(
     isLongLatency = long_lat;
     latency = _latency;
     MaxPipeLatency = max_pipe_lat;
-    for (unsigned i = 0; i < MaxPipeLatency; i++) {
+    for (unsigned i = 0; i < latency; i++) {
         pipelineQueue.push({false, inv, 0});
     }
     timeStruct = new TimeBuffer<SFUTimeReg>(2, 2);
