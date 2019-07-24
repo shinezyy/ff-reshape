@@ -109,6 +109,8 @@ public:
     void clearPending();
 
     DQPointer extraWakeupPointer;
+
+    void printTail();
 };
 
 

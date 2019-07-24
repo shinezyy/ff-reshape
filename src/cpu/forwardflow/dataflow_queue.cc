@@ -50,10 +50,11 @@ template<class Impl>
 void
 DataflowQueueBank<Impl>::advanceTail()
 {
-    DPRINTF(FFSquash, "Tail = %u\n", tail);
+    DPRINTF(FFSquash, "Tail before adv = %u\n", tail);
     instArray.at(tail) = nullptr;
     nearlyWakeup.reset(tail);
     tail = (tail + 1) % depth;
+    DPRINTF(FFSquash, "Tail after adv = %u\n", tail);
 }
 
 template<class Impl>
@@ -329,14 +330,16 @@ void
 DataflowQueueBank<Impl>::writeInstsToBank(
         DQPointer pointer, DataflowQueueBank::DynInstPtr &inst)
 {
-    DPRINTF(DQWrite, "insert inst[%d] to (%d %d)\n",
+    DPRINTF(DQWrite, "insert inst[%llu] to (%d %d)\n",
             inst->seqNum, pointer.bank, pointer.index);
     auto index = pointer.index;
     assert(!instArray[index]);
     instArray[index] = inst;
 
+    DPRINTF(DQWrite, "Tail before writing: %u\n", tail);
     if (!instArray[tail]) {
         tail = index;
+        DPRINTF(DQWrite, "Tail becomes %u\n", tail);
     }
 }
 
@@ -371,6 +374,7 @@ template<class Impl>
 void DataflowQueueBank<Impl>::setTail(unsigned t)
 {
     tail = t;
+    DPRINTF(DQWrite, "Tail set to %u\n", tail);
 }
 
 template<class Impl>
@@ -390,6 +394,12 @@ void DataflowQueueBank<Impl>::clearPending()
 {
     pendingInstValid = false;
     pendingInst = nullptr;
+}
+
+template<class Impl>
+void DataflowQueueBank<Impl>::printTail()
+{
+    DPRINTF(DQ, "D Tail = %u\n", tail);
 }
 
 template<class Impl>
@@ -1298,7 +1308,7 @@ list<typename Impl::DynInstPtr>
 DataflowQueues<Impl>::getBankTails()
 {
     list<DynInstPtr> tails;
-    auto ptr_i = tail;
+    unsigned ptr_i = tail;
     for (unsigned count = 0; count < nBanks; count++) {
         auto ptr = uint2Pointer(ptr_i);
         DynInstPtr inst = dqs[ptr.bank].readInstsFromBank(ptr);
@@ -1383,7 +1393,7 @@ void DataflowQueues<Impl>::tryFastCleanup()
     }
     while (!inst && !isEmpty()) {
         auto tail_ptr = uint2Pointer(tail);
-        auto bank = dqs[tail_ptr.bank];
+        auto &bank = dqs[tail_ptr.bank];
         bank.setTail(uint2Pointer(tail).index);
         bank.advanceTail();
 
