@@ -241,23 +241,23 @@ BaseDynInst<Impl>::setSquashed()
     status.set(Squashed);
 }
 
-// template <class Impl>
-// void
-// BaseDynInst<Impl>::incref() {
-//     DPRINTF(DynInst, "inc ref of inst[%llu] from %d to %d\n",
-//             seqNum, count, count + 1);
-//     ++count;
-// }
-//
-// template <class Impl>
-// void
-// BaseDynInst<Impl>::decref() {
-//     DPRINTF(DynInst, "dec ref of inst[%llu] from %d to %d\n",
-//             seqNum, count, count - 1);
-//     if (--count <= 0) {
-//         delete this;
-//     }
-// }
+ template <class Impl>
+ void
+ BaseDynInst<Impl>::incref() {
+     DPRINTF(DynInst, "inc ref of inst[%llu] from %d to %d\n",
+             seqNum, count, count + 1);
+     ++count;
+ }
+
+ template <class Impl>
+ void
+ BaseDynInst<Impl>::decref() {
+     DPRINTF(DynInst, "dec ref of inst[%llu] from %d to %d\n",
+             seqNum, count, count - 1);
+     if (--count <= 0) {
+         delete this;
+     }
+ }
 
 }
 

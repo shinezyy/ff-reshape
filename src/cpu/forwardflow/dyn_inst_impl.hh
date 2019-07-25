@@ -305,6 +305,39 @@ unsigned BaseO3DynInst<Impl>::numBusyOps()
     return busy;
 }
 
+template<class Impl>
+void BaseO3DynInst<Impl>::setSrcValue(unsigned idx, FFRegValue val)
+{
+    srcValues[idx] = val;
+}
+
+template<class Impl>
+typename BaseO3DynInst<Impl>::FloatRegBits
+BaseO3DynInst<Impl>::readFloatRegOperandBits(const StaticInst *si, int idx)
+{
+    assert(idx < 3);
+    assert(opReady[idx + 1] || srcTakenWithInst[idx]);
+    return srcValues[idx].i;
+}
+
+template<class Impl>
+typename BaseO3DynInst<Impl>::FloatReg
+BaseO3DynInst<Impl>::readFloatRegOperand(const StaticInst *si, int idx)
+{
+    assert(idx < 3);
+    assert(opReady[idx + 1] || srcTakenWithInst[idx]);
+    return srcValues[idx].f;
+}
+
+template<class Impl>
+typename BaseO3DynInst<Impl>::IntReg
+BaseO3DynInst<Impl>::readIntRegOperand(const StaticInst *si, int idx)
+{
+    assert(idx < 3);
+    assert(opReady[idx + 1] || srcTakenWithInst[idx]);
+    return srcValues[idx].i;
+}
+
 }
 
 #endif//__CPU_FF_DYN_INST_IMPL_HH__

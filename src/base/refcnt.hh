@@ -46,7 +46,7 @@
  */
 class RefCounted
 {
-  private:
+  protected:
     // The reference count is mutable because one may want to
     // reference count a const pointer.  This really is OK because
     // const is about logical constness of the object not really about
@@ -83,13 +83,17 @@ class RefCounted
     virtual ~RefCounted() {}
 
     /// Increment the reference count
-    void incref() {
-        ++count;
+    virtual void incref()
+//    void incref()
+    {
+            ++count;
     }
 
     /// Decrement the reference count and destroy the object if all
     /// references are gone.
-    void decref() {
+    virtual void decref()
+//    void decref()
+    {
         if (--count <= 0) {
             delete this;
         }

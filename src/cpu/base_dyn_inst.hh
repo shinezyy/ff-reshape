@@ -615,6 +615,15 @@ class BaseDynInst : public ExecContext, public RefCounted
         return dflt;
     }
 
+    InstResult getResult(InstResult dflt = InstResult())
+    {
+        if (!instResult.empty()) {
+            InstResult t = instResult.front();
+            return t;
+        }
+        return dflt;
+    }
+
     /** Pushes a result onto the instResult queue. */
     /** @{ */
     /** Scalar result. */

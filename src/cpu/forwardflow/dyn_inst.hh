@@ -53,6 +53,7 @@
 #include "cpu/forwardflow/isa_specific.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/reg_class.hh"
+#include "debug/FFExec.hh"
 #include "debug/FFReg.hh"
 
 class Packet;
@@ -234,32 +235,11 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     // storage (which is pretty hard to imagine they would have reason
     // to do).
 
-    IntReg readIntRegOperand(const StaticInst *si, int idx)
-    {
-        assert(idx < 3);
-        if (srcTakenWithInst[idx]) {
-            return srcValues[idx].i;
-        }
-        return this->cpu->readIntReg(this->_srcInstPointer[idx]);
-    }
+    IntReg readIntRegOperand(const StaticInst *si, int idx);
 
-    FloatReg readFloatRegOperand(const StaticInst *si, int idx)
-    {
-        assert(idx < 3);
-        if (srcTakenWithInst[idx]) {
-            return srcValues[idx].f;
-        }
-        return this->cpu->readFloatReg(this->_srcInstPointer[idx]);
-    }
+    FloatReg readFloatRegOperand(const StaticInst *si, int idx);
 
-    FloatRegBits readFloatRegOperandBits(const StaticInst *si, int idx)
-    {
-        assert(idx < 3);
-        if (srcTakenWithInst[idx]) {
-            return srcValues[idx].f;
-        }
-        return this->cpu->readFloatRegBits(this->_srcInstPointer[idx]);
-    }
+    FloatRegBits readFloatRegOperandBits(const StaticInst *si, int idx);
 
     const VecRegContainer&
     readVecRegOperand(const StaticInst *si, int idx) const
@@ -354,8 +334,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
      */
     void setIntRegOperand(const StaticInst *si, int idx, IntReg val)
     {
-        DPRINTF(FFReg, "Inst %s setting int reg(%i) to %llu\n",
-                si->disassemble(this->instAddr()), idx, val);
+        DPRINTF(FFExec, "Inst [%llu] %s setting dest int reg(%i) to %llu\n",
+                this->seqNum, si->disassemble(this->instAddr()), idx, val);
 
         // this->cpu->setIntReg(this->_destRegIdx[idx], val);
         // let inst carry their results with themselves
@@ -366,6 +346,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     void setFloatRegOperand(const StaticInst *si, int idx, FloatReg val)
     {
         // this->cpu->setFloatReg(this->_destRegIdx[idx], val);
+        DPRINTF(FFExec, "Inst [%llu] %s setting dest float reg(%i) to %f\n",
+                this->seqNum, si->disassemble(this->instAddr()), idx, val);
         destValue.f = val;
         BaseDynInst<Impl>::setFloatRegOperand(si, idx, val);
     }
@@ -374,6 +356,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
                                 FloatRegBits val)
     {
         // this->cpu->setFloatRegBits(this->_destRegIdx[idx], val);
+        DPRINTF(FFExec, "Inst [%llu] %s setting dest float reg(%i) to %llu\n",
+                this->seqNum, si->disassemble(this->instAddr()), idx, val);
         destValue.i = val;
         BaseDynInst<Impl>::setFloatRegOperandBits(si, idx, val);
     }
@@ -434,13 +418,16 @@ public:
 
     bool destReforward;
 
-    std::array<FFRegValue, 3> srcValues;
-
     std::array<bool, 3> srcTakenWithInst;
 
+    unsigned numBusyOps();
+
+    void setSrcValue(unsigned idx, FFRegValue val);
+
+private:
     FFRegValue destValue;
 
-    unsigned numBusyOps();
+    std::array<FFRegValue, 3> srcValues;
 };
 
 }

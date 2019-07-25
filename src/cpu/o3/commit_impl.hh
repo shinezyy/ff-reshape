@@ -65,6 +65,7 @@
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
 #include "debug/O3PipeView.hh"
+#include "debug/ValueCommit.hh"
 #include "params/DerivO3CPU.hh"
 #include "sim/faults.hh"
 #include "sim/full_system.hh"
@@ -1278,6 +1279,16 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
     }
     DPRINTF(Commit, "Committing instruction with [sn:%lli] PC %s\n",
             head_inst->seqNum, head_inst->pcState());
+
+    DPRINTFR(ValueCommit, "@%llu Committing instruction with sn:%lli PC:%s",
+            curTick(), head_inst->seqNum, head_inst->pcState());
+    if (head_inst->numDestRegs() > 0) {
+        DPRINTFR(ValueCommit, ", with wb value: %llu\n",
+                head_inst->getResult().asIntegerNoAssert());
+    } else {
+        DPRINTFR(ValueCommit, ", with wb value: none\n");
+    }
+
     if (head_inst->traceData) {
         head_inst->traceData->setFetchSeq(head_inst->seqNum);
         head_inst->traceData->setCPSeq(thread[tid]->numOp);

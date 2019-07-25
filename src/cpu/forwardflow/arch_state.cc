@@ -36,7 +36,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             DPRINTF(Rename, "Skip zero reg\n");
             FFRegValue v;
             v.i = 0;
-            inst->srcValues[src_idx] = v;
+            inst->setSrcValue(src_idx, v);
             inst->srcTakenWithInst[src_idx] = true;
             inst->opReady[src_idx + 1] = true;
             pairs.push_back(invalid_pair);
@@ -48,9 +48,9 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
         if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
             if (inst->isFloating()) {
-                inst->srcValues[src_idx] = floatArchRF[src_reg.index()];
+                inst->setSrcValue(src_idx, floatArchRF[src_reg.index()]);
             } else if (inst->isInteger()) {
-                inst->srcValues[src_idx] = intArchRF[src_reg.index()];
+                inst->setSrcValue(src_idx, intArchRF[src_reg.index()]);
             } else {
                 panic("Unexpected reg type\n");
             }

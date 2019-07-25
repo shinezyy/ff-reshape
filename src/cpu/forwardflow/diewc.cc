@@ -15,6 +15,7 @@
 #include "debug/FFSquash.hh"
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
+#include "debug/ValueCommit.hh"
 #include "params/DerivFFCPU.hh"
 
 namespace FF{
@@ -635,6 +636,16 @@ FFDIEWC<Impl>::
     DPRINTF(Commit, "Committing instruction with [sn:%lli] PC %s @DQ(%d %d)\n",
             head_inst->seqNum, head_inst->pcState(),
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
+
+    DPRINTFR(ValueCommit, "@%llu Committing instruction with sn:%lli PC:%s",
+            curTick(), head_inst->seqNum, head_inst->pcState());
+    if (head_inst->numDestRegs() > 0) {
+        DPRINTFR(ValueCommit, ", with wb value: %llu\n",
+                head_inst->getResult().asIntegerNoAssert());
+    } else {
+        DPRINTFR(ValueCommit, ", with wb value: none\n");
+    }
+
     if (head_inst->traceData) {
         head_inst->traceData->setFetchSeq(head_inst->seqNum);
         head_inst->traceData->setCPSeq(thread->numOp);
@@ -947,7 +958,10 @@ void FFDIEWC<Impl>::handleSquash() {
         changedDQNumEntries = true;
 
         commitStatus = DQSquashing;
-        toNextCycle->diewc2diewc.squash = false;
+
+        // toNextCycle->diewc2diewc.squash = false;
+        // toNextCycle->diewc2diewc.pc = fromLastCycle->diewc2diewc.pc;
+        // does not override if there is another squashing this cycle
 
         // todo: following LOCs will cause loop?
         // toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
@@ -966,8 +980,6 @@ void FFDIEWC<Impl>::handleSquash() {
             ++branchMispredicts;
         }
 
-        toNextCycle->diewc2diewc.pc =
-                fromLastCycle->diewc2diewc.pc;
     }
 }
 
@@ -1037,6 +1049,7 @@ void FFDIEWC<Impl>::squashAll() {
     toNextCycle->diewc2diewc.mispredictInst = nullptr;
     toNextCycle->diewc2diewc.squashInst = nullptr;
     toNextCycle->diewc2diewc.pc = pc;
+    DPRINTF(IEW, "toNextCycle PC: %s.\n", pc);
 }
 
 template<class Impl>
@@ -1361,6 +1374,7 @@ void FFDIEWC<Impl>::checkMisprediction(DynInstPtr &inst)
         toNextCycle->diewc2diewc.squashedSeqNum > inst->seqNum) {
 
         if (inst->mispredicted()) {
+            panic("unexpected mispredicted mem ref\n");
             fetchRedirect = true;
 
             DPRINTF(IEW, "Execute: Branch mispredict detected.\n");
@@ -1393,6 +1407,7 @@ void FFDIEWC<Impl>::squashDueToBranch(DynInstPtr &inst)
         TheISA::PCState pc = inst->pcState();
         TheISA::advancePC(pc, inst->staticInst);
         toNextCycle->diewc2diewc.pc = pc;
+        DPRINTF(IEW, "toNextCycle PC: %s.\n", pc);
 
         toNextCycle->diewc2diewc.mispredictInst = inst;
         toNextCycle->diewc2diewc.squashInst = inst;
@@ -1656,9 +1671,14 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
         inst->setCanCommit();
     }
 
-    if (!fetchRedirect ||
+    if ((!fetchRedirect ||
         !toNextCycle->diewc2diewc.squash ||
-        toNextCycle->diewc2diewc.squashedSeqNum > inst->seqNum) {
+        toNextCycle->diewc2diewc.squashedSeqNum > inst->seqNum)
+        // this squash is more primary that one found in this cycle
+        && (!fromLastCycle->diewc2diewc.squash ||
+            fromLastCycle->diewc2diewc.squashedSeqNum > inst->seqNum)
+        // this squash is more primary that one found in last cycle
+        ) {
 
         // Prevent testing for misprediction on load instructions,
         // that have not been executed.
@@ -1743,6 +1763,7 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &inst)
         toNextCycle->diewc2diewc.squashedSeqNum = inst->seqNum;
         toNextCycle->diewc2diewc.squashedPointer = inst->dqPosition;
         toNextCycle->diewc2diewc.pc = inst->pcState();
+        DPRINTF(IEW, "toNextCycle PC: %s.\n", pc);
         toNextCycle->diewc2diewc.mispredictInst = nullptr;
 
         // Must include the memory violator in the squash.

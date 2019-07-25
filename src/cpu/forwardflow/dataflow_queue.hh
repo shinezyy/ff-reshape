@@ -30,7 +30,13 @@ public:
 
     typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
 
+    typedef typename Impl::CPUPol CPUPolicy;
+
 private:
+    typedef typename CPUPolicy::DataflowQueues DQ;
+
+    DQ *dq;
+
     const unsigned nOps{4};
 
     const unsigned depth;
@@ -63,12 +69,13 @@ private:
 
     unsigned tail;
 
+
 public:
     void advanceTail();
 
     void setTail(unsigned t);
 
-    explicit DataflowQueueBank(DerivFFCPUParams *params, unsigned bankID);
+    explicit DataflowQueueBank(DerivFFCPUParams *params, unsigned bankID, DQ *dq);
 
     bool canServeNew();
 

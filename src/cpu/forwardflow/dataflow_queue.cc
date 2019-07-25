@@ -114,8 +114,11 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
     for (unsigned op = 0; op < nOps; op++) {
         auto &ptr = pointers[op];
         if (!ptr.valid) continue;
-        if (!instArray.at(ptr.index)) {
+        if (!instArray.at(ptr.index) || instArray.at(ptr.index)->isSquashed()) {
             DPRINTF(DQWake, "Wakeup ignores null inst @%d\n", ptr.index);
+            if (anyPending) {
+                ptr.valid = false;
+            }
             continue;
         }
 
@@ -125,6 +128,9 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         if (op == 0 && !(ptr.wkType == WKPointer::WKMem)) {
             DPRINTF(DQWake, "Wakeup ignores op wakeup pointer to Dest\n");
+            if (anyPending) {
+                ptr.valid = false;
+            }
             continue;
         }
 
@@ -136,6 +142,9 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         } else { //  if (ptr.wkType == WKPointer::WKOp)
             inst->opReady[ptr.op] = true;
+            if (op != 0) {
+                inst->setSrcValue(op - 1, dq->readReg(inst->getSrcPointer(op - 1)));
+            }
 
             if (nearlyWakeup[ptr.index]) {
                 DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
@@ -279,8 +288,10 @@ void DataflowQueueBank<Impl>::checkPending()
 }
 
 template<class Impl>
-DataflowQueueBank<Impl>::DataflowQueueBank(DerivFFCPUParams *params, unsigned bankID)
-        : nOps(params->numOperands),
+DataflowQueueBank<Impl>::DataflowQueueBank(
+        DerivFFCPUParams *params, unsigned bankID, DQ *dq)
+        : dq(dq),
+          nOps(params->numOperands),
           depth(params->DQDepth),
           nullDQPointer(DQPointer{false, 0, 0, 0, 0}),
           instArray(depth, nullptr),
@@ -438,6 +449,8 @@ void DataflowQueues<Impl>::tick()
     //      to wake up the child one cycle before its value arrived
 
     DPRINTF(DQ, "FU selecting ready insts from banks\n");
+    DPRINTF(DQWake, "FU req packets:\n");
+    dumpInstPackets(fu_req_ptrs);
     fu_granted_ptrs = bankFUNet.select(fu_req_ptrs);
     for (unsigned b = 0; b < nBanks; b++) {
         assert(fu_granted_ptrs[b]);
@@ -677,7 +690,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         fuWrappers[b].fillMyBitMap(fuGroupCaps, b);
         fuWrappers[b].setDQ(this);
 
-        dqs.push_back(XDataflowQueueBank(params, b));
+        dqs.push_back(XDataflowQueueBank(params, b, this));
     }
     memDepUnit.init(params, DummyTid);
     memDepUnit.setIQ(this);
@@ -1204,10 +1217,10 @@ void DataflowQueues<Impl>::dumpInstPackets(vector<DQPacket<DynInstPtr> *> &v)
 {
     for (auto& pkt: v) {
         assert(pkt);
-        DPRINTF(DQOmega, "&pkt: %p, ", pkt);
-        DPRINTFR(DQOmega, "v: %d, dest: %lu, src: %d,",
+        DPRINTF(DQWake, "&pkt: %p, ", pkt);
+        DPRINTFR(DQWake, "v: %d, dest: %lu, src: %d,",
                 pkt->valid, pkt->destBits.to_ulong(), pkt->source);
-        DPRINTFR(DQOmega, " inst: %p\n", pkt->payload);
+        DPRINTFR(DQWake, " inst: %p\n", pkt->payload);
     }
 }
 

@@ -389,6 +389,10 @@ class BaseDynInst : public ExecContext, public RefCounted
     {
         _srcInstPointer[idx] = renamed_src;
     }
+    DQPointer getSrcPointer(int idx)
+    {
+        return _srcInstPointer[idx];
+    }
 
     void trackSrcInst(int idx, DQPointer ptr)
     {
@@ -602,6 +606,15 @@ class BaseDynInst : public ExecContext, public RefCounted
         if (!instResult.empty()) {
             InstResult t = instResult.front();
             instResult.pop();
+            return t;
+        }
+        return dflt;
+    }
+
+    InstResult getResult(InstResult dflt = InstResult())
+    {
+        if (!instResult.empty()) {
+            InstResult t = instResult.front();
             return t;
         }
         return dflt;
@@ -895,9 +908,9 @@ class BaseDynInst : public ExecContext, public RefCounted
     { return cpu->getCpuAddrMonitor(threadNumber); }
 
   public:
-    // void incref() override;
+     void incref() override;
 
-    // void decref() override;
+     void decref() override;
 };
 
 template<class Impl>

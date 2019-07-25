@@ -89,6 +89,7 @@ if 'FFCPU' in env['CPU_MODELS']:
     DebugFlag('FFSquash')
     DebugFlag('FFInit')
     DebugFlag('FFReg')
+    DebugFlag('FFExec')
     DebugFlag('FFLSQ')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',

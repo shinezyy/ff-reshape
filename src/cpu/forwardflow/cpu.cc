@@ -59,6 +59,7 @@
 #include "debug/Drain.hh"
 #include "debug/FFCPU.hh"
 #include "debug/FFCommit.hh"
+#include "debug/FFExec.hh"
 #include "debug/FFInit.hh"
 #include "debug/FFSquash.hh"
 #include "debug/Quiesce.hh"
@@ -1530,18 +1531,21 @@ FFCPU<Impl>::updateThreadPriority()
 template<class Impl>
 uint64_t FFCPU<Impl>::readIntReg(DQPointer ptr) {
     FFRegValue val = dq->readReg(ptr);
+    DPRINTF(FFExec, "Reading op %llu\n", val.i);
     return val.i;
 }
 
 template<class Impl>
 double FFCPU<Impl>::readFloatReg(DQPointer ptr) {
     FFRegValue val = dq->readReg(ptr);
+    DPRINTF(FFExec, "Reading op %f\n", val.f);
     return val.f;
 }
 
 template<class Impl>
 uint64_t FFCPU<Impl>::readFloatRegBits(DQPointer ptr) {
     FFRegValue val = dq->readReg(ptr);
+    DPRINTF(FFExec, "Reading op %llu\n", val.i);
     return val.i;
 }
 
