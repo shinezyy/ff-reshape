@@ -734,6 +734,10 @@ FFDIEWC<Impl>::commitInsts()
             num_committed++;
             if (!dq.isEmpty()) {
                 dq.tryFastCleanup();
+                if (!dq.validPosition(oldestForwarded)) {
+                    // 反正clean up之后有很多空位，不及时commit也无所谓
+                    oldestForwarded = dq.getTailPtr();
+                }
             }
             break;
         }

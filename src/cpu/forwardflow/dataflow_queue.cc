@@ -944,6 +944,10 @@ void DataflowQueues<Impl>::setReg(DQPointer ptr, FFRegValue val)
 template<class Impl>
 void DataflowQueues<Impl>::addReadyMemInst(DynInstPtr inst)
 {
+    if (inst->isSquashed()) {
+        DPRINTF(DQWake, "Cancel replaying mem inst[%llu] because it was squashed\n", inst->seqNum);
+        return;
+    }
     DPRINTF(DQWake, "Replaying mem inst[%llu]\n", inst->seqNum);
     WKPointer wk(inst->dqPosition);
     wk.wkType = WKPointer::WKMem;
@@ -1520,6 +1524,7 @@ void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
         DPRINTF(DQWake, "Mark itself[%llu] (%i) (%i %i) (%i) ready\n",
                 inst->seqNum, p.valid, p.bank, p.index, p.op);
         inst->opReady[0] = true;
+        completeMemInst(inst);
     }
 }
 
