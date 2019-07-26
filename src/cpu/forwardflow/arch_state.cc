@@ -111,8 +111,11 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                 m.bank, m.index, m.op);
     }
 
-    if (inst->isControl()) {
+    if (inst->isControl() ||
+            (diewc->cptHint &&
+            diewc->toCheckpoint == inst->pcState())) {
         takeCheckpoint(inst);
+//        diewc->cptHint = false;
     }
 
     return pairs;
@@ -190,7 +193,7 @@ void ArchState<Impl>::recoverCPT(InstSeqNum &num)
 
     auto it = cpts.begin();
     while (it != cpts.end()) {
-        if (it->first >= num) {
+        if (it->first > num) {
             it = cpts.erase(it);
         } else {
             it++;
@@ -314,10 +317,19 @@ InstSeqNum ArchState<Impl>::getYoungestCPTBefore(InstSeqNum violator)
             youngest = it.first;
         }
     }
-    if (!youngest) {
-        panic("This case makes me feel really panic...\n");
-    }
     return youngest;
+}
+
+template<class Impl>
+void ArchState<Impl>::squashAll()
+{
+    cpts.clear();
+    renameMap.clear();
+    parentMap.clear();
+    reverseTable.clear();
+    for (auto &pair: scoreboard) {
+        pair.second = true;
+    }
 }
 
 }

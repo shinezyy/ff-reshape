@@ -458,6 +458,8 @@ struct TimeBufStruct {
         bool canCommit[Impl::MaxWidth];
 
         bool includeSquashInst;
+
+        bool squashAll;
     };
 
     DIEWC2DIEWC diewc2diewc;

@@ -103,6 +103,8 @@ public:
     void setDIEWC(DIEWC *_diewc);
 
     InstSeqNum getYoungestCPTBefore(InstSeqNum violator);
+
+    void squashAll();
 };
 
 }

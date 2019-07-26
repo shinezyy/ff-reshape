@@ -2,7 +2,6 @@
 // Created by zyy on 19-6-11.
 //
 #include "cpu/forwardflow/diewc.hh"
-
 #include "arch/utility.hh"
 #include "cpu/forwardflow/arch_state.hh"
 #include "cpu/forwardflow/store_set.hh"
@@ -947,41 +946,50 @@ void FFDIEWC<Impl>::handleSquash() {
                     fromLastCycle->diewc2diewc.squashedSeqNum);
         }
 
-        InstSeqNum squashed_inst = fromLastCycle->diewc2diewc.squashedSeqNum;
-
-        if (fromLastCycle->diewc2diewc.includeSquashInst) {
-            squashed_inst--;
-        }
-
-        youngestSeqNum = squashed_inst;
-        auto p = fromLastCycle->diewc2diewc.squashedPointer;
-        DPRINTF(FFSquash, "Olddest inst ptr to squash: (%i %i)\n", p.bank, p.index);
-        dq.squash(fromLastCycle->diewc2diewc.squashedPointer, false , false);
         toAllocation->diewcInfo.usedDQ = true;
-        archState.recoverCPT(squashed_inst);
         changedDQNumEntries = true;
-
         commitStatus = DQSquashing;
 
-        // toNextCycle->diewc2diewc.squash = false;
-        // toNextCycle->diewc2diewc.pc = fromLastCycle->diewc2diewc.pc;
-        // does not override if there is another squashing this cycle
 
-        // todo: following LOCs will cause loop?
-        // toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
-        // toNextCycle->diewc2diewc.squash = true;
-        // toNextCycle->diewc2diewc.dqSquashing = true;
-        // toNextCycle->diewc2diewc.mispredictInst =
-        //         fromLastCycle->diewc2diewc.mispredictInst;
-        // toNextCycle->diewc2diewc.branchTaken =
-        //         fromLastCycle->diewc2diewc.branchTaken;
-        // toNextCycle->diewc2diewc.squashInst = dq.findInst(squashed_inst);
+        if (!fromLastCycle->diewc2diewc.squashAll) {
+            InstSeqNum squashed_inst = fromLastCycle->diewc2diewc.squashedSeqNum;
 
-        if (toNextCycle->diewc2diewc.mispredictInst) {
-            if (toNextCycle->diewc2diewc.mispredictInst->isUncondCtrl()) {
-                toNextCycle->diewc2diewc.branchTaken = true;
+            if (fromLastCycle->diewc2diewc.includeSquashInst) {
+                squashed_inst--;
             }
-            ++branchMispredicts;
+
+            youngestSeqNum = squashed_inst;
+            auto p = fromLastCycle->diewc2diewc.squashedPointer;
+            DPRINTF(FFSquash, "Olddest inst ptr to squash: (%i %i)\n", p.bank, p.index);
+            dq.squash(fromLastCycle->diewc2diewc.squashedPointer, false, false);
+            archState.recoverCPT(squashed_inst);
+
+            // toNextCycle->diewc2diewc.squash = false;
+            // toNextCycle->diewc2diewc.pc = fromLastCycle->diewc2diewc.pc;
+            // does not override if there is another squashing this cycle
+
+            // todo: following LOCs will cause loop?
+            // toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
+            // toNextCycle->diewc2diewc.squash = true;
+            // toNextCycle->diewc2diewc.dqSquashing = true;
+            // toNextCycle->diewc2diewc.mispredictInst =
+            //         fromLastCycle->diewc2diewc.mispredictInst;
+            // toNextCycle->diewc2diewc.branchTaken =
+            //         fromLastCycle->diewc2diewc.branchTaken;
+            // toNextCycle->diewc2diewc.squashInst = dq.findInst(squashed_inst);
+
+            if (toNextCycle->diewc2diewc.mispredictInst) {
+                if (toNextCycle->diewc2diewc.mispredictInst->isUncondCtrl()) {
+                    toNextCycle->diewc2diewc.branchTaken = true;
+                }
+                ++branchMispredicts;
+            }
+        } else {
+            DPRINTF(FFSquash, "Squashing all!\n");
+            DQPointer dont_care;
+            bool dont_care_either = false;
+            dq.squash(dont_care, true, dont_care_either);
+            archState.squashAll();
         }
 
     }
@@ -1039,21 +1047,22 @@ void FFDIEWC<Impl>::squashAll() {
             lastCommitedSeqNum : dq.getTail()->seqNum - 1;
 
     youngestSeqNum = lastCommitedSeqNum;
-    DQPointer dont_care;
-    bool dont_care_either = false;
-    dq.squash(dont_care, true, dont_care_either);
+
     toAllocation->diewcInfo.usedDQ = true;
 
     changedDQNumEntries = true;
 
+    commitStatus = DQSquashing; // to prevent pc from advancing
+
     toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
     toNextCycle->diewc2diewc.donePointer = dq.getTail()->dqPosition;
     toNextCycle->diewc2diewc.squash = true;
-    toNextCycle->diewc2diewc.dqSquashing = true;
+//    toNextCycle->diewc2diewc.dqSquashing = true;
     toNextCycle->diewc2diewc.mispredictInst = nullptr;
     toNextCycle->diewc2diewc.squashInst = nullptr;
     toNextCycle->diewc2diewc.pc = pc;
-    DPRINTF(IEW, "toNextCycle PC: %s.\n", pc);
+    toNextCycle->diewc2diewc.squashAll = true;
+    DPRINTF(IEW, "SquashAll toNextCycle PC: %s.\n", pc);
 }
 
 template<class Impl>
@@ -1725,7 +1734,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
             dq.violation(inst, violator);
 
             // Squash.
-            squashDueToMemOrder(violator);
+            squashDueToMemOrder(inst, violator);
 
             ++memOrderViolationEvents;
         }
@@ -1750,10 +1759,10 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &inst)
+void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator)
 {
     DPRINTF(DIEWC, "Memory violation, squashing violator and younger "
-                 "insts, PC: %s [sn:%i].\n", inst->pcState(), inst->seqNum);
+                 "insts, PC: %s [sn:%i].\n", violator->pcState(), violator->seqNum);
     // Need to include inst->seqNum in the following comparison to cover the
     // corner case when a branch misprediction and a memory violation for the
     // same instruction (e.g. load PC) are detected in the same cycle.  In this
@@ -1761,30 +1770,45 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &inst)
     // misprediction because it requires the violator itself to be included in
     // the squash.
     if ((!toNextCycle->diewc2diewc.squash ||
-        inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum) //more primary than that found in this cyle
+        violator->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum) //more primary than that found in this cyle
         && (!fromLastCycle->diewc2diewc.squash ||
-        inst->seqNum <= fromLastCycle->diewc2diewc.squashedSeqNum) //more primary than that found in last cyle
+        violator->seqNum <= fromLastCycle->diewc2diewc.squashedSeqNum) //more primary than that found in last cyle
         ) {
 
-        InstSeqNum youngest_cpted_inst_seq = archState.getYoungestCPTBefore(inst->seqNum);
+        if (victim->pcState() != toCheckpoint) {
+            cptHint = false;
+        }
 
-        toNextCycle->diewc2diewc.squash = true;
+        InstSeqNum youngest_cpted_inst_seq = archState.getYoungestCPTBefore(violator->seqNum);
 
-        toNextCycle->diewc2diewc.doneSeqNum = youngest_cpted_inst_seq - 1;
-        toNextCycle->diewc2diewc.squashedSeqNum = youngest_cpted_inst_seq;
-        DynInstPtr innocent_victim = dq.findBySeq(youngest_cpted_inst_seq);
-        toNextCycle->diewc2diewc.squashedPointer = innocent_victim->dqPosition;
+        if (!youngest_cpted_inst_seq) {
+            squashAll();
+            cptHint = true;
+            toCheckpoint = victim->pcState();
+            DPRINTF(FFSquash, "Hint to checkpoint on pc: %s next time\n",
+                    toCheckpoint);
 
-        toNextCycle->diewc2diewc.pc = innocent_victim->pcState();
-        DPRINTF(IEW, "Will replay from inst[%llu].\n", innocent_victim->seqNum);
-        DPRINTF(IEW, "toNextCycle PC: %s.\n", innocent_victim->pcState());
-        toNextCycle->diewc2diewc.mispredictInst = nullptr;
+        } else {
+            toNextCycle->diewc2diewc.squash = true;
 
-        // Must include the memory violator in the squash.
-        // todo: nope this is not true in forward flow
-        toNextCycle->diewc2diewc.includeSquashInst = false;
+            toNextCycle->diewc2diewc.doneSeqNum = youngest_cpted_inst_seq - 1;
+            toNextCycle->diewc2diewc.squashedSeqNum = youngest_cpted_inst_seq;
+            DynInstPtr innocent_victim = dq.findBySeq(youngest_cpted_inst_seq);
+            toNextCycle->diewc2diewc.squashedPointer = innocent_victim->dqPosition;
 
-        wroteToTimeBuffer = true;
+            auto npc = innocent_victim->pcState();
+            TheISA::advancePC(npc, innocent_victim->staticInst);
+            toNextCycle->diewc2diewc.pc = npc;
+            DPRINTF(IEW, "Will replay after inst[%llu].\n", innocent_victim->seqNum);
+            DPRINTF(IEW, "toNextCycle PC: %s.\n", npc);
+            toNextCycle->diewc2diewc.mispredictInst = nullptr;
+
+            // Must include the memory violator in the squash.
+            // todo: nope this is not true in forward flow
+            toNextCycle->diewc2diewc.includeSquashInst = false;
+
+            wroteToTimeBuffer = true;
+        }
     }
 }
 

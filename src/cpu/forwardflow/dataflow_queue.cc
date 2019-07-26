@@ -966,6 +966,7 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
         tail = 0;
         memDepUnit.squash(0, DummyTid);
         diewc->DQPointerJumped = true;
+        cpu->removeInstsUntil(0, DummyTid);
         return;
     }
 

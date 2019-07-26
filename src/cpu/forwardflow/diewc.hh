@@ -418,7 +418,7 @@ public:
 
     void executeInst(DynInstPtr &inst);
 
-    void squashDueToMemOrder(DynInstPtr &inst);
+    void squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator);
 
 private:
     void sendBackwardInfo();
@@ -433,6 +433,10 @@ public:
     InstSeqNum getOldestFw();
 
     bool DQPointerJumped;
+
+    TheISA::PCState toCheckpoint;
+
+    bool cptHint;
 };
 
 
