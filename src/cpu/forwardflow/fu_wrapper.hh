@@ -134,6 +134,8 @@ public:
 
     void fillMyBitMap(std::vector<std::vector<bool>> &v, unsigned bank);
 
+    void fillLatTable(std::unordered_map<OpClass, unsigned> &v);
+
     const std::string name() { return _name;}
 
     std::string _name;

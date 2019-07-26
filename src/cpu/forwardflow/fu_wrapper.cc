@@ -42,7 +42,8 @@ bool FUWrapper<Impl>::canServe(DynInstPtr &inst) {
 }
 
 template<class Impl>
-bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
+bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
+{
 
     auto lat = opLat[inst->opClass()];
     SingleFUWrapper &wrapper = wrappers[inst->opClass()];
@@ -54,6 +55,32 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
     DPRINTF(FUW, "Consuming inst[%d]\n", inst->seqNum);
 
     DQPointer &dest = inst->pointers[0];
+
+    DQPointer to_wake{};
+    to_wake.valid = false;
+
+    if (dest.valid) {
+        if (!inst->isLoad()) {
+            DPRINTFR(FUW, "to wake up (%i) (%i %i) (%i)\n",
+                     dest.valid, dest.bank, dest.index, dest.op);
+            to_wake = dest;
+        } else {
+            DPRINTFR(FUW, "(let loads forget) to wake up (%i) (%i %i) (%i)\n",
+                     dest.valid, dest.bank, dest.index, dest.op);
+        }
+    } else if (inst->numDestRegs() > 0) {
+        if (!inst->isLoad()) {
+            to_wake = inst->dqPosition;
+            inst->destReforward = true;
+            DPRINTFR(FUW, "to wake up itself "
+                          " who has children but not dispatched yet\n");
+        } else {
+            DPRINTFR(FUW, "(let loads forget) to wake up invalid ptr (%i) (%i %i) (%i)\n",
+                     dest.valid, dest.bank, dest.index, dest.op);
+        }
+    } else {
+        DPRINTFR(FUW, "but wake up nobody\n");
+    }
 
     // schedule wake up
     if (wrapper.isSingleCycle) {
@@ -68,34 +95,11 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
         // schedule wb port
         assert(!wbScheduled[0]);
         wbScheduled[0] = true;
+        wrapper.oneCyclePointer = to_wake;
 
-        DPRINTF(FUW, "Add inst[%i] into 1-cycle wrapper (%i, %i)",
+        DPRINTF(FUW, "Add inst[%i] into 1-cycle wrapper (%i, %i)\n",
                 inst->seqNum, wrapperID, inst->opClass());
-        if (dest.valid) {
-            if (!inst->isLoad()) {
-                DPRINTFR(FUW,"to wake up (%i) (%i %i) (%i)\n",
-                         dest.valid, dest.bank, dest.index, dest.op);
-                wrapper.oneCyclePointer = dest;
-            } else {
-                DPRINTFR(FUW,"(let loads forget) to wake up (%i) (%i %i) (%i)\n",
-                         dest.valid, dest.bank, dest.index, dest.op);
-                wrapper.oneCyclePointer.valid = false;
-            }
-        } else if (inst->numDestRegs() > 0) {
-            if (!inst->isLoad()) {
-                wrapper.oneCyclePointer = inst->dqPosition;
-                inst->destReforward = true;
-                DPRINTFR(FUW, "to wake up itself "
-                              " who has children but not dispatched yet\n");
-            } else {
-                DPRINTFR(FUW,"(let loads forget) to wake up invalid ptr (%i) (%i %i) (%i)\n",
-                         dest.valid, dest.bank, dest.index, dest.op);
-                wrapper.oneCyclePointer.valid = false;
-            }
-        } else {
-            DPRINTFR(FUW,"but wake up nobody\n");
-            wrapper.oneCyclePointer.valid = false;
-        }
+
 
     } else if (wrapper.isPipelined) {
         // schedule wb port
@@ -104,7 +108,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
 
         DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will push\n",
                 wrapperID, inst->opClass(), wrapper.pipelineQueue.size());
-        wrapper.pipelineQueue.push({true, dest, inst->seqNum});
+        wrapper.pipelineQueue.push({true, to_wake, inst->seqNum});
 
         assert(!wrapper.writtenThisCycle);
         wrapper.writtenThisCycle = true;
@@ -118,7 +122,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst) {
 
         wrapper.toNextCycle->hasPendingInst = true;
         wrapper.toNextCycle->seq = inst->seqNum;
-        wrapper.toNextCycle->longLatencyPointer = dest;
+        wrapper.toNextCycle->longLatencyPointer = to_wake;
         wrapper.toNextCycle->cycleLeft = opLat[inst->opClass()];
 
         DPRINTF(FUW, "add inst[%i] into LL wrapper (%i, %i)\n",
@@ -369,6 +373,17 @@ void FUWrapper<Impl>::fillMyBitMap(std::vector<std::vector<bool>> &v,
 {
     for (unsigned i = 0; i < Num_OpClasses; i++) {
         v[i][bank] = capabilityList[i];
+    }
+}
+
+template<class Impl>
+void FUWrapper<Impl>::fillLatTable(std::unordered_map<OpClass, unsigned> &v)
+{
+    for (unsigned i = 0; i < Num_OpClasses; i++) {
+        auto opc = static_cast<OpClass>(i);
+        if (capabilityList[i] && !v.count(opc)) {
+            v[opc] = opLat[i];
+        }
     }
 }
 

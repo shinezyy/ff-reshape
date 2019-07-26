@@ -12,6 +12,7 @@
 #include "debug/DQWrite.hh"  // DQ write
 #include "debug/FFCommit.hh"
 #include "debug/FFSquash.hh"
+#include "debug/FUW.hh"
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
 
@@ -416,8 +417,6 @@ void DataflowQueueBank<Impl>::printTail()
 template<class Impl>
 void DataflowQueues<Impl>::tick()
 {
-    cycleStart();
-
     // fu preparation
     for (auto &wrapper: fuWrappers) {
         wrapper.startCycle();
@@ -459,13 +458,15 @@ void DataflowQueues<Impl>::tick()
         }
         DynInstPtr &inst = fu_granted_ptrs[b]->payload;
 
-        DPRINTF(DQWake, "Inst[%d] selected\n", inst->seqNum);
+        DPRINTF(DQWake, "Inst[%d] selected by fu%u\n", inst->seqNum, b);
 
         bool can_accept = fuWrappers[b].canServe(inst);
         if (can_accept) {
             fu_req_granted[fu_granted_ptrs[b]->source] = true;
             fuWrappers[b].consume(inst);
             dqs[fu_granted_ptrs[b]->source].clearPending();
+        } else if (opLat[inst->opClass()] > 1){
+            llBlockedNext = true;
         }
     }
 
@@ -610,6 +611,11 @@ void DataflowQueues<Impl>::cycleStart()
     for (auto &bank: dqs) {
         bank.cycleStart();
     }
+    llBlocked = llBlockedNext;
+    llBlockedNext = false;
+    if (llBlocked) {
+        DPRINTF(FUW, "ll blocked last cycle\n");
+    }
 }
 
 template<class Impl>
@@ -688,9 +694,11 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         fuWrappers[b].init(fuPool->fw, b);
         // initiate fu bit map here
         fuWrappers[b].fillMyBitMap(fuGroupCaps, b);
+        fuWrappers[b].fillLatTable(opLat);
         fuWrappers[b].setDQ(this);
 
         dqs.push_back(XDataflowQueueBank(params, b, this));
+        fuPointer[b] = b;
     }
     memDepUnit.init(params, DummyTid);
     memDepUnit.setIQ(this);
@@ -731,11 +739,17 @@ DataflowQueues<Impl>::coordinateFU(
         DataflowQueues::DynInstPtr &inst, unsigned bank)
 {
     // find another FU group with desired capability.
+    DPRINTF(FUW, "Coordinating bank %u with llb:%i\n", bank, llBlocked);
     if (llBlocked) {
         auto fu_bitmap = fuGroupCaps[inst->opClass()];
         do {
             fuPointer[bank] = (fuPointer[bank] + 1) % nBanks;
         } while (!fu_bitmap[fuPointer[bank]]);
+        DPRINTF(FUW, "switch to req fu %u\n", fuPointer[bank]);
+
+    } else if (opLat[inst->opClass()] == 1) {
+        fuPointer[bank] = bank;
+        DPRINTF(FUW, "reset to origin\n");
     }
     return uint2Bits(fuPointer[bank]);
 }

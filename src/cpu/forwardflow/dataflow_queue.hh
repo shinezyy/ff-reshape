@@ -208,6 +208,8 @@ private:
     boost::dynamic_bitset<> coordinateFU(DynInstPtr &inst, unsigned bank);
 
     std::vector<std::vector<bool>> fuGroupCaps;
+    std::unordered_map<OpClass, unsigned> opLat;
+
     std::vector<unsigned> fuPointer;
     bool llBlocked;
     bool llBlockedNext;
