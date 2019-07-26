@@ -304,6 +304,22 @@ ArchState<Impl>::commitInstInSB(
     }
 }
 
+template<class Impl>
+InstSeqNum ArchState<Impl>::getYoungestCPTBefore(InstSeqNum violator)
+{
+    InstSeqNum youngest = 0;
+    for (const auto& it: cpts) {
+        DPRINTFR(FFSquash, "Traverse cpt: %llu\n", it.first);
+        if (it.first < violator && it.first > youngest) {
+            youngest = it.first;
+        }
+    }
+    if (!youngest) {
+        panic("This case makes me feel really panic...\n");
+    }
+    return youngest;
+}
+
 }
 
 #include "cpu/forwardflow/isa_specific.hh"

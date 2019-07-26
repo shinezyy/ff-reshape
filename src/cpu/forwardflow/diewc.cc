@@ -1756,18 +1756,29 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &inst)
     // case the memory violator should take precedence over the branch
     // misprediction because it requires the violator itself to be included in
     // the squash.
-    if (!toNextCycle->diewc2diewc.squash ||
-        inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum) {
+    if ((!toNextCycle->diewc2diewc.squash ||
+        inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum) //more primary than that found in this cyle
+        && (!fromLastCycle->diewc2diewc.squash ||
+        inst->seqNum <= fromLastCycle->diewc2diewc.squashedSeqNum) //more primary than that found in last cyle
+        ) {
+
+        InstSeqNum youngest_cpted_inst_seq = archState.getYoungestCPTBefore(inst->seqNum);
+
         toNextCycle->diewc2diewc.squash = true;
 
-        toNextCycle->diewc2diewc.squashedSeqNum = inst->seqNum;
-        toNextCycle->diewc2diewc.squashedPointer = inst->dqPosition;
-        toNextCycle->diewc2diewc.pc = inst->pcState();
-        DPRINTF(IEW, "toNextCycle PC: %s.\n", pc);
+        toNextCycle->diewc2diewc.doneSeqNum = youngest_cpted_inst_seq - 1;
+        toNextCycle->diewc2diewc.squashedSeqNum = youngest_cpted_inst_seq;
+        DynInstPtr innocent_victim = dq.findBySeq(youngest_cpted_inst_seq);
+        toNextCycle->diewc2diewc.squashedPointer = innocent_victim->dqPosition;
+
+        toNextCycle->diewc2diewc.pc = innocent_victim->pcState();
+        DPRINTF(IEW, "Will replay from inst[%llu].\n", innocent_victim->seqNum);
+        DPRINTF(IEW, "toNextCycle PC: %s.\n", innocent_victim->pcState());
         toNextCycle->diewc2diewc.mispredictInst = nullptr;
 
         // Must include the memory violator in the squash.
-        toNextCycle->diewc2diewc.includeSquashInst = true;
+        // todo: nope this is not true in forward flow
+        toNextCycle->diewc2diewc.includeSquashInst = false;
 
         wroteToTimeBuffer = true;
     }

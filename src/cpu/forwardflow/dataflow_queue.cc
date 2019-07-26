@@ -1591,6 +1591,19 @@ typename Impl::DynInstPtr DataflowQueues<Impl>::getBlockedMemInst()
     }
 }
 
+template<class Impl>
+typename Impl::DynInstPtr DataflowQueues<Impl>::findBySeq(InstSeqNum seq)
+{
+    for (unsigned u = tail; logicallyLET(u, head); u = inc(u)) {
+        auto p = uint2Pointer(u);
+        auto inst = dqs[p.bank].readInstsFromBank(p);
+        if (inst && inst->seqNum == seq) {
+            return inst;
+        }
+    }
+    panic("It must be it DQ!\n");
+}
+
 }
 
 #include "cpu/forwardflow/isa_specific.hh"

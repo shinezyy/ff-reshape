@@ -101,6 +101,8 @@ public:
     const std::string name() {return "arch_state";}
 
     void setDIEWC(DIEWC *_diewc);
+
+    InstSeqNum getYoungestCPTBefore(InstSeqNum violator);
 };
 
 }

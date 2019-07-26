@@ -874,9 +874,10 @@ DefaultFetch<Impl>::squash(const TheISA::PCState &newPC,
                            const InstSeqNum seq_num, DynInstPtr squashInst,
                            ThreadID tid)
 {
-    DPRINTF(Fetch, "Squash from commit on inst[%llu] PC: %s\n",
-            squashInst->seqNum, squashInst->pcState());
-
+    if (squashInst) {
+        DPRINTF(Fetch, "Squash from commit on inst[%llu] PC: %s\n",
+                squashInst->seqNum, squashInst->pcState());
+    }
     doSquash(newPC, squashInst, tid);
 
     // Tell the CPU to remove any instructions that are not in the ROB.

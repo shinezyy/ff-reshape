@@ -386,6 +386,8 @@ public:
     void wakeMemRelated(DynInstPtr &inst);
 
     void completeMemInst(DynInstPtr &inst);
+
+    DynInstPtr findBySeq(InstSeqNum seq);
 };
 
 }
