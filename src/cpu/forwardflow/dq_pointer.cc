@@ -5,7 +5,7 @@
 #include "dq_pointer.hh"
 
 
-DQPointer::DQPointer(WKPointer &wk)
+DQPointer::DQPointer(const WKPointer &wk)
 {
     valid = wk.valid;
     group = wk.group;
@@ -14,14 +14,14 @@ DQPointer::DQPointer(WKPointer &wk)
     op = wk.op;
 }
 
-DQPointer::DQPointer(WKPointer wk)
-{
-    valid = wk.valid;
-    group = wk.group;
-    bank = wk.bank;
-    index = wk.index;
-    op = wk.op;
-}
+// DQPointer::DQPointer(WKPointer &&wk)
+// {
+//     valid = wk.valid;
+//     group = wk.group;
+//     bank = wk.bank;
+//     index = wk.index;
+//     op = wk.op;
+// }
 
 DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o)
 {

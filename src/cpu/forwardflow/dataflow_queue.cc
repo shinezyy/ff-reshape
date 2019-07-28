@@ -3,7 +3,6 @@
 //
 
 #include "cpu/forwardflow/dataflow_queue.hh"
-#include "dataflow_queue.hh"
 #include "debug/DQ.hh"
 #include "debug/DQB.hh"  // DQ bank
 #include "debug/DQOmega.hh"
@@ -11,6 +10,7 @@
 #include "debug/DQWake.hh"  // DQ wakeup
 #include "debug/DQWrite.hh"  // DQ write
 #include "debug/FFCommit.hh"
+#include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FUW.hh"
 #include "params/DerivFFCPU.hh"
@@ -144,7 +144,11 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         } else { //  if (ptr.wkType == WKPointer::WKOp)
             inst->opReady[ptr.op] = true;
             if (op != 0) {
-                inst->setSrcValue(op - 1, dq->readReg(inst->getSrcPointer(op - 1)));
+
+                FFRegValue v = dq->readReg(inst->getSrcPointer(op - 1), DQPointer(ptr));
+                DPRINTF(FFExec, "Setting src reg[%i] of inst[%llu] to %llu\n",
+                        op-1, inst->seqNum, v.i);
+                inst->setSrcValue(op - 1, v);
             }
 
             if (nearlyWakeup[ptr.index]) {
@@ -913,24 +917,42 @@ bool DataflowQueues<Impl>::fwPointerQueueClogging() const
 }
 
 template<class Impl>
-FFRegValue DataflowQueues<Impl>::readReg(DQPointer ptr)
+FFRegValue DataflowQueues<Impl>::readReg(const DQPointer &src, const DQPointer &dest)
 {
-    auto b = ptr.bank;
-    auto inst = dqs[b].readInstsFromBank(ptr);
+    auto b = src.bank;
     FFRegValue result;
-    if (inst && inst->isExecuted()) {
+
+    bool readFromCommitted;
+
+    if (!validPosition(pointer2uint(src))) {
+        // src is committed
+        readFromCommitted = true;
+
+    } else if (logicallyLT(pointer2uint(src), pointer2uint(dest))) {
+        // src is not committed yet
+        readFromCommitted = false;
+
+    } else {
+        // src is committed and newer inst has occupied its position
+        readFromCommitted = true;
+    }
+
+    if (!readFromCommitted) {
+        auto inst = dqs[b].readInstsFromBank(src);
+        assert(inst && inst->isExecuted());
         // not committed yet
         result = inst->getDestValue();
+        DPRINTF(FFExec, "Reading value: %llu from inst[%llu]\n",
+                result.i, inst->seqNum);
     } else {
-        if (!inst->isExecuted()) {
-            // assert(it is younger than currently executing instruciont);
+        if (!committedValues.count(src)) {
+            DPRINTF(FFExec, "Reading uncommitted pointer (%i %i) (%i)!\n",
+                    src.bank, src.index, src.op);
+            assert(committedValues.count(src));
         }
-        if (!committedValues.count(ptr)) {
-            DPRINTF(DQ, "Reading uncommitted pointer (%i %i) (%i)!\n",
-                    ptr.bank, ptr.index, ptr.op);
-            assert(committedValues.count(ptr));
-        }
-        result = committedValues[ptr];
+        DPRINTF(FFExec, "Reading value: %llu from committed entry: (%i %i) (%i)\n",
+                result.i, src.bank, src.index, src.op);
+        result = committedValues[src];
     }
     return result;
 }
@@ -1515,9 +1537,12 @@ void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
     if (inst->pointers[0].valid) {
         WKPointer wk(inst->pointers[0]);
         DPRINTF(DQWake, "Sending pointer to (%i) (%i %i) (%i) that depends on"
-                        " load[%llu] (%i %i)\n", wk.valid, wk.bank, wk.index, wk.op,
-                inst->seqNum,
-                inst->dqPosition.bank, inst->dqPosition.index);
+                        " load[%llu] (%i %i) loaded value: %llu\n",
+                        wk.valid, wk.bank, wk.index, wk.op,
+                        inst->seqNum,
+                        inst->dqPosition.bank, inst->dqPosition.index,
+                        inst->getDestValue().i
+               );
         extraWakeup(wk);
         completeMemInst(inst);
     } else {
@@ -1574,10 +1599,10 @@ template<class Impl>
 void DataflowQueues<Impl>::replayMemInsts()
 {
     DynInstPtr inst;
-    if (inst = getDeferredMemInstToExecute()) {
+    if ((inst = getDeferredMemInstToExecute())) {
         DPRINTF(DQWake, "Replaying from deferred\n");
         addReadyMemInst(inst);
-    } else if (inst = getBlockedMemInst()) {
+    } else if ((inst = getBlockedMemInst())) {
         DPRINTF(DQWake, "Replaying from blocked\n");
         addReadyMemInst(inst);
     }

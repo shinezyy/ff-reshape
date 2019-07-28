@@ -268,7 +268,7 @@ public:
 
     DynInstPtr findInst(InstSeqNum seq_to_quash) const;
 
-    FFRegValue readReg(DQPointer pointer);
+    FFRegValue readReg(const DQPointer &src, const DQPointer &dest);
 
     void setReg(DQPointer pointer, FFRegValue val);
 

@@ -325,6 +325,7 @@ void FFDIEWC<Impl>::dispatch() {
     if (dispatched) {
         toAllocation->diewcInfo.usedDQ = true;
     }
+    archState.dumpMaps();
 
 //    DPRINTF(DIEWC, "dispatch reach 8\n");
     if (!to_dispatch.empty()) {

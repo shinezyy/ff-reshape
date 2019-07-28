@@ -1530,23 +1530,17 @@ FFCPU<Impl>::updateThreadPriority()
 
 template<class Impl>
 uint64_t FFCPU<Impl>::readIntReg(DQPointer ptr) {
-    FFRegValue val = dq->readReg(ptr);
-    DPRINTF(FFExec, "Reading op %llu\n", val.i);
-    return val.i;
+    panic("Should not be used!\n");
 }
 
 template<class Impl>
 double FFCPU<Impl>::readFloatReg(DQPointer ptr) {
-    FFRegValue val = dq->readReg(ptr);
-    DPRINTF(FFExec, "Reading op %f\n", val.f);
-    return val.f;
+    panic("Should not be used!\n");
 }
 
 template<class Impl>
 uint64_t FFCPU<Impl>::readFloatRegBits(DQPointer ptr) {
-    FFRegValue val = dq->readReg(ptr);
-    DPRINTF(FFExec, "Reading op %llu\n", val.i);
-    return val.i;
+    panic("Should not be used!\n");
 }
 
 template<class Impl>

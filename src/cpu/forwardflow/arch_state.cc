@@ -64,8 +64,11 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             inst->opReady[src_idx + 1] = true;
 
         } else {
-            assert(parentMap.count(src_reg)); // to parents only
-            assert(renameMap.count(src_reg)); // to parents or siblings
+            if (!parentMap.count(src_reg) || !renameMap.count(src_reg)) {
+                dumpMaps();
+                assert(parentMap.count(src_reg)); // to parents only
+                assert(renameMap.count(src_reg)); // to parents or siblings
+            }
             DQPointer renamed_ptr = parentMap[src_reg];
 
             DPRINTF(Rename, "Looking up %s arch reg %i"
@@ -106,7 +109,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
         parentMap[dest_reg] = inst->dqPosition;
         renameMap[dest_reg] = inst->dqPosition;
         auto &m = renameMap[dest_reg];
-        DPRINTF(Rename, "Inst[%i] define reg[%s %d] int (%d %d)(%d)\n",
+        DPRINTF(Rename, "Inst[%i] define reg[%s %d] (%d %d)(%d)\n",
                 inst->seqNum, dest_reg.className(), dest_reg.index(),
                 m.bank, m.index, m.op);
     }
@@ -221,7 +224,7 @@ pair<bool, FFRegValue> ArchState<Impl>::commitInst(DynInstPtr &inst)
     // clear older checkpoints
     auto it = cpts.begin();
     while (it != cpts.end()) {
-        if (it->first < num) {
+        if (it->first <= num) {
             DPRINTF(FFCommit, "inst[%llu] is older than cpt[%llu], erase it!\n",
                     num, it->first);
             it = cpts.erase(it);
@@ -329,6 +332,23 @@ void ArchState<Impl>::squashAll()
     reverseTable.clear();
     for (auto &pair: scoreboard) {
         pair.second = true;
+    }
+}
+
+template<class Impl>
+void ArchState<Impl>::dumpMaps()
+{
+    DPRINTF(Rename, "Definition map:\n");
+    for (const auto &pair: parentMap) {
+        DPRINTFR(Rename, "%s %i -> (%i %i) (%i)\n",
+                pair.first.className(), pair.first.index(),
+                pair.second.bank, pair.second.index, pair.second.op);
+    }
+    DPRINTF(Rename, "Forwarding map:\n");
+    for (const auto &pair: renameMap) {
+        DPRINTFR(Rename, "%s %i -> (%i %i) (%i)\n",
+                 pair.first.className(), pair.first.index(),
+                 pair.second.bank, pair.second.index, pair.second.op);
     }
 }
 

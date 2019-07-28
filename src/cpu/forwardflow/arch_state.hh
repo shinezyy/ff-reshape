@@ -105,6 +105,8 @@ public:
     InstSeqNum getYoungestCPTBefore(InstSeqNum violator);
 
     void squashAll();
+
+    void dumpMaps();
 };
 
 }

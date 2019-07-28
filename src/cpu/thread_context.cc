@@ -50,6 +50,7 @@
 #include "cpu/base.hh"
 #include "cpu/quiesce_event.hh"
 #include "debug/Context.hh"
+#include "debug/FFInit.hh"
 #include "debug/Quiesce.hh"
 #include "params/BaseCPU.hh"
 #include "sim/full_system.hh"
@@ -194,8 +195,10 @@ unserialize(ThreadContext &tc, CheckpointIn &cp)
     // This is a bit ugly, but needed to maintain backwards
     // compatibility.
     arrayParamIn(cp, "floatRegs.i", floatRegs, NumFloatRegs);
-    for (int i = 0; i < NumFloatRegs; ++i)
+    for (int i = 0; i < NumFloatRegs; ++i) {
+        DPRINTF(FFInit, "floatReg %i: %llu\n", i, floatRegs[i]);
         tc.setFloatRegBitsFlat(i, floatRegs[i]);
+    }
 
     std::vector<TheISA::VecRegContainer> vecRegs(NumVecRegs);
     UNSERIALIZE_CONTAINER(vecRegs);

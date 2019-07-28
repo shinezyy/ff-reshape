@@ -21,9 +21,7 @@ struct DQPointer{
 
     DQPointer(bool, unsigned, unsigned, unsigned, unsigned);
 
-    explicit DQPointer(WKPointer&);
-
-    explicit DQPointer(WKPointer);
+    explicit DQPointer(const WKPointer&);
 
     bool operator==(const DQPointer& that) const {
         return group == that.group &&

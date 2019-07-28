@@ -317,6 +317,7 @@ BaseO3DynInst<Impl>::readFloatRegOperandBits(const StaticInst *si, int idx)
 {
     assert(idx < 3);
     assert(opReady[idx + 1] || srcTakenWithInst[idx]);
+    DPRINTFR(FFExec, "Reading op %i: %llu\n", idx, srcValues[idx].i);
     return srcValues[idx].i;
 }
 
@@ -326,6 +327,7 @@ BaseO3DynInst<Impl>::readFloatRegOperand(const StaticInst *si, int idx)
 {
     assert(idx < 3);
     assert(opReady[idx + 1] || srcTakenWithInst[idx]);
+    DPRINTFR(FFExec, "Reading op %i: %f\n", idx, srcValues[idx].f);
     return srcValues[idx].f;
 }
 
@@ -335,6 +337,7 @@ BaseO3DynInst<Impl>::readIntRegOperand(const StaticInst *si, int idx)
 {
     assert(idx < 3);
     assert(opReady[idx + 1] || srcTakenWithInst[idx]);
+    DPRINTFR(FFExec, "Reading op %i: %llu\n", idx, srcValues[idx].i);
     return srcValues[idx].i;
 }
 
