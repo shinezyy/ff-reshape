@@ -522,6 +522,9 @@ class DefaultCommit
 
 private:
     std::array<bool, Impl::MaxThreads> skipThisCycle;
+
+    const unsigned commitTraceInterval;
+    unsigned commitCounter;
 };
 
 #endif // __CPU_O3_COMMIT_HH__

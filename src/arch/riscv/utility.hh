@@ -129,6 +129,9 @@ copyRegs(ThreadContext *src, ThreadContext *dest)
     for (int i = 0; i < NumIntRegs; ++i)
         dest->setIntReg(i, src->readIntReg(i));
 
+    for (int i = 0; i < NumFloatRegs; ++i)
+        dest->setFloatRegBits(i, src->readFloatRegBits(i));
+
     // Lastly copy PC/NPC
     dest->pcState(src->pcState());
 }

@@ -1008,7 +1008,10 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
     auto head_next_p = uint2Pointer(head_next);
 
     auto head_inst_next = dqs[head_next_p.bank].readInstsFromBank(head_next_p);
-    assert(head_inst_next || head_next == tail);
+    if (!(head_inst_next || head_next == tail)) {
+        DPRINTF(FFSquash, "head: %i, tail: %i, head_next: %i\n", head, tail, head_next);
+        assert(head_inst_next || head_next == tail);
+    }
     DPRINTF(FFSquash, "DQ: squash all instruction after inst[%llu]\n",
             head_inst_next->seqNum);
 

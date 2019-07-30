@@ -95,7 +95,9 @@ DefaultCommit<Impl>::DefaultCommit(O3CPU *_cpu, DerivO3CPUParams *params)
       drainImminent(false),
       trapLatency(params->trapLatency),
       canHandleInterrupts(true),
-      avoidQuiesceLiveLock(false)
+      avoidQuiesceLiveLock(false),
+      commitTraceInterval(params->commitTraceInterval),
+      commitCounter(0)
 {
     if (commitWidth > Impl::MaxWidth)
         fatal("commitWidth (%d) is larger than compiled limit (%d),\n"
@@ -381,6 +383,7 @@ DefaultCommit<Impl>::startupStage()
     cpu->activateStage(O3CPU::CommitIdx);
 
     cpu->activityThisCycle();
+    commitCounter = 0;
 }
 
 template <class Impl>
@@ -1280,13 +1283,18 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
     DPRINTF(Commit, "Committing instruction with [sn:%lli] PC %s\n",
             head_inst->seqNum, head_inst->pcState());
 
-    DPRINTFR(ValueCommit, "@%llu Committing instruction with sn:%lli PC:%s",
-            curTick(), head_inst->seqNum, head_inst->pcState());
-    if (head_inst->numDestRegs() > 0) {
-        DPRINTFR(ValueCommit, ", with wb value: %llu\n",
-                head_inst->getResult().asIntegerNoAssert());
+    if (commitCounter == commitTraceInterval) {
+        DPRINTFR(ValueCommit, "@%llu Committing instruction with sn:%lli PC:%s",
+                curTick(), head_inst->seqNum, head_inst->pcState());
+        if (head_inst->numDestRegs() > 0) {
+            DPRINTFR(ValueCommit, ", with wb value: %llu\n",
+                    head_inst->getResult().asIntegerNoAssert());
+        } else {
+            DPRINTFR(ValueCommit, ", with wb value: none\n");
+        }
+        commitCounter = 0;
     } else {
-        DPRINTFR(ValueCommit, ", with wb value: none\n");
+        commitCounter++;
     }
 
     if (head_inst->traceData) {

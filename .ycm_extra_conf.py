@@ -38,7 +38,7 @@ flags = [
 '-Wall',
 '-Wextra',
 '-Werror',
-'-Wno-unused-results',
+'-Wno-unused-result',
 '-Wno-unused-parameter',
 # '-Wno-long-long',
 # '-Wno-variadic-macros',
@@ -58,8 +58,8 @@ flags = [
 # relevant for c++ headers.
 # For a C project, you would set this to 'c' instead of 'c++'.
 '-x', 'c++',
-'-I', '.',
 '-I', './build/RISCV',
+'-I', './src',
 ]
 
 

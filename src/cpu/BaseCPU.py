@@ -224,6 +224,7 @@ class BaseCPU(MemObject):
         "between CPU models)")
 
     tracer = Param.InstTracer(default_tracer, "Instruction tracer")
+    commitTraceInterval = Param.Unsigned(11, 'commitTraceInterval')
 
     icache_port = MasterPort("Instruction Port")
     dcache_port = MasterPort("Data Port")
@@ -374,3 +375,4 @@ class BaseCPU(MemObject):
             cpus_node.append(node)
 
         yield cpus_node
+

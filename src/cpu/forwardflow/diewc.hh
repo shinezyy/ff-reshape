@@ -437,6 +437,11 @@ public:
     TheISA::PCState toCheckpoint;
 
     bool cptHint;
+
+private:
+    const unsigned commitTraceInterval;
+    unsigned commitCounter;
+
 };
 
 

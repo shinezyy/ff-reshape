@@ -120,10 +120,12 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
         assert(wrapper.isLongLatency);
         assert(!wrapper.hasPendingInst);
 
+        assert(!wbScheduledNext[lat-2]);
+
         wrapper.toNextCycle->hasPendingInst = true;
         wrapper.toNextCycle->seq = inst->seqNum;
         wrapper.toNextCycle->longLatencyPointer = to_wake;
-        wrapper.toNextCycle->cycleLeft = opLat[inst->opClass()];
+        wrapper.toNextCycle->cycleLeft = opLat[inst->opClass()] - 1;
 
         DPRINTF(FUW, "add inst[%i] into LL wrapper (%i, %i)\n",
                 inst->seqNum, wrapperID, inst->opClass());
@@ -159,6 +161,8 @@ void FUWrapper<Impl>::setWakeup() {
                 seqToExec = wrapper.seq;
                 count += 1;
             } else {
+                DPRINTF(FUW, "LL inst[%llu] has %i cycles left\n", wrapper.seq,
+                        wrapper.cycleLeft);
                 assert(wrapper.cycleLeft > 1);
                 // keep
                 wrapper.toNextCycle->longLatencyPointer = wrapper.longLatencyPointer;
@@ -242,8 +246,8 @@ void FUWrapper<Impl>::startCycle() {
         SingleFUWrapper &wrapper = pair.second;
 
         if (wrapper.isLongLatency && wrapper.hasPendingInst && !wrapper.isLSU) {
-            if (wrapper.cycleLeft <= 19 && !wbScheduled[19]) {
-                wbScheduledNext[19] = true;
+            if (wrapper.cycleLeft <= 20 && !wbScheduled[wrapper.cycleLeft - 1]) {
+                wbScheduledNext[wrapper.cycleLeft - 2] = true;
             }
         }
 

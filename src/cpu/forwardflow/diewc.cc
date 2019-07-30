@@ -558,6 +558,15 @@ FFDIEWC<Impl>::
         return false;
     }
 
+    if (toNextCycle->diewc2diewc.squash &&
+            toNextCycle->diewc2diewc.squashedSeqNum <= head_inst->seqNum) {
+        DPRINTF(FFCommit, "Inst[%llu]'s checkpoint will be used for squashing next cycle"
+                " to squash after[%llu], and cannot be committed right now\n",
+                head_inst->seqNum,
+                toNextCycle->diewc2diewc.squashedSeqNum);
+        return false;
+    }
+
     if (head_inst->isThreadSync()) {
         // Not handled for now.
         panic("Thread sync instructions are not handled yet.\n");
@@ -637,13 +646,18 @@ FFDIEWC<Impl>::
             head_inst->seqNum, head_inst->pcState(),
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
 
-    DPRINTFR(ValueCommit, "@%llu Committing instruction with sn:%lli PC:%s",
-            curTick(), head_inst->seqNum, head_inst->pcState());
-    if (head_inst->numDestRegs() > 0) {
-        DPRINTFR(ValueCommit, ", with wb value: %llu\n",
-                head_inst->getResult().asIntegerNoAssert());
+    if (commitCounter == commitTraceInterval) {
+        DPRINTFR(ValueCommit, "@%llu Committing instruction with sn:%lli PC:%s",
+                curTick(), head_inst->seqNum, head_inst->pcState());
+        if (head_inst->numDestRegs() > 0) {
+            DPRINTFR(ValueCommit, ", with wb value: %llu\n",
+                    head_inst->getResult().asIntegerNoAssert());
+        } else {
+            DPRINTFR(ValueCommit, ", with wb value: none\n");
+        }
+        commitCounter = 0;
     } else {
-        DPRINTFR(ValueCommit, ", with wb value: none\n");
+        commitCounter++;
     }
 
     if (head_inst->traceData) {
@@ -1090,7 +1104,10 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         avoidQuiesceLiveLock(),  //todo: fix
         squashAfterInst(nullptr),
         tcSquash(false),
-        allocationToDIEWCDelay(params->allocationToDIEWCDelay)
+        allocationToDIEWCDelay(params->allocationToDIEWCDelay),
+        commitTraceInterval(params->commitTraceInterval),
+        commitCounter(0)
+
 {
     skidBufferMax = (allocationToDIEWCDelay + 1)*width;
     dq.setLSQ(&ldstQueue);
@@ -1309,6 +1326,7 @@ void FFDIEWC<Impl>::startupStage()
 
         cpu->activateStage(XFFCPU::IEWCIdx);
     }
+    commitCounter = 0;
 }
 
 template<class Impl>
@@ -1685,13 +1703,24 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
         inst->setCanCommit();
     }
 
-    if ((!fetchRedirect ||
-        !toNextCycle->diewc2diewc.squash ||
-        toNextCycle->diewc2diewc.squashedSeqNum > inst->seqNum)
+    if ((!fetchRedirect ||  // fetch not redirected
+
+        !toNextCycle->diewc2diewc.squash ||  // no squash needed yet
+
+        toNextCycle->diewc2diewc.squashedSeqNum > inst->seqNum ||
         // this squash is more primary that one found in this cycle
+
+        (toNextCycle->diewc2diewc.squashedSeqNum == inst->seqNum &&
+         toNextCycle->diewc2diewc.memViolation && inst->mispredicted()))
+        // branch misprediction is more primary than the mem violation
+
         && (!fromLastCycle->diewc2diewc.squash ||
-            fromLastCycle->diewc2diewc.squashedSeqNum > inst->seqNum)
+            fromLastCycle->diewc2diewc.squashedSeqNum > inst->seqNum ||
         // this squash is more primary that one found in last cycle
+        //
+        (fromLastCycle->diewc2diewc.squashedSeqNum == inst->seqNum &&
+         fromLastCycle->diewc2diewc.memViolation && inst->mispredicted()))
+        // branch misprediction is more primary than the mem violation found in last cycle
         ) {
 
         // Prevent testing for misprediction on load instructions,
@@ -1810,6 +1839,7 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator
 
             wroteToTimeBuffer = true;
         }
+        toNextCycle->diewc2diewc.memViolation = true;
     }
 }
 
