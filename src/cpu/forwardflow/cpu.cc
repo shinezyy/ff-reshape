@@ -317,9 +317,10 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
               "Ensure createInterruptController() is called.\n", name());
     }
 
-    for (ThreadID tid = 0; tid < this->numThreads; tid++)
+    for (ThreadID tid = 0; tid < this->numThreads; tid++) {
+        isa[tid] = params->isa[tid];
         this->thread[tid]->setFuncExeInst(0);
-
+    }
 }
 
 template <class Impl>
@@ -1081,6 +1082,7 @@ template <class Impl>
 TheISA::MiscReg
 FFCPU<Impl>::readMiscRegNoEffect(int misc_reg, ThreadID tid) const
 {
+    DPRINTF(FFExec, "reading misc reg with no effect\n");
     return this->isa[tid]->readMiscRegNoEffect(misc_reg);
 }
 
@@ -1088,6 +1090,8 @@ template <class Impl>
 TheISA::MiscReg
 FFCPU<Impl>::readMiscReg(int misc_reg, ThreadID tid)
 {
+    DPRINTF(FFExec, "reading misc reg for tid %i\n", tid);
+    assert(this->isa[tid]);
     miscRegfileReads++;
     return this->isa[tid]->readMiscReg(misc_reg, tcBase(tid));
 }

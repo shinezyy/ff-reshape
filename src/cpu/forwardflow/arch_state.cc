@@ -47,9 +47,9 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
 
         if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
-            if (inst->isFloating()) {
+            if (src_reg.classValue() == FloatRegClass) {
                 inst->setSrcValue(src_idx, floatArchRF[src_reg.index()]);
-            } else if (inst->isInteger()) {
+            } else if (src_reg.classValue() == IntRegClass) {
                 inst->setSrcValue(src_idx, intArchRF[src_reg.index()]);
             } else {
                 panic("Unexpected reg type\n");
