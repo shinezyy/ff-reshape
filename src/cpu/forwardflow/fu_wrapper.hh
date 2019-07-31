@@ -136,7 +136,7 @@ public:
 
     void fillLatTable(std::unordered_map<OpClass, unsigned> &v);
 
-    const std::string name() { return _name;}
+    const std::string name() const { return _name;}
 
     std::string _name;
 private:
@@ -163,6 +163,8 @@ public:
     void executeInsts();
 
     void setWakeup();
+
+    void dumpWBSchedule() const;
 
 private:
 

@@ -29,15 +29,12 @@ bool FUWrapper<Impl>::canServe(DynInstPtr &inst) {
     DPRINTF(FUW2, "FUW , opclass:%d\n", inst->opClass());
     auto lat = opLat[inst->opClass()];
     auto has_capability = capabilityList[inst->opClass()];
-    auto wb_port_already_scheduled = wbScheduled[0];
-    if (lat == 1) {
-        wb_port_already_scheduled = wbScheduled[0];
-    } else {
-        wb_port_already_scheduled = wbScheduled[lat - 1];
-    }
+
+    DPRINTF(FUSched, "wbScheduled now in %s: ", __func__);
     if (Debug::FUSched) {
         cout << wbScheduled << endl;
     }
+    bool wb_port_already_scheduled = wbScheduled[lat - 1];
     return has_capability && !wb_port_already_scheduled;
 }
 
@@ -89,9 +86,6 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
         wrapper.hasPendingInst = true;  // execute in one cycle
         wrapper.seq = inst->seqNum;
 
-        if (Debug::FUSched) {
-            cout << wbScheduled << endl;
-        }
         // schedule wb port
         assert(!wbScheduled[0]);
         wbScheduled[0] = true;
@@ -113,7 +107,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
         assert(!wrapper.writtenThisCycle);
         wrapper.writtenThisCycle = true;
 
-        DPRINTF(FUW, "add inst[%i] into pipelined wrapper (%i, %i) with lat %u\n",
+        DPRINTF(FUW, "Add inst[%i] into pipelined wrapper (%i, %i) with lat %u\n",
                 inst->seqNum, wrapperID, inst->opClass(), wrapper.latency);
 
     } else {
@@ -127,7 +121,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
         wrapper.toNextCycle->longLatencyPointer = to_wake;
         wrapper.toNextCycle->cycleLeft = opLat[inst->opClass()] - 1;
 
-        DPRINTF(FUW, "add inst[%i] into LL wrapper (%i, %i)\n",
+        DPRINTF(FUW, "Add inst[%i] into LL wrapper (%i, %i)\n",
                 inst->seqNum, wrapperID, inst->opClass());
     }
 
@@ -191,6 +185,10 @@ void FUWrapper<Impl>::setWakeup() {
         }
         count_overall += count;
     }
+    DPRINTF(FUSched, "wbScheduled now: ");
+    if (Debug::FUSched) {
+        cout << wbScheduled << endl;
+    }
     if (wbScheduled[0]) {
         DPRINTF(FUW, "one instruction should be executed and its children"
                 " should be waken up\n");
@@ -199,11 +197,6 @@ void FUWrapper<Impl>::setWakeup() {
                     toWakeup.bank, toWakeup.index, toWakeup.op);
         }
         assert(count_overall > 0);
-    } else {
-        DPRINTF(FUSched, "wbScheduled now: ");
-        if (Debug::FUSched) {
-            cout << wbScheduled << endl;
-        }
     }
 }
 
@@ -428,6 +421,15 @@ template<class Impl>
 void FUWrapper<Impl>::setExec(Exec *_exec)
 {
     exec = _exec;
+}
+
+template<class Impl>
+void FUWrapper<Impl>::dumpWBSchedule() const
+{
+    DPRINTF(FUSched, "wbScheduled dump: ");
+    if (Debug::FUSched) {
+        cout << wbScheduled << endl;
+    }
 }
 
 void
