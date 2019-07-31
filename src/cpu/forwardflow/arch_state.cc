@@ -78,6 +78,21 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
             inst->renameSrcReg(src_idx, renamed_ptr);
 
+            unsigned identical = 0;
+            for (unsigned src_idx_x = 0; src_idx_x < src_idx; src_idx_x++) {
+                if (inst->srcRegIdx(src_idx_x) == inst->srcRegIdx(src_idx)) {
+                    identical = src_idx_x + 1;
+                    break;
+                }
+            }
+
+            if (identical) {
+                DPRINTF(Rename, "Skipped to forward because src reg %i is identical to"
+                        "src reg %u\n", src_idx, identical - 1);
+                inst->identicalTo[src_idx + 1] = identical;
+                continue;
+            }
+
             diewc->setOldestFw(renameMap[src_reg]);
 
             auto old = renameMap[src_reg];
@@ -94,7 +109,6 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                     old.bank, old.index, old.op,
                     new_.bank, new_.index, new_.op);
         }
-
     }
 
     const RegId& dest_reg = inst->destRegIdx(0);
@@ -240,10 +254,12 @@ pair<bool, FFRegValue> ArchState<Impl>::commitInst(DynInstPtr &inst)
 
         const RegId &dest = inst->staticInst->destRegIdx(0);
         val = inst->getDestValue();
-        if (inst->isInteger()) {
+        if (dest.isIntReg()) {
             intArchRF[dest.index()] = val;
-        } else if (inst->isInteger()) {
+
+        } else if (dest.isFloatReg()) {
             floatArchRF[dest.index()] = val;
+
         } else {
             panic("not ready for other instructions!");
         }

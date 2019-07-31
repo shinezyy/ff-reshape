@@ -400,6 +400,8 @@ public:
     std::array<bool, 4> opReady;
     bool opFulfilled(unsigned);
 
+    std::array<unsigned, 4> identicalTo;
+
     bool hasMemDep;
     bool memDepReady;
     bool memOpFulfilled();

@@ -142,13 +142,22 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                     inst->seqNum);
 
         } else { //  if (ptr.wkType == WKPointer::WKOp)
-            inst->opReady[ptr.op] = true;
+            inst->opReady[op] = true;
             if (op != 0) {
-
                 FFRegValue v = dq->readReg(inst->getSrcPointer(op - 1), DQPointer(ptr));
                 DPRINTF(FFExec, "Setting src reg[%i] of inst[%llu] to %llu\n",
                         op-1, inst->seqNum, v.i);
                 inst->setSrcValue(op - 1, v);
+            }
+
+            for (unsigned xop = op + 1; xop <= 3; xop++) {
+                if (inst->identicalTo[xop] && inst->identicalTo[xop] == op) {
+                    inst->opReady[xop] = true;
+                    FFRegValue v = dq->readReg(inst->getSrcPointer(xop - 1), DQPointer(ptr));
+                    DPRINTF(FFExec, "Setting src reg[%i] of inst[%llu] to %llu\n",
+                            xop-1, inst->seqNum, v.i);
+                    inst->setSrcValue(xop - 1, v);
+                }
             }
 
             if (nearlyWakeup[ptr.index]) {

@@ -133,6 +133,7 @@ BaseO3DynInst<Impl>::initVars()
     dqPosition.valid = false;
     std::fill(hasOp.begin(), hasOp.end(), false);
     std::fill(opReady.begin(), opReady.end(), false);
+    std::fill(identicalTo.begin(), identicalTo.end(), 0);
     fuGranted = false;
     std::fill(srcTakenWithInst.begin(), srcTakenWithInst.end(), false);
     hasMemDep = false;
@@ -299,7 +300,7 @@ unsigned BaseO3DynInst<Impl>::numBusyOps()
 {
     unsigned busy = 0;
     for (unsigned op = 1; op <= 3; op++) {
-        busy += !opFulfilled(op);
+        busy += (!opFulfilled(op)) && !identicalTo[op];  // a little tricky..
     }
     busy += !miscOpFulfilled();
     return busy;
