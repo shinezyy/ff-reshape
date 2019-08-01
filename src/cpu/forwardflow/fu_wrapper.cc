@@ -29,13 +29,19 @@ bool FUWrapper<Impl>::canServe(DynInstPtr &inst) {
     DPRINTF(FUW2, "FUW , opclass:%d\n", inst->opClass());
     auto lat = opLat[inst->opClass()];
     auto has_capability = capabilityList[inst->opClass()];
+    bool fu_free = true;
+
+    if (has_capability) {
+        const auto &wrapper = wrappers[inst->opClass()];
+        fu_free = !wrapper.isLongLatency || !wrapper.hasPendingInst;
+    }
 
     DPRINTF(FUSched, "wbScheduled now in %s: ", __func__);
     if (Debug::FUSched) {
         cout << wbScheduled << endl;
     }
     bool wb_port_already_scheduled = wbScheduled[lat - 1];
-    return has_capability && !wb_port_already_scheduled;
+    return has_capability && !wb_port_already_scheduled && fu_free;
 }
 
 template<class Impl>
@@ -49,7 +55,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
     insts[inst->seqNum] = inst;
     inst->fuGranted = true;
 
-    DPRINTF(FUW, "Consuming inst[%d]\n", inst->seqNum);
+    DPRINTF(FUW, "w(%i, %i) Consuming inst[%d]\n", wrapperID, inst->opClass(), inst->seqNum);
 
     DQPointer &dest = inst->pointers[0];
 
@@ -112,7 +118,11 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
 
     } else {
         assert(wrapper.isLongLatency);
-        assert(!wrapper.hasPendingInst);
+        if (wrapper.hasPendingInst) {
+            DPRINTF(FUW, "w(%i, %i) hasPendingInst on consuming new inst\n",
+                    wrapperID, inst->opClass());
+            assert(!wrapper.hasPendingInst);
+        }
 
         assert(!wbScheduledNext[lat-2]);
 
@@ -143,20 +153,22 @@ void FUWrapper<Impl>::setWakeup() {
 
         // todo: has pending inst should be cleared every cycle
         if (wrapper.isSingleCycle && wrapper.hasPendingInst) {
-            DPRINTF(FUW, "Waking up children of one cycle inst[%d]\n", wrapper.seq);
+            DPRINTF(FUW, "w(%i, %i) Waking up children of one cycle inst[%d]\n",
+                    wrapperID, pair.first, wrapper.seq);
             toWakeup = wrapper.oneCyclePointer;
             seqToExec = wrapper.seq;
             count += 1;
         }
         if (wrapper.isLongLatency && wrapper.hasPendingInst) {
             if (wrapper.cycleLeft == 1) {
-                DPRINTF(FUW, "Waking up children of LL inst[%d]\n", wrapper.seq);
+                DPRINTF(FUW, "w(%i, %i) Waking up children of LL inst[%d]\n",
+                        wrapperID, pair.first, wrapper.seq);
                 toWakeup = wrapper.longLatencyPointer;
                 seqToExec = wrapper.seq;
                 count += 1;
             } else {
-                DPRINTF(FUW, "LL inst[%llu] has %i cycles left\n", wrapper.seq,
-                        wrapper.cycleLeft);
+                DPRINTF(FUW, "w(%i, %i) LL inst[%llu] has %i cycles left\n", wrapper.seq,
+                        wrapperID, pair.first, wrapper.cycleLeft);
                 assert(wrapper.cycleLeft > 1);
                 // keep
                 wrapper.toNextCycle->longLatencyPointer = wrapper.longLatencyPointer;
@@ -169,8 +181,8 @@ void FUWrapper<Impl>::setWakeup() {
 
 
         if (wrapper.isPipelined && wrapper.pipelineQueue.front().valid) {
-            DPRINTF(FUW, "Waking up children of pipelined inst[%d]\n",
-                    wrapper.pipelineQueue.front().seq);
+            DPRINTF(FUW, "w(%i, %i) Waking up children of pipelined inst[%d]\n",
+                    wrapperID, pair.first, wrapper.pipelineQueue.front().seq);
             if (Debug::FUSched) {
                 cout << wbScheduled << endl;
             }

@@ -948,11 +948,12 @@ FFRegValue DataflowQueues<Impl>::readReg(const DQPointer &src, const DQPointer &
 
     if (!readFromCommitted) {
         auto inst = dqs[b].readInstsFromBank(src);
-        assert(inst && inst->isExecuted());
-        // not committed yet
-        result = inst->getDestValue();
+        assert(inst);
         DPRINTF(FFExec, "Reading value: %llu from inst[%llu]\n",
                 result.i, inst->seqNum);
+        assert(inst->isExecuted());
+        // not committed yet
+        result = inst->getDestValue();
     } else {
         if (!committedValues.count(src)) {
             DPRINTF(FFExec, "Reading uncommitted pointer (%i %i) (%i)!\n",
@@ -1514,7 +1515,7 @@ void DataflowQueues<Impl>::digestForwardPointer()
                         pair.dest.bank, pair.dest.index, pair.dest.op);
                 markFwPointers(inst->pointers, pair, inst);
 
-                if (op == 0 && inst->destReforward) {
+                if (op == 0 && inst->destReforward && inst->isExecuted()) {
                     // already executed but not forwarded
                     extraWakeup(WKPointer(pair.payload));
                     inst->destReforward = false;
