@@ -501,7 +501,10 @@ void DataflowQueues<Impl>::tick()
                         ptr.bank, ptr.index, ptr.op, b);
                 wakeQueues[b * nOps + op].push(WKPointer(ptr));
                 numPendingWakeups++;
-                assert(wakeQueues[b * nOps + op].size() <= maxQueueDepth);
+                if (wakeQueues[b * nOps + op].size() > maxQueueDepth) {
+                    clearAndDumpQueues();
+                    assert(wakeQueues[b * nOps + op].size() <= maxQueueDepth);
+                }
             }
         }
 
@@ -572,13 +575,15 @@ void DataflowQueues<Impl>::tick()
                     fuWrappers[b].toWakeup.op);
             wakeQueues[b * nOps].push(WKPointer(fuWrappers[b].toWakeup));
             numPendingWakeups++;
-            assert(wakeQueues[b * nOps].size() <= maxQueueDepth);
+            if (wakeQueues[b * nOps].size() > maxQueueDepth) {
+                clearAndDumpQueues();
+                assert(wakeQueues[b * nOps].size() <= maxQueueDepth);
+            }
         }
     }
 
     for (auto &wrapper: fuWrappers) {
         wrapper.executeInsts();
-        wrapper.endCycle();
     }
 
     // todo: write insts from bank to time buffer!
@@ -786,12 +791,10 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
         forwardPointerQueue[forwardPtrIndex].push(pkt);
 
         if (forwardPointerQueue[forwardPtrIndex].size() > maxQueueDepth) {
-//        for (const auto &q: forwardPointerQueue) {
-//            DPRINTF(DQ, "fw ptr queue size: %i\n", q.size());
-//        }
+            clearAndDumpQueues();
+            assert(forwardPointerQueue[forwardPtrIndex].size() <= maxQueueDepth);
         }
 
-        assert(forwardPointerQueue[forwardPtrIndex].size() <= maxQueueDepth);
         numPendingFwPointers++;
         DPRINTF(DQWake, "numPendingFwPointers: %i\n", numPendingFwPointers);
         if (forwardPointerQueue[forwardPtrIndex].size() > numPendingFwPointerMax) {
@@ -999,6 +1002,11 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
         memDepUnit.squash(0, DummyTid);
         diewc->DQPointerJumped = true;
         cpu->removeInstsUntil(0, DummyTid);
+
+        for (auto &wrapper: fuWrappers) {
+            wrapper.squash(0);
+        }
+
         return;
     }
 
@@ -1026,6 +1034,9 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
             head_inst_next->seqNum);
 
     memDepUnit.squash(head_inst_next->seqNum, DummyTid);
+    for (auto &wrapper: fuWrappers) {
+        wrapper.squash(head_inst_next->seqNum);
+    }
     cpu->removeInstsUntil(head_inst_next->seqNum, DummyTid);
 
     while (validPosition(u) && logicallyLET(u, head)) {
@@ -1039,6 +1050,7 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
     }
     DPRINTF(FFSquash, "DQ logic head becomes %d, physical is %d, tail is %d\n",
             head_next, head, tail);
+
 }
 
 template<class Impl>
@@ -1660,6 +1672,48 @@ bool DataflowQueues<Impl>::queuesEmpty()
         }
     }
     return fwPointerEmpty;
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::clearAndDumpQueues()
+{
+    DPRINTF(DQ, "Dump and clear wakeQueues!\n");
+    for (unsigned b = 0; b < nBanks; b++) {
+        for (unsigned op = 0; op < nOps; op++) {
+            DPRINTFR(DQ, "Q[%i]: ", b*nOps+op);
+            auto &q = wakeQueues[b*nOps + op];
+            while (!q.empty()) {
+                auto &p = q.front();
+                DPRINTFR(DQ, "(%i) (%i %i) (%i), \n",
+                        p.valid, p.bank, p.index, p.op);
+                q.pop();
+            }
+            DPRINTFR(DQ, "\n");
+        }
+    }
+    DPRINTF(DQ, "Dump and clear fw pointer queues!\n");
+    for (unsigned b = 0; b < nBanks; b++) {
+        for (unsigned op = 0; op < nOps; op++) {
+            DPRINTFR(DQ, "Q[%i]: ", b*nOps+op);
+            auto &q = forwardPointerQueue[b*nOps + op];
+            while (!q.empty()) {
+                auto &p = q.front();
+                DPRINTFR(DQ, "(%i) (%i %i) (%i), \n",
+                        p.payload.dest.valid, p.payload.dest.bank,
+                        p.payload.dest.index, p.payload.dest.op);
+                q.pop();
+            }
+            DPRINTFR(DQ, "\n");
+        }
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::endCycle()
+{
+    for (auto &wrapper: fuWrappers) {
+        wrapper.endCycle();
+    }
 }
 
 }

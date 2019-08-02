@@ -350,6 +350,9 @@ private:
     void replayMemInsts();
 
     DynInstPtr getBlockedMemInst();
+
+    void clearAndDumpQueues();
+
 public:
     bool logicallyLT(unsigned left, unsigned right) const;
 
@@ -390,6 +393,8 @@ public:
     DynInstPtr findBySeq(InstSeqNum seq);
 
     bool queuesEmpty();
+
+    void endCycle();
 };
 
 }

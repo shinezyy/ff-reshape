@@ -5,7 +5,7 @@
 #ifndef __FF_FU_WRAPPER_HH__
 #define __FF_FU_WRAPPER_HH__
 
-#include <queue>
+#include <deque>
 #include <unordered_map>
 
 #include "cpu/forwardflow/comm.hh"
@@ -38,7 +38,7 @@ struct SingleFUWrapper {
         InstSeqNum seq;
     };
 
-    std::queue<PipelineStruct> pipelineQueue;
+    std::deque<PipelineStruct> pipelineQueue;
 
     DQPointer longLatencyPointer;
     unsigned cycleLeft;  // for long latency
@@ -165,6 +165,8 @@ public:
     void setWakeup();
 
     void dumpWBSchedule() const;
+
+    void squash(InstSeqNum squash_seq);
 
 private:
 

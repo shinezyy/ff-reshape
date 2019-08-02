@@ -108,7 +108,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
 
         DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will push\n",
                 wrapperID, inst->opClass(), wrapper.pipelineQueue.size());
-        wrapper.pipelineQueue.push({true, to_wake, inst->seqNum});
+        wrapper.pipelineQueue.push_back({true, to_wake, inst->seqNum});
 
         assert(!wrapper.writtenThisCycle);
         wrapper.writtenThisCycle = true;
@@ -129,7 +129,11 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
         wrapper.toNextCycle->hasPendingInst = true;
         wrapper.toNextCycle->seq = inst->seqNum;
         wrapper.toNextCycle->longLatencyPointer = to_wake;
-        wrapper.toNextCycle->cycleLeft = opLat[inst->opClass()] - 1;
+        wrapper.toNextCycle->cycleLeft = lat - 1;
+
+        wrapper.hasPendingInst = true;
+        wrapper.seq = inst->seqNum;
+        wrapper.cycleLeft = lat;
 
         DPRINTF(FUW, "Add inst[%i] into LL wrapper (%i, %i)\n",
                 inst->seqNum, wrapperID, inst->opClass());
@@ -167,8 +171,8 @@ void FUWrapper<Impl>::setWakeup() {
                 seqToExec = wrapper.seq;
                 count += 1;
             } else {
-                DPRINTF(FUW, "w(%i, %i) LL inst[%llu] has %i cycles left\n", wrapper.seq,
-                        wrapperID, pair.first, wrapper.cycleLeft);
+                DPRINTF(FUW, "w(%i, %i) LL inst[%llu] has %i cycles left\n",
+                        wrapperID, pair.first, wrapper.seq, wrapper.cycleLeft);
                 assert(wrapper.cycleLeft > 1);
                 // keep
                 wrapper.toNextCycle->longLatencyPointer = wrapper.longLatencyPointer;
@@ -261,7 +265,7 @@ void FUWrapper<Impl>::startCycle() {
                     wrapperID, pair.first, wrapper.pipelineQueue.size());
             assert(wrapper.pipelineQueue.size() == wrapper.latency);
             // pop to prepare for incoming pointers
-            wrapper.pipelineQueue.pop();
+            wrapper.pipelineQueue.pop_front();
         }
     }
 }
@@ -283,7 +287,7 @@ void FUWrapper<Impl>::endCycle() {
             if (!wrapper.writtenThisCycle) {
                 DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will push\n",
                         wrapperID, pair.first, wrapper.pipelineQueue.size());
-                wrapper.pipelineQueue.push({false, inv, 0});
+                wrapper.pipelineQueue.push_back({false, inv, 0});
             } else {
                 DPRINTF(FUPipe, "wrapper(%i, %i) has been written, size:%u, will not push\n",
                         wrapperID, pair.first, wrapper.pipelineQueue.size());
@@ -444,6 +448,46 @@ void FUWrapper<Impl>::dumpWBSchedule() const
     }
 }
 
+template<class Impl>
+void FUWrapper<Impl>::squash(InstSeqNum squash_seq)
+{
+    for (auto &pair: wrappers) {
+        auto &fu = pair.second;
+        if (fu.isLongLatency && fu.hasPendingInst &&
+                fu.seq > squash_seq) {
+            DPRINTF(FUW, "Squashing LL inst[%llu] in w(%i, %i)\n",
+                    fu.seq, wrapperID, pair.first);
+            fu.toNextCycle->hasPendingInst = false;
+            fu.toNextCycle->cycleLeft = 0;
+            fu.toNextCycle->seq = 0;
+
+            if (fu.cycleLeft <= 19) {
+                assert(wbScheduledNext[fu.cycleLeft - 2]);
+                wbScheduledNext[fu.cycleLeft - 2] = false;
+            }
+        }
+
+        if (fu.isPipelined) {
+            unsigned cycle_left = 1;
+            // note that head has already been read in this tick
+            for (auto &element: fu.pipelineQueue) {
+                if (cycle_left > 1 && element.valid && element.seq > squash_seq) {
+                    DPRINTF(FUW, "Squashing pipe inst[%llu] in w(%i, %i)\n",
+                            element.seq, wrapperID, pair.first);
+                    element.pointer.valid = false;
+                    element.valid = false;
+
+                    assert(wbScheduledNext[cycle_left - 2]);
+                    wbScheduledNext[cycle_left - 2] = false;
+                }
+                cycle_left++;
+            }
+        }
+
+        // no need to handle single-cycle instructions, right?
+    }
+}
+
 void
 SingleFUWrapper::init(
         bool pipe, bool single_cycle, bool long_lat,
@@ -459,7 +503,7 @@ SingleFUWrapper::init(
     latency = _latency;
     MaxPipeLatency = max_pipe_lat;
     for (unsigned i = 0; i < latency; i++) {
-        pipelineQueue.push({false, inv, 0});
+        pipelineQueue.push_back({false, inv, 0});
     }
     timeStruct = new TimeBuffer<SFUTimeReg>(2, 2);
     toNextCycle = timeStruct->getWire(0);

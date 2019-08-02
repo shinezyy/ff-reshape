@@ -966,7 +966,6 @@ void FFDIEWC<Impl>::handleSquash() {
         changedDQNumEntries = true;
         commitStatus = DQSquashing;
 
-
         if (!fromLastCycle->diewc2diewc.squashAll) {
             InstSeqNum squashed_inst = fromLastCycle->diewc2diewc.squashedSeqNum;
 
@@ -1001,6 +1000,7 @@ void FFDIEWC<Impl>::handleSquash() {
                 }
                 ++branchMispredicts;
             }
+
         } else {
             DPRINTF(FFSquash, "Squashing all!\n");
             DQPointer dont_care;
@@ -1911,6 +1911,7 @@ void FFDIEWC<Impl>::clearAtEnd()
     if (dq.numInFlightFw() == 0) {
         resetOldestFw();
     }
+    dq.endCycle();
 }
 
 }
