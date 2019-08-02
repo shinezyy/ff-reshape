@@ -142,7 +142,7 @@ void FFDIEWC<Impl>::checkSignalsAndUpdate() {
         }
     }
 
-    if (dqSqushing) {
+    if (dqSquashing) {
         dispatchStatus = Squashing;
         clearAllocatedInsts();
         wroteToTimeBuffer = true;
@@ -325,7 +325,7 @@ void FFDIEWC<Impl>::dispatch() {
     if (dispatched) {
         toAllocation->diewcInfo.usedDQ = true;
     }
-    archState.dumpMaps();
+    // archState.dumpMaps();
 
 //    DPRINTF(DIEWC, "dispatch reach 8\n");
     if (!to_dispatch.empty()) {
@@ -394,7 +394,8 @@ void FFDIEWC<Impl>::commit() {
 template<class Impl>
 bool FFDIEWC<Impl>::checkStall() {
     // todo: fix mysterious stall
-    if (dqSqushing) {
+    if (dqSquashing) {
+        DPRINTF(DIEWC, "block because dq squashing\n");
         return true;
     }
     if (dq.stallToUnclog()) {
@@ -888,7 +889,7 @@ FFDIEWC<Impl>::commitInsts()
                 toAllocation->diewcInfo.usedDQ = true;
             } else {
                 DPRINTF(Commit, "Unable to commit head instruction PC:%s "
-                        "[sn:%i].\n",
+                        "[sn:%llu].\n",
                         head_inst->pcState(), head_inst->seqNum);
 
                 skipThisCycle = true;
@@ -977,6 +978,7 @@ void FFDIEWC<Impl>::handleSquash() {
             auto p = fromLastCycle->diewc2diewc.squashedPointer;
             DPRINTF(FFSquash, "Olddest inst ptr to squash: (%i %i)\n", p.bank, p.index);
             dq.squash(fromLastCycle->diewc2diewc.squashedPointer, false, false);
+            dqSquashing = true;
             archState.recoverCPT(squashed_inst);
 
             // toNextCycle->diewc2diewc.squash = false;
@@ -1007,6 +1009,10 @@ void FFDIEWC<Impl>::handleSquash() {
             archState.squashAll();
         }
 
+    }
+
+    if (dqSquashing && dq.queuesEmpty()) {
+        dqSquashing = false;
     }
 }
 
@@ -1092,7 +1098,7 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         fuWrapper(),
         ldstQueue(cpu, this, params), // todo: WTF fix it !!!!!!!
         fetchRedirect(false),
-        dqSqushing(false),
+        dqSquashing(false),
         dispatchWidth(params->dispatchWidth),
         width(params->allocationWidth),
         trapInFlight(false),

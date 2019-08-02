@@ -192,7 +192,7 @@ private:
 
     bool fetchRedirect;
 
-    bool dqSqushing;
+    bool dqSquashing;
 
     bool checkStall();
 

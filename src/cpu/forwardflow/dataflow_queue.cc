@@ -124,8 +124,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         }
 
         auto &inst = instArray[ptr.index];
-        DPRINTF(DQWake, "Pointer (%i %i) (%i) working\n",
-                ptr.bank, ptr.index, ptr.op);
+        DPRINTF(DQWake, "Pointer (%i %i) (%i) working on inst[%llu]\n",
+                ptr.bank, ptr.index, ptr.op, inst->seqNum);
 
         if (op == 0 && !(ptr.wkType == WKPointer::WKMem)) {
             DPRINTF(DQWake, "Wakeup ignores op wakeup pointer to Dest\n");
@@ -1646,6 +1646,20 @@ typename Impl::DynInstPtr DataflowQueues<Impl>::findBySeq(InstSeqNum seq)
         }
     }
     panic("It must be it DQ!\n");
+}
+
+template<class Impl>
+bool DataflowQueues<Impl>::queuesEmpty()
+{
+    bool fwPointerEmpty = true;
+//    bool wkPointerEmpty = true;
+    for (unsigned b = 0; b < nBanks; b++) {
+        for (unsigned op = 0; op < nOps; op++) {
+            fwPointerEmpty &= forwardPointerQueue[b*nOps+op].empty();
+//            wkPointerEmpty &= forwardPointerQueue[b*nOps+op].empty();
+        }
+    }
+    return fwPointerEmpty;
 }
 
 }

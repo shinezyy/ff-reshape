@@ -388,6 +388,8 @@ public:
     void completeMemInst(DynInstPtr &inst);
 
     DynInstPtr findBySeq(InstSeqNum seq);
+
+    bool queuesEmpty();
 };
 
 }
