@@ -129,7 +129,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         DPRINTF(DQWake, "Pointer (%i %i) (%i) working on inst[%llu]\n",
                 ptr.bank, ptr.index, ptr.op, inst->seqNum);
 
-        if (op == 0 && !(ptr.wkType == WKPointer::WKMem)) {
+        if (op == 0 && !(ptr.wkType == WKPointer::WKMem ||
+                    ptr.wkType == WKPointer::WKMisc)) {
             DPRINTF(DQWake, "Wakeup ignores op wakeup pointer to Dest\n");
             if (anyPending) {
                 ptr.valid = false;
@@ -137,7 +138,13 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             continue;
         }
 
-        if (ptr.wkType == WKPointer::WKMem) {
+        if (ptr.wkType == WKPointer::WKMisc) {
+            inst->miscDepReady = true;
+            first = inst;
+            DPRINTF(DQWake, "Non spec inst [%llu] is the gifted one in this bank\n",
+                    inst->seqNum);
+
+        } else if (ptr.wkType == WKPointer::WKMem) {
             inst->memDepReady = true;
             first = inst;
             DPRINTF(DQWake, "Mem inst [%llu] is the gifted one in this bank\n",
@@ -1369,7 +1376,9 @@ void DataflowQueues<Impl>::violation(DynInstPtr store, DynInstPtr violator)
 template<class Impl>
 void DataflowQueues<Impl>::scheduleNonSpec()
 {
-    WKPointer wk(uint2Pointer(tail));
+    auto p = uint2Pointer(tail);
+    WKPointer wk(p);
+    DPRINTF(DQ, "Scheduling non spec inst @ (%i %i)\n", p.bank, p.index);
     wk.wkType = WKPointer::WKMisc;
     extraWakeup(wk);
 }

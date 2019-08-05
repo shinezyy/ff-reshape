@@ -63,7 +63,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
     to_wake.valid = false;
 
     if (dest.valid) {
-        if (!inst->isLoad()) {
+        if (!(inst->isLoad() || inst->isStoreConditional())) {
             DPRINTFR(FUW, "to wake up (%i) (%i %i) (%i)\n",
                      dest.valid, dest.bank, dest.index, dest.op);
             to_wake = dest;
@@ -72,7 +72,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
                      dest.valid, dest.bank, dest.index, dest.op);
         }
     } else if (inst->numDestRegs() > 0) {
-        if (!inst->isLoad()) {
+        if (!(inst->isLoad() || inst->isStoreConditional())) {
             to_wake = inst->dqPosition;
             inst->destReforward = true;
             DPRINTFR(FUW, "to wake up itself "
@@ -465,7 +465,7 @@ void FUWrapper<Impl>::squash(InstSeqNum squash_seq)
             fu.toNextCycle->cycleLeft = 0;
             fu.toNextCycle->seq = 0;
 
-            if (fu.cycleLeft <= 19) {
+            if (fu.cycleLeft <= 20) {
                 assert(wbScheduledNext[fu.cycleLeft - 2]);
                 wbScheduledNext[fu.cycleLeft - 2] = false;
             }

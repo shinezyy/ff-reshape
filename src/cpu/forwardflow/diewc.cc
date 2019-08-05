@@ -100,9 +100,11 @@ void FFDIEWC<Impl>::tick() {
 
     if (tbuf.nonSpecSeqNum != 0) {
         if (tbuf.strictlyOrdered) {
+            DPRINTF(DIEWC, "Recv strictlyOrdered non spec\n");
             dq.replayMemInst(tbuf.strictlyOrderedLoad);
             tbuf.strictlyOrderedLoad->setAtCommit();
         } else {
+            DPRINTF(DIEWC, "Recv other non spec\n");
             assert(tbuf.nonSpecSeqNum == dq.getTail()->seqNum);
             dq.scheduleNonSpec();
         }
@@ -254,6 +256,8 @@ void FFDIEWC<Impl>::dispatch() {
                         inst->staticInst->disassemble(inst->instAddr()));
 //                panic("There should not be store conditional in Risc-V\n");
                 inst->setCanCommit();
+
+                insertPointerPairs(archState.recordAndUpdateMap(inst));
 
                 dq.insertNonSpec(inst);
 
@@ -550,6 +554,12 @@ FFDIEWC<Impl>::
     } else {
         DPRINTF(FFCommit, "comp tick: %u, curTick: %llu, fetch tick: %llu\n",
                 head_inst->completeTick, curTick(), head_inst->fetchTick);
+    }
+
+    if (head_inst->isStoreConditional() && !head_inst->isCompleted()) {
+        DPRINTF(FFCommit, "Inst[%llu] is store cond, and not completed yet,"
+                " cannot commit\n", head_inst->seqNum);
+        return false;
     }
 
     if (!dq.logicallyLT(dq.pointer2uint(head_inst->dqPosition), oldestForwarded)) {
@@ -1278,7 +1288,7 @@ void FFDIEWC<Impl>::wakeCPU()
 template<class Impl>
 void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
 {
-    assert(inst->isLoad());
+    assert(inst->isLoad() || inst->isStoreConditional());
     inst->setCanCommit();
     // assert(inst->sfuWrapper);
     // inst->sfuWrapper->markWb();

@@ -44,7 +44,7 @@ from m5.params import *
 from FuncUnit import *
 import copy
 
-commonOpList = [ OpDesc(opClass='IntAlu'),
+commonOpList = [OpDesc(opClass='No_OpClass'), OpDesc(opClass='IntAlu'),
         OpDesc(opClass='MemRead'), OpDesc(opClass='MemWrite'),
         OpDesc(opClass='FloatMemRead'), OpDesc(opClass='FloatMemWrite')]
 
