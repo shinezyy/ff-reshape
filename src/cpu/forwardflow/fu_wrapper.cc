@@ -465,8 +465,12 @@ void FUWrapper<Impl>::squash(InstSeqNum squash_seq)
             fu.toNextCycle->cycleLeft = 0;
             fu.toNextCycle->seq = 0;
 
-            if (fu.cycleLeft <= 20) {
+            if (fu.cycleLeft <= 19) {
                 assert(wbScheduledNext[fu.cycleLeft - 2]);
+                wbScheduledNext[fu.cycleLeft - 2] = false;
+
+            } else if (fu.cycleLeft == 20){
+                // here are some corner cases that I don't want to handle
                 wbScheduledNext[fu.cycleLeft - 2] = false;
             }
         }
