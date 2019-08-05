@@ -111,6 +111,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         DPRINTF(DQWake, "Select inputPointers\n");
     }
 
+    std::array<bool, 4> need_pending_ptr;
+    std::fill(need_pending_ptr.begin(), need_pending_ptr.end(), false);
 
     for (unsigned op = 0; op < nOps; op++) {
         auto &ptr = pointers[op];
@@ -161,6 +163,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             }
 
             if (nearlyWakeup[ptr.index]) {
+                assert(inst->numBusyOps() == 0);
                 DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
                 wakeup_count++;
                 if (!first) {
@@ -174,6 +177,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                     }
                 } else {
                     DPRINTF(DQWake, "inst [%llu] has no luck in this bank\n", inst->seqNum);
+                    need_pending_ptr[op] = true;
                 }
             } else {
                 unsigned busy_count = inst->numBusyOps();
@@ -188,7 +192,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
     if (wakeup_count > 1) {
         for (unsigned op = 1; op < nOps; op++) {
             auto &ptr = pointers[op];
-            if (ptr.index != first_index) {
+            if (ptr.index != first_index && need_pending_ptr[op]) {
                 DPRINTF(DQWake, "Pointer (%i %i) (%i) becomes pending\n",
                         ptr.bank, ptr.index, ptr.op);
                 pendingWakeupPointers[op] = ptr;
@@ -473,13 +477,20 @@ void DataflowQueues<Impl>::tick()
 
         DPRINTF(DQWake, "Inst[%d] selected by fu%u\n", inst->seqNum, b);
 
-        bool can_accept = fuWrappers[b].canServe(inst);
-        if (can_accept) {
+        if (inst->isSquashed()) {
+            DPRINTF(FFSquash, "Skip squashed inst[%llu]\n", inst->seqNum);
             fu_req_granted[fu_granted_ptrs[b]->source] = true;
-            fuWrappers[b].consume(inst);
             dqs[fu_granted_ptrs[b]->source].clearPending();
-        } else if (opLat[inst->opClass()] > 1){
-            llBlockedNext = true;
+
+        } else {
+            bool can_accept = fuWrappers[b].canServe(inst);
+            if (can_accept) {
+                fu_req_granted[fu_granted_ptrs[b]->source] = true;
+                fuWrappers[b].consume(inst);
+                dqs[fu_granted_ptrs[b]->source].clearPending();
+            } else if (opLat[inst->opClass()] > 1){
+                llBlockedNext = true;
+            }
         }
     }
 
@@ -578,6 +589,13 @@ void DataflowQueues<Impl>::tick()
             if (wakeQueues[b * nOps].size() > maxQueueDepth) {
                 clearAndDumpQueues();
                 assert(wakeQueues[b * nOps].size() <= maxQueueDepth);
+            }
+
+            if (fuWrappers[b].toWakeup.op == 0) {
+                unsigned used = pointer2uint(fuWrappers[b].toWakeup);
+                if (validPosition(used) && logicallyLET(used, oldestUsed)) {
+                    oldestUsed = used;
+                }
             }
         }
     }
@@ -1713,6 +1731,18 @@ void DataflowQueues<Impl>::endCycle()
 {
     for (auto &wrapper: fuWrappers) {
         wrapper.endCycle();
+    }
+
+    if (numPendingWakeups == 0) {
+        oldestUsed = getHeadPtr();
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::maintainOldestUsed()
+{
+    if (!validPosition(oldestUsed)) {
+        oldestUsed = getTailPtr();
     }
 }
 

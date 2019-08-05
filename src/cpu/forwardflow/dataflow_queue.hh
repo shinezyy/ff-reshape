@@ -395,6 +395,14 @@ public:
     bool queuesEmpty();
 
     void endCycle();
+
+private:
+    unsigned oldestUsed;
+
+public:
+    void maintainOldestUsed();
+
+    unsigned getOldestUsed() {return oldestUsed;};
 };
 
 }

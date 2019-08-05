@@ -103,7 +103,7 @@ void FFDIEWC<Impl>::tick() {
             dq.replayMemInst(tbuf.strictlyOrderedLoad);
             tbuf.strictlyOrderedLoad->setAtCommit();
         } else {
-            assert(tbuf.nonSpecSeqNum == dq.getTail());
+            assert(tbuf.nonSpecSeqNum == dq.getTail()->seqNum);
             dq.scheduleNonSpec();
         }
     }
@@ -307,6 +307,7 @@ void FFDIEWC<Impl>::dispatch() {
                 if (!dq.validPosition(oldestForwarded)) {
                     oldestForwarded = dq.getTailPtr();
                 }
+                dq.maintainOldestUsed();
             }
             youngestSeqNum = inst->seqNum;
 //            DPRINTF(DIEWC, "dispatch reach 7.3\n");
@@ -558,6 +559,13 @@ FFDIEWC<Impl>::
                           head_inst->dqPosition.index);
         return false;
     }
+    if (!dq.logicallyLT(dq.pointer2uint(head_inst->dqPosition), dq.getOldestUsed())) {
+        DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is referenced recently,"
+                          " and cannot be committed right now\n",
+                          head_inst->seqNum, head_inst->dqPosition.bank,
+                          head_inst->dqPosition.index);
+        return false;
+    }
 
     if (toNextCycle->diewc2diewc.squash &&
             toNextCycle->diewc2diewc.squashedSeqNum <= head_inst->seqNum) {
@@ -753,6 +761,7 @@ FFDIEWC<Impl>::commitInsts()
                     // 反正clean up之后有很多空位，不及时commit也无所谓
                     oldestForwarded = dq.getTailPtr();
                 }
+                dq.maintainOldestUsed();
             }
             break;
         }
@@ -1871,6 +1880,7 @@ void FFDIEWC<Impl>::sendBackwardInfo()
         if (!dq.validPosition(oldestForwarded)) {
             oldestForwarded = dq.getTailPtr();
         }
+        dq.maintainOldestUsed();
 
         if (fromLastCycle->diewc2diewc.squash) {
             toAllocation->diewcInfo.updateDQHead = true;

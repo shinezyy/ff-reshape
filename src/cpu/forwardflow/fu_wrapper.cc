@@ -126,14 +126,15 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
 
         assert(!wbScheduledNext[lat-2]);
 
-        wrapper.toNextCycle->hasPendingInst = true;
-        wrapper.toNextCycle->seq = inst->seqNum;
-        wrapper.toNextCycle->longLatencyPointer = to_wake;
-        wrapper.toNextCycle->cycleLeft = lat - 1;
+//        wrapper.toNextCycle->hasPendingInst = true;
+//        wrapper.toNextCycle->seq = inst->seqNum;
+//        wrapper.toNextCycle->longLatencyPointer = to_wake;
+//        wrapper.toNextCycle->cycleLeft = lat - 1;
 
         wrapper.hasPendingInst = true;
         wrapper.seq = inst->seqNum;
         wrapper.cycleLeft = lat;
+        wrapper.longLatencyPointer = to_wake;
 
         DPRINTF(FUW, "Add inst[%i] into LL wrapper (%i, %i)\n",
                 inst->seqNum, wrapperID, inst->opClass());
@@ -211,6 +212,9 @@ void FUWrapper<Impl>::setWakeup() {
         if (toWakeup.valid) {
             DPRINTF(FUW, "To wakeup: (%i %i) (%i)\n",
                     toWakeup.bank, toWakeup.index, toWakeup.op);
+        } else {
+            DPRINTF(FUW, "Don't wakeup: (%i) (%i %i) (%i)\n",
+                    toWakeup.valid, toWakeup.bank, toWakeup.index, toWakeup.op);
         }
         assert(count_overall > 0);
     }
