@@ -387,7 +387,7 @@ void FFDIEWC<Impl>::commit() {
 
     handleSquash();
 
-    if (commitStatus != DQSquashing) {
+    if (!(commitStatus == DQSquashing || commitStatus == TrapPending)) {
         commitInsts();
     } else {
         DPRINTF(FFSquash, "DQ is squashing\n");

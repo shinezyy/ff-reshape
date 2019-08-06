@@ -736,6 +736,7 @@ template <class Impl>
 void
 DefaultCommit<Impl>::handleInterrupt()
 {
+    DPRINTF(Commit, "handleInterrupt entry.\n");
     // Verify that we still have an interrupt to handle
     if (!cpu->checkInterrupts(cpu->tcBase(0))) {
         DPRINTF(Commit, "Pending interrupt is cleared by master before "
@@ -995,8 +996,10 @@ DefaultCommit<Impl>::commitInsts()
 
         ThreadID commit_thread = getCommittingThread();
 
-        if (commit_thread == -1 || !rob->isHeadReady(commit_thread))
+        if (commit_thread == -1 || !rob->isHeadReady(commit_thread)) {
+            DPRINTF(Commit, "commit_thread = %i || ROB head not ready.\n", commit_thread);
             break;
+        }
 
         head_inst = rob->readHeadInst(commit_thread);
 
