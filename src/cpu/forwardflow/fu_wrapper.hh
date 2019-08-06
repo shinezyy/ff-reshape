@@ -34,16 +34,16 @@ struct SingleFUWrapper {
 
     struct PipelineStruct {
         bool valid;
-        DQPointer pointer;
+        std::array<DQPointer, 2> pointer;
         InstSeqNum seq;
     };
 
     std::deque<PipelineStruct> pipelineQueue;
 
-    DQPointer longLatencyPointer;
+    std::array<DQPointer, 2> longLatencyPointer;
     unsigned cycleLeft;  // for long latency
 
-    DQPointer oneCyclePointer;
+    std::array<DQPointer, 2> oneCyclePointer;
 
     void init(bool pipe, bool single_cycle, bool long_lat,
                     unsigned latency, unsigned max_pipe_lat);
@@ -51,8 +51,8 @@ struct SingleFUWrapper {
     struct SFUTimeReg {
         bool hasPendingInst;
         InstSeqNum seq;
-        DQPointer oneCyclePointer;
-        DQPointer longLatencyPointer;
+        std::array<DQPointer, 2> oneCyclePointer;
+        std::array<DQPointer, 2> longLatencyPointer;
         unsigned cycleLeft;
     };
 
@@ -120,7 +120,7 @@ public:
 
     void startCycle();
 
-    DQPointer toWakeup;
+    std::array<DQPointer, 2> toWakeup;
 
     bool toExec;
 

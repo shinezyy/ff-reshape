@@ -66,6 +66,11 @@ typedef union {
     uint64_t i;
 } FFRegValue;
 
+enum PointerIndex {
+    SrcPtr = 0,
+    DestPtr
+};
+
 extern ThreadID DummyTid;
 
 /** Physical register ID.

@@ -251,6 +251,11 @@ DataflowQueueBank<Impl>::readPointersFromBank()
 
                 if (instArray[ptr.index]->pointers[op].valid) {
                     if (op != 0 || instArray[ptr.index]->destReforward) {
+
+                        if (op == 0 && instArray[ptr.index]->destReforward) {
+                            DPRINTF(DQ, "Although its wakeup ptr to dest,"
+                                    " it is still forwarded because of destReforward flag\n");
+                        }
                         optr = instArray[ptr.index]->pointers[op];
                         if (op == 0 && optr.valid && instArray[ptr.index]->destReforward) {
                             instArray[ptr.index]->destReforward = false;
@@ -509,7 +514,7 @@ void DataflowQueues<Impl>::tick()
 
     replayMemInsts();
 
-    DPRINTF(DQ, "Reading wk pointers from fu to wake queus\n");
+    DPRINTF(DQ, "Reading wk pointers from banks to wake queus\n");
     // push forward pointers to queues
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op <= 3; op++) {
@@ -585,25 +590,32 @@ void DataflowQueues<Impl>::tick()
     }
 
     for (unsigned b = 0; b < nBanks; b++) {
-        // todo: check this line of code
-        if (fuWrappers[b].toWakeup.valid) {
-            DPRINTF(DQWake, "Got wakeup pointer to (%d %d)(%d), pushed to wakeQueue\n",
-                    fuWrappers[b].toWakeup.bank,
-                    fuWrappers[b].toWakeup.index,
-                    fuWrappers[b].toWakeup.op);
-            wakeQueues[b * nOps].push(WKPointer(fuWrappers[b].toWakeup));
-            numPendingWakeups++;
-            if (wakeQueues[b * nOps].size() > maxQueueDepth) {
-                clearAndDumpQueues();
-                assert(wakeQueues[b * nOps].size() <= maxQueueDepth);
-            }
+        const DQPointer &src = fuWrappers[b].toWakeup[SrcPtr];
+        const DQPointer &dest = fuWrappers[b].toWakeup[DestPtr];
 
-            if (fuWrappers[b].toWakeup.op == 0) {
-                unsigned used = pointer2uint(fuWrappers[b].toWakeup);
-                if (validPosition(used) && logicallyLET(used, oldestUsed)) {
-                    oldestUsed = used;
-                }
+        if (dest.valid) {
+            DPRINTF(DQWake, "Got wakeup pointer to (%d %d)(%d), pushed to wakeQueue\n",
+                    dest.bank, dest.index, dest.op);
+            wakeQueues[b * nOps].push(WKPointer(dest));
+            numPendingWakeups++;
+
+        }
+
+        if (src.valid) {
+            DPRINTF(DQWake, "Got inverse wakeup pointer to (%d %d)(%d), pushed to wakeQueue\n",
+                    src.bank, src.index, src.op);
+            wakeQueues[b * nOps].push(WKPointer(src));
+            numPendingWakeups++;
+
+            unsigned used = pointer2uint(src);
+            if (validPosition(used) && logicallyLET(used, oldestUsed)) {
+                oldestUsed = used;
             }
+        }
+
+        if (wakeQueues[b * nOps].size() > maxQueueDepth) {
+            clearAndDumpQueues();
+            assert(wakeQueues[b * nOps].size() <= maxQueueDepth);
         }
     }
 
@@ -1152,6 +1164,10 @@ DataflowQueues<Impl>::markFwPointers(
         if (inst && (inst->isExecuted() || inst->opReady[op])) {
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
             extraWakeup(WKPointer(pair.payload));
+
+        } else if (inst && inst->fuGranted && op == 0){
+            DPRINTF(FFSquash, "And mark it to wakeup new child\n");
+            inst->destReforward = true;
         }
     } else if (inst && inst->opReady[op]) {
         DPRINTF(DQWake, "which has already been waken up!\n");

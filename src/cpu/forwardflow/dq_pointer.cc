@@ -32,7 +32,7 @@ DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o)
     op = o;
 }
 
-WKPointer::WKPointer(DQPointer &dqPointer)
+WKPointer::WKPointer(const DQPointer &dqPointer)
 {
     valid = dqPointer.valid;
     wkType = WKOp;
@@ -42,12 +42,12 @@ WKPointer::WKPointer(DQPointer &dqPointer)
     op = dqPointer.op;
 }
 
-WKPointer::WKPointer(DQPointer &&dqPointer)
-{
-    valid = dqPointer.valid;
-    wkType = WKOp;
-    group = dqPointer.group;
-    bank = dqPointer.bank;
-    index = dqPointer.index;
-    op = dqPointer.op;
-}
+// WKPointer::WKPointer(DQPointer &&dqPointer)
+// {
+//     valid = dqPointer.valid;
+//     wkType = WKOp;
+//     group = dqPointer.group;
+//     bank = dqPointer.bank;
+//     index = dqPointer.index;
+//     op = dqPointer.op;
+// }

@@ -1026,6 +1026,7 @@ void FFDIEWC<Impl>::handleSquash() {
             bool dont_care_either = false;
             dq.squash(dont_care, true, dont_care_either);
             archState.squashAll();
+            // archState.dumpMaps();
         }
 
     }
@@ -1095,7 +1096,9 @@ void FFDIEWC<Impl>::squashAll() {
     commitStatus = DQSquashing; // to prevent pc from advancing
 
     toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
-    toNextCycle->diewc2diewc.donePointer = dq.getTail()->dqPosition;
+    if (!dq.isEmpty()) {
+        toNextCycle->diewc2diewc.donePointer = dq.getTail()->dqPosition;
+    }
     toNextCycle->diewc2diewc.squash = true;
 //    toNextCycle->diewc2diewc.dqSquashing = true;
     toNextCycle->diewc2diewc.mispredictInst = nullptr;

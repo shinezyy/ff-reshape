@@ -59,27 +59,34 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
 
     DQPointer &dest = inst->pointers[0];
 
-    DQPointer to_wake{};
-    to_wake.valid = false;
+    std::array<DQPointer, 2> to_wake;
+    to_wake[SrcPtr].valid = false;
+    to_wake[DestPtr].valid = false;
 
     if (dest.valid) {
         if (!(inst->isLoad() || inst->isStoreConditional())) {
             DPRINTFR(FUW, "to wake up (%i) (%i %i) (%i)\n",
                      dest.valid, dest.bank, dest.index, dest.op);
-            to_wake = dest;
+            to_wake[DestPtr] = dest;
         } else {
             DPRINTFR(FUW, "(let loads forget) to wake up (%i) (%i %i) (%i)\n",
                      dest.valid, dest.bank, dest.index, dest.op);
         }
-    } else if (inst->numDestRegs() > 0) {
+    }
+    if (inst->numDestRegs() > 0) {
         if (!(inst->isLoad() || inst->isStoreConditional())) {
-            to_wake = inst->dqPosition;
-            inst->destReforward = true;
-            DPRINTFR(FUW, "to wake up itself "
-                          " who has children but not dispatched yet\n");
+            to_wake[SrcPtr] = inst->dqPosition;
+            if (!dest.valid) {
+                inst->destReforward = true;
+                DPRINTFR(FUW, "to wake up itself "
+                        " who has children but not dispatched yet\n");
+            } else {
+                DPRINTFR(FUW, "to wake up itself "
+                        " in case that current child was squashed\n");
+            }
         } else {
             DPRINTFR(FUW, "(let loads forget) to wake up invalid ptr (%i) (%i %i) (%i)\n",
-                     dest.valid, dest.bank, dest.index, dest.op);
+                    dest.valid, dest.bank, dest.index, dest.op);
         }
     } else {
         DPRINTFR(FUW, "but wake up nobody\n");
@@ -209,20 +216,35 @@ void FUWrapper<Impl>::setWakeup() {
     if (wbScheduled[0]) {
         DPRINTF(FUW, "one instruction should be executed and its children"
                 " should be waken up\n");
-        if (toWakeup.valid) {
-            DPRINTF(FUW, "To wakeup: (%i %i) (%i)\n",
-                    toWakeup.bank, toWakeup.index, toWakeup.op);
+
+        const DQPointer &src = toWakeup[SrcPtr];
+        const DQPointer &dest = toWakeup[DestPtr];
+
+        if (src.valid) {
+            DPRINTF(FUW, "To wakeup source: (%i %i) (%i)\n",
+                    src.bank, src.index, src.op);
+
         } else {
-            DPRINTF(FUW, "Don't wakeup: (%i) (%i %i) (%i)\n",
-                    toWakeup.valid, toWakeup.bank, toWakeup.index, toWakeup.op);
+            DPRINTF(FUW, "Don't wakeup source: (%i) (%i %i) (%i)\n",
+                    src.valid, src.bank, src.index, src.op);
         }
+        if (dest.valid) {
+            DPRINTF(FUW, "To wakeup dest: (%i %i) (%i)\n",
+                    dest.bank, dest.index, dest.op);
+
+        } else {
+            DPRINTF(FUW, "Don't wakeup dest: (%i) (%i %i) (%i)\n",
+                    dest.valid, dest.bank, dest.index, dest.op);
+        }
+
         assert(count_overall > 0);
     }
 }
 
 template<class Impl>
 void FUWrapper<Impl>::startCycle() {
-    toWakeup.valid = false;
+    toWakeup[SrcPtr].valid = false;
+    toWakeup[DestPtr].valid = false;
     toExec = false;
     seqToExec = 0;
 
@@ -291,7 +313,7 @@ void FUWrapper<Impl>::endCycle() {
             if (!wrapper.writtenThisCycle) {
                 DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will push\n",
                         wrapperID, pair.first, wrapper.pipelineQueue.size());
-                wrapper.pipelineQueue.push_back({false, inv, 0});
+                wrapper.pipelineQueue.push_back({false, {inv, inv}, 0});
             } else {
                 DPRINTF(FUPipe, "wrapper(%i, %i) has been written, size:%u, will not push\n",
                         wrapperID, pair.first, wrapper.pipelineQueue.size());
@@ -465,7 +487,7 @@ void FUWrapper<Impl>::squash(InstSeqNum squash_seq)
             fu.toNextCycle->cycleLeft = 0;
             fu.toNextCycle->seq = 0;
 
-            if (fu.cycleLeft <= 19) {
+            if (fu.cycleLeft > 1 && fu.cycleLeft <= 19) {
                 assert(wbScheduledNext[fu.cycleLeft - 2]);
                 wbScheduledNext[fu.cycleLeft - 2] = false;
 
@@ -482,7 +504,8 @@ void FUWrapper<Impl>::squash(InstSeqNum squash_seq)
                 if (cycle_left > 1 && element.valid && element.seq > squash_seq) {
                     DPRINTF(FUW, "Squashing pipe inst[%llu] in w(%i, %i)\n",
                             element.seq, wrapperID, pair.first);
-                    element.pointer.valid = false;
+                    element.pointer[SrcPtr].valid = false;
+                    element.pointer[DestPtr].valid = false;
                     element.valid = false;
 
                     assert(wbScheduledNext[cycle_left - 2]);
@@ -511,7 +534,7 @@ SingleFUWrapper::init(
     latency = _latency;
     MaxPipeLatency = max_pipe_lat;
     for (unsigned i = 0; i < latency; i++) {
-        pipelineQueue.push_back({false, inv, 0});
+        pipelineQueue.push_back({false, {inv, inv}, 0});
     }
     timeStruct = new TimeBuffer<SFUTimeReg>(2, 2);
     toNextCycle = timeStruct->getWire(0);
