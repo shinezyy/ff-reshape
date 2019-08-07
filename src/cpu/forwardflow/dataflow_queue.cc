@@ -524,9 +524,10 @@ void DataflowQueues<Impl>::tick()
                         ptr.bank, ptr.index, ptr.op, b);
                 wakeQueues[b * nOps + op].push(WKPointer(ptr));
                 numPendingWakeups++;
+                DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
                 if (wakeQueues[b * nOps + op].size() > maxQueueDepth) {
                     clearAndDumpQueues();
-                    assert(wakeQueues[b * nOps + op].size() <= maxQueueDepth);
+                    panic("wakeQueues[%u.%u].size > maxQueueDepth", b, op);
                 }
             }
         }
@@ -572,6 +573,7 @@ void DataflowQueues<Impl>::tick()
                         ptr.bank, ptr.index, ptr.op, pkt->source);
                 wakeQueues[pkt->source].pop();
                 numPendingWakeups--;
+                DPRINTF(DQWake, "After pop, numPendingWakeups = %u\n", numPendingWakeups);
             }
         }
     }
@@ -598,14 +600,16 @@ void DataflowQueues<Impl>::tick()
                     dest.bank, dest.index, dest.op);
             wakeQueues[b * nOps].push(WKPointer(dest));
             numPendingWakeups++;
+            DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 
         }
 
         if (src.valid) {
             DPRINTF(DQWake, "Got inverse wakeup pointer to (%d %d)(%d), pushed to wakeQueue\n",
                     src.bank, src.index, src.op);
-            wakeQueues[b * nOps].push(WKPointer(src));
+            wakeQueues[b * nOps + 2].push(WKPointer(src));
             numPendingWakeups++;
+            DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 
             unsigned used = pointer2uint(src);
             if (validPosition(used) && logicallyLET(used, oldestUsed)) {
@@ -615,7 +619,7 @@ void DataflowQueues<Impl>::tick()
 
         if (wakeQueues[b * nOps].size() > maxQueueDepth) {
             clearAndDumpQueues();
-            assert(wakeQueues[b * nOps].size() <= maxQueueDepth);
+            panic("wakeQueues[%u.%u].size > maxQueueDepth", b, 0);
         }
     }
 
@@ -829,7 +833,7 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
 
         if (forwardPointerQueue[forwardPtrIndex].size() > maxQueueDepth) {
             clearAndDumpQueues();
-            assert(forwardPointerQueue[forwardPtrIndex].size() <= maxQueueDepth);
+            panic("fwQueues.size > maxQueueDepth");
         }
 
         numPendingFwPointers++;
@@ -1629,6 +1633,7 @@ void DataflowQueues<Impl>::extraWakeup(const WKPointer &wk)
             wk.bank, wk.index, wk.op, extraWKPtr * nOps + 3);
     wakeQueues[extraWKPtr * nOps + 3].push(wk);
     numPendingWakeups++;
+    DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
     incExtraWKptr();
 }
 
@@ -1720,33 +1725,33 @@ bool DataflowQueues<Impl>::queuesEmpty()
 template<class Impl>
 void DataflowQueues<Impl>::clearAndDumpQueues()
 {
-    DPRINTF(DQ, "Dump and clear wakeQueues!\n");
+    printf("Dump and clear wakeQueues!\n");
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
-            DPRINTFR(DQ, "Q[%i]: ", b*nOps+op);
+            printf("Q[%i]: ", b*nOps+op);
             auto &q = wakeQueues[b*nOps + op];
             while (!q.empty()) {
                 auto &p = q.front();
-                DPRINTFR(DQ, "(%i) (%i %i) (%i), \n",
+                printf("(%i) (%i %i) (%i), ",
                         p.valid, p.bank, p.index, p.op);
                 q.pop();
             }
-            DPRINTFR(DQ, "\n");
+            printf("\n");
         }
     }
-    DPRINTF(DQ, "Dump and clear fw pointer queues!\n");
+    printf("Dump and clear fw pointer queues!\n");
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
-            DPRINTFR(DQ, "Q[%i]: ", b*nOps+op);
+            printf("Q[%i]: ", b*nOps+op);
             auto &q = forwardPointerQueue[b*nOps + op];
             while (!q.empty()) {
                 auto &p = q.front();
-                DPRINTFR(DQ, "(%i) (%i %i) (%i), \n",
+                printf("(%i) (%i %i) (%i), ",
                         p.payload.dest.valid, p.payload.dest.bank,
                         p.payload.dest.index, p.payload.dest.op);
                 q.pop();
             }
-            DPRINTFR(DQ, "\n");
+            printf("\n");
         }
     }
 }
@@ -1760,6 +1765,15 @@ void DataflowQueues<Impl>::endCycle()
 
     if (numPendingWakeups == 0) {
         oldestUsed = getHeadPtr();
+        DPRINTF(DQ, "Set oldestUsed to youngest inst on wake queue empty\n");
+    } else {
+        DPRINTF(DQ, "wake queue in flight = %i, cannot reset oldestUsed\n", numPendingWakeups);
+        for (unsigned b = 0; b < nBanks; b++) {
+            for (unsigned op = 0; op < nOps; op++) {
+                DPRINTFR(DQ, "wake queue %i.%i size: %llu\n",
+                        b, op, wakeQueues[b*nOps + op].size());
+            }
+        }
     }
 }
 
@@ -1768,6 +1782,7 @@ void DataflowQueues<Impl>::maintainOldestUsed()
 {
     if (!validPosition(oldestUsed)) {
         oldestUsed = getTailPtr();
+        DPRINTF(DQ, "Set oldestUsed to tail: %u\n", oldestUsed);
     }
 }
 
