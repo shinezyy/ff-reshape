@@ -1731,6 +1731,10 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
         inst->setCanCommit();
     }
 
+    if (inst->isMemBarrier() || inst->isWriteBarrier()) {
+        dq.completeMemInst(inst);
+    }
+
     if ((!fetchRedirect ||  // fetch not redirected
 
         !toNextCycle->diewc2diewc.squash ||  // no squash needed yet

@@ -487,6 +487,8 @@ void FUWrapper<Impl>::squash(InstSeqNum squash_seq)
             fu.toNextCycle->cycleLeft = 0;
             fu.toNextCycle->seq = 0;
 
+            insts.erase(fu.seq);
+
             if (fu.cycleLeft > 1 && fu.cycleLeft <= 19) {
                 assert(wbScheduledNext[fu.cycleLeft - 2]);
                 wbScheduledNext[fu.cycleLeft - 2] = false;
@@ -507,6 +509,7 @@ void FUWrapper<Impl>::squash(InstSeqNum squash_seq)
                     element.pointer[SrcPtr].valid = false;
                     element.pointer[DestPtr].valid = false;
                     element.valid = false;
+                    insts.erase(element.seq);
 
                     assert(wbScheduledNext[cycle_left - 2]);
                     wbScheduledNext[cycle_left - 2] = false;

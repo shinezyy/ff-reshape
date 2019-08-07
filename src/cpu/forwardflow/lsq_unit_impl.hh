@@ -716,8 +716,8 @@ LSQUnit<Impl>::commitLoad()
 {
     assert(loadQueue[loadHead]);
 
-    DPRINTF(LSQUnit, "Committing head load instruction, PC %s\n",
-            loadQueue[loadHead]->pcState());
+    DPRINTF(LSQUnit, "Committing head load inst[%llu], PC %s\n",
+            loadQueue[loadHead]->seqNum, loadQueue[loadHead]->pcState());
 
     loadQueue[loadHead] = NULL;
 

@@ -213,7 +213,7 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
 
         if (hash_it != memDepHash.end()) {
             store_entry = (*hash_it).second;
-            DPRINTF(MemDepUnit, "Proucer found\n");
+            DPRINTF(MemDepUnit, "Producer found\n");
         }
     }
 

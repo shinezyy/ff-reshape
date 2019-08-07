@@ -1775,6 +1775,9 @@ void DataflowQueues<Impl>::endCycle()
             }
         }
     }
+
+    DPRINTF(DQ, "Size of blockedMemInsts: %llu, size of retryMemInsts: %llu\n",
+            blockedMemInsts.size(), retryMemInsts.size());
 }
 
 template<class Impl>
