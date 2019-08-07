@@ -596,8 +596,8 @@ void DataflowQueues<Impl>::tick()
         const DQPointer &dest = fuWrappers[b].toWakeup[DestPtr];
 
         if (dest.valid) {
-            DPRINTF(DQWake, "Got wakeup pointer to (%d %d)(%d), pushed to wakeQueue\n",
-                    dest.bank, dest.index, dest.op);
+            DPRINTF(DQWake, "Got wakeup pointer to (%d %d)(%d), pushed to wakeQueue[%i]\n",
+                    dest.bank, dest.index, dest.op, b * nOps);
             wakeQueues[b * nOps].push(WKPointer(dest));
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
@@ -605,8 +605,8 @@ void DataflowQueues<Impl>::tick()
         }
 
         if (src.valid) {
-            DPRINTF(DQWake, "Got inverse wakeup pointer to (%d %d)(%d), pushed to wakeQueue\n",
-                    src.bank, src.index, src.op);
+            DPRINTF(DQWake, "Got inverse wakeup pointer to (%d %d)(%d), pushed to wakeQueue[%i]\n",
+                    src.bank, src.index, src.op, b * nOps + 2);
             wakeQueues[b * nOps + 2].push(WKPointer(src));
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
@@ -1165,9 +1165,13 @@ DataflowQueues<Impl>::markFwPointers(
     if (pointers[op].valid) {
         DPRINTF(FFSquash, "Overriding previous (squashed) sibling:(%d %d) (%d)\n",
                 pointers[op].bank, pointers[op].index, pointers[op].op);
+
         if (inst && (inst->isExecuted() || inst->opReady[op])) {
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
             extraWakeup(WKPointer(pair.payload));
+            if (op == 0) {
+                inst->destReforward = false;
+            }
 
         } else if (inst && inst->fuGranted && op == 0){
             DPRINTF(FFSquash, "And mark it to wakeup new child\n");
