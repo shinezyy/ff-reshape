@@ -35,7 +35,8 @@ struct WKPointer{
     bool valid{};
     enum WKType {
         WKOp, // wakeup operands
-        WKMem, // wakeup mem dependency
+        WKMem, // wakeup mem blocked dependency
+        WKOrder, // wakeup store to load dependency
         WKMisc // wakeup non-speculative, barrier, etc.
     };
     WKType wkType;

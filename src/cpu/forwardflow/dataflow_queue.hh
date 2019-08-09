@@ -148,7 +148,7 @@ public:
 
     unsigned writes, reads;
 
-    bool insert(DynInstPtr &inst);
+    bool insert(DynInstPtr &inst, bool nonSpec);
 
     void tick();
 
@@ -272,7 +272,7 @@ public:
 
     void setReg(DQPointer pointer, FFRegValue val);
 
-    void addReadyMemInst(DynInstPtr);
+    void addReadyMemInst(DynInstPtr inst, bool isOrderDep = true);
 
     void rescheduleMemInst(DynInstPtr &inst);
 
@@ -403,6 +403,8 @@ public:
     void maintainOldestUsed();
 
     unsigned getOldestUsed() {return oldestUsed;};
+
+    void dumpFwQSize();
 };
 
 }

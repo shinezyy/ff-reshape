@@ -410,6 +410,10 @@ public:
     bool miscDepReady;
     bool miscOpFulfilled();
 
+    bool hasOrderDep;
+    bool orderDepReady;
+    bool orderFulfilled();
+
     DQPointer dqPosition;
 
     FFRegValue getDestValue();

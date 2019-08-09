@@ -224,6 +224,7 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
                 "%s [sn:%lli].\n", inst->pcState(), inst->seqNum);
 
         inst_entry->memDepReady = true;
+        inst->hasOrderDep = false;
 
         if (inst->readyToIssue()) {
             inst_entry->regsReady = true;
@@ -239,6 +240,7 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
         if (inst->readyToIssue()) {
             inst_entry->regsReady = true;
         }
+        inst->hasOrderDep = true;
 
         // Clear the bit saying this instruction can issue.
         inst->clearCanIssue();
@@ -471,10 +473,14 @@ MemDepUnit<MemDepPred, Impl>::wakeDependents(DynInstPtr &inst)
                 "[sn:%lli].\n",
                 woken_inst->inst->seqNum);
 
-        if (woken_inst->regsReady && !woken_inst->squashed) {
+        // if (woken_inst->regsReady && !woken_inst->squashed) {
+        //     moveToReady(woken_inst);
+        // } else {
+        //     woken_inst->memDepReady = true;
+        // }
+        if (!woken_inst->squashed) {
             moveToReady(woken_inst);
-        } else {
-            woken_inst->memDepReady = true;
+            // moveToReady -> addReadyMemInst -> send wake ptr to entry
         }
     }
 

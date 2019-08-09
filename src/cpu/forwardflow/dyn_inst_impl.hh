@@ -136,11 +136,18 @@ BaseO3DynInst<Impl>::initVars()
     std::fill(identicalTo.begin(), identicalTo.end(), 0);
     fuGranted = false;
     std::fill(srcTakenWithInst.begin(), srcTakenWithInst.end(), false);
+
     hasMemDep = false;
     hasMiscDep = false;
+    hasOrderDep = false;
+
     miscDepReady = false;
     memDepReady = false;
+    orderDepReady = false;
+
     sfuWrapper = nullptr;
+
+
 
     destReforward = false;
 }
@@ -281,6 +288,12 @@ bool BaseO3DynInst<Impl>::memOpFulfilled()
 }
 
 template<class Impl>
+bool BaseO3DynInst<Impl>::orderFulfilled()
+{
+    return !hasOrderDep || orderDepReady;
+}
+
+template<class Impl>
 bool BaseO3DynInst<Impl>::miscOpFulfilled()
 {
     return !hasMiscDep || miscDepReady;
@@ -303,6 +316,7 @@ unsigned BaseO3DynInst<Impl>::numBusyOps()
         busy += (!opFulfilled(op)) && !identicalTo[op];  // a little tricky..
     }
     busy += !miscOpFulfilled();
+    busy += !orderFulfilled();
     return busy;
 }
 

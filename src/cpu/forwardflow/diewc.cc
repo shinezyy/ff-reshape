@@ -306,7 +306,7 @@ void FFDIEWC<Impl>::dispatch() {
 //            DPRINTF(DIEWC, "dispatch reach 7.1\n");
             insertPointerPairs(archState.recordAndUpdateMap(inst));
 //            DPRINTF(DIEWC, "dispatch reach 7.2\n");
-            bool jumped = dq.insert(inst);
+            bool jumped = dq.insert(inst, false);
             if (jumped) {
                 if (!dq.validPosition(oldestForwarded)) {
                     oldestForwarded = dq.getTailPtr();
@@ -562,14 +562,16 @@ FFDIEWC<Impl>::
         return false;
     }
 
-    if (!dq.logicallyLT(dq.pointer2uint(head_inst->dqPosition), oldestForwarded)) {
+    if (!dq.logicallyLT(dq.pointer2uint(head_inst->dqPosition), oldestForwarded) &&
+            !(head_inst->isStoreConditional() || head_inst->isSerializeAfter())) {
         DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is forwarded recently,"
                           " and cannot be committed right now\n",
                           head_inst->seqNum, head_inst->dqPosition.bank,
                           head_inst->dqPosition.index);
         return false;
     }
-    if (!dq.logicallyLT(dq.pointer2uint(head_inst->dqPosition), dq.getOldestUsed())) {
+    if (!dq.logicallyLT(dq.pointer2uint(head_inst->dqPosition), dq.getOldestUsed()) &&
+            !(head_inst->isStoreConditional() || head_inst->isSerializeAfter())) {
         DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is referenced recently,"
                           " and cannot be committed right now\n",
                           head_inst->seqNum, head_inst->dqPosition.bank,
@@ -723,6 +725,7 @@ FFDIEWC<Impl>::generateTrapEvent(ThreadID tid, Fault inst_fault)
 
     Cycles latency = dynamic_pointer_cast<SyscallRetryFault>(inst_fault) ?
                      cpu->syscallRetryLatency : trapLatency;
+    DPRINTF(Commit, "Scheduled latency: %lli\n", latency);
 
     cpu->schedule(trap, cpu->clockEdge(latency));
     trapInFlight = true;
@@ -1709,7 +1712,9 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
                 inst->setCanCommit();
 
                 dq.wakeMemRelated(inst);
-                dq.completeMemInst(inst);
+                if (!inst->isStoreConditional()) {
+                    dq.completeMemInst(inst);
+                }
                 activityThisCycle();
             }
 
@@ -1904,6 +1909,7 @@ void FFDIEWC<Impl>::sendBackwardInfo()
         }
     }
     toAllocation->diewcInfo.freeDQEntries = dq.numFree();
+    toAllocation->diewcInfo.emptyDQ = dq.isEmpty();
 }
 
 
@@ -1937,6 +1943,8 @@ void FFDIEWC<Impl>::clearAtEnd()
 {
     if (dq.numInFlightFw() == 0) {
         resetOldestFw();
+    } else {
+        dq.dumpFwQSize();
     }
     dq.endCycle();
 }

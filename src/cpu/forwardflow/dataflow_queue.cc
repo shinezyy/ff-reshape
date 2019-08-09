@@ -79,8 +79,9 @@ DataflowQueueBank<Impl>::tryWakeTail()
             return nullptr;
         }
     }
-    if (!tail_inst->memOpFulfilled() || !tail_inst->miscOpFulfilled()) {
-        DPRINTF(DQWake, "inst[%d] has mem/misc op not ready and cannot execute\n",
+    if (!tail_inst->memOpFulfilled() || !tail_inst->miscOpFulfilled() ||
+            !tail_inst->orderFulfilled()) {
+        DPRINTF(DQWake, "inst[%d] has mem/order/misc op not ready and cannot execute\n",
                 tail_inst->seqNum);
         return nullptr;
     }
@@ -130,13 +131,15 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 ptr.bank, ptr.index, ptr.op, inst->seqNum);
 
         if (op == 0 && !(ptr.wkType == WKPointer::WKMem ||
-                    ptr.wkType == WKPointer::WKMisc)) {
+                    ptr.wkType == WKPointer::WKMisc || ptr.wkType == WKPointer::WKOrder)) {
             DPRINTF(DQWake, "Wakeup ignores op wakeup pointer to Dest\n");
             if (anyPending) {
                 ptr.valid = false;
             }
             continue;
         }
+
+        bool handle_wakeup = false;
 
         if (ptr.wkType == WKPointer::WKMisc) {
             inst->miscDepReady = true;
@@ -150,7 +153,14 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             DPRINTF(DQWake, "Mem inst [%llu] is the gifted one in this bank\n",
                     inst->seqNum);
 
+        } else if (ptr.wkType == WKPointer::WKOrder) {
+            handle_wakeup = true;
+            inst->orderDepReady = true;
+            DPRINTF(DQWake, "Mem inst [%llu] (has order dep) is the gifted one in this bank\n",
+                    inst->seqNum);
+
         } else { //  if (ptr.wkType == WKPointer::WKOp)
+            handle_wakeup = true;
             inst->opReady[op] = true;
             if (op != 0) {
                 FFRegValue v = dq->readReg(inst->getSrcPointer(op - 1), DQPointer(ptr));
@@ -168,7 +178,10 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                     inst->setSrcValue(xop - 1, v);
                 }
             }
+            DPRINTF(DQWake, "Mark op[%d] of inst [%llu] ready\n", op, inst->seqNum);
+        }
 
+        if (handle_wakeup) {
             if (nearlyWakeup[ptr.index]) {
                 assert(inst->numBusyOps() == 0);
                 DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
@@ -193,7 +206,6 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                     nearlyWakeup.set(ptr.index);
                 }
             }
-            DPRINTF(DQWake, "Mark op[%d] of inst [%llu] ready\n", op, inst->seqNum);
         }
     }
     if (wakeup_count > 1) {
@@ -397,6 +409,7 @@ void DataflowQueueBank<Impl>::checkReadiness(DQPointer pointer)
         readyIndices.push_back(pointer.index);
     }
     if (busy_count == 1) {
+        DPRINTF(DQWake, "inst [%llu] becomes nearly waken up\n", inst->seqNum);
         nearlyWakeup.set(index);
     }
 }
@@ -1018,7 +1031,7 @@ void DataflowQueues<Impl>::setReg(DQPointer ptr, FFRegValue val)
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::addReadyMemInst(DynInstPtr inst)
+void DataflowQueues<Impl>::addReadyMemInst(DynInstPtr inst, bool isOrderDep)
 {
     if (inst->isSquashed()) {
         DPRINTF(DQWake, "Cancel replaying mem inst[%llu] because it was squashed\n", inst->seqNum);
@@ -1026,7 +1039,11 @@ void DataflowQueues<Impl>::addReadyMemInst(DynInstPtr inst)
     }
     DPRINTF(DQWake, "Replaying mem inst[%llu]\n", inst->seqNum);
     WKPointer wk(inst->dqPosition);
-    wk.wkType = WKPointer::WKMem;
+    if (isOrderDep) {
+        wk.wkType = WKPointer::WKOrder;
+    } else {
+        wk.wkType = WKPointer::WKMem;
+    }
     extraWakeup(wk);
 }
 
@@ -1095,7 +1112,7 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
 }
 
 template<class Impl>
-bool DataflowQueues<Impl>::insert(DynInstPtr &inst)
+bool DataflowQueues<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 {
     // todo: send to allocated DQ position
     assert(inst);
@@ -1127,11 +1144,9 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst)
 
 
 //    DPRINTF(DQ, "insert reach 3\n");
-    if (inst->isMemRef()) {
+
+    if (inst->isMemRef() && !nonSpec) {
         memDepUnit.insert(inst);
-//        if (inst->isLoad()) {
-//            inst->hasMemDep = true;
-//        }
     }
 //    DPRINTF(DQ, "insert reach 4\n");
     dqs[allocated.bank].checkReadiness(allocated);
@@ -1150,10 +1165,15 @@ void DataflowQueues<Impl>::insertBarrier(DynInstPtr &inst)
 template<class Impl>
 void DataflowQueues<Impl>::insertNonSpec(DynInstPtr &inst)
 {
+    bool non_spec = false;
+    if (inst->isStoreConditional()) {
+        memDepUnit.insertNonSpec(inst);
+        non_spec = true;
+    }
     assert(inst);
     inst->miscDepReady = false;
     inst->hasMiscDep = true;
-    insert(inst);
+    insert(inst, non_spec);
 }
 
 template<class Impl>
@@ -1678,10 +1698,10 @@ void DataflowQueues<Impl>::replayMemInsts()
     DynInstPtr inst;
     if ((inst = getDeferredMemInstToExecute())) {
         DPRINTF(DQWake, "Replaying from deferred\n");
-        addReadyMemInst(inst);
+        addReadyMemInst(inst, false);
     } else if ((inst = getBlockedMemInst())) {
         DPRINTF(DQWake, "Replaying from blocked\n");
-        addReadyMemInst(inst);
+        addReadyMemInst(inst, false);
     }
 }
 
@@ -1782,6 +1802,18 @@ void DataflowQueues<Impl>::endCycle()
 
     DPRINTF(DQ, "Size of blockedMemInsts: %llu, size of retryMemInsts: %llu\n",
             blockedMemInsts.size(), retryMemInsts.size());
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::dumpFwQSize()
+{
+    DPRINTF(DQ, "fw queue in flight = %i, cannot reset oldestRef\n", numPendingFwPointers);
+    for (unsigned b = 0; b < nBanks; b++) {
+        for (unsigned op = 0; op < nOps; op++) {
+            DPRINTFR(DQ, "fw queue %i.%i size: %llu\n",
+                    b, op, forwardPointerQueue[b*nOps + op].size());
+        }
+    }
 }
 
 template<class Impl>

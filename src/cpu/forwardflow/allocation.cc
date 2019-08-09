@@ -511,6 +511,7 @@ void Allocation<Impl>::readFreeEntries() {
         freeEntries.lqEntries = fromDIEWC->diewcInfo.freeLQEntries;
         freeEntries.sqEntries = fromDIEWC->diewcInfo.freeSQEntries;
     }
+    emptyDQ = fromDIEWC->diewcInfo.emptyDQ;
 }
 
 template<class Impl>
@@ -586,7 +587,12 @@ void Allocation<Impl>::incrFullStat(Allocation::FullSource source) {
 
 template<class Impl>
 void Allocation<Impl>::serializeAfter(Allocation::InstQueue &insts) {
-
+    if (insts.empty()) {
+        serializeOnNextInst = true;
+        return;
+    } else {
+        insts.front()->setSerializeBefore();
+    }
 }
 
 template<class Impl>
@@ -637,6 +643,8 @@ void Allocation<Impl>::resetStage()
     loadsInProgress = 0;
     storesInProgress = 0;
     serializeOnNextInst = false;
+
+    emptyDQ = true;
 }
 
 template<class Impl>

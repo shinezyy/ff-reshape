@@ -311,6 +311,8 @@ struct TimeBufStruct {
 
         bool updateDQHead;
         bool updateDQTail;
+
+        bool emptyDQ; // *R
     };
 
     diewcComm diewcInfo;
