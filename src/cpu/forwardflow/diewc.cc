@@ -1875,11 +1875,11 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator
             toNextCycle->diewc2diewc.squashedPointer = innocent_victim->dqPosition;
 
             TheISA::PCState npc;
-            if (!innocent_victim->isControl()) {
+            if (innocent_victim->isControl() && !innocent_victim->isExecuted() ) {
+                npc = innocent_victim->predPC;
+            } else {
                 npc = innocent_victim->pcState();
                 TheISA::advancePC(npc, innocent_victim->staticInst);
-            } else {
-                npc = innocent_victim->predPC;
             }
             toNextCycle->diewc2diewc.pc = npc;
             DPRINTF(IEW, "Will replay after inst[%llu].\n", innocent_victim->seqNum);
