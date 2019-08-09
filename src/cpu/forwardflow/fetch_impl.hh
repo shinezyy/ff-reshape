@@ -1113,9 +1113,9 @@ DefaultFetch<Impl>::buildInst(ThreadID tid, StaticInstPtr staticInst,
             "[sn:%lli]. @ addr:%p\n", tid, thisPC.instAddr(),
             thisPC.microPC(), seq, instruction.get());
 
-    DPRINTF(Fetch, "[tid:%i]: Instruction is: %s\n", tid,
-            instruction->staticInst->
-            disassemble(thisPC.instAddr()));
+    DPRINTF(Fetch, "[tid:%i]: Instruction %s is: %s\n", tid,
+            instruction->pcState(),
+            instruction->staticInst->disassemble(thisPC.instAddr()));
 
 #if TRACING_ON
     if (trace) {

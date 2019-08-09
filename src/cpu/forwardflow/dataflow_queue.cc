@@ -142,8 +142,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         bool handle_wakeup = false;
 
         if (ptr.wkType == WKPointer::WKMisc) {
+            handle_wakeup = true;
             inst->miscDepReady = true;
-            first = inst;
             DPRINTF(DQWake, "Non spec inst [%llu] is the gifted one in this bank\n",
                     inst->seqNum);
 

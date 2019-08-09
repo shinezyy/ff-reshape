@@ -1764,6 +1764,16 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
         // that have not been executed.
         bool loadNotExecuted = !inst->isExecuted() && inst->isLoad();
 
+        if (inst->isControl() && !inst->mispredicted()) {
+            TheISA::PCState temp_pc = inst->pcState();
+            TheISA::advancePC(temp_pc, inst->staticInst);
+            TheISA::PCState predPC = inst->predPC;
+            DPRINTF(IEW, "Execute: Branch prediction is correct for inst[%llu]\n",
+                    inst->seqNum);
+            DPRINTF(DIEWC, "Pred PC: %s, NPC: %s\n", predPC, temp_pc);
+
+        }
+
         if (inst->mispredicted() && !loadNotExecuted) {
             fetchRedirect = true;
 
@@ -1806,6 +1816,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
             ++memOrderViolationEvents;
         }
     } else {
+        DPRINTF(FFSquash, "Will not check for squash because condition not satisified\n");
         // Reset any state associated with redirects that will not
         // be used.
         if (ldstQueue.violation(DummyTid)) {
@@ -1863,8 +1874,13 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator
             DynInstPtr innocent_victim = dq.findBySeq(youngest_cpted_inst_seq);
             toNextCycle->diewc2diewc.squashedPointer = innocent_victim->dqPosition;
 
-            auto npc = innocent_victim->pcState();
-            TheISA::advancePC(npc, innocent_victim->staticInst);
+            TheISA::PCState npc;
+            if (!innocent_victim->isControl()) {
+                npc = innocent_victim->pcState();
+                TheISA::advancePC(npc, innocent_victim->staticInst);
+            } else {
+                npc = innocent_victim->predPC;
+            }
             toNextCycle->diewc2diewc.pc = npc;
             DPRINTF(IEW, "Will replay after inst[%llu].\n", innocent_victim->seqNum);
             DPRINTF(IEW, "toNextCycle PC: %s.\n", npc);

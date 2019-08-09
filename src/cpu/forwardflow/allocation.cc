@@ -62,7 +62,8 @@ Allocation<Impl>::readInsts()
 
     for (const auto& inst: insts) {
         if (inst && !inst->isSquashed()) {
-            DPRINTF(DAllocation, "Inst[%d] %s arrived allocation\n", inst->seqNum,
+            DPRINTF(DAllocation, "Inst[%d] pc: %s, %s arrived allocation\n", inst->seqNum,
+                    inst->pcState(),
                     inst->staticInst->disassemble(inst->instAddr()));
         }
     }
