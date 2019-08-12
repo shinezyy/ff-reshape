@@ -112,6 +112,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
         // schedule wb port
         assert(!wbScheduledNext[lat-2]);
         wbScheduledNext[lat-2] = true;
+        wbScheduled[lat-1] = true;
 
         DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will push\n",
                 wrapperID, inst->opClass(), wrapper.pipelineQueue.size());
@@ -130,8 +131,11 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
                     wrapperID, inst->opClass());
             assert(!wrapper.hasPendingInst);
         }
-
         assert(!wbScheduledNext[lat-2]);
+
+        if (lat <= Impl::MaxOpLatency) {
+            wbScheduled[lat-1] = true;
+        }
 
 //        wrapper.toNextCycle->hasPendingInst = true;
 //        wrapper.toNextCycle->seq = inst->seqNum;
@@ -490,7 +494,7 @@ void FUWrapper<Impl>::squash(InstSeqNum squash_seq)
             insts.erase(fu.seq);
 
             if (fu.cycleLeft > 1 && fu.cycleLeft <= 19) {
-                assert(wbScheduledNext[fu.cycleLeft - 2]);
+                assert(wbScheduledNext[fu.cycleLeft - 2] || wbScheduled[fu.cycleLeft - 1]);
                 wbScheduledNext[fu.cycleLeft - 2] = false;
 
             } else if (fu.cycleLeft == 20){

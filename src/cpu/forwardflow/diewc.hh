@@ -308,7 +308,7 @@ public:
      /** Tells memory dependence unit that a memory instruction needs to be
      * rescheduled. It will re-execute once replayMemInst() is called.
      */
-    void rescheduleMemInst(DynInstPtr &inst);
+    void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered);
 
     /** Re-executes all rescheduled memory instructions. */
     void replayMemInst(DynInstPtr &inst);
@@ -442,6 +442,7 @@ private:
     const unsigned commitTraceInterval;
     unsigned commitCounter;
 
+    void checkDQHalfSquash();
 };
 
 

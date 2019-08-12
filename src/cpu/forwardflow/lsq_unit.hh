@@ -571,7 +571,7 @@ LSQUnit<Impl>::read(const RequestPtr &req,
     // (at the head of the ROB too).
     if (req->isStrictlyOrdered() &&
         (load_idx != loadHead || !load_inst->isAtCommit())) {
-        iewStage->rescheduleMemInst(load_inst);
+        iewStage->rescheduleMemInst(load_inst, true);
         ++lsqRescheduledLoads;
         DPRINTF(LSQUnit, "Strictly ordered load [sn:%lli] PC %s\n",
                 load_inst->seqNum, load_inst->pcState());
@@ -743,7 +743,7 @@ LSQUnit<Impl>::read(const RequestPtr &req,
 
             // Tell IQ/mem dep unit that this instruction will need to be
             // rescheduled eventually
-            iewStage->rescheduleMemInst(load_inst);
+            iewStage->rescheduleMemInst(load_inst, false);
             load_inst->clearIssued();
             ++lsqRescheduledLoads;
 

@@ -15,5 +15,6 @@ with open('./gem5_out.txt') as f:
     for line in f:
         match_and_append(dispatch_pattern, dispatched)
         match_and_append(destroy_pattern, destroyed)
-print(dispatched.difference(destroyed))
+leakage = [int(x) for x in dispatched.difference(destroyed)]
+print(sorted(leakage))
 

@@ -144,19 +144,18 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         if (ptr.wkType == WKPointer::WKMisc) {
             handle_wakeup = true;
             inst->miscDepReady = true;
-            DPRINTF(DQWake, "Non spec inst [%llu] is the gifted one in this bank\n",
-                    inst->seqNum);
+            DPRINTF(DQWake, "Non spec inst [%llu] received wakeup pkt\n", inst->seqNum);
 
         } else if (ptr.wkType == WKPointer::WKMem) {
             inst->memDepReady = true;
             first = inst;
-            DPRINTF(DQWake, "Mem inst [%llu] is the gifted one in this bank\n",
+            DPRINTF(DQWake, "Mem inst [%llu] received wakeup pkt\n",
                     inst->seqNum);
 
         } else if (ptr.wkType == WKPointer::WKOrder) {
             handle_wakeup = true;
             inst->orderDepReady = true;
-            DPRINTF(DQWake, "Mem inst [%llu] (has order dep) is the gifted one in this bank\n",
+            DPRINTF(DQWake, "Mem inst [%llu] (has order dep) received wakeup pkt\n",
                     inst->seqNum);
 
         } else { //  if (ptr.wkType == WKPointer::WKOp)
@@ -406,7 +405,9 @@ void DataflowQueueBank<Impl>::checkReadiness(DQPointer pointer)
     unsigned busy_count = inst->numBusyOps();
 
     if (busy_count == 0) {
-        readyIndices.push_back(pointer.index);
+        DPRINTF(DQWake, "inst [%llu] becomes ready on dispatch\n", inst->seqNum);
+        nearlyWakeup.set(index);
+        // readyIndices.push_back(pointer.index);
     }
     if (busy_count == 1) {
         DPRINTF(DQWake, "inst [%llu] becomes nearly waken up\n", inst->seqNum);
@@ -535,12 +536,11 @@ void DataflowQueues<Impl>::tick()
             if (ptr.valid) {
                 DPRINTF(DQWake, "Push WakePtr (%i %i) (%i) to wakequeue[%u]\n",
                         ptr.bank, ptr.index, ptr.op, b);
-                wakeQueues[b * nOps + op].push(WKPointer(ptr));
+                wakeQueues[b * nOps + op].push_back(WKPointer(ptr));
                 numPendingWakeups++;
                 DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
                 if (wakeQueues[b * nOps + op].size() > maxQueueDepth) {
-                    clearAndDumpQueues();
-                    panic("wakeQueues[%u.%u].size > maxQueueDepth", b, op);
+                    processWKQueueFull();
                 }
             }
         }
@@ -584,7 +584,7 @@ void DataflowQueues<Impl>::tick()
                 }
                 DPRINTF(DQWake, "Pop WakePtr (%i %i) (%i)from wakequeue[%u]\n",
                         ptr.bank, ptr.index, ptr.op, pkt->source);
-                wakeQueues[pkt->source].pop();
+                wakeQueues[pkt->source].pop_front();
                 numPendingWakeups--;
                 DPRINTF(DQWake, "After pop, numPendingWakeups = %u\n", numPendingWakeups);
             }
@@ -611,7 +611,7 @@ void DataflowQueues<Impl>::tick()
         if (dest.valid) {
             DPRINTF(DQWake, "Got wakeup pointer to (%d %d)(%d), pushed to wakeQueue[%i]\n",
                     dest.bank, dest.index, dest.op, b * nOps);
-            wakeQueues[b * nOps].push(WKPointer(dest));
+            wakeQueues[b * nOps].push_back(WKPointer(dest));
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 
@@ -620,7 +620,7 @@ void DataflowQueues<Impl>::tick()
         if (src.valid) {
             DPRINTF(DQWake, "Got inverse wakeup pointer to (%d %d)(%d), pushed to wakeQueue[%i]\n",
                     src.bank, src.index, src.op, b * nOps + 2);
-            wakeQueues[b * nOps + 2].push(WKPointer(src));
+            wakeQueues[b * nOps + 2].push_back(WKPointer(src));
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 
@@ -630,9 +630,9 @@ void DataflowQueues<Impl>::tick()
             }
         }
 
-        if (wakeQueues[b * nOps].size() > maxQueueDepth) {
-            clearAndDumpQueues();
-            panic("wakeQueues[%u.%u].size > maxQueueDepth", b, 0);
+        if (wakeQueues[b * nOps].size() > maxQueueDepth ||
+                wakeQueues[b * nOps + 2].size() > maxQueueDepth) {
+            processWKQueueFull();
         }
     }
 
@@ -688,6 +688,8 @@ void DataflowQueues<Impl>::cycleStart()
     if (llBlocked) {
         DPRINTF(FUW, "ll blocked last cycle\n");
     }
+    halfSquash = false;
+    halfSquashSeq = 0;
 }
 
 template<class Impl>
@@ -842,11 +844,10 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
                 pair.dest.bank, pair.dest.index, pair.dest.op,
                 pair.payload.bank, pair.payload.index, pair.payload.op);
 
-        forwardPointerQueue[forwardPtrIndex].push(pkt);
+        forwardPointerQueue[forwardPtrIndex].push_back(pkt);
 
         if (forwardPointerQueue[forwardPtrIndex].size() > maxQueueDepth) {
-            clearAndDumpQueues();
-            panic("fwQueues.size > maxQueueDepth");
+            processFWQueueFull();
         }
 
         numPendingFwPointers++;
@@ -1064,6 +1065,16 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
         for (auto &wrapper: fuWrappers) {
             wrapper.squash(0);
         }
+        for (auto &q: wakeQueues) {
+            q.clear();
+        }
+        for (auto &q: forwardPointerQueue) {
+            q.clear();
+        }
+        numPendingWakeups = 0;
+        numPendingFwPointers = 0;
+        numPendingWakeupMax = 0;
+        numPendingFwPointerMax = 0;
 
         return;
     }
@@ -1208,12 +1219,17 @@ DataflowQueues<Impl>::markFwPointers(
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::rescheduleMemInst(DynInstPtr &inst)
+void DataflowQueues<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered)
 {
     inst->translationStarted(false);
     inst->translationCompleted(false);
     inst->clearCanIssue();
-    inst->hasMiscDep = true;  // this is rare, do not send a packet here
+    inst->fuGranted = false;
+    if (isStrictOrdered) {
+        inst->hasMiscDep = true;  // this is rare, do not send a packet here
+    } else {
+        inst->hasOrderDep = true;  // this is rare, do not send a packet here
+    }
 
     memDepUnit.reschedule(inst);
 }
@@ -1616,7 +1632,7 @@ void DataflowQueues<Impl>::digestForwardPointer()
             if (forwardPointerQueue[pkt->source].size() == numPendingFwPointerMax) {
                 numPendingFwPointerMax--;
             }
-            forwardPointerQueue[pkt->source].pop();
+            forwardPointerQueue[pkt->source].pop_front();
             numPendingFwPointers--;
 
             // handle the special case that inst executed before pointer reached
@@ -1655,7 +1671,7 @@ void DataflowQueues<Impl>::extraWakeup(const WKPointer &wk)
 {
     DPRINTF(DQWake, "Push Wake (extra) Ptr (%i %i) (%i) to wakequeue[%u]\n",
             wk.bank, wk.index, wk.op, extraWKPtr * nOps + 3);
-    wakeQueues[extraWKPtr * nOps + 3].push(wk);
+    wakeQueues[extraWKPtr * nOps + 3].push_back(wk);
     numPendingWakeups++;
     DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
     incExtraWKptr();
@@ -1747,33 +1763,29 @@ bool DataflowQueues<Impl>::queuesEmpty()
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::clearAndDumpQueues()
+void DataflowQueues<Impl>::dumpQueues()
 {
-    printf("Dump and clear wakeQueues!\n");
+    printf("Dump wakeQueues:\n");
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
             printf("Q[%i]: ", b*nOps+op);
             auto &q = wakeQueues[b*nOps + op];
-            while (!q.empty()) {
-                auto &p = q.front();
+            for (const auto &p: q) {
                 printf("(%i) (%i %i) (%i), ",
                         p.valid, p.bank, p.index, p.op);
-                q.pop();
             }
             printf("\n");
         }
     }
-    printf("Dump and clear fw pointer queues!\n");
+    printf("Dump fw pointer queues:\n");
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
             printf("Q[%i]: ", b*nOps+op);
             auto &q = forwardPointerQueue[b*nOps + op];
-            while (!q.empty()) {
-                auto &p = q.front();
+            for (const auto &p: q) {
                 printf("(%i) (%i %i) (%i), ",
                         p.payload.dest.valid, p.payload.dest.bank,
                         p.payload.dest.index, p.payload.dest.op);
-                q.pop();
             }
             printf("\n");
         }
@@ -1822,6 +1834,134 @@ void DataflowQueues<Impl>::maintainOldestUsed()
     if (!validPosition(oldestUsed)) {
         oldestUsed = getTailPtr();
         DPRINTF(DQ, "Set oldestUsed to tail: %u\n", oldestUsed);
+    }
+}
+
+template<class Impl>
+InstSeqNum DataflowQueues<Impl>::clearHalfWKQueue()
+{
+    unsigned oldest_to_squash = getHeadPtr();
+    for (auto &q: wakeQueues) {
+        if (q.empty()) {
+            continue;
+        }
+        for (size_t i = 0, e = q.size(); i < e/2; i++) {
+            const auto &ele = q[e - 1 - i];
+            if (ele.valid) {
+                unsigned p = pointer2uint(DQPointer(ele));
+                if (!validPosition(p)) {
+                    panic("WTF, a pointer in wk queue is not valid!\n");
+                }
+                if (logicallyLT(p, oldest_to_squash)) {
+                    oldest_to_squash = p;
+                }
+            }
+            q.pop_back();
+            numPendingWakeups--;
+        }
+    }
+    if (oldest_to_squash == getHeadPtr()) {
+        warn("oldest_to_squash == getHeadPtr, this case is infrequent\n");
+    }
+    auto ptr = uint2Pointer(oldest_to_squash);
+    auto inst = dqs[ptr.bank].readInstsFromBank(ptr);
+    assert(inst);
+    return inst->seqNum;
+}
+
+template<class Impl>
+InstSeqNum DataflowQueues<Impl>::clearHalfFWQueue()
+{
+    unsigned oldest_to_squash = getHeadPtr();
+    for (auto &q: forwardPointerQueue) {
+        if (q.empty()) {
+            continue;
+        }
+        for (size_t i = 0, e = q.size(); i < e/2; i++) {
+            const auto &ele = q[e - 1 - i];
+            if (ele.valid) {
+                unsigned p = pointer2uint(ele.payload.payload);
+                if (!validPosition(p)) {
+                    panic("WTF, a receiver pointer in fw queue is not valid!\n");
+                }
+                if (logicallyLT(p, oldest_to_squash)) {
+                    oldest_to_squash = p;
+                }
+            }
+            q.pop_back();
+            numPendingFwPointers--;
+        }
+    }
+    if (oldest_to_squash == getHeadPtr()) {
+        warn("oldest_to_squash == getHeadPtr, this case is infrequent\n");
+    }
+    auto ptr = uint2Pointer(oldest_to_squash);
+    auto inst = dqs[ptr.bank].readInstsFromBank(ptr);
+    assert(inst);
+    return inst->seqNum;
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::processWKQueueFull()
+{
+    halfSquash = true;
+
+    DPRINTF(DQ, "Dump before clear:\n");
+    if (Debug::DQ) {
+        dumpQueues();
+    }
+
+    halfSquashSeq = clearHalfWKQueue();
+
+    bool clear_fw_queue = false;
+    for (auto q: forwardPointerQueue) {
+        if (q.size() > maxQueueDepth/2) {
+            clear_fw_queue = true;
+        }
+    }
+
+    if (clear_fw_queue) {
+        InstSeqNum another_seq = clearHalfFWQueue();
+        if (another_seq < halfSquashSeq) {
+            halfSquashSeq = another_seq;
+        }
+    }
+
+    DPRINTF(DQ, "Dump after clear:\n");
+    if (Debug::DQ) {
+        dumpQueues();
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::processFWQueueFull()
+{
+    halfSquash = true;
+
+    DPRINTF(DQ, "Dump before clear:\n");
+    if (Debug::DQ) {
+        dumpQueues();
+    }
+
+    halfSquashSeq = clearHalfFWQueue();
+
+    bool clear_fw_queue = false;
+    for (auto q: wakeQueues) {
+        if (q.size() > maxQueueDepth/2) {
+            clear_fw_queue = true;
+        }
+    }
+
+    if (clear_fw_queue) {
+        InstSeqNum another_seq = clearHalfWKQueue();
+        if (another_seq < halfSquashSeq) {
+            halfSquashSeq = another_seq;
+        }
+    }
+
+    DPRINTF(DQ, "Dump after clear:\n");
+    if (Debug::DQ) {
+        dumpQueues();
     }
 }
 

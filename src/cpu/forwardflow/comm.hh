@@ -469,6 +469,8 @@ struct TimeBufStruct {
         bool squashAll;
 
         bool memViolation;
+
+        bool halfSquash;
     };
 
     DIEWC2DIEWC diewc2diewc;

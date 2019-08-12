@@ -39,7 +39,7 @@ public:
 protected:
     const uint32_t bits;
     const uint32_t stage;
-    const bool ascendPrio;
+    bool ascendPrio;
 
 };
 
@@ -82,6 +82,7 @@ CrossBar<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
 {
     int low = 1- ascendPrio;
     int high = ascendPrio;
+    ascendPrio = 1 - ascendPrio;
     int direction_bit = bits - stage - 1;
 
     DQPacket<T> * inputs[2];

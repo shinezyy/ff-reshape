@@ -6,7 +6,7 @@
 #define __FF_DATAFLOW_QUEUE_HH__
 
 #include <cstdint>
-#include <queue>
+#include <deque>
 #include <unordered_map>
 #include <vector>
 
@@ -69,7 +69,6 @@ private:
 
     unsigned tail;
 
-
 public:
     void advanceTail();
 
@@ -118,6 +117,8 @@ public:
     DQPointer extraWakeupPointer;
 
     void printTail();
+
+    void setNearlyWakeup(DQPointer ptr);
 };
 
 
@@ -166,9 +167,9 @@ private:
 
     const unsigned queueSize;
 
-    std::vector<std::queue<WKPointer>> wakeQueues;
+    std::vector<std::deque<WKPointer>> wakeQueues;
 
-    std::vector<std::queue<DQPacket<PointerPair>>> forwardPointerQueue;
+    std::vector<std::deque<DQPacket<PointerPair>>> forwardPointerQueue;
 
     std::vector<XDataflowQueueBank> dqs;
 
@@ -274,7 +275,7 @@ public:
 
     void addReadyMemInst(DynInstPtr inst, bool isOrderDep = true);
 
-    void rescheduleMemInst(DynInstPtr &inst);
+    void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered);
 
     /** Re-executes all rescheduled memory instructions. */
     void replayMemInst(DynInstPtr &inst);
@@ -351,7 +352,7 @@ private:
 
     DynInstPtr getBlockedMemInst();
 
-    void clearAndDumpQueues();
+    void dumpQueues();
 
 public:
     bool logicallyLT(unsigned left, unsigned right) const;
@@ -399,12 +400,24 @@ public:
 private:
     unsigned oldestUsed;
 
+    InstSeqNum clearHalfWKQueue();
+
+    InstSeqNum clearHalfFWQueue();
+
+    void processWKQueueFull();
+
+    void processFWQueueFull();
 public:
     void maintainOldestUsed();
 
     unsigned getOldestUsed() {return oldestUsed;};
 
     void dumpFwQSize();
+
+    bool halfSquash;
+
+    InstSeqNum halfSquashSeq;
+
 };
 
 }
