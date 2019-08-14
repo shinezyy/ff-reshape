@@ -1784,7 +1784,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
 
         }
 
-        if (inst->mispredicted() && !loadNotExecuted) {
+        if (inst->isControl() && inst->mispredicted() && !loadNotExecuted) {
             fetchRedirect = true;
 
             DPRINTF(IEW, "Execute: Branch mispredict detected.\n");
