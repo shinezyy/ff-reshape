@@ -1221,6 +1221,7 @@ DataflowQueues<Impl>::markFwPointers(
 template<class Impl>
 void DataflowQueues<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered)
 {
+    DPRINTF(DQ, "Marking inst[%llu] as need rescheduling\n", inst->seqNum);
     inst->translationStarted(false);
     inst->translationCompleted(false);
     inst->clearCanIssue();
@@ -1229,6 +1230,7 @@ void DataflowQueues<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrde
         inst->hasMiscDep = true;  // this is rare, do not send a packet here
     } else {
         inst->hasOrderDep = true;  // this is rare, do not send a packet here
+        inst->orderDepReady = false;
     }
 
     memDepUnit.reschedule(inst);

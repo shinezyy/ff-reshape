@@ -973,7 +973,8 @@ void FFDIEWC<Impl>::handleSquash() {
     }
     if (fromLastCycle->diewc2diewc.squash &&
         commitStatus != TrapPending &&
-        fromLastCycle->diewc2diewc.squashedSeqNum <= youngestSeqNum) {
+        (fromLastCycle->diewc2diewc.squashedSeqNum <= youngestSeqNum ||
+         fromLastCycle->diewc2diewc.squashAll)) {
 
         if (fromLastCycle->diewc2diewc.mispredictInst) {
             DPRINTF(FFCommit,
@@ -1101,6 +1102,7 @@ void FFDIEWC<Impl>::squashAll() {
     commitStatus = DQSquashing; // to prevent pc from advancing
 
     toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
+    toNextCycle->diewc2diewc.squashedSeqNum = squashed_inst + 1;
     if (!dq.isEmpty()) {
         toNextCycle->diewc2diewc.donePointer = dq.getTail()->dqPosition;
     }
@@ -1153,14 +1155,18 @@ template<class Impl>
 void
 FFDIEWC<Impl>::squashInFlight()
 {
-    DPRINTF(IEW, "Squashing all in-flight instructions.\n");
+    DPRINTF(IEW, "Squashing in-flight instructions.\n");
 
     // Tell the IQ to start squashing.
     // todo: we don't need this in forwardflow?
 
     // Tell the LDSTQ to start squashing.
     // todo: check this LOCs
-    ldstQueue.squash(fromLastCycle->diewc2diewc.squashedSeqNum, DummyTid);
+    if (fromLastCycle->diewc2diewc.squashAll) {
+        ldstQueue.squash(fromLastCycle->diewc2diewc.doneSeqNum, DummyTid);
+    } else {
+        ldstQueue.squash(fromLastCycle->diewc2diewc.squashedSeqNum, DummyTid);
+    }
     // dq.squash(fromLastCycle->diewc2diewc.donePointer, false);
     updatedQueues = true;
 

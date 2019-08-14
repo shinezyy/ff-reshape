@@ -55,6 +55,7 @@
 #include "cpu/forwardflow/lsq_unit.hh"
 #include "debug/Activity.hh"
 #include "debug/DIEWC.hh"
+#include "debug/FFSquash.hh"
 #include "debug/IEW.hh"
 #include "debug/LSQUnit.hh"
 #include "debug/O3PipeView.hh"
@@ -1000,6 +1001,7 @@ LSQUnit<Impl>::squash(const InstSeqNum &squashed_num)
     int load_idx = loadTail;
     decrLdIdx(load_idx);
 
+    unsigned squashed_load = 0;
     while (loads != 0 && loadQueue[load_idx]->seqNum > squashed_num) {
         DPRINTF(LSQUnit,"Load Instruction PC %s squashed, "
                 "[sn:%lli]\n",
@@ -1022,6 +1024,7 @@ LSQUnit<Impl>::squash(const InstSeqNum &squashed_num)
 
         decrLdIdx(load_idx);
         ++lsqSquashedLoads;
+        squashed_load++;
     }
 
     if (memDepViolator && squashed_num < memDepViolator->seqNum) {
@@ -1031,6 +1034,7 @@ LSQUnit<Impl>::squash(const InstSeqNum &squashed_num)
     int store_idx = storeTail;
     decrStIdx(store_idx);
 
+    unsigned squashed_store = 0;
     while (stores != 0 &&
            storeQueue[store_idx].inst->seqNum > squashed_num) {
         // Instructions marked as can WB are already committed.
@@ -1073,6 +1077,11 @@ LSQUnit<Impl>::squash(const InstSeqNum &squashed_num)
 
         decrStIdx(store_idx);
         ++lsqSquashedStores;
+        squashed_store++;
+    }
+
+    if (Debug::FFSquash && (squashed_load == 0 || squashed_store == 0)) {
+        dumpInsts();
     }
 }
 
