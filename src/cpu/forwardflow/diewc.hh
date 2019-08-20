@@ -412,6 +412,12 @@ public:
     Stats::Scalar statComVector;
     Stats::Scalar statComFunctionCalls;
 
+    Stats::Scalar iewExecutedInsts;
+    Stats::Scalar iewExecutedBranches;
+    Stats::Scalar iewExecutedRefs;
+    Stats::Scalar iewExecLoadInsts;
+    Stats::Formula iewExecStoreInsts;
+
     ArchState *getArchState() {return &archState;}
 
     XDataflowQueues *getDQ() {return &dq;}
@@ -443,6 +449,9 @@ private:
     unsigned commitCounter;
 
     void checkDQHalfSquash();
+
+    void updateExeInstStats(DynInstPtr &inst);
+
 };
 
 

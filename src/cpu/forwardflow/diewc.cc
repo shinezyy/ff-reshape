@@ -829,7 +829,9 @@ FFDIEWC<Impl>::commitInsts()
                 changedDQNumEntries = true;
 
                 // Set the doneSeqNum to the youngest committed instruction.
-                toNextCycle->diewc2diewc.doneSeqNum = head_inst->seqNum;
+                if (!toNextCycle->diewc2diewc.squash) {
+                    toNextCycle->diewc2diewc.doneSeqNum = head_inst->seqNum;
+                }
                 toNextCycle->diewc2diewc.donePointer = head_inst->dqPosition;
 
                 canHandleInterrupts =  (!head_inst->isDelayedCommit()) &&
@@ -1025,7 +1027,6 @@ void FFDIEWC<Impl>::handleSquash() {
                 if (toNextCycle->diewc2diewc.mispredictInst->isUncondCtrl()) {
                     toNextCycle->diewc2diewc.branchTaken = true;
                 }
-                ++branchMispredicts;
             }
 
         } else {
@@ -1104,7 +1105,7 @@ void FFDIEWC<Impl>::squashAll() {
     commitStatus = DQSquashing; // to prevent pc from advancing
 
     toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
-    toNextCycle->diewc2diewc.squashedSeqNum = squashed_inst + 1;
+    toNextCycle->diewc2diewc.squashedSeqNum = squashed_inst;
     if (!dq.isEmpty()) {
         toNextCycle->diewc2diewc.donePointer = dq.getTail()->dqPosition;
     }
@@ -1474,6 +1475,7 @@ void FFDIEWC<Impl>::squashDueToBranch(DynInstPtr &inst)
     if (!toNextCycle->diewc2diewc.squash ||
             inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum) {
         toNextCycle->diewc2diewc.squash = true;
+        toNextCycle->diewc2diewc.doneSeqNum = inst->seqNum;
         toNextCycle->diewc2diewc.squashedSeqNum = inst->seqNum;
         toNextCycle->diewc2diewc.squashedPointer = inst->dqPosition;
 
@@ -1481,6 +1483,7 @@ void FFDIEWC<Impl>::squashDueToBranch(DynInstPtr &inst)
         TheISA::advancePC(pc, inst->staticInst);
         toNextCycle->diewc2diewc.pc = pc;
         DPRINTF(IEW, "toNextCycle PC: %s.\n", pc);
+        DPRINTF(IEW, "Will replay after inst[%llu].\n", inst->seqNum);
 
         toNextCycle->diewc2diewc.mispredictInst = inst;
         toNextCycle->diewc2diewc.squashInst = inst;
@@ -1488,6 +1491,7 @@ void FFDIEWC<Impl>::squashDueToBranch(DynInstPtr &inst)
         toNextCycle->diewc2diewc.branchTaken = inst->pcState().branching();
 
         wroteToTimeBuffer = true;
+        branchMispredicts++;
     }
 }
 
@@ -1649,6 +1653,29 @@ void FFDIEWC<Impl>::regStats()
 
     dq.regStats();
     ldstQueue.regStats();
+
+    iewExecutedInsts
+            .name(name() + ".iewExecutedInsts")
+            .desc("Number of executed instructions");
+
+    iewExecutedRefs
+            .name(name() + ".exec_refs")
+            .desc("number of memory reference insts executed");
+
+    iewExecLoadInsts
+            .name(name() + ".iewExecLoadInsts")
+            .desc("Number of load instructions executed");
+
+    iewExecutedBranches
+            .name(name() + ".exec_branches")
+            .desc("Number of branches executed");
+
+    iewExecStoreInsts
+            .name(name() + ".exec_stores")
+            .desc("Number of stores executed");
+    iewExecStoreInsts = iewExecutedRefs - iewExecLoadInsts;
+
+
 }
 
 template<class Impl>
@@ -1749,6 +1776,8 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
     if (inst->isMemBarrier() || inst->isWriteBarrier()) {
         dq.completeMemInst(inst);
     }
+
+    updateExeInstStats(inst);
 
     if ((!fetchRedirect ||  // fetch not redirected
 
@@ -1883,7 +1912,7 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator
         } else {
             toNextCycle->diewc2diewc.squash = true;
 
-            toNextCycle->diewc2diewc.doneSeqNum = youngest_cpted_inst_seq - 1;
+            toNextCycle->diewc2diewc.doneSeqNum = youngest_cpted_inst_seq;
             toNextCycle->diewc2diewc.squashedSeqNum = youngest_cpted_inst_seq;
             DynInstPtr innocent_victim = dq.findBySeq(youngest_cpted_inst_seq);
             toNextCycle->diewc2diewc.squashedPointer = innocent_victim->dqPosition;
@@ -2006,7 +2035,7 @@ void FFDIEWC<Impl>::checkDQHalfSquash()
         } else {
             toNextCycle->diewc2diewc.squash = true;
 
-            toNextCycle->diewc2diewc.doneSeqNum = youngest_cpted_inst_seq - 1;
+            toNextCycle->diewc2diewc.doneSeqNum = youngest_cpted_inst_seq;
             toNextCycle->diewc2diewc.squashedSeqNum = youngest_cpted_inst_seq;
             DynInstPtr innocent_victim = dq.findBySeq(youngest_cpted_inst_seq);
             toNextCycle->diewc2diewc.squashedPointer = innocent_victim->dqPosition;
@@ -2033,6 +2062,24 @@ void FFDIEWC<Impl>::checkDQHalfSquash()
         toNextCycle->diewc2diewc.halfSquash = true;
     }
 
+}
+
+template<class Impl>
+void FFDIEWC<Impl>:: updateExeInstStats(DynInstPtr &inst)
+{
+    iewExecutedInsts++;
+
+    if (inst->isControl()) {
+        iewExecutedBranches++;
+    }
+
+    if (inst->isMemRef()) {
+        iewExecutedRefs++;
+
+        if (inst->isLoad()) {
+            iewExecLoadInsts++;
+        }
+    }
 }
 
 }
