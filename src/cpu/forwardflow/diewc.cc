@@ -238,6 +238,7 @@ void FFDIEWC<Impl>::dispatch() {
             break;
         }
 
+        bool jumped = false;
         DPRINTF(DIEWC, "Dispatching inst[%llu] %s PC: %s\n",
                 inst->seqNum, inst->staticInst->disassemble(inst->instAddr()),
                 inst->pcState());
@@ -261,7 +262,7 @@ void FFDIEWC<Impl>::dispatch() {
 
                 insertPointerPairs(archState.recordAndUpdateMap(inst));
 
-                dq.insertNonSpec(inst);
+                jumped = dq.insertNonSpec(inst);
 
                 normally_add_to_dq = false;
 
@@ -276,7 +277,7 @@ void FFDIEWC<Impl>::dispatch() {
             // get who is the oldest consumer
             insertPointerPairs(archState.recordAndUpdateMap(inst));
 
-            dq.insertBarrier(inst);
+            jumped = dq.insertBarrier(inst);
             normally_add_to_dq = false;
 
         } else if (inst->isNop()) {
@@ -297,7 +298,7 @@ void FFDIEWC<Impl>::dispatch() {
 
             insertPointerPairs(archState.recordAndUpdateMap(inst));
 
-            dq.insertNonSpec(inst);
+            jumped = dq.insertNonSpec(inst);
 
             ++dispNonSpecInsts;
             normally_add_to_dq = false;
@@ -308,15 +309,16 @@ void FFDIEWC<Impl>::dispatch() {
 //            DPRINTF(DIEWC, "dispatch reach 7.1\n");
             insertPointerPairs(archState.recordAndUpdateMap(inst));
 //            DPRINTF(DIEWC, "dispatch reach 7.2\n");
-            bool jumped = dq.insert(inst, false);
-            if (jumped) {
-                if (!dq.validPosition(oldestForwarded)) {
-                    oldestForwarded = dq.getTailPtr();
-                }
-                dq.maintainOldestUsed();
-            }
+            jumped = dq.insert(inst, false);
             youngestSeqNum = inst->seqNum;
 //            DPRINTF(DIEWC, "dispatch reach 7.3\n");
+        }
+
+        if (jumped) {
+            if (!dq.validPosition(oldestForwarded)) {
+                oldestForwarded = dq.getTailPtr();
+            }
+            dq.maintainOldestUsed();
         }
 
 //        DPRINTF(DIEWC, "dispatch reach 8\n");
@@ -1538,110 +1540,110 @@ template<class Impl>
 void FFDIEWC<Impl>::regStats()
 {
     dispSquashedInsts
-        .name(name() + "dispSquashedInsts")
+        .name(name() + ".dispSquashedInsts")
         .desc("dispSquashedInsts");
     dqFullEvents
-        .name(name() + "dqFullEvents")
+        .name(name() + ".dqFullEvents")
         .desc("dqFullEvents");
     lqFullEvents
-        .name(name() + "lqFullEvents")
+        .name(name() + ".lqFullEvents")
         .desc("lqFullEvents");
     sqFullEvents
-        .name(name() + "sqFullEvents")
+        .name(name() + ".sqFullEvents")
         .desc("sqFullEvents");
     dispaLoads
-        .name(name() + "dispaLoads")
+        .name(name() + ".dispaLoads")
         .desc("dispaLoads");
     dispStores
-        .name(name() + "dispStores")
+        .name(name() + ".dispStores")
         .desc("dispStores");
     dispNonSpecInsts
-        .name(name() + "dispNonSpecInsts")
+        .name(name() + ".dispNonSpecInsts")
         .desc("dispNonSpecInsts");
     dispatchedInsts
-        .name(name() + "dispatchedInsts")
+        .name(name() + ".dispatchedInsts")
         .desc("dispatchedInsts");
     blockCycles
-        .name(name() + "blockCycles")
+        .name(name() + ".blockCycles")
         .desc("blockCycles");
     squashCycles
-        .name(name() + "squashCycles")
+        .name(name() + ".squashCycles")
         .desc("squashCycles");
     runningCycles
-        .name(name() + "runningCycles")
+        .name(name() + ".runningCycles")
         .desc("runningCycles");
     unblockCycles
-        .name(name() + "unblockCycles")
+        .name(name() + ".unblockCycles")
         .desc("unblockCycles");
     commitNonSpecStalls
-        .name(name() + "commitNonSpecStalls")
+        .name(name() + ".commitNonSpecStalls")
         .desc("commitNonSpecStalls");
     commitSquashedInsts
-        .name(name() + "commitSquashedInsts")
+        .name(name() + ".commitSquashedInsts")
         .desc("commitSquashedInsts");
     branchMispredicts
-        .name(name() + "branchMispredicts")
+        .name(name() + ".branchMispredicts")
         .desc("branchMispredicts");
     predictedTakenIncorrect
-        .name(name() + "predictedTakenIncorrect")
+        .name(name() + ".predictedTakenIncorrect")
         .desc("predictedTakenIncorrect");
     predictedNotTakenIncorrect
-        .name(name() + "predictedNotTakenIncorrect")
+        .name(name() + ".predictedNotTakenIncorrect")
         .desc("predictedNotTakenIncorrect");
 
     commitEligibleSamples
-            .name(name() + "ommitEligibleSamples")
+            .name(name() + ".ommitEligibleSamples")
             .desc("ommitEligibleSamples");
 
     statCommittedInstType
             .init(Num_OpClasses)
-            .name(name() + "statCommittedInstType")
+            .name(name() + ".statCommittedInstType")
             .desc("statCommittedInstType");
 
     numCommittedDist
             .init(0, width, 1)
-            .name(name() + "numCommittedDist")
+            .name(name() + ".numCommittedDist")
             .desc("numCommittedDist")
             .flags(Stats::pdf);
 
     instsCommitted
-        .name(name() + "instsCommitted")
+        .name(name() + ".instsCommitted")
         .desc("instsCommitted")
         ;
     opsCommitted
-        .name(name() + "opsCommitted")
+        .name(name() + ".opsCommitted")
         .desc("opsCommitted")
         ;
     statComBranches
-        .name(name() + "statComBranches")
+        .name(name() + ".statComBranches")
         .desc("statComBranches")
         ;
     statComRefs
-        .name(name() + "statComRefs")
+        .name(name() + ".statComRefs")
         .desc("statComRefs")
         ;
     statComLoads
-        .name(name() + "statComLoads")
+        .name(name() + ".statComLoads")
         .desc("statComLoads")
         ;
     statComMembars
-        .name(name() + "statComMembars")
+        .name(name() + ".statComMembars")
         .desc("statComMembars")
         ;
     statComInteger
-        .name(name() + "statComInteger")
+        .name(name() + ".statComInteger")
         .desc("statComInteger")
         ;
     statComFloating
-        .name(name() + "statComFloating")
+        .name(name() + ".statComFloating")
         .desc("statComFloating")
         ;
     statComVector
-        .name(name() + "statComVector")
+        .name(name() + ".statComVector")
         .desc("statComVector")
         ;
     statComFunctionCalls
-        .name(name() + "statComFunctionCalls")
+        .name(name() + ".statComFunctionCalls")
         .desc("statComFunctionCalls")
         ;
 

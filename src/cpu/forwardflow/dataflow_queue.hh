@@ -254,9 +254,9 @@ public:
 
     bool isEmpty() const;
 
-    void insertBarrier(DynInstPtr &inst);
+    bool insertBarrier(DynInstPtr &inst);
 
-    void insertNonSpec(DynInstPtr &inst);
+    bool insertNonSpec(DynInstPtr &inst);
 
 //    void recordProducer(DynInstPtr &inst);
 

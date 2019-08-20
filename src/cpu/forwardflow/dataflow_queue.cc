@@ -1167,14 +1167,14 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::insertBarrier(DynInstPtr &inst)
+bool DataflowQueues<Impl>::insertBarrier(DynInstPtr &inst)
 {
     memDepUnit.insertBarrier(inst);
-    insertNonSpec(inst);
+    return insertNonSpec(inst);
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::insertNonSpec(DynInstPtr &inst)
+bool DataflowQueues<Impl>::insertNonSpec(DynInstPtr &inst)
 {
     bool non_spec = false;
     if (inst->isStoreConditional()) {
@@ -1184,7 +1184,7 @@ void DataflowQueues<Impl>::insertNonSpec(DynInstPtr &inst)
     assert(inst);
     inst->miscDepReady = false;
     inst->hasMiscDep = true;
-    insert(inst, non_spec);
+    return insert(inst, non_spec);
 }
 
 template<class Impl>
