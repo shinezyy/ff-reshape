@@ -333,6 +333,7 @@ void FFDIEWC<Impl>::dispatch() {
 
     if (dispatched) {
         toAllocation->diewcInfo.usedDQ = true;
+        activityThisCycle();
     }
     // archState.dumpMaps();
 
@@ -794,6 +795,7 @@ FFDIEWC<Impl>::commitInsts()
         // (be removed from the ROB) at any time.
         if (head_inst->isSquashed()) {
             DPRINTF(Commit, "Retiring squashed instruction from DQ.\n");
+            activityThisCycle();
 
             head_inst->clearInDQ();
             cpu->removeFrontInst(head_inst);
@@ -821,6 +823,8 @@ FFDIEWC<Impl>::commitInsts()
             DPRINTF(Commit, "commit reach 2\n");
 
             if (commit_success) {
+                activityThisCycle();
+
                 toAllocation->diewcInfo.updateDQTail = true;
                 ++num_committed;
                 statCommittedInstType[head_inst->opClass()]++;
@@ -1007,6 +1011,7 @@ void FFDIEWC<Impl>::handleSquash() {
             DPRINTF(FFSquash, "Olddest inst ptr to squash: (%i %i)\n", p.bank, p.index);
             dq.squash(fromLastCycle->diewc2diewc.squashedPointer, false, false);
             dqSquashing = true;
+            dqSquashSeq = squashed_inst;
             archState.recoverCPT(squashed_inst);
 
             // toNextCycle->diewc2diewc.squash = false;
@@ -1042,6 +1047,7 @@ void FFDIEWC<Impl>::handleSquash() {
 
     if (dqSquashing && dq.queuesEmpty()) {
         dqSquashing = false;
+        dqSquashSeq = 0;
     }
 }
 
@@ -1131,6 +1137,7 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         ldstQueue(cpu, this, params), // todo: WTF fix it !!!!!!!
         fetchRedirect(false),
         dqSquashing(false),
+        dqSquashSeq(0),
         dispatchWidth(params->dispatchWidth),
         width(params->allocationWidth),
         trapInFlight(false),
@@ -1273,9 +1280,10 @@ void FFDIEWC<Impl>::insertPointerPairs(std::list<PointerPair> pairs) {
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered)
+void FFDIEWC<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered,
+        bool isFalsePositive)
 {
-    dq.rescheduleMemInst(inst, isStrictOrdered);
+    dq.rescheduleMemInst(inst, isStrictOrdered, isFalsePositive);
 }
 
 template<class Impl>
@@ -1693,6 +1701,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
     DPRINTF(DIEWC, "Executing inst[%d] %s\n", inst->seqNum,
             inst->staticInst->disassemble(inst->instAddr()));
 
+    activityThisCycle();
     if (inst->isSquashed()) {
         inst->setExecuted();
         inst->completeTick = curTick() - inst->fetchTick;
@@ -1752,7 +1761,6 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
                 if (!inst->isStoreConditional()) {
                     dq.completeMemInst(inst);
                 }
-                activityThisCycle();
             }
 
             // Store conditionals will mark themselves as
@@ -2024,6 +2032,9 @@ void FFDIEWC<Impl>::checkDQHalfSquash()
         && (!fromLastCycle->diewc2diewc.squash ||
         victim_seq <= fromLastCycle->diewc2diewc.squashedSeqNum)
         //more primary than that found in last cyle
+
+        && (!dqSquashing || victim_seq <= dqSquashSeq)
+        // more primary than processing squashing
         ) {
 
         InstSeqNum youngest_cpted_inst_seq = archState.getYoungestCPTBefore(victim_seq);

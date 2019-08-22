@@ -148,15 +148,25 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         } else if (ptr.wkType == WKPointer::WKMem) {
             inst->memDepReady = true;
-            first = inst;
             DPRINTF(DQWake, "Mem inst [%llu] received wakeup pkt\n",
                     inst->seqNum);
+            if (!inst->fuGranted) {
+                first = inst;
+            } else {
+                DPRINTF(DQWake, "But ignore it because inst [%llu] has already been granted\n",
+                        inst->seqNum);
+            }
 
         } else if (ptr.wkType == WKPointer::WKOrder) {
-            handle_wakeup = true;
             inst->orderDepReady = true;
             DPRINTF(DQWake, "Mem inst [%llu] (has order dep) received wakeup pkt\n",
                     inst->seqNum);
+            if (!inst->fuGranted) {
+                handle_wakeup = true;
+            } else {
+                DPRINTF(DQWake, "But ignore it because inst [%llu] has already been granted\n",
+                        inst->seqNum);
+            }
 
         } else { //  if (ptr.wkType == WKPointer::WKOp)
             handle_wakeup = true;
@@ -1219,12 +1229,15 @@ DataflowQueues<Impl>::markFwPointers(
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered)
+void DataflowQueues<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered,
+        bool isFalsePositive)
 {
     DPRINTF(DQ, "Marking inst[%llu] as need rescheduling\n", inst->seqNum);
     inst->translationStarted(false);
     inst->translationCompleted(false);
-    inst->clearCanIssue();
+    if (!isFalsePositive) {
+        inst->clearCanIssue();
+    }
     inst->fuGranted = false;
     if (isStrictOrdered) {
         inst->hasMiscDep = true;  // this is rare, do not send a packet here
@@ -1867,8 +1880,11 @@ InstSeqNum DataflowQueues<Impl>::clearHalfWKQueue()
     }
     auto ptr = uint2Pointer(oldest_to_squash);
     auto inst = dqs[ptr.bank].readInstsFromBank(ptr);
-    assert(inst);
-    return inst->seqNum;
+    if (inst) {
+        return inst->seqNum;
+    } else {
+        return std::numeric_limits<InstSeqNum>::max();
+    }
 }
 
 template<class Impl>
@@ -1899,8 +1915,11 @@ InstSeqNum DataflowQueues<Impl>::clearHalfFWQueue()
     }
     auto ptr = uint2Pointer(oldest_to_squash);
     auto inst = dqs[ptr.bank].readInstsFromBank(ptr);
-    assert(inst);
-    return inst->seqNum;
+    if (inst) {
+        return inst->seqNum;
+    } else {
+        return std::numeric_limits<InstSeqNum>::max();
+    }
 }
 
 template<class Impl>

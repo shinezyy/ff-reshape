@@ -194,6 +194,8 @@ private:
 
     bool dqSquashing;
 
+    InstSeqNum dqSquashSeq;
+
     bool checkStall();
 
     void block();
@@ -308,7 +310,7 @@ public:
      /** Tells memory dependence unit that a memory instruction needs to be
      * rescheduled. It will re-execute once replayMemInst() is called.
      */
-    void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered);
+    void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive = false);
 
     /** Re-executes all rescheduled memory instructions. */
     void replayMemInst(DynInstPtr &inst);

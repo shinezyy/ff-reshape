@@ -743,7 +743,7 @@ LSQUnit<Impl>::read(const RequestPtr &req,
 
             // Tell IQ/mem dep unit that this instruction will need to be
             // rescheduled eventually
-            iewStage->rescheduleMemInst(load_inst, false);
+            iewStage->rescheduleMemInst(load_inst, false, true); // is false positive
             load_inst->clearIssued();
             ++lsqRescheduledLoads;
 

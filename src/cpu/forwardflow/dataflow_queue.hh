@@ -275,7 +275,7 @@ public:
 
     void addReadyMemInst(DynInstPtr inst, bool isOrderDep = true);
 
-    void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered);
+    void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive = false);
 
     /** Re-executes all rescheduled memory instructions. */
     void replayMemInst(DynInstPtr &inst);
