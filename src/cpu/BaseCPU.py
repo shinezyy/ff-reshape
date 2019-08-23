@@ -224,7 +224,7 @@ class BaseCPU(MemObject):
         "between CPU models)")
 
     tracer = Param.InstTracer(default_tracer, "Instruction tracer")
-    commitTraceInterval = Param.Unsigned(11, 'commitTraceInterval')
+    commitTraceInterval = Param.Unsigned(19, 'commitTraceInterval')
 
     icache_port = MasterPort("Instruction Port")
     dcache_port = MasterPort("Data Port")

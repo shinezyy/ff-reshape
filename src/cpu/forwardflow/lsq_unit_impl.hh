@@ -134,6 +134,8 @@ LSQUnit<Impl>::completeDataAccess(PacketPtr pkt)
         }
     } else {
         DPRINTF(DIEWC, "inst[%llu] has been squashed^&@$&?\n", inst->seqNum);
+        cpu->wakeCPU();
+        cpu->activityThisCycle();
     }
 
     if (TheISA::HasUnalignedMemAcc && state->isSplit && state->isLoad) {

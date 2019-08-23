@@ -739,6 +739,8 @@ LSQUnit<Impl>::read(const RequestPtr &req,
                 stalled = true;
                 stallingStoreIsn = storeQueue[store_idx].inst->seqNum;
                 stallingLoadIdx = load_idx;
+                DPRINTF(LSQUnit, "Set stalling Store to [%llu], stalled load to [%llu]\n",
+                        stallingStoreIsn, load_inst->seqNum);
             }
 
             // Tell IQ/mem dep unit that this instruction will need to be

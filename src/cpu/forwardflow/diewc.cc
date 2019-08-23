@@ -88,11 +88,11 @@ void FFDIEWC<Impl>::tick() {
 
 
     // commit from LSQ
-    if (fromLastCycle->diewc2diewc.doneSeqNum &&
-        !fromLastCycle->diewc2diewc.squash &&
-        !fromLastCycle->diewc2diewc.dqSquashing) {
-        ldstQueue.commitStores(fromLastCycle->diewc2diewc.doneSeqNum, DummyTid);
-        ldstQueue.commitLoads(fromLastCycle->diewc2diewc.doneSeqNum, DummyTid);
+    if (anySuccessfulCommit) {
+        DPRINTF(FFCommit, "Mark load/store insts oldder than [%lu] as can wb\n",
+                lastCommitedSeqNum);
+        ldstQueue.commitStores(lastCommitedSeqNum, DummyTid);
+        ldstQueue.commitLoads(lastCommitedSeqNum, DummyTid);
 
         updateLSQNextCycle = true;
     }
@@ -863,6 +863,8 @@ FFDIEWC<Impl>::commitInsts()
 
                 // Keep track of the last sequence number commited
                 lastCommitedSeqNum = head_inst->seqNum;
+                anySuccessfulCommit = true;
+                DPRINTF(FFCommit, "Commit successfully, set lastest to %lu\n", lastCommitedSeqNum);
 
                 // If this is an instruction that doesn't play nicely with
                 // others squash everything and restart fetch
@@ -1955,6 +1957,7 @@ void FFDIEWC<Impl>::clearAtStart()
         insts_to_commit.pop();
     }
     DQPointerJumped = false;
+    anySuccessfulCommit = false;
 }
 
 template<class Impl>

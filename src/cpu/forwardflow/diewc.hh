@@ -454,6 +454,8 @@ private:
 
     void updateExeInstStats(DynInstPtr &inst);
 
+    bool anySuccessfulCommit;
+
 };
 
 

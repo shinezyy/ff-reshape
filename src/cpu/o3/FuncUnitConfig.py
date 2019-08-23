@@ -45,7 +45,7 @@ from FuncUnit import *
 
 class IntALU(FUDesc):
     opList = [ OpDesc(opClass='IntAlu') ]
-    count = 6
+    count = 4
 
 class IntMultDiv(FUDesc):
     opList = [ OpDesc(opClass='IntMult', opLat=3),
@@ -64,7 +64,7 @@ class FP_ALU(FUDesc):
     opList = [ OpDesc(opClass='FloatAdd', opLat=2),
                OpDesc(opClass='FloatCmp', opLat=2),
                OpDesc(opClass='FloatCvt', opLat=2) ]
-    count = 4
+    count = 2
 
 class FP_MultDiv(FUDesc):
     opList = [ OpDesc(opClass='FloatMult', opLat=4),
@@ -74,38 +74,38 @@ class FP_MultDiv(FUDesc):
                OpDesc(opClass='FloatSqrt', opLat=24, pipelined=False) ]
     count = 2
 
-class SIMD_Unit(FUDesc):
-    opList = [ OpDesc(opClass='SimdAdd'),
-               OpDesc(opClass='SimdAddAcc'),
-               OpDesc(opClass='SimdAlu'),
-               OpDesc(opClass='SimdCmp'),
-               OpDesc(opClass='SimdCvt'),
-               OpDesc(opClass='SimdMisc'),
-               OpDesc(opClass='SimdMult'),
-               OpDesc(opClass='SimdMultAcc'),
-               OpDesc(opClass='SimdShift'),
-               OpDesc(opClass='SimdShiftAcc'),
-               OpDesc(opClass='SimdSqrt'),
-               OpDesc(opClass='SimdFloatAdd'),
-               OpDesc(opClass='SimdFloatAlu'),
-               OpDesc(opClass='SimdFloatCmp'),
-               OpDesc(opClass='SimdFloatCvt'),
-               OpDesc(opClass='SimdFloatDiv'),
-               OpDesc(opClass='SimdFloatMisc'),
-               OpDesc(opClass='SimdFloatMult'),
-               OpDesc(opClass='SimdFloatMultAcc'),
-               OpDesc(opClass='SimdFloatSqrt') ]
-    count = 4
+# class SIMD_Unit(FUDesc):
+#     opList = [ OpDesc(opClass='SimdAdd'),
+#                OpDesc(opClass='SimdAddAcc'),
+#                OpDesc(opClass='SimdAlu'),
+#                OpDesc(opClass='SimdCmp'),
+#                OpDesc(opClass='SimdCvt'),
+#                OpDesc(opClass='SimdMisc'),
+#                OpDesc(opClass='SimdMult'),
+#                OpDesc(opClass='SimdMultAcc'),
+#                OpDesc(opClass='SimdShift'),
+#                OpDesc(opClass='SimdShiftAcc'),
+#                OpDesc(opClass='SimdSqrt'),
+#                OpDesc(opClass='SimdFloatAdd'),
+#                OpDesc(opClass='SimdFloatAlu'),
+#                OpDesc(opClass='SimdFloatCmp'),
+#                OpDesc(opClass='SimdFloatCvt'),
+#                OpDesc(opClass='SimdFloatDiv'),
+#                OpDesc(opClass='SimdFloatMisc'),
+#                OpDesc(opClass='SimdFloatMult'),
+#                OpDesc(opClass='SimdFloatMultAcc'),
+#                OpDesc(opClass='SimdFloatSqrt') ]
+#     count = 4
 
-class ReadPort(FUDesc):
-    opList = [ OpDesc(opClass='MemRead'),
-               OpDesc(opClass='FloatMemRead') ]
-    count = 0
-
-class WritePort(FUDesc):
-    opList = [ OpDesc(opClass='MemWrite'),
-               OpDesc(opClass='FloatMemWrite') ]
-    count = 0
+# class ReadPort(FUDesc):
+#     opList = [ OpDesc(opClass='MemRead'),
+#                OpDesc(opClass='FloatMemRead') ]
+#     count = 0
+#
+# class WritePort(FUDesc):
+#     opList = [ OpDesc(opClass='MemWrite'),
+#                OpDesc(opClass='FloatMemWrite') ]
+#     count = 0
 
 class RdWrPort(FUDesc):
     opList = [ OpDesc(opClass='MemRead'), OpDesc(opClass='MemWrite'),
