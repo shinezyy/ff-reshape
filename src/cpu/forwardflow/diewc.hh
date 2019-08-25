@@ -220,7 +220,6 @@ private:
     bool commitHead(DynInstPtr &head_inst, unsigned inst_num);
 
     bool committedStores;
-    bool hasStoresToWB;
 
     Thread *thread;
 

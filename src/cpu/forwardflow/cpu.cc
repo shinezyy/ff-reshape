@@ -505,9 +505,11 @@ FFCPU<Impl>::tick()
             // increment stat
             lastRunningCycle = curCycle();
         } else if (!activityRec.active() || _status == Idle) {
-            DPRINTF(FFCPU, "Idle!\n");
-            lastRunningCycle = curCycle();
-            timesIdled++;
+            // DPRINTF(FFCPU, "Idle!\n");
+            schedule(tickEvent, clockEdge(Cycles(1)));
+            DPRINTF(FFCPU, "Although idle, Scheduling next tick!\n");
+            // lastRunningCycle = curCycle();
+            // timesIdled++;
         } else {
             schedule(tickEvent, clockEdge(Cycles(1)));
             DPRINTF(FFCPU, "Scheduling next tick!\n");

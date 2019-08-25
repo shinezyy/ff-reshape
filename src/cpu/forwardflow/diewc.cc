@@ -2,6 +2,7 @@
 // Created by zyy on 19-6-11.
 //
 #include "cpu/forwardflow/diewc.hh"
+
 #include "arch/utility.hh"
 #include "cpu/forwardflow/arch_state.hh"
 #include "cpu/forwardflow/store_set.hh"
@@ -12,6 +13,7 @@
 #include "debug/ExecFaulting.hh"
 #include "debug/FFCommit.hh"
 #include "debug/FFSquash.hh"
+#include "debug/FanoutLog.hh"
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
 #include "debug/ValueCommit.hh"
@@ -526,8 +528,9 @@ FFDIEWC<Impl>::
                     "instruction [sn:%lli] at the head of the ROB, PC %s.\n",
                     head_inst->seqNum, head_inst->pcState());
 
-            if (inst_num > 0 || hasStoresToWB) {
-                DPRINTF(Commit, "Waiting for all stores to writeback.\n");
+            if (inst_num > 0 || ldstQueue.hasStoresToWB()) {
+                DPRINTF(Commit, "Waiting for all stores to writeback. inst_num: %i, "
+                        "has store to wb: %i\n", inst_num, ldstQueue.hasStoresToWB());
                 return false;
             }
 
@@ -610,7 +613,7 @@ FFDIEWC<Impl>::
         DPRINTF(Commit, "Inst [sn:%lli] PC %s has a fault\n",
                 head_inst->seqNum, head_inst->pcState());
 
-        if (hasStoresToWB || inst_num > 0) {
+        if (ldstQueue.hasStoresToWB() || inst_num > 0) {
             DPRINTF(Commit, "Stores outstanding, fault must wait.\n");
             return false;
         }
@@ -681,6 +684,13 @@ FFDIEWC<Impl>::
         } else {
             DPRINTFR(ValueCommit, ", with wb value: none\n");
         }
+
+        if (head_inst->numDestRegs() > 0) {
+            DPRINTFR(FanoutLog, "Inst[%lu] with PC: %s has %u children and pred large: %i\n",
+                    head_inst->seqNum, head_inst->pcState(),
+                    head_inst->numChildren, head_inst->predLargeFanout);
+        }
+
         commitCounter = 0;
     } else {
         commitCounter++;
@@ -1161,6 +1171,7 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
     dq.setDIEWC(this);
     dq.setCPU(cpu);
     archState.setDIEWC(this);
+    archState.setDQ(&dq);
 }
 
 template<class Impl>

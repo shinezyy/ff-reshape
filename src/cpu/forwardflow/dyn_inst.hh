@@ -430,6 +430,10 @@ public:
 
     void setSrcValue(unsigned idx, FFRegValue val);
 
+    unsigned numChildren;
+
+    bool predLargeFanout;
+
 private:
     FFRegValue destValue;
 

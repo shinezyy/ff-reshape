@@ -117,7 +117,9 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
     for (unsigned op = 0; op < nOps; op++) {
         auto &ptr = pointers[op];
+        DPRINTF(DQ, "pointer: (%i %i) (%i)\n", ptr.index, ptr.bank, ptr.op);
         if (!ptr.valid) continue;
+        DPRINTF(DQ, "pointer: (%i %i) (%i)\n", ptr.index, ptr.bank, ptr.op);
         if (!instArray.at(ptr.index) || instArray.at(ptr.index)->isSquashed()) {
             DPRINTF(DQWake, "Wakeup ignores null inst @%d\n", ptr.index);
             if (anyPending) {
@@ -126,6 +128,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             continue;
         }
 
+        DPRINTF(DQ, "pointer: (%i %i) (%i)\n", ptr.index, ptr.bank, ptr.op);
         auto &inst = instArray[ptr.index];
         DPRINTF(DQWake, "Pointer (%i %i) (%i) working on inst[%llu]\n",
                 ptr.bank, ptr.index, ptr.op, inst->seqNum);
@@ -254,6 +257,7 @@ const std::vector<DQPointer>
 DataflowQueueBank<Impl>::readPointersFromBank()
 {
     DPRINTF(DQWake, "Reading pointers from banks\n");
+    DPRINTF(DQ, "Tail: %i", tail);
     for (unsigned op = 0; op < nOps; op++) {
         const auto &ptr = inputPointers[op];
         auto &optr = outputPointers[op];
@@ -744,14 +748,25 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         fuGroupCaps(Num_OpClasses, vector<bool>(nBanks)),
         fuPointer(nBanks),
 
+
+
+
         bankWidth((unsigned) ceilLog2(params->numDQBanks)),
         bankMask((unsigned) (1 << bankWidth) - 1),
         indexWidth((unsigned) ceilLog2(params->DQDepth)),
         indexMask((unsigned) ((1 << indexWidth) - 1) << bankWidth),
 
+        extraWKPtr(0),
+
         maxQueueDepth(params->pendingQueueDepth),
+        numPendingWakeups(0),
+        numPendingWakeupMax(0),
+
         PendingWakeupThreshold(params->PendingWakeupThreshold),
         PendingWakeupMaxThreshold(params->PendingWakeupMaxThreshold),
+
+        numPendingFwPointers(0),
+        numPendingFwPointerMax(0),
         PendingFwPointerThreshold(params->PendingFwPointerThreshold)
 
 {
@@ -793,8 +808,8 @@ template<class Impl>
 boost::dynamic_bitset<>
 DataflowQueues<Impl>::uint2Bits(unsigned from)
 {
-    auto res = boost::dynamic_bitset<>(32);
-    for (unsigned i = 0; i < 32; i++, from >>= 1) {
+    auto res = boost::dynamic_bitset<>(depth);
+    for (unsigned i = 0; i < depth; i++, from >>= 1) {
         res[i] = from & 1;
     }
     return res;
@@ -1148,7 +1163,6 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst, bool nonSpec)
         DPRINTF(FFCommit, "Dead inst[%llu] found unexpectedly\n", dead_inst->seqNum);
         assert(!dqs[allocated.bank].readInstsFromBank(allocated));
     }
-//    DPRINTF(DQ, "insert reach 1\n");
     dqs[allocated.bank].writeInstsToBank(allocated, inst);
     if (isEmpty()) {
         tail = pointer2uint(allocated); //keep them together
@@ -1157,21 +1171,17 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst, bool nonSpec)
         alignTails();
     }
     head = pointer2uint(allocated);
-//    DPRINTF(DQ, "insert reach 2\n");
 
     inst->setInDQ();
     // we don't need to add to dependents or producers here,
     //  which is maintained in DIEWC by archState
 
 
-//    DPRINTF(DQ, "insert reach 3\n");
 
     if (inst->isMemRef() && !nonSpec) {
         memDepUnit.insert(inst);
     }
-//    DPRINTF(DQ, "insert reach 4\n");
     dqs[allocated.bank].checkReadiness(allocated);
-//    DPRINTF(DQ, "insert reach 5\n");
 
     return jumped;
 }
@@ -1696,7 +1706,7 @@ template<class Impl>
 void DataflowQueues<Impl>::alignTails()
 {
     for (unsigned count = 0; count < nBanks; count++) {
-        auto u = count + tail;
+        auto u = (count + tail) % queueSize;
         auto ptr = uint2Pointer(u);
         dqs[ptr.bank].setTail(ptr.index);
     }
@@ -1984,6 +1994,15 @@ void DataflowQueues<Impl>::processFWQueueFull()
     if (Debug::DQ) {
         dumpQueues();
     }
+}
+
+template<class Impl>
+typename DataflowQueues<Impl>::DynInstPtr
+DataflowQueues<Impl>::readInst(const DQPointer &p) const
+{
+    const XDataflowQueueBank &bank = dqs[p.bank];
+    const auto &inst = bank.readInstsFromBank(p);
+    return inst;
 }
 
 }

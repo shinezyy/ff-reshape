@@ -147,9 +147,11 @@ BaseO3DynInst<Impl>::initVars()
 
     sfuWrapper = nullptr;
 
-
-
     destReforward = false;
+
+    numChildren = 0;
+
+    predLargeFanout = false;
 }
 
 template <class Impl>

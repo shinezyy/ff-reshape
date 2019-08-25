@@ -418,6 +418,8 @@ public:
 
     InstSeqNum halfSquashSeq;
 
+    DynInstPtr readInst(const DQPointer &p) const;
+
 };
 
 }

@@ -1,12 +1,13 @@
 //
 // Created by zyy on 19-6-11.
 //
-
 #include "cpu/forwardflow/arch_state.hh"
+
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
 #include "debug/FFCommit.hh"
 #include "debug/FFSquash.hh"
+#include "debug/FanoutPred.hh"
 #include "debug/Rename.hh"
 #include "params/DerivFFCPU.hh"
 
@@ -45,7 +46,6 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
         auto sb_index = make_pair(src_reg.classValue(), src_reg.index());
 
-
         if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
             if (src_reg.classValue() == FloatRegClass) {
                 inst->setSrcValue(src_idx, floatArchRF[src_reg.index()]);
@@ -75,6 +75,15 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                     ", got pointer (%i %i)\n",
                     src_reg.className(), src_reg.index(),
                     renamed_ptr.bank, renamed_ptr.index);
+
+            DynInstPtr parent = dq->readInst(renamed_ptr);
+            if (parent) {
+                parent->numChildren++;
+                DPRINTF(FanoutPred, "inc num children of inst[%lu] to %u",
+                        parent->seqNum, parent->numChildren);
+            } else {
+                warn("Parent is null ptr at renaming\n");
+            }
 
             inst->renameSrcReg(src_idx, renamed_ptr);
 
@@ -288,6 +297,12 @@ template<class Impl>
 void ArchState<Impl>::setDIEWC(DIEWC *_diewc)
 {
     diewc = _diewc;
+}
+
+template<class Impl>
+void ArchState<Impl>::setDQ(DataflowQueues *_dq)
+{
+    dq = _dq;
 }
 
 template<class Impl>

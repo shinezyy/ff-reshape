@@ -29,6 +29,7 @@ private:
 //    using DynInstPtr = BaseO3DynInst<Impl>*;
     typedef typename Impl::O3CPU O3CPU;
     typedef typename CPUPol::DIEWC DIEWC;
+    typedef typename CPUPol::DataflowQueues DataflowQueues;
 
 //    const unsigned WritePorts, ReadPorts;
 //
@@ -67,6 +68,8 @@ private:
 
     DIEWC *diewc;
 
+    DataflowQueues *dq;
+
     void commitInstInSB(DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest);
 
 public:
@@ -101,6 +104,8 @@ public:
     const std::string name() {return "arch_state";}
 
     void setDIEWC(DIEWC *_diewc);
+
+    void setDQ(DataflowQueues *_dq);
 
     InstSeqNum getYoungestCPTBefore(InstSeqNum violator);
 

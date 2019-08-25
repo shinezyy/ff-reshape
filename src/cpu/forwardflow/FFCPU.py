@@ -122,8 +122,8 @@ class DerivFFCPU(BaseCPU):
     forwardComSize = Param.Unsigned(10,
             "Time buffer size for forward communication")
 
-    LQEntries = Param.Unsigned(32, "Number of load queue entries")
-    SQEntries = Param.Unsigned(16, "Number of store queue entries")
+    LQEntries = Param.Unsigned(72, "Number of load queue entries")
+    SQEntries = Param.Unsigned(56, "Number of store queue entries")
     LSQDepCheckShift = Param.Unsigned(4,
             "Number of places to shift addr before check")
     LSQCheckLoads = Param.Bool(True,
@@ -202,7 +202,7 @@ class DerivFFCPU(BaseCPU):
 
             exit(1)
 
-    DQDepth = Param.Unsigned(32, "depth of each dataflow queue bank")
+    DQDepth = Param.Unsigned(48, "depth of each dataflow queue bank")
     numOperands = Param.Unsigned(4,
             "number of dest and src operands for each instruction")
     numDQBanks = Param.Unsigned(4, "number of DQ banks per group")
