@@ -10,6 +10,7 @@
 
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
+#include "cpu/fanout_pred.hh"
 #include "cpu/forwardflow/comm.hh"
 //#include "cpu/forwardflow/dataflow_queue.hh"
 //#include "cpu/forwardflow/lsq.hh"
@@ -419,6 +420,12 @@ public:
     Stats::Scalar iewExecLoadInsts;
     Stats::Formula iewExecStoreInsts;
 
+    Stats::Scalar totalFanoutPredictions;
+    Stats::Scalar largeFanoutInsts;
+    Stats::Scalar falseNegativeLF;
+    Stats::Scalar falsePositiveLF;
+    Stats::Formula fanoutMispredRate;
+
     ArchState *getArchState() {return &archState;}
 
     XDataflowQueues *getDQ() {return &dq;}
@@ -445,6 +452,8 @@ public:
 
     bool cptHint;
 
+    void setFanoutPred(FanoutPred *fanoutPred1);
+
 private:
     const unsigned commitTraceInterval;
     unsigned commitCounter;
@@ -455,6 +464,9 @@ private:
 
     bool anySuccessfulCommit;
 
+    FanoutPred *fanoutPred;
+
+    const unsigned largeFanoutThreshold;
 };
 
 

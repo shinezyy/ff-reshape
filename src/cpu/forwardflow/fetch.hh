@@ -48,6 +48,7 @@
 #include "arch/utility.hh"
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
+#include "cpu/fanout_pred.hh"
 #include "cpu/pc_event.hh"
 #include "cpu/pred/bpred_unit.hh"
 #include "cpu/timebuf.hh"
@@ -574,6 +575,18 @@ class DefaultFetch
     Stats::Formula branchRate;
     /** Number of instruction fetched per cycle. */
     Stats::Formula fetchRate;
+
+    FanoutPred *fanoutPred;
+
+    void predictFanout(DynInstPtr &inst);
+
+    const unsigned largeFanoutThreshold;
+
+public:
+    void setFanoutPred(FanoutPred *fanoutPred1);
+
+
+
 };
 
 }

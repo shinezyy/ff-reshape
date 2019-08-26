@@ -59,6 +59,7 @@
 #include "config/the_isa.hh"
 #include "cpu/activity.hh"
 #include "cpu/base.hh"
+#include "cpu/fanout_pred.hh"
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/cpu_policy.hh"
 #include "cpu/forwardflow/thread_context.hh"
@@ -745,6 +746,8 @@ class FFCPU : public BaseO3CPU
 
 private:
     void setPointers();
+
+    FanoutPred fanoutPred;
 };
 
 }

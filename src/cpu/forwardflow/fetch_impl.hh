@@ -51,6 +51,7 @@
 #include <map>
 #include <queue>
 
+
 #include "arch/generic/tlb.hh"
 #include "arch/isa_traits.hh"
 #include "arch/utility.hh"
@@ -59,8 +60,6 @@
 #include "base/types.hh"
 #include "config/the_isa.hh"
 #include "cpu/base.hh"
-
-//#include "cpu/checker/cpu.hh"
 #include "cpu/exetrace.hh"
 #include "cpu/forwardflow/fetch.hh"
 #include "cpu/forwardflow/isa_specific.hh"
@@ -97,7 +96,8 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivFFCPUParams *params)
       fetchQueueSize(params->fetchQueueSize),
       numThreads(params->numThreads),
       numFetchingThreads(params->smtNumFetchingThreads),
-      finishTranslationEvent(this)
+      finishTranslationEvent(this),
+      largeFanoutThreshold(params->LargeFanoutThreshold)
 {
     if (numThreads > Impl::MaxThreads)
         fatal("numThreads (%d) is larger than compiled limit (%d),\n"
@@ -1353,6 +1353,8 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             thisPC = nextPC;
             inRom = isRomMicroPC(thisPC.microPC());
 
+            predictFanout(instruction);
+
             if (newMacro) {
                 fetchAddr = thisPC.instAddr() & BaseCPU::PCMask;
                 blkOffset = (fetchAddr - fetchBufferPC[tid]) / instSize;
@@ -1677,6 +1679,29 @@ DefaultFetch<Impl>::profileStall(ThreadID tid) {
         DPRINTF(Fetch, "[tid:%i]: Unexpected fetch stall reason (Status: %i).\n",
              tid, fetchStatus[tid]);
     }
+}
+
+template<class Impl>
+void DefaultFetch<Impl>::setFanoutPred(FanoutPred *fanoutPred1)
+{
+    fanoutPred = fanoutPred1;
+}
+
+template<class Impl>
+void DefaultFetch<Impl>::predictFanout(DynInstPtr &inst)
+{
+    if (inst->numDestRegs() == 0) {
+        return;
+    }
+    const RegId& dest_reg = inst->destRegIdx(0);
+
+    unsigned pred = fanoutPred->lookup(
+            inst->pcState().instAddr(),
+            hash<std::pair<RegClass, RegIndex>>{}(
+                    std::make_pair(dest_reg.classValue(), dest_reg.index())));
+
+    inst->predFanout = pred;
+    inst->predLargeFanout = pred > largeFanoutThreshold;
 }
 
 }

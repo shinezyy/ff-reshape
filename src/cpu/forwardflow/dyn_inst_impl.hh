@@ -152,6 +152,7 @@ BaseO3DynInst<Impl>::initVars()
     numChildren = 0;
 
     predLargeFanout = false;
+    predFanout = 0;
 }
 
 template <class Impl>

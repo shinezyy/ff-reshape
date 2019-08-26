@@ -434,6 +434,8 @@ public:
 
     bool predLargeFanout;
 
+    unsigned predFanout;
+
 private:
     FFRegValue destValue;
 

@@ -178,7 +178,8 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
 
       globalSeqNum(1),
       system(params->system),
-      lastRunningCycle(curCycle())
+      lastRunningCycle(curCycle()),
+      fanoutPred(params)
 {
     if (!params->switched_out) {
         _status = Running;
@@ -226,6 +227,9 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
     allocation.setAllocQueue(&allocationQueue);
     diewc.setAllocQueue(&allocationQueue);
 //    diewc.setIEWQueue(&iewQueue); // todo: set self-to-self queue
+
+    fetch.setFanoutPred(&fanoutPred);
+    diewc.setFanoutPred(&fanoutPred);
 
     setPointers();
 

@@ -224,7 +224,11 @@ class BaseCPU(MemObject):
         "between CPU models)")
 
     tracer = Param.InstTracer(default_tracer, "Instruction tracer")
+
     commitTraceInterval = Param.Unsigned(19, 'commitTraceInterval')
+
+    FanoutPredLambda = Param.Float(0.6, 'FanoutPredTableSize')
+    FanoutPredTableSize = Param.Unsigned(512, 'FanoutPredTableSize')
 
     icache_port = MasterPort("Instruction Port")
     dcache_port = MasterPort("Data Port")

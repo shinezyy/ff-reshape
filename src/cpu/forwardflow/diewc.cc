@@ -1163,8 +1163,8 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         tcSquash(false),
         allocationToDIEWCDelay(params->allocationToDIEWCDelay),
         commitTraceInterval(params->commitTraceInterval),
-        commitCounter(0)
-
+        commitCounter(0),
+        largeFanoutThreshold(params->LargeFanoutThreshold)
 {
     skidBufferMax = (allocationToDIEWCDelay + 1)*width;
     dq.setLSQ(&ldstQueue);
@@ -1283,6 +1283,25 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
     // Function Calls
     if (inst->isCall())
         statComFunctionCalls++;
+
+    if (!inst->isSquashed() && inst->numDestRegs() > 0) {
+        totalFanoutPredictions++;
+        bool is_large_fanout = inst->numChildren > largeFanoutThreshold;
+        if (is_large_fanout) {
+            largeFanoutInsts++;
+        }
+        if (inst->predLargeFanout && !is_large_fanout) {
+            falsePositiveLF++;
+        } else if (!inst->predLargeFanout && is_large_fanout) {
+            falseNegativeLF++;
+        }
+
+        const RegId& dest_reg = inst->destRegIdx(0);
+        fanoutPred->update(inst->instAddr(),
+                hash<std::pair<RegClass, RegIndex>>{}(
+                    std::make_pair(dest_reg.classValue(), dest_reg.index()) ),
+                inst->numChildren);
+    }
 }
 
 template<class Impl>
@@ -1696,6 +1715,22 @@ void FFDIEWC<Impl>::regStats()
             .desc("Number of stores executed");
     iewExecStoreInsts = iewExecutedRefs - iewExecLoadInsts;
 
+    totalFanoutPredictions
+        .name(name() + ".totalFanoutPredictions")
+        .desc("totalFanoutPredictions");
+    falseNegativeLF
+        .name(name() + ".falseNegativeLF")
+        .desc("falseNegativeLF");
+    falsePositiveLF
+        .name(name() + ".falsePositiveLF")
+        .desc("falsePositiveLF");
+    fanoutMispredRate
+        .name(name() + ".fanoutMispredRate")
+        .desc("fanoutMispredRate");
+    largeFanoutInsts
+        .name(name() + ".largeFanoutInsts")
+        .desc("largeFanoutInsts");
+    fanoutMispredRate = (falseNegativeLF + falsePositiveLF) / totalFanoutPredictions;
 
 }
 
@@ -2105,6 +2140,12 @@ void FFDIEWC<Impl>:: updateExeInstStats(DynInstPtr &inst)
             iewExecLoadInsts++;
         }
     }
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::setFanoutPred(FanoutPred *fanoutPred1)
+{
+    fanoutPred = fanoutPred1;
 }
 
 }

@@ -217,3 +217,5 @@ class DerivFFCPU(BaseCPU):
     PendingFwPointerThreshold = Param.Unsigned(8*6, "PendingFwPointerThreshold ")
 
     MaxCheckpoints = Param.Unsigned(16, "Max pending branch instructions")
+
+    LargeFanoutThreshold = Param.Unsigned(3, "LargeFanoutThreshold")
