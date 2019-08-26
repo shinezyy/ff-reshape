@@ -1287,20 +1287,23 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
     if (!inst->isSquashed() && inst->numDestRegs() > 0) {
         totalFanoutPredictions++;
         bool is_large_fanout = inst->numChildren > largeFanoutThreshold;
+        bool mis_pred = false;
         if (is_large_fanout) {
             largeFanoutInsts++;
         }
         if (inst->predLargeFanout && !is_large_fanout) {
             falsePositiveLF++;
+            mis_pred = true;
         } else if (!inst->predLargeFanout && is_large_fanout) {
             falseNegativeLF++;
+            mis_pred = true;
         }
 
         const RegId& dest_reg = inst->destRegIdx(0);
         fanoutPred->update(inst->instAddr(),
                 hash<std::pair<RegClass, RegIndex>>{}(
                     std::make_pair(dest_reg.classValue(), dest_reg.index()) ),
-                inst->numChildren);
+                inst->numChildren, mis_pred);
     }
 }
 

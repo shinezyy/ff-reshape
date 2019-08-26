@@ -23,7 +23,7 @@ private:
 public:
     explicit FanoutPred(BaseCPUParams *params);
 
-    void update(uint64_t pc, unsigned reg_idx, unsigned fanout);
+    void update(uint64_t pc, unsigned reg_idx, unsigned fanout, bool verbose);
 
     unsigned lookup(uint64_t pc, unsigned reg_idx);
 

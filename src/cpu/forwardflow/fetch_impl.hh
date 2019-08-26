@@ -1696,7 +1696,7 @@ void DefaultFetch<Impl>::predictFanout(DynInstPtr &inst)
     const RegId& dest_reg = inst->destRegIdx(0);
 
     unsigned pred = fanoutPred->lookup(
-            inst->pcState().instAddr(),
+            inst->instAddr(),
             hash<std::pair<RegClass, RegIndex>>{}(
                     std::make_pair(dest_reg.classValue(), dest_reg.index())));
 
