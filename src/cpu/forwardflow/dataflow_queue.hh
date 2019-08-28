@@ -53,8 +53,6 @@ private:
     std::vector<WKPointer> pendingWakeupPointers;
     bool anyPending;
 
-    std::vector<unsigned> readyIndices;
-
     // input forward pointers
     std::vector<WKPointer> inputPointers;
 
@@ -68,6 +66,10 @@ private:
     std::vector<DQPointer> outputPointers;
 
     unsigned tail;
+
+    unsigned readyQueueSize;
+
+    std::deque<DQPointer> readyQueue;
 
 public:
     void advanceTail();
@@ -102,9 +104,11 @@ public:
 
     DynInstPtr tryWakeTail();
 
+    DynInstPtr tryWakeDirect();
+
     std::string _name;
 
-    const std::string name() const {return _name;}
+    std::string name() const {return _name;}
 
     void clear(bool markSquashed);
 
@@ -119,6 +123,18 @@ public:
     void printTail();
 
     void setNearlyWakeup(DQPointer ptr);
+
+    //stats:
+    Stats::Scalar wakenUpByPointer;
+    Stats::Scalar wakenUpAtTail;
+    Stats::Scalar directReady;
+    Stats::Scalar directWakenUp;
+
+    void regStats();
+
+    bool hasTooManyPendingInsts();
+
+    void squash(const DQPointer &squash_from);
 };
 
 
@@ -171,7 +187,7 @@ private:
 
     std::vector<std::deque<DQPacket<PointerPair>>> forwardPointerQueue;
 
-    std::vector<XDataflowQueueBank> dqs;
+    std::vector<XDataflowQueueBank *> dqs;
 
     TimeBuffer<DQStruct> *DQTS;
 
@@ -377,7 +393,7 @@ public:
 
     void setCPU(O3CPU *_cpu) {cpu = _cpu;};
 
-    const std::string name() const {return "dataflow_queue";}
+    std::string name() const {return "dataflow_queue";}
 
     void violation(DynInstPtr store, DynInstPtr violator);
 
@@ -420,6 +436,7 @@ public:
 
     DynInstPtr readInst(const DQPointer &p) const;
 
+    bool hasTooManyPendingInsts();
 };
 
 }
