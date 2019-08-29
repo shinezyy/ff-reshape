@@ -431,6 +431,7 @@ template<class Impl>
 DQPointer Allocation<Impl>::allocateDQEntry() {
     auto tmp = flatHead;
     flatHead = (flatHead + 1)%dqSize;
+    DPRINTF(DAllocation, "head: %u, tail: %u\n", flatHead, flatTail);
     return PositionfromUint(tmp);
 }
 

@@ -1779,6 +1779,12 @@ void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
                         inst->getDestValue().i
                );
         extraWakeup(wk);
+
+        unsigned used = pointer2uint(inst->dqPosition);
+        if (validPosition(used) && logicallyLET(used, oldestUsed)) {
+            oldestUsed = used;
+        }
+
         completeMemInst(inst);
     } else {
         auto &p = inst->dqPosition;

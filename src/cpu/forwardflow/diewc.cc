@@ -846,7 +846,7 @@ FFDIEWC<Impl>::commitInsts()
                 if (!toNextCycle->diewc2diewc.squash) {
                     toNextCycle->diewc2diewc.doneSeqNum = head_inst->seqNum;
                 }
-                toNextCycle->diewc2diewc.donePointer = head_inst->dqPosition;
+                // toNextCycle->diewc2diewc.donePointer = head_inst->dqPosition;
 
                 canHandleInterrupts =  (!head_inst->isDelayedCommit()) &&
                                        ((THE_ISA != ALPHA_ISA) ||
@@ -1111,8 +1111,9 @@ void FFDIEWC<Impl>::squashFromSquashAfter() {
 
 template<class Impl>
 void FFDIEWC<Impl>::squashAll() {
-    InstSeqNum squashed_inst = dq.isEmpty() ?
-            lastCommitedSeqNum : dq.getTail()->seqNum - 1;
+    DynInstPtr tail_inst = dq.getTail();
+    InstSeqNum squashed_inst = dq.isEmpty() ? lastCommitedSeqNum :
+        (tail_inst ? tail_inst->seqNum - 1: lastCommitedSeqNum);
 
     youngestSeqNum = lastCommitedSeqNum;
 
@@ -1124,9 +1125,9 @@ void FFDIEWC<Impl>::squashAll() {
 
     toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
     toNextCycle->diewc2diewc.squashedSeqNum = squashed_inst;
-    if (!dq.isEmpty()) {
-        toNextCycle->diewc2diewc.donePointer = dq.getTail()->dqPosition;
-    }
+    // if (!dq.isEmpty()) {
+    //     toNextCycle->diewc2diewc.donePointer = dq.getTail()->dqPosition;
+    // }
     toNextCycle->diewc2diewc.squash = true;
 //    toNextCycle->diewc2diewc.dqSquashing = true;
     toNextCycle->diewc2diewc.mispredictInst = nullptr;
