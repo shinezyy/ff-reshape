@@ -448,7 +448,7 @@ public:
 
     bool DQPointerJumped;
 
-    TheISA::PCState toCheckpoint;
+    Addr toCheckpoint;
 
     bool cptHint;
 

@@ -139,7 +139,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
     if (inst->isControl() ||
             (diewc->cptHint &&
-            diewc->toCheckpoint == inst->pcState())) {
+            diewc->toCheckpoint == inst->instAddr())) {
         takeCheckpoint(inst);
 //        diewc->cptHint = false;
     }

@@ -416,9 +416,9 @@ public:
 private:
     unsigned oldestUsed;
 
-    InstSeqNum clearHalfWKQueue();
+    std::pair<InstSeqNum, Addr> clearHalfWKQueue();
 
-    InstSeqNum clearHalfFWQueue();
+    std::pair<InstSeqNum, Addr> clearHalfFWQueue();
 
     void processWKQueueFull();
 
@@ -433,6 +433,8 @@ public:
     bool halfSquash;
 
     InstSeqNum halfSquashSeq;
+
+    Addr halfSquashPC;
 
     DynInstPtr readInst(const DQPointer &p) const;
 

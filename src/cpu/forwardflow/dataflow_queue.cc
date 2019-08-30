@@ -1967,7 +1967,7 @@ void DataflowQueues<Impl>::maintainOldestUsed()
 }
 
 template<class Impl>
-InstSeqNum DataflowQueues<Impl>::clearHalfWKQueue()
+std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfWKQueue()
 {
     unsigned oldest_to_squash = getHeadPtr();
     for (auto &q: wakeQueues) {
@@ -1994,15 +1994,23 @@ InstSeqNum DataflowQueues<Impl>::clearHalfWKQueue()
     }
     auto ptr = uint2Pointer(oldest_to_squash);
     auto inst = dqs[ptr.bank]->readInstsFromBank(ptr);
+
+    auto sec_ptr = uint2Pointer(dec(oldest_to_squash));
+    auto second_oldest_inst = dqs[sec_ptr.bank]->readInstsFromBank(sec_ptr);
+    Addr hint_pc = 0;
+    if (second_oldest_inst) {
+        hint_pc = second_oldest_inst->instAddr();
+    }
+
     if (inst) {
-        return inst->seqNum;
+        return std::make_pair(inst->seqNum, hint_pc);
     } else {
-        return std::numeric_limits<InstSeqNum>::max();
+        return std::make_pair(std::numeric_limits<InstSeqNum>::max(), hint_pc);
     }
 }
 
 template<class Impl>
-InstSeqNum DataflowQueues<Impl>::clearHalfFWQueue()
+std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfFWQueue()
 {
     unsigned oldest_to_squash = getHeadPtr();
     for (auto &q: forwardPointerQueue) {
@@ -2029,10 +2037,18 @@ InstSeqNum DataflowQueues<Impl>::clearHalfFWQueue()
     }
     auto ptr = uint2Pointer(oldest_to_squash);
     auto inst = dqs[ptr.bank]->readInstsFromBank(ptr);
+
+    auto sec_ptr = uint2Pointer(dec(oldest_to_squash));
+    auto second_oldest_inst = dqs[ptr.bank]->readInstsFromBank(sec_ptr);
+    Addr hint_pc = 0;
+    if (second_oldest_inst) {
+        hint_pc = second_oldest_inst->instAddr();
+    }
+
     if (inst) {
-        return inst->seqNum;
+        return std::make_pair(inst->seqNum, hint_pc);
     } else {
-        return std::numeric_limits<InstSeqNum>::max();
+        return std::make_pair(std::numeric_limits<InstSeqNum>::max(), hint_pc);
     }
 }
 
@@ -2046,19 +2062,22 @@ void DataflowQueues<Impl>::processWKQueueFull()
         dumpQueues();
     }
 
-    halfSquashSeq = clearHalfWKQueue();
+    std::tie(halfSquashSeq, halfSquashPC) = clearHalfWKQueue();
 
-    bool clear_fw_queue = false;
+    bool clear_another_queue = false;
     for (auto q: forwardPointerQueue) {
         if (q.size() > maxQueueDepth/2) {
-            clear_fw_queue = true;
+            clear_another_queue = true;
         }
     }
 
-    if (clear_fw_queue) {
-        InstSeqNum another_seq = clearHalfFWQueue();
-        if (another_seq < halfSquashSeq) {
+    if (clear_another_queue) {
+        InstSeqNum another_seq;
+        Addr another_pc;
+        std::tie(another_seq, another_pc) = clearHalfFWQueue();
+        if (another_seq <= halfSquashSeq) {
             halfSquashSeq = another_seq;
+            halfSquashPC = another_pc;
         }
     }
 
@@ -2078,19 +2097,22 @@ void DataflowQueues<Impl>::processFWQueueFull()
         dumpQueues();
     }
 
-    halfSquashSeq = clearHalfFWQueue();
+    std::tie(halfSquashSeq, halfSquashPC) = clearHalfFWQueue();
 
-    bool clear_fw_queue = false;
+    bool clear_another_queue = false;
     for (auto q: wakeQueues) {
         if (q.size() > maxQueueDepth/2) {
-            clear_fw_queue = true;
+            clear_another_queue = true;
         }
     }
 
-    if (clear_fw_queue) {
-        InstSeqNum another_seq = clearHalfWKQueue();
-        if (another_seq < halfSquashSeq) {
+    if (clear_another_queue) {
+        InstSeqNum another_seq;
+        Addr another_pc;
+        std::tie(another_seq, another_pc) = clearHalfWKQueue();
+        if (another_seq <= halfSquashSeq) {
             halfSquashSeq = another_seq;
+            halfSquashPC = another_pc;
         }
     }
 

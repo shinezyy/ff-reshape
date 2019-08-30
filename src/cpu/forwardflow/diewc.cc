@@ -1956,7 +1956,7 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator
         //more primary than that found in last cyle
         ) {
 
-        if (victim->pcState() != toCheckpoint) {
+        if (victim->instAddr() != toCheckpoint) {
             cptHint = false;
         }
 
@@ -1965,9 +1965,9 @@ void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator
         if (!youngest_cpted_inst_seq) {
             squashAll();
             cptHint = true;
-            toCheckpoint = victim->pcState();
-            DPRINTF(FFSquash, "Hint to checkpoint on pc: %s next time\n",
-                    toCheckpoint);
+            toCheckpoint = victim->instAddr();
+            DPRINTF(FFSquash, "Hint to checkpoint on pc: 0x%llx next time"
+                    " in case mem violation\n", toCheckpoint);
 
         } else {
             toNextCycle->diewc2diewc.squash = true;
@@ -2094,7 +2094,11 @@ void FFDIEWC<Impl>::checkDQHalfSquash()
 
         if (!youngest_cpted_inst_seq) {
             squashAll();
+            cptHint = true;
+            toCheckpoint = dq.halfSquashPC;
             DPRINTF(FFSquash, "Squash all because no cpt found\n");
+            DPRINTF(FFSquash, "Hint to checkpoint on pc: 0x%llx next time"
+                    " in case half squash\n", toCheckpoint);
 
         } else {
             toNextCycle->diewc2diewc.squash = true;
