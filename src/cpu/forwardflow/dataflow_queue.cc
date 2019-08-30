@@ -1669,7 +1669,7 @@ template<class Impl>
 unsigned
 DataflowQueues<Impl>::dec(unsigned u) const
 {
-    return u == 0 ? queueSize : u - 1;
+    return u == 0 ? queueSize - 1 : u - 1;
 }
 
 template<class Impl>
