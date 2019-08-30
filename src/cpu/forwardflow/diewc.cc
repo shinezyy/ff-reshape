@@ -1058,6 +1058,7 @@ void FFDIEWC<Impl>::handleSquash() {
     }
 
     if (dqSquashing && dq.queuesEmpty()) {
+        DPRINTF(FFSquash, "cleared dqSquashing\n");
         dqSquashing = false;
         dqSquashSeq = 0;
     }

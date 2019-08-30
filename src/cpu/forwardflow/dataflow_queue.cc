@@ -1881,14 +1881,14 @@ template<class Impl>
 bool DataflowQueues<Impl>::queuesEmpty()
 {
     bool fwPointerEmpty = true;
-//    bool wkPointerEmpty = true;
+    bool wkPointerEmpty = true;
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
             fwPointerEmpty &= forwardPointerQueue[b*nOps+op].empty();
-//            wkPointerEmpty &= forwardPointerQueue[b*nOps+op].empty();
+            wkPointerEmpty &= wakeQueues[b*nOps+op].empty();
         }
     }
-    return fwPointerEmpty;
+    return fwPointerEmpty && wkPointerEmpty;
 }
 
 template<class Impl>
