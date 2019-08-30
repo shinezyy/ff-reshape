@@ -40,7 +40,7 @@ bool FUWrapper<Impl>::canServe(DynInstPtr &inst) {
     if (Debug::FUSched) {
         cout << wbScheduled << endl;
     }
-    bool wb_port_already_scheduled = wbScheduled[lat - 1];
+    bool wb_port_already_scheduled = wbScheduled[lat - 1] || wbScheduledNext[lat - 2];
     return has_capability && !wb_port_already_scheduled && fu_free;
 }
 
