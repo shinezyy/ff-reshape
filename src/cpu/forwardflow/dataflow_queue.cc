@@ -1981,7 +1981,10 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfWKQueue()
                 if (!validPosition(p)) {
                     panic("WTF, a pointer in wk queue is not valid!\n");
                 }
-                if (logicallyLT(p, oldest_to_squash)) {
+                auto p_ptr = uint2Pointer(p);
+                auto p_inst = dqs[p_ptr.bank]->readInstsFromBank(p_ptr);
+
+                if (logicallyLT(p, oldest_to_squash) && p_inst) {
                     oldest_to_squash = p;
                 }
             }
