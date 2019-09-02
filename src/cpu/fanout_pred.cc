@@ -17,13 +17,14 @@ FanoutPred::FanoutPred(BaseCPUParams *params)
 
 }
 
-void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout, bool verbose)
+void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
+        bool verbose, uint64_t history)
 {
     if (verbose) {
         DPRINTF(FanoutPred1, "Old prediction for %llu ^ %u is %u, groud truth is %u\n",
-                pc, reg_idx, table.at(hash(pc, reg_idx)), fanout);
+                pc, reg_idx, table.at(hash(pc, reg_idx, history)), fanout);
     }
-    auto &entry = table.at(hash(pc, reg_idx));
+    auto &entry = table.at(hash(pc, reg_idx, history));
     if (entry == 0) {
         entry = fanout;
     } else {
@@ -34,16 +35,16 @@ void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout, bool ver
 
     if (verbose) {
         DPRINTF(FanoutPred1, "New prediction for %llu ^ %u is %u\n",
-                pc, reg_idx, table.at(hash(pc, reg_idx)));
+                pc, reg_idx, table.at(hash(pc, reg_idx, history)));
     }
 }
 
-unsigned FanoutPred::lookup(uint64_t pc, unsigned reg_idx)
+unsigned FanoutPred::lookup(uint64_t pc, unsigned reg_idx, uint64_t history)
 {
-    return table.at(hash(pc, reg_idx));
+    return table.at(hash(pc, reg_idx, history));
 }
 
-unsigned FanoutPred::hash(uint64_t pc, unsigned reg_idx)
+unsigned FanoutPred::hash(uint64_t pc, unsigned reg_idx, uint64_t history)
 {
-    return static_cast<unsigned>((pc ^ reg_idx)) % depth;
+    return static_cast<unsigned>((pc ^ history)) % depth;
 }

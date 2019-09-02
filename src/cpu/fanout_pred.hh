@@ -23,11 +23,12 @@ private:
 public:
     explicit FanoutPred(BaseCPUParams *params);
 
-    void update(uint64_t pc, unsigned reg_idx, unsigned fanout, bool verbose);
+    void update(uint64_t pc, unsigned reg_idx, unsigned fanout,
+            bool verbose, uint64_t history);
 
-    unsigned lookup(uint64_t pc, unsigned reg_idx);
+    unsigned lookup(uint64_t pc, unsigned reg_idx, uint64_t history);
 
-    unsigned hash(uint64_t pc, unsigned reg_idx);
+    unsigned hash(uint64_t pc, unsigned reg_idx, uint64_t history);
 };
 
 

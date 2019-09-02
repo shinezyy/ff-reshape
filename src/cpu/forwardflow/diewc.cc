@@ -1305,7 +1305,8 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
         fanoutPred->update(inst->instAddr(),
                 hash<std::pair<RegClass, RegIndex>>{}(
                     std::make_pair(dest_reg.classValue(), dest_reg.index()) ),
-                inst->numChildren, mis_pred);
+                inst->numChildren, mis_pred,
+                inst->ghr);
     }
 }
 

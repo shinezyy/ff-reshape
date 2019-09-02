@@ -190,6 +190,10 @@ class BPredUnit : public SimObject
 
     virtual unsigned getGHR(ThreadID tid, void* bp_history) const { return 0; }
 
+    virtual uint64_t getCurrentGHR(ThreadID tid) const {
+        panic("Not implemented\n");
+    };
+
     void dump();
 
   private:

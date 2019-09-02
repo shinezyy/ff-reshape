@@ -213,3 +213,8 @@ void ZPerceptron::Neuron::dump() const{
     }
 }
 
+
+uint64_t ZPerceptron::getCurrentGHR(ThreadID tid) const {
+    assert(globalHistoryLen <= 64);
+    return (uint64_t) globalHistory[tid].to_ulong();
+}

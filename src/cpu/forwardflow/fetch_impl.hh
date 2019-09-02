@@ -1694,11 +1694,13 @@ void DefaultFetch<Impl>::predictFanout(DynInstPtr &inst)
         return;
     }
     const RegId& dest_reg = inst->destRegIdx(0);
+    inst->ghr = branchPred->getCurrentGHR(DummyTid);
 
     unsigned pred = fanoutPred->lookup(
             inst->instAddr(),
             hash<std::pair<RegClass, RegIndex>>{}(
-                    std::make_pair(dest_reg.classValue(), dest_reg.index())));
+                    std::make_pair(dest_reg.classValue(), dest_reg.index())),
+            inst->ghr);
 
     inst->predFanout = pred;
     inst->predLargeFanout = pred > largeFanoutThreshold;

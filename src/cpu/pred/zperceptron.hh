@@ -102,6 +102,8 @@ class ZPerceptron: public BPredUnit{
     void tryDump();
 
     Tick nextDumpTick{0};
+
+    uint64_t getCurrentGHR(ThreadID tid) const override;
 };
 
 #endif
