@@ -5,6 +5,7 @@
 #ifndef GEM5_FANOUT_PRED_HH
 #define GEM5_FANOUT_PRED_HH
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -18,7 +19,35 @@ private:
 
     const unsigned mask;
 
+    const unsigned history_len;
+
+    const unsigned history_mask;
+
+    unsigned filterHash(int funcID, uint64_t pc, unsigned reg_idx);
+
+    bool isPossibleLF(uint64_t pc, unsigned reg_idx);
+
+    void markAsPossible(uint64_t pc, unsigned reg_idx);
+
+    unsigned pcRegHash(uint64_t pc, unsigned reg_idx);
+
+    unsigned pcFoldHash(uint64_t pc);
+
+    const unsigned foldLen;
+
+    const unsigned foldMask;
+
+    const unsigned numDiambgFuncs;
+
+    const unsigned diambgTableSize;
+
+    const unsigned diambgEntryMax;
+
+    unsigned numPossible{};
+
     std::vector<unsigned> table;
+
+    std::array<std::vector<bool>, 2> privTable;
 
 public:
     explicit FanoutPred(BaseCPUParams *params);
