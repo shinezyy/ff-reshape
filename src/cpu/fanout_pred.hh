@@ -39,9 +39,9 @@ private:
 
     const unsigned numDiambgFuncs;
 
-    const unsigned diambgTableSize;
+    const unsigned disambgTableSize;
 
-    const unsigned diambgEntryMax;
+    const unsigned disambgEntryMax;
 
     unsigned numPossible{};
 

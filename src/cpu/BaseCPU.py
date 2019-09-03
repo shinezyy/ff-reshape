@@ -228,7 +228,7 @@ class BaseCPU(MemObject):
     commitTraceInterval = Param.Unsigned(19, 'commitTraceInterval')
 
     FanoutPredLambda = Param.Float(0.2, 'FanoutPredTableSize')
-    FanoutPredTableSize = Param.Unsigned(32 * 2**10, 'FanoutPredTableSize')
+    FanoutPredTableSize = Param.Unsigned(8 * 2**10, 'FanoutPredTableSize')
 
     icache_port = MasterPort("Instruction Port")
     dcache_port = MasterPort("Data Port")

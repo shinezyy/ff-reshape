@@ -58,3 +58,5 @@ def modifyO3CPUConfig(options, cpu):
 
     if options.bp_redundant_bit:
         cpu.branchPred.redundantBit = options.bp_redundant_bit
+
+    cpu.FanoutPredLambda = options.fanout_lambda

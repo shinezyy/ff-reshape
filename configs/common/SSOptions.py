@@ -89,3 +89,8 @@ def addO3Options(parser):
     parser.add_option("--use-snn",
             action='store_true',
             help='Use snn as branch predictor')
+
+    parser.add_option("--fanout-lambda",
+            default=0.2,
+            action='store', type='float',
+            help='lambda for fanout predictor')
