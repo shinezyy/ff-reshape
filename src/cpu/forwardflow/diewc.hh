@@ -404,6 +404,7 @@ public:
     Stats::Scalar memOrderViolationEvents;
 
     Stats::Scalar instsCommitted;
+    Stats::Scalar forwardersCommitted;
     Stats::Scalar opsCommitted;
     Stats::Scalar statComBranches;
     Stats::Scalar statComRefs;

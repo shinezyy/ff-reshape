@@ -183,6 +183,7 @@ class StaticInst : public RefCounted, public StaticInstFlags
     bool isDelayedCommit() const { return flags[IsDelayedCommit]; }
     bool isLastMicroop() const { return flags[IsLastMicroop]; }
     bool isFirstMicroop() const { return flags[IsFirstMicroop]; }
+    bool isForwarder() const { return flags[IsForwarder]; }
     //This flag doesn't do anything yet
     bool isMicroBranch() const { return flags[IsMicroBranch]; }
     //@}
@@ -345,5 +346,27 @@ class StaticInst : public RefCounted, public StaticInstFlags
      */
     virtual size_t asBytes(void *buf, size_t max_size) { return 0; }
 };
+
+class ForwarderInst : public StaticInst
+{
+public:
+    ForwarderInst(const RegId &src_reg);
+
+    Fault execute(ExecContext *xc, Trace::InstRecord *traceData) const override;
+
+    void advancePC(TheISA::PCState &pcState) const override
+    {
+        //pass
+    }
+
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const override
+    {
+        return mnemonic;
+    }
+
+private:
+};
+
+
 
 #endif // __CPU_STATIC_INST_HH__

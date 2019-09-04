@@ -1289,7 +1289,8 @@ void
 FFCPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
 {
     // Keep an instruction count.
-    if (!inst->isMicroop() || inst->isLastMicroop()) {
+    if ((!inst->isMicroop() || inst->isLastMicroop()) &&
+            !inst->isForwarder()) {
         thread[tid]->numInst++;
         thread[tid]->numInsts++;
         committedInsts[tid]++;
@@ -1299,9 +1300,11 @@ FFCPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
         comInstEventQueue[tid]->serviceEvents(thread[tid]->numInst);
         system->instEventQueue.serviceEvents(system->totalNumInsts);
     }
-    thread[tid]->numOp++;
-    thread[tid]->numOps++;
-    committedOps[tid]++;
+    if (!inst->isForwarder()) {
+        thread[tid]->numOp++;
+        thread[tid]->numOps++;
+        committedOps[tid]++;
+    }
 
     probeInstCommit(inst->staticInst);
 }

@@ -33,6 +33,7 @@
 
 #include <iostream>
 
+#include "cpu/exec_context.hh"
 #include "sim/core.hh"
 
 namespace {
@@ -144,3 +145,70 @@ StaticInst::printFlags(std::ostream &outs,
         }
     }
 }
+
+static TheISA::ExtMachInst forwarderMachInst;
+
+ForwarderInst::ForwarderInst(const RegId &src_reg) :
+        StaticInst("Reshape Forwarder",
+                        forwarderMachInst, OpClass::Forwarder)
+{
+        _numSrcRegs = 1;
+        _numDestRegs = 1;
+        _destRegIdx[0] = src_reg;
+        _srcRegIdx[0] = src_reg;
+        this->setFlag(StaticInstFlags::Flags::IsForwarder);
+
+        if (_srcRegIdx[0].isCCReg()) {
+                _numCCDestRegs = 1;
+        } else if (_srcRegIdx[0].isMiscReg()) {
+                // pass
+
+        } else if (_srcRegIdx[0].isVecReg()) {
+                _numVecDestRegs = 1;
+        } else if (_srcRegIdx[0].isVecElem()) {
+                _numVecElemDestRegs = 1;
+
+        } else if (_srcRegIdx[0].isFloatReg()) {
+                _numFPDestRegs = 1;
+
+        } else if (_srcRegIdx[0].isIntReg()) {
+                _numIntDestRegs = 1;
+
+        } else {
+                panic("Not implemented reg type!\n");
+        }
+}
+
+
+Fault
+ForwarderInst::execute(
+                ExecContext *xc, Trace::InstRecord *traceData) const
+{
+        if (_srcRegIdx[0].isCCReg()) {
+                auto val = xc->readCCRegOperand(this, 0);
+                xc->setCCRegOperand(this, 0, val);
+
+        } else if (_srcRegIdx[0].isMiscReg()) {
+                auto val = xc->readMiscRegOperand(this, 0);
+                xc->setMiscRegOperand(this, 0, val);
+
+        } else if (_srcRegIdx[0].isVecReg()) {
+                auto val = xc->readVecRegOperand(this, 0);
+                xc->setVecRegOperand(this, 0, val);
+
+        } else if (_srcRegIdx[0].isFloatReg()) {
+                auto val = xc->readFloatRegOperand(this, 0);
+                xc->setFloatRegOperand(this, 0, val);
+
+        } else if (_srcRegIdx[0].isIntReg()) {
+                auto val = xc->readIntRegOperand(this, 0);
+                xc->setIntRegOperand(this, 0, val);
+
+        } else {
+                panic("Not implemented reg type!\n");
+        }
+
+        return NoFault;
+}
+
+

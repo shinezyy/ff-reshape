@@ -537,6 +537,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool isLastMicroop() const { return staticInst->isLastMicroop(); }
     bool isFirstMicroop() const { return staticInst->isFirstMicroop(); }
     bool isMicroBranch() const { return staticInst->isMicroBranch(); }
+    bool isForwarder() const { return staticInst->isForwarder(); }
 
     /** Temporarily sets this instruction as a serialize before instruction. */
     void setSerializeBefore() { status.set(SerializeBefore); }

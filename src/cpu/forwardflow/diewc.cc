@@ -1240,9 +1240,16 @@ void FFDIEWC<Impl>::clearAllocatedInsts() {
 template<class Impl>
 void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
 
-    if (!inst->isMicroop() || inst->isLastMicroop())
-        instsCommitted++;
-    opsCommitted++;
+    if (!inst->isMicroop() || inst->isLastMicroop()) {
+        if (!inst->isForwarder()) {
+            instsCommitted++;
+        } else {
+            forwardersCommitted++;
+        }
+    }
+    if (!inst->isForwarder()) {
+        opsCommitted++;
+    }
 
     // To match the old model, don't count nops and instruction
     // prefetches towards the total commit count.
@@ -1659,6 +1666,10 @@ void FFDIEWC<Impl>::regStats()
     instsCommitted
         .name(name() + ".instsCommitted")
         .desc("instsCommitted")
+        ;
+    forwardersCommitted
+        .name(name() + ".forwardersCommitted")
+        .desc("forwardersCommitted")
         ;
     opsCommitted
         .name(name() + ".opsCommitted")
