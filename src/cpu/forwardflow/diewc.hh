@@ -27,6 +27,7 @@ class FFDIEWC //dispatch, issue, execution, writeback, commit
 
 public:
     typedef typename Impl::DynInstPtr DynInstPtr;
+    typedef typename Impl::DynInst DynInst;
 //    using DynInstPtr = BaseO3DynInst<Impl>*;
     //Typedefs from Impl
     typedef typename Impl::CPUPol CPUPol;
@@ -98,13 +99,13 @@ private:
 
     FUWrapper fuWrapper;
 
-    typedef std::queue<DynInstPtr> InstQueue;
+    typedef std::deque<DynInstPtr> InstQueue;
     InstQueue insts_from_allocation;
     InstQueue skidBuffer;
 
     std::queue<PointerPair> pointerPackets;
 
-    InstQueue insts_to_commit;
+    std::queue<DynInstPtr> insts_to_commit;
 
 public:
     XLSQ ldstQueue;
@@ -468,6 +469,10 @@ private:
     FanoutPred *fanoutPred;
 
     const unsigned largeFanoutThreshold;
+
+    void insertForwarder(DynInstPtr &inst, DynInstPtr &anchor,InstQueue &inst_buffer);
+
+    bool EnableReshape;
 };
 
 

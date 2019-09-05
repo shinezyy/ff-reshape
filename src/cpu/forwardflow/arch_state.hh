@@ -112,6 +112,9 @@ public:
     void squashAll();
 
     void dumpMaps();
+
+    // is LF source, is LF drain
+    std::pair<bool, bool> forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forward);
 };
 
 }

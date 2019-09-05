@@ -365,7 +365,10 @@ class FFCPU : public BaseO3CPU
 
     /** Get the current instruction sequence number, and increment it. */
     InstSeqNum getAndIncrementInstSeq()
-    { return globalSeqNum++; }
+    {
+        globalSeqNum += 100;
+        return globalSeqNum;
+    }
 
     /** Traps to handle given fault. */
     void trap(const Fault &fault, ThreadID tid, const StaticInstPtr &inst);
@@ -491,6 +494,8 @@ class FFCPU : public BaseO3CPU
      *  instructions.  Used when new instructions are fetched.
      */
     ListIt addInst(DynInstPtr &inst);
+
+    ListIt addInstAfter(DynInstPtr &inst, ListIt anchor);
 
     /** Function to tell the CPU that an instruction has completed. */
     void instDone(ThreadID tid, DynInstPtr &inst);

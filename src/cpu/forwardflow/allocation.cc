@@ -652,7 +652,7 @@ void Allocation<Impl>::resetStage()
 template<class Impl>
 void Allocation<Impl>::squash()
 {
-        if (allocationStatus == Blocked ||
+    if (allocationStatus == Blocked ||
         allocationStatus == Unblocking) {
         toDecode->renameUnblock[DummyTid] = true;
 

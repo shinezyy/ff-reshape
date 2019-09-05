@@ -436,6 +436,8 @@ public:
 
     unsigned predFanout;
 
+    unsigned numForwardRest;
+
     uint64_t ghr;
 private:
     FFRegValue destValue;

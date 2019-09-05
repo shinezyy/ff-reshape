@@ -1285,6 +1285,22 @@ FFCPU<Impl>::addInst(DynInstPtr &inst)
 }
 
 template <class Impl>
+typename FFCPU<Impl>::ListIt
+FFCPU<Impl>::addInstAfter(DynInstPtr &inst, ListIt anchor)
+{
+    auto younger = std::next(anchor);
+
+    inst->seqNum = (*anchor)->seqNum + 1;
+    if (younger != instList.end()) {
+        assert((*younger)->seqNum > inst->seqNum);
+    }
+
+    instList.insert(younger, inst);
+
+    return ++anchor;
+}
+
+template <class Impl>
 void
 FFCPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
 {

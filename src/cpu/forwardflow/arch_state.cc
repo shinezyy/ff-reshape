@@ -69,14 +69,14 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                 assert(parentMap.count(src_reg)); // to parents only
                 assert(renameMap.count(src_reg)); // to parents or siblings
             }
-            DQPointer renamed_ptr = parentMap[src_reg];
+            DQPointer parent_ptr = parentMap[src_reg];
 
             DPRINTF(Rename, "Looking up %s arch reg %i"
                     ", got pointer (%i %i)\n",
                     src_reg.className(), src_reg.index(),
-                    renamed_ptr.bank, renamed_ptr.index);
+                    parent_ptr.bank, parent_ptr.index);
 
-            DynInstPtr parent = dq->readInst(renamed_ptr);
+            DynInstPtr parent = dq->readInst(parent_ptr);
             if (parent) {
                 parent->numChildren++;
                 DPRINTF(FanoutPred, "inc num children of inst[%lu] to %u",
@@ -85,7 +85,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                 warn("Parent is null ptr at renaming\n");
             }
 
-            inst->renameSrcReg(src_idx, renamed_ptr);
+            inst->renameSrcReg(src_idx, parent_ptr);
 
             unsigned identical = 0;
             for (unsigned src_idx_x = 0; src_idx_x < src_idx; src_idx_x++) {
@@ -102,21 +102,33 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                 continue;
             }
 
+            auto renamed_ptr = renameMap[src_reg];
+            bool predecessor_is_forwarder = false;
+            DynInstPtr predecessor = dq->readInst(renamed_ptr);
+            if (predecessor && !predecessor->isSquashed() && predecessor->isForwarder()) {
+                predecessor_is_forwarder = true;
+            }
+
             diewc->setOldestFw(renameMap[src_reg]);
 
-            auto old = renameMap[src_reg];
+            auto &old = renameMap[src_reg];
+            auto dest = inst->dqPosition;
+            dest.op = static_cast<unsigned int>(src_idx) + 1;
+            pairs.push_back({old, dest});
 
-            renameMap[src_reg] = inst->dqPosition;
-            renameMap[src_reg].op = static_cast<unsigned int>(src_idx) + 1;
-            auto new_ = renameMap[src_reg];
+            if (!predecessor_is_forwarder) {
+                renameMap[src_reg] = dest;
+                auto &new_ = dest;
 
-            pairs.push_back({old, new_});
-
-            DPRINTF(Rename, "Inst[%i] forward reg[%s %d]from (%d %d)(%d) "
-                    "to (%d %d)(%d)\n",
-                    inst->seqNum, src_reg.className(), src_reg.index(),
-                    old.bank, old.index, old.op,
-                    new_.bank, new_.index, new_.op);
+                DPRINTF(Rename, "Inst[%i] forward reg[%s %d]from (%d %d)(%d) "
+                        "to (%d %d)(%d)\n",
+                        inst->seqNum, src_reg.className(), src_reg.index(),
+                        old.bank, old.index, old.op,
+                        new_.bank, new_.index, new_.op);
+            } else {
+                old.op = old.op + 1;
+                assert(old.op <= 3);
+            }
         }
     }
 
@@ -381,6 +393,48 @@ void ArchState<Impl>::dumpMaps()
                  pair.first.className(), pair.first.index(),
                  pair.second.bank, pair.second.index, pair.second.op);
     }
+}
+
+template<class Impl>
+std::pair<bool, bool>
+ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forward)
+{
+    bool is_lf_source = false;
+    bool is_lf_drain = false;
+    if (inst->predLargeFanout && inst->numForwardRest > 0) {
+        is_lf_source = true;
+        need_forward.push_back(inst);
+    }
+    // TODO! what if inst is  x = x !!!???
+    unsigned num_src_regs = inst->numSrcRegs();
+    for (unsigned src_idx = 0; src_idx < num_src_regs; src_idx++) {
+        const RegId& src_reg = inst->srcRegIdx(src_idx);
+        if (src_reg.isZeroReg()) {
+            DPRINTF(Rename, "Skip zero reg\n");
+            continue;
+        }
+        auto sb_index = make_pair(src_reg.classValue(), src_reg.index());
+        if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
+            continue; // already ready
+        }
+
+        if (inst->destRegIdx(0) == src_reg) {
+            continue; // do not need to forward anymore
+        }
+
+        DQPointer renamed_ptr = renameMap[src_reg];
+        DynInstPtr predecessor = dq->readInst(renamed_ptr); // sibling or parent
+        if (!predecessor || predecessor->isSquashed()) {
+            continue; //squashed
+        }
+
+        if (predecessor->isForwarder() && predecessor->numChildren == 2
+                && predecessor->numForwardRest > 0) {
+            is_lf_drain = true;
+            need_forward.push_back(predecessor);
+        }
+    }
+    return std::make_pair(is_lf_source, is_lf_drain);
 }
 
 }

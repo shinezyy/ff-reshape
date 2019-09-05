@@ -122,7 +122,7 @@ void FanoutPred::markAsPossible(uint64_t pc, unsigned reg_idx)
         std::uniform_int_distribution<> dis(0, 10);
         for (unsigned u = 0; u < numDiambgFuncs; u++) {
             for (unsigned i = 0; i < privTable[u].size(); i++) {
-                privTable[u][i] = (dis(gen) > 3) & privTable[u][i];
+                privTable[u][i] = (dis(gen) > 1) & privTable[u][i];
                 numPossible += privTable[u][i];
             }
             // std::fill(privTable[u].begin(), privTable[u].end(), false);

@@ -176,7 +176,7 @@ void FFDIEWC<Impl>::readInsts() {
     DPRINTF(DIEWC, "num from Allocation is %d\n", num);
     for (int i = 0; i < num; ++i) {
         DynInstPtr inst = fromAllocation->insts[i];
-        insts_from_allocation.push(inst);
+        insts_from_allocation.push_back(inst);
     }
 }
 
@@ -201,7 +201,7 @@ void FFDIEWC<Impl>::dispatch() {
 
         if (inst->isSquashed()) {
             ++dispSquashedInsts;
-            to_dispatch.pop();
+            to_dispatch.pop_front();
 
             if (inst->isLoad()) {
                 toAllocation->diewcInfo.dispatchedToLQ++;
@@ -215,6 +215,19 @@ void FFDIEWC<Impl>::dispatch() {
             toAllocation->diewcInfo.dispatched++;
 
             continue;
+        }
+
+        bool is_lf_source, is_lf_drain;
+        list<DynInstPtr> to_forward;
+        std::tie(is_lf_source, is_lf_drain) = archState.forwardAfter(inst, to_forward);
+        if (is_lf_source || is_lf_drain) {
+            to_dispatch.pop_front();
+            DynInstPtr last = inst;
+            for (auto &it: to_forward) {
+                insertForwarder(it, last, to_dispatch);
+                last = to_dispatch.front(); // last forwarder
+            }
+            to_dispatch.push_front(inst);
         }
 
 //        DPRINTF(DIEWC, "dispatch reach 3\n");
@@ -324,7 +337,7 @@ void FFDIEWC<Impl>::dispatch() {
         }
 
 //        DPRINTF(DIEWC, "dispatch reach 8\n");
-        to_dispatch.pop();
+        to_dispatch.pop_front();
         toAllocation->diewcInfo.dispatched++;
         ++dispatchedInsts;
 #if TRACING_ON
@@ -491,8 +504,8 @@ void FFDIEWC<Impl>::skidInsert() {
     while (!insts_from_allocation.empty()) {
         inst = insts_from_allocation.front();
         DPRINTF(DIEWC, "skidInsert inst[%i]\n", inst->seqNum);
-        insts_from_allocation.pop();
-        skidBuffer.push(inst);
+        insts_from_allocation.pop_front();
+        skidBuffer.push_back(inst);
     }
     assert(skidBuffer.size() <= skidBufferMax);
 }
@@ -1168,7 +1181,7 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         commitCounter(0),
         largeFanoutThreshold(params->LargeFanoutThreshold)
 {
-    skidBufferMax = (allocationToDIEWCDelay + 1)*width;
+    skidBufferMax = (allocationToDIEWCDelay + 1 + 4)*width;
     dq.setLSQ(&ldstQueue);
     dq.setDIEWC(this);
     dq.setCPU(cpu);
@@ -1209,7 +1222,7 @@ FFDIEWC<Impl>::squashInFlight()
 
         toAllocation->diewcInfo.dispatched++;
 
-        skidBuffer.pop();
+        skidBuffer.pop_front();
     }
 
 
@@ -1233,7 +1246,7 @@ void FFDIEWC<Impl>::clearAllocatedInsts() {
 
         toAllocation->diewcInfo.dispatched++;
 
-        insts.pop();
+        insts.pop_front();
     }
 }
 
@@ -2167,6 +2180,37 @@ template<class Impl>
 void FFDIEWC<Impl>::setFanoutPred(FanoutPred *fanoutPred1)
 {
     fanoutPred = fanoutPred1;
+}
+
+template<class Impl>
+void
+FFDIEWC<Impl>::insertForwarder(
+        DynInstPtr &parent_inst, DynInstPtr &anchor, InstQueue &inst_buffer)
+{
+    const RegId &lf_reg = parent_inst->staticInst->destRegIdx(0);
+
+    StaticInstPtr static_forwarder = new ForwarderInst(lf_reg);
+
+    TheISA::PCState forward_pc(parent_inst->pcState().pc());
+    forward_pc.instNPC(parent_inst->pcState().pc());
+
+    DynInstPtr forwarder = new DynInst(static_forwarder,
+            nullptr, forward_pc, forward_pc, parent_inst->seqNum, cpu);
+
+    forwarder->setTid(DummyTid);
+    forwarder->setASID(DummyTid);
+    forwarder->setThreadState(cpu->thread[DummyTid]);
+
+    forwarder->setInstListIt(cpu->addInstAfter(forwarder,
+                anchor->getInstListIt()));
+    if (parent_inst->predLargeFanout) {
+        forwarder->numForwardRest = (parent_inst->predFanout - 3) / 3;
+    } else {
+        assert(parent_inst->isForwarder());
+        forwarder->numForwardRest = parent_inst->numForwardRest - 1;
+    }
+
+    inst_buffer.push_front(forwarder);
 }
 
 }
