@@ -439,6 +439,8 @@ public:
     DynInstPtr readInst(const DQPointer &p) const;
 
     bool hasTooManyPendingInsts();
+
+    void advanceHead();
 };
 
 }

@@ -303,7 +303,7 @@ void Allocation<Impl>::allocateInsts() {
             serializeAfter(to_allocate);
         }
 
-        inst->dqPosition = allocateDQEntry();
+        allocateDQEntry();
         DPRINTF(DAllocation, "Inst[%d] allocated @ (%d %d)\n",
                 inst->seqNum, inst->dqPosition.bank, inst->dqPosition.index);
 
@@ -500,6 +500,8 @@ template<class Impl>
 void Allocation<Impl>::readFreeEntries() {
     if (fromDIEWC->diewcInfo.usedDQ) {
         freeEntries.dqEntries = fromDIEWC->diewcInfo.freeDQEntries;
+        DPRINTF(DAllocation, "read freeDQEntries = %i from DIEWC\n",
+                freeEntries.dqEntries);
     }
     if (fromDIEWC->diewcInfo.updateDQTail) {
         flatTail = fromDIEWC->diewcInfo.dqTail;

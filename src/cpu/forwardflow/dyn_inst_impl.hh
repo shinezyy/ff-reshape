@@ -153,6 +153,8 @@ BaseO3DynInst<Impl>::initVars()
 
     predLargeFanout = false;
     predFanout = 0;
+
+    numForwardRest = 0;
 }
 
 template <class Impl>

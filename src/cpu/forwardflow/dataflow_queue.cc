@@ -1225,20 +1225,24 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
     }
     cpu->removeInstsUntil(head_inst_next->seqNum, DummyTid);
 
-    while (validPosition(u) && logicallyLET(u, head)) {
-        auto ptr = uint2Pointer(u);
-        auto &bank = dqs.at(ptr.bank);
-        bank->erase(ptr, true);
-        if (u == head) {
-            break;
+    if (head != head_next) {
+        while (validPosition(u) && logicallyLET(u, head)) {
+            auto ptr = uint2Pointer(u);
+            auto &bank = dqs.at(ptr.bank);
+            bank->erase(ptr, true);
+            if (u == head) {
+                break;
+            }
+            u = inc(u);
         }
-        u = inc(u);
-    }
-    DPRINTF(FFSquash, "DQ logic head becomes %d, physical is %d, tail is %d\n",
-            head_next, head, tail);
+        DPRINTF(FFSquash, "DQ logic head becomes %d, physical is %d, tail is %d\n",
+                head_next, head, tail);
 
-    for (auto &bank: dqs) {
-        bank->squash(p);
+        for (auto &bank: dqs) {
+            bank->squash(p);
+        }
+    } else {
+        DPRINTF(FFSquash, "Very rare case: the youngset inst mispredicted, do nothing\n");
     }
 }
 
@@ -1247,16 +1251,16 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 {
     // todo: send to allocated DQ position
     assert(inst);
-    assert(!isFull());
 
     bool jumped = false;
+
     DQPointer allocated = inst->dqPosition;
     DPRINTF(DQ, "allocated @(%d %d)\n", allocated.bank, allocated.index);
 
     auto dead_inst = dqs[allocated.bank]->readInstsFromBank(allocated);
     if (dead_inst) {
         DPRINTF(FFCommit, "Dead inst[%llu] found unexpectedly\n", dead_inst->seqNum);
-        assert(!dqs[allocated.bank]->readInstsFromBank(allocated));
+        assert(!dead_inst);
     }
     dqs[allocated.bank]->writeInstsToBank(allocated, inst);
     if (isEmpty()) {
@@ -1265,7 +1269,6 @@ bool DataflowQueues<Impl>::insert(DynInstPtr &inst, bool nonSpec)
         jumped = true;
         alignTails();
     }
-    head = pointer2uint(allocated);
 
     inst->setInDQ();
     // we don't need to add to dependents or producers here,
@@ -2144,6 +2147,24 @@ DataflowQueues<Impl>::hasTooManyPendingInsts()
         }
     }
     return false;
+}
+
+template<class Impl>
+void
+DataflowQueues<Impl>::advanceHead()
+{
+    if (isEmpty()) {
+        return;
+    }
+    assert(!isFull());
+    head = inc(head);
+
+    auto allocated = uint2Pointer(head);
+    auto dead_inst = dqs[allocated.bank]->readInstsFromBank(allocated);
+    if (dead_inst) {
+        DPRINTF(FFCommit, "Dead inst[%llu] found unexpectedly\n", dead_inst->seqNum);
+        assert(!dead_inst);
+    }
 }
 
 }

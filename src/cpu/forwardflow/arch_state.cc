@@ -9,6 +9,7 @@
 #include "debug/FFSquash.hh"
 #include "debug/FanoutPred.hh"
 #include "debug/Rename.hh"
+#include "debug/Reshape.hh"
 #include "params/DerivFFCPU.hh"
 
 namespace FF
@@ -127,6 +128,9 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                         new_.bank, new_.index, new_.op);
             } else {
                 old.op = old.op + 1;
+                DPRINTF(Reshape, "(%i %i) (%i) incremented to (%i %i) (%i)\n",
+                        old.bank, old.index, old.op - 1,
+                        old.bank, old.index, old.op);
                 assert(old.op <= 3);
             }
         }

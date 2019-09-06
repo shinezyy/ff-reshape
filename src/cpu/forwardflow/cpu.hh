@@ -366,8 +366,9 @@ class FFCPU : public BaseO3CPU
     /** Get the current instruction sequence number, and increment it. */
     InstSeqNum getAndIncrementInstSeq()
     {
+        auto old = globalSeqNum;
         globalSeqNum += 100;
-        return globalSeqNum;
+        return old;
     }
 
     /** Traps to handle given fault. */

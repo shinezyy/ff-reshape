@@ -212,7 +212,9 @@ void FFDIEWC<Impl>::dispatch() {
             if (inst->isStore()) {
                 toAllocation->diewcInfo.dispatchedToSQ++;
             }
-            toAllocation->diewcInfo.dispatched++;
+            if (!inst->isForwarder()) {
+                toAllocation->diewcInfo.dispatched++;
+            }
 
             continue;
         }
@@ -252,6 +254,10 @@ void FFDIEWC<Impl>::dispatch() {
             toAllocation->diewcUnblock = false;
             break;
         }
+
+        // postponed allocation;
+        dq.advanceHead();
+        inst->dqPosition = dq.uint2Pointer(dq.getHeadPtr());
 
         bool jumped = false;
         DPRINTF(DIEWC, "Dispatching inst[%llu] %s PC: %s\n",
@@ -337,8 +343,10 @@ void FFDIEWC<Impl>::dispatch() {
         }
 
 //        DPRINTF(DIEWC, "dispatch reach 8\n");
+        if (!to_dispatch.front()->isForwarder()) {
+            toAllocation->diewcInfo.dispatched++;
+        }
         to_dispatch.pop_front();
-        toAllocation->diewcInfo.dispatched++;
         ++dispatchedInsts;
 #if TRACING_ON
         inst->dispatchTick = curTick() - inst->fetchTick;
@@ -849,6 +857,7 @@ FFDIEWC<Impl>::commitInsts()
                 activityThisCycle();
 
                 toAllocation->diewcInfo.updateDQTail = true;
+                toAllocation->diewcInfo.updateDQHead = true;
                 ++num_committed;
                 statCommittedInstType[head_inst->opClass()]++;
                 ppCommit->notify(head_inst);
@@ -1220,7 +1229,9 @@ FFDIEWC<Impl>::squashInFlight()
             toAllocation->diewcInfo.dispatchedToSQ++;
         }
 
-        toAllocation->diewcInfo.dispatched++;
+        if (!skidBuffer.front()->isForwarder()) {
+            toAllocation->diewcInfo.dispatched++;
+        }
 
         skidBuffer.pop_front();
     }
@@ -1243,8 +1254,9 @@ void FFDIEWC<Impl>::clearAllocatedInsts() {
         if (insts.front()->isStore()) {
             toAllocation->diewcInfo.dispatchedToSQ++;
         }
-
-        toAllocation->diewcInfo.dispatched++;
+        if (!insts.front()->isForwarder()) {
+            toAllocation->diewcInfo.dispatched++;
+        }
 
         insts.pop_front();
     }
@@ -2041,7 +2053,7 @@ void FFDIEWC<Impl>::sendBackwardInfo()
 {
     toAllocation->diewcInfo.dqTail = dq.getTailPtr();
     toAllocation->diewcInfo.dqHead = dq.inc(dq.getHeadPtr()); // p+1 to allocation
-    DPRINTF(DIEWC, "head: %i, tail: %i\n", toAllocation->diewcInfo.dqHead,
+    DPRINTF(DIEWC, "To allocation head: %i, tail: %i\n", toAllocation->diewcInfo.dqHead,
             toAllocation->diewcInfo.dqTail);
     if (DQPointerJumped) {
         toAllocation->diewcInfo.updateDQTail = true;

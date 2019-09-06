@@ -176,7 +176,7 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
                   params->backComSize + params->forwardComSize,
                   params->activity),
 
-      globalSeqNum(1),
+      globalSeqNum(100),
       system(params->system),
       lastRunningCycle(curCycle()),
       fanoutPred(params)
