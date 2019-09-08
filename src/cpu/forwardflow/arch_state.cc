@@ -117,21 +117,19 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             dest.op = static_cast<unsigned int>(src_idx) + 1;
             pairs.push_back({old, dest});
 
-            if (!predecessor_is_forwarder) {
-                renameMap[src_reg] = dest;
-                auto &new_ = dest;
-
+            if (!predecessor_is_forwarder || old.op >= 3) {
                 DPRINTF(Rename, "Inst[%i] forward reg[%s %d]from (%d %d)(%d) "
                         "to (%d %d)(%d)\n",
                         inst->seqNum, src_reg.className(), src_reg.index(),
                         old.bank, old.index, old.op,
-                        new_.bank, new_.index, new_.op);
+                        dest.bank, dest.index, dest.op);
+                renameMap[src_reg] = dest;
+
             } else {
                 old.op = old.op + 1;
                 DPRINTF(Reshape, "(%i %i) (%i) incremented to (%i %i) (%i)\n",
                         old.bank, old.index, old.op - 1,
                         old.bank, old.index, old.op);
-                assert(old.op <= 3);
             }
         }
     }
@@ -405,7 +403,7 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
 {
     bool is_lf_source = false;
     bool is_lf_drain = false;
-    if (inst->predLargeFanout && inst->numForwardRest > 0) {
+    if (inst->predLargeFanout) {
         is_lf_source = true;
         need_forward.push_back(inst);
     }
@@ -432,7 +430,8 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
             continue; //squashed
         }
 
-        if (predecessor->isForwarder() && predecessor->numChildren == 2
+        const auto &old = renameMap[src_reg];
+        if (predecessor->isForwarder() && old.op >= 1
                 && predecessor->numForwardRest > 0) {
             is_lf_drain = true;
             need_forward.push_back(predecessor);
