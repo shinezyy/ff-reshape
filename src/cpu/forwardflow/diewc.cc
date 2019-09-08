@@ -16,6 +16,7 @@
 #include "debug/FanoutLog.hh"
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
+#include "debug/Reshape.hh"
 #include "debug/ValueCommit.hh"
 #include "params/DerivFFCPU.hh"
 
@@ -219,17 +220,20 @@ void FFDIEWC<Impl>::dispatch() {
             continue;
         }
 
-        bool is_lf_source, is_lf_drain;
-        list<DynInstPtr> to_forward;
-        std::tie(is_lf_source, is_lf_drain) = archState.forwardAfter(inst, to_forward);
-        if (is_lf_source || is_lf_drain) {
-            to_dispatch.pop_front();
-            DynInstPtr last = inst;
-            for (auto &it: to_forward) {
-                insertForwarder(it, last, to_dispatch);
-                last = to_dispatch.front(); // last forwarder
+        if (!inst->forwarded) {
+            bool is_lf_source, is_lf_drain;
+            list<DynInstPtr> to_forward;
+            std::tie(is_lf_source, is_lf_drain) = archState.forwardAfter(inst, to_forward);
+            if (is_lf_source || is_lf_drain) {
+                to_dispatch.pop_front();
+                DynInstPtr last = inst;
+                for (auto &it: to_forward) {
+                    insertForwarder(it, last, to_dispatch);
+                    last = to_dispatch.front(); // last forwarder
+                }
+                to_dispatch.push_front(inst);
+                inst->forwarded = true;
             }
-            to_dispatch.push_front(inst);
         }
 
 //        DPRINTF(DIEWC, "dispatch reach 3\n");
@@ -2207,7 +2211,12 @@ FFDIEWC<Impl>::insertForwarder(
     forward_pc.instNPC(parent_inst->pcState().pc());
 
     DynInstPtr forwarder = new DynInst(static_forwarder,
-            nullptr, forward_pc, forward_pc, parent_inst->seqNum, cpu);
+            nullptr, forward_pc, forward_pc,
+            anchor->seqNum + (++anchor->numFollowingFw), cpu);
+
+    DPRINTF(Reshape, "Inserting forwarder inst[%llu] after inst[%llu]"
+            "to forwarding value of inst[%llu]\n",
+            forwarder->seqNum, anchor->seqNum, parent_inst->seqNum);
 
     forwarder->setTid(DummyTid);
     forwarder->setASID(DummyTid);

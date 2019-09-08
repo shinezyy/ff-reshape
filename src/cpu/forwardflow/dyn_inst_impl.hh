@@ -155,6 +155,9 @@ BaseO3DynInst<Impl>::initVars()
     predFanout = 0;
 
     numForwardRest = 0;
+    numFollowingFw = 0;
+
+    forwarded = false;
 }
 
 template <class Impl>

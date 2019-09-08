@@ -438,6 +438,10 @@ public:
 
     unsigned numForwardRest;
 
+    unsigned numFollowingFw;
+
+    bool forwarded;
+
     uint64_t ghr;
 private:
     FFRegValue destValue;
