@@ -135,6 +135,8 @@ public:
     bool hasTooManyPendingInsts();
 
     void squash(const DQPointer &squash_from);
+
+    bool servedForwarder;
 };
 
 

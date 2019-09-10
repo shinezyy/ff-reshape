@@ -312,6 +312,8 @@ FFRegValue BaseO3DynInst<Impl>::getDestValue()
 {
     if (this->isExecuted()) {
         return destValue;
+    } else if (this->isForwarder()) {
+        return srcValues[0];
     }
     panic("requesting dest value of inst [%llu] when it has not been executed", this->seqNum);
 }

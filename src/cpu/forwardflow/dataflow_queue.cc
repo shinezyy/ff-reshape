@@ -162,9 +162,14 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
     for (unsigned op = 0; op < nOps; op++) {
         auto &ptr = pointers[op];
+
+        if (!ptr.valid) {
+            DPRINTF(DQ, "skip pointer: (%i) (%i %i) (%i)\n",
+                    ptr.valid, ptr.index, ptr.bank, ptr.op);
+            continue;
+        }
         DPRINTF(DQ, "pointer: (%i %i) (%i)\n", ptr.index, ptr.bank, ptr.op);
-        if (!ptr.valid) continue;
-        DPRINTF(DQ, "pointer: (%i %i) (%i)\n", ptr.index, ptr.bank, ptr.op);
+
         if (!instArray.at(ptr.index) || instArray.at(ptr.index)->isSquashed()) {
             DPRINTF(DQWake, "Wakeup ignores null inst @%d\n", ptr.index);
             if (anyPending) {
@@ -173,8 +178,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             continue;
         }
 
-        DPRINTF(DQ, "pointer: (%i %i) (%i)\n", ptr.index, ptr.bank, ptr.op);
         auto &inst = instArray[ptr.index];
+
         DPRINTF(DQWake, "Pointer (%i %i) (%i) working on inst[%llu]\n",
                 ptr.bank, ptr.index, ptr.op, inst->seqNum);
 
@@ -307,39 +312,57 @@ const std::vector<DQPointer>
 DataflowQueueBank<Impl>::readPointersFromBank()
 {
     DPRINTF(DQWake, "Reading pointers from banks\n");
-    DPRINTF(DQ, "Tail: %i", tail);
+    DPRINTF(DQ, "Tail: %i\n", tail);
+    bool served_forwarder = false;
     for (unsigned op = 0; op < nOps; op++) {
+        if (served_forwarder) {
+            break;
+        }
         const auto &ptr = inputPointers[op];
         auto &optr = outputPointers[op];
 
         if (!ptr.valid) {
             optr.valid = false;
         } else {
-            if (!instArray[ptr.index]) {
+            const auto &inst = instArray[ptr.index];
+            if (!inst) {
                 DPRINTF(FFSquash, "Ignore forwarded pointer to (%i %i) (%i) (squashed)\n",
                         ptr.bank, ptr.index, ptr.op);
                 optr.valid = false;
             } else {
-                if (op == 0 ) {
+                if (op == 0) {
                     outputPointers[0].valid = false; // dest register should never be forwarded
                 }
 
-                if (instArray[ptr.index]->pointers[op].valid) {
-                    if (op != 0 || instArray[ptr.index]->destReforward) {
+                if (op == 1 && inst->isForwarder()) {
+                    served_forwarder = true;
+                    for (unsigned out_op = 0; out_op < nOps; out_op++) {
+                        auto &out_ptr = outputPointers[out_op];
+                        out_ptr = inst->pointers[out_op];
 
-                        if (op == 0 && instArray[ptr.index]->destReforward) {
+                        if (out_ptr.valid) {
+                            DPRINTF(FFSquash, "Put forwarding wakeup Pointer (%i %i) (%i)"
+                                    " to outputPointers\n",
+                                    out_ptr.bank, out_ptr.index, out_ptr.op);
+                        }
+                    }
+
+                } else if (inst->pointers[op].valid) {
+                    if (op != 0 || inst->destReforward) {
+                        if (op == 0 && inst->destReforward) {
                             DPRINTF(DQ, "Although its wakeup ptr to dest,"
                                     " it is still forwarded because of destReforward flag\n");
                         }
-                        optr = instArray[ptr.index]->pointers[op];
-                        if (op == 0 && optr.valid && instArray[ptr.index]->destReforward) {
-                            instArray[ptr.index]->destReforward = false;
+                        optr = inst->pointers[op];
+                        if (op == 0 && optr.valid && inst->destReforward) {
+                            inst->destReforward = false;
                         }
                         DPRINTF(FFSquash, "Put forwarding wakeup Pointer (%i %i) (%i)"
-                                          " to outputPointers\n",
+                                " to outputPointers\n",
                                 optr.bank, optr.index, optr.op);
                     }
                 } else {
+                    DPRINTF(DQ, "Skip invalid pointer on op[%i]\n", op);
                     optr.valid = false;
                 }
             }
@@ -365,6 +388,8 @@ bool DataflowQueueBank<Impl>::canServeNew()
         DPRINTF(DQWake, "Pending inst[%llu]\n", pendingInst->seqNum);
     }
     anyPending = !flag;
+
+    flag &= !servedForwarder;
     if (!flag) {
         DPRINTF(DQWake, "DQ bank cannot serve new insts!\n");
     }
@@ -379,6 +404,12 @@ bool DataflowQueueBank<Impl>::wakeup(WKPointer pointer)
     auto op = pointer.op;
     assert(!inputPointers[op].valid);
     inputPointers[op] = pointer;
+
+    auto &inst = instArray[pointer.index];
+    if (inst && inst->isForwarder()) {
+        servedForwarder = true;
+    }
+
     return true;
 }
 
@@ -508,6 +539,7 @@ void DataflowQueueBank<Impl>::cycleStart()
     for (auto &p: outputPointers) {
         p.valid = false;
     }
+    servedForwarder = false;
 }
 
 template<class Impl>
@@ -667,8 +699,8 @@ void DataflowQueues<Impl>::tick()
     }
     // check whether each bank can really accept
     for (unsigned b = 0; b < nBanks; b++) {
-        if (dqs[b]->canServeNew()) {
-            for (unsigned op = 0; op <= 3; op++) {
+        for (unsigned op = 0; op <= 3; op++) {
+            if (dqs[b]->canServeNew()) {
                 const auto &pkt = wakeup_granted_ptrs[b * nOps + op];
 
                 DPRINTF(DQWake, "granted[%i.%i]: dest:(%llu) (%i) (%i %i) (%i)\n",
@@ -1126,7 +1158,7 @@ FFRegValue DataflowQueues<Impl>::readReg(const DQPointer &src, const DQPointer &
         assert(inst);
         DPRINTF(FFExec, "Reading value: %llu from inst[%llu]\n",
                 result.i, inst->seqNum);
-        assert(inst->isExecuted());
+        assert(inst->isExecuted() || inst->isForwarder());
         // not committed yet
         result = inst->getDestValue();
     } else {
@@ -1315,18 +1347,20 @@ DataflowQueues<Impl>::markFwPointers(
         DPRINTF(FFSquash, "Overriding previous (squashed) sibling:(%d %d) (%d)\n",
                 pointers[op].bank, pointers[op].index, pointers[op].op);
 
-        if (inst && (inst->isExecuted() || inst->opReady[op])) {
+        if (inst && (inst->isExecuted() || inst->opReady[op] ||
+                    (inst->isForwarder() && inst->opReady[1]))) {
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
             extraWakeup(WKPointer(pair.payload));
             if (op == 0) {
                 inst->destReforward = false;
             }
 
-        } else if (inst && inst->fuGranted && op == 0){
+        } else if (inst && inst->fuGranted && op == 0 && !inst->isForwarder()){
             DPRINTF(FFSquash, "And mark it to wakeup new child\n");
             inst->destReforward = true;
         }
-    } else if (inst && inst->opReady[op]) {
+    } else if (inst && (inst->opReady[op] ||
+                (inst->isForwarder() && inst->opReady[1]))) {
         DPRINTF(DQWake, "which has already been waken up!\n");
         extraWakeup(WKPointer(pair.payload));
     }

@@ -64,19 +64,19 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
     to_wake[DestPtr].valid = false;
 
     if (dest.valid) {
-        if (!(inst->isLoad() || inst->isStoreConditional())) {
+        if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder())) {
             DPRINTFR(FUW, "to wake up (%i) (%i %i) (%i)\n",
                      dest.valid, dest.bank, dest.index, dest.op);
             to_wake[DestPtr] = dest;
         } else {
-            DPRINTFR(FUW, "(let loads forget) to wake up (%i) (%i %i) (%i)\n",
+            DPRINTFR(FUW, "(let loads/SC/forwarder forget) to wake up (%i) (%i %i) (%i)\n",
                      dest.valid, dest.bank, dest.index, dest.op);
         }
     }
     if (inst->numDestRegs() > 0) {
-        if (!(inst->isLoad() || inst->isStoreConditional())) {
+        if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder())) {
             to_wake[SrcPtr] = inst->dqPosition;
-            if (!dest.valid) {
+            if (!dest.valid && !inst->isForwarder()) {
                 inst->destReforward = true;
                 DPRINTFR(FUW, "to wake up itself "
                         " who has children but not dispatched yet\n");
@@ -85,7 +85,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
                         " in case that current child was squashed\n");
             }
         } else {
-            DPRINTFR(FUW, "(let loads forget) to wake up invalid ptr (%i) (%i %i) (%i)\n",
+            DPRINTFR(FUW, "(let loads/SC/forwarder forget) to wake up (%i) (%i %i) (%i)\n",
                     dest.valid, dest.bank, dest.index, dest.op);
         }
     } else {
