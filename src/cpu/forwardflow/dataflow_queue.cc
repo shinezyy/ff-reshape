@@ -308,7 +308,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 }
 
 template<class Impl>
-const std::vector<DQPointer>
+std::vector<DQPointer>
 DataflowQueueBank<Impl>::readPointersFromBank()
 {
     DPRINTF(DQWake, "Reading pointers from banks\n");
@@ -324,7 +324,8 @@ DataflowQueueBank<Impl>::readPointersFromBank()
         if (!ptr.valid) {
             optr.valid = false;
         } else {
-            const auto &inst = instArray[ptr.index];
+            DPRINTF(DQ, "op = %i\n", op);
+            const auto &inst = instArray.at(ptr.index);
             if (!inst) {
                 DPRINTF(FFSquash, "Ignore forwarded pointer to (%i %i) (%i) (squashed)\n",
                         ptr.bank, ptr.index, ptr.op);
@@ -348,6 +349,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                     }
 
                 } else if (inst->pointers[op].valid) {
+                    DPRINTF(DQ, "op now = %i\n", op);
                     if (op != 0 || inst->destReforward) {
                         if (op == 0 && inst->destReforward) {
                             DPRINTF(DQ, "Although its wakeup ptr to dest,"
@@ -357,9 +359,9 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                         if (op == 0 && optr.valid && inst->destReforward) {
                             inst->destReforward = false;
                         }
-                        DPRINTF(FFSquash, "Put forwarding wakeup Pointer (%i %i) (%i)"
+                        DPRINTF(FFSquash, "Put forwarding wakeup Pointer(%i) (%i %i) (%i)"
                                 " to outputPointers\n",
-                                optr.bank, optr.index, optr.op);
+                                optr.valid, optr.bank, optr.index, optr.op);
                     }
                 } else {
                     DPRINTF(DQ, "Skip invalid pointer on op[%i]\n", op);
@@ -368,6 +370,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
             }
         }
     }
+    // dumpOutPointers();
     return outputPointers;
 }
 
@@ -401,6 +404,7 @@ bool DataflowQueueBank<Impl>::wakeup(WKPointer pointer)
 {
     DPRINTF(DQWake, "Mark waking up: (%i %i) (%i) in inputPointers\n",
             pointer.bank, pointer.index, pointer.op);
+
     auto op = pointer.op;
     assert(!inputPointers[op].valid);
     inputPointers[op] = pointer;
@@ -596,6 +600,16 @@ void DataflowQueueBank<Impl>::squash(const DQPointer &squash_ptr)
 }
 
 template<class Impl>
+void DataflowQueueBank<Impl>::dumpOutPointers() const
+{
+    unsigned op = 0;
+    for (const auto &ptr: outputPointers) {
+        DPRINTF(DQ, "outputPointers[%i]: (%i) (%i %i) (%i)\n",
+                op++, ptr.valid, ptr.bank, ptr.index, ptr.op);
+    }
+}
+
+template<class Impl>
 void DataflowQueues<Impl>::tick()
 {
     // fu preparation
@@ -680,6 +694,9 @@ void DataflowQueues<Impl>::tick()
                 if (wakeQueues[b * nOps + op].size() > maxQueueDepth) {
                     processWKQueueFull();
                 }
+            } else {
+                DPRINTF(DQWake, "Ignore Invalid WakePtr (%i) (%i %i) (%i)\n",
+                        ptr.valid, ptr.bank, ptr.index, ptr.op);
             }
         }
 
@@ -699,7 +716,7 @@ void DataflowQueues<Impl>::tick()
     }
     // check whether each bank can really accept
     for (unsigned b = 0; b < nBanks; b++) {
-        for (unsigned op = 0; op <= 3; op++) {
+        for (unsigned op: opPrioList) {
             if (dqs[b]->canServeNew()) {
                 const auto &pkt = wakeup_granted_ptrs[b * nOps + op];
 
@@ -731,8 +748,12 @@ void DataflowQueues<Impl>::tick()
 
     // todo: write forward pointers from bank to time buffer!
     for (unsigned b = 0; b < nBanks; b++) {
-        const std::vector<DQPointer> forward_ptrs = dqs[b]->readPointersFromBank();
-        for (unsigned op = 0; op <= 3; op++) {
+        std::vector<DQPointer> forward_ptrs = dqs[b]->readPointersFromBank();
+        for (unsigned op = 0; op < nOps; op++) {
+            const auto &ptr = forward_ptrs[op];
+            // dqs[b]->dumpOutPointers();
+            DPRINTF(DQ, "Putting wk ptr (%i) (%i %i) (%i) to time buffer\n",
+                    ptr.valid, ptr.bank, ptr.index, ptr.op);
             toNextCycle->pointers[b * nOps + op] = forward_ptrs[op];
         }
     }
@@ -891,7 +912,8 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
 
         numPendingFwPointers(0),
         numPendingFwPointerMax(0),
-        PendingFwPointerThreshold(params->PendingFwPointerThreshold)
+        PendingFwPointerThreshold(params->PendingFwPointerThreshold),
+        opPrioList{1, 0, 2, 3}
 
 {
     // init inputs to omega networks

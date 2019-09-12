@@ -84,7 +84,7 @@ public:
 
     DynInstPtr wakeupInstsFromBank();
 
-    const std::vector<DQPointer> readPointersFromBank();
+    std::vector<DQPointer> readPointersFromBank();
 
     DynInstPtr readInstsFromBank(DQPointer pointer) const;
 
@@ -137,6 +137,8 @@ public:
     void squash(const DQPointer &squash_from);
 
     bool servedForwarder;
+
+    void dumpOutPointers() const;
 };
 
 
@@ -425,6 +427,8 @@ private:
     void processWKQueueFull();
 
     void processFWQueueFull();
+
+    std::vector<unsigned> opPrioList;
 public:
     void maintainOldestUsed();
 
