@@ -78,11 +78,44 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                     parent_ptr.bank, parent_ptr.index);
 
             DynInstPtr parent = dq->readInst(parent_ptr);
-            if (parent) {
+            if (parent && !inst->isForwarder()) {
                 parent->numChildren++;
-                DPRINTF(FanoutPred, "inc num children of inst[%lu] to %u",
+                DPRINTF(FanoutPred, "inc num children of inst[%lu] to %u\n",
                         parent->seqNum, parent->numChildren);
-            } else {
+
+                const auto &ancestorPtr = parent->ancestorPointer;
+                if (parent->isForwarder()) {
+                    DPRINTF(Reshape, "Parent is forwarder, trying to add to ancestor"
+                            "(%i) (%i %i)\n", ancestorPtr.valid,
+                            ancestorPtr.bank, ancestorPtr.index);
+                    if (dq->validPosition(dq->pointer2uint(ancestorPtr))) {
+                        if (dq->logicallyLT(dq->pointer2uint(ancestorPtr),
+                                    dq->pointer2uint(inst->dqPosition))) {
+                            DPRINTF(Reshape, "Ancestor found!\n");
+                        } else {
+                            DPRINTF(Reshape, "Ancestor has been committed!\n");
+                        }
+                    } else {
+                        DPRINTF(Reshape, "Ancestor not valid!\n");
+                    }
+                }
+                if (parent->isForwarder() && ancestorPtr.valid &&
+                        dq->validPosition(dq->pointer2uint(ancestorPtr)) &&
+                        dq->logicallyLT(dq->pointer2uint(ancestorPtr),
+                            dq->pointer2uint(inst->dqPosition))) {
+                    DynInstPtr ancestor = dq->readInst(ancestorPtr);
+                    if (ancestor) {
+                        inst->ancestorPointer = ancestorPtr;
+                        ancestor->numChildren++;
+                        DPRINTF(FanoutPred, "inc num children of ancestor[%lu] to %u\n",
+                                ancestor->seqNum, ancestor->numChildren);
+                    } else {
+                        DPRINTF(Reshape, "Ancestor (%i %i) is squashed\n",
+                                ancestorPtr.bank, ancestorPtr.index);
+                    }
+                }
+            }
+            if (!parent) {
                 warn("Parent is null ptr at renaming\n");
             }
 

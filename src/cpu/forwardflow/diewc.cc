@@ -220,22 +220,6 @@ void FFDIEWC<Impl>::dispatch() {
             continue;
         }
 
-        if (!inst->forwarded) {
-            bool is_lf_source, is_lf_drain;
-            list<DynInstPtr> to_forward;
-            std::tie(is_lf_source, is_lf_drain) = archState.forwardAfter(inst, to_forward);
-            if (is_lf_source || is_lf_drain) {
-                to_dispatch.pop_front();
-                DynInstPtr last = inst;
-                for (auto &it: to_forward) {
-                    insertForwarder(it, last, to_dispatch);
-                    last = to_dispatch.front(); // last forwarder
-                }
-                to_dispatch.push_front(inst);
-                inst->forwarded = true;
-            }
-        }
-
 //        DPRINTF(DIEWC, "dispatch reach 3\n");
         if (dq.isFull() || dq.hasTooManyPendingInsts()) {
             DPRINTF(DIEWC, "block because DQ is full\n");
@@ -351,6 +335,21 @@ void FFDIEWC<Impl>::dispatch() {
             toAllocation->diewcInfo.dispatched++;
         }
         to_dispatch.pop_front();
+
+        if (EnableReshape && !inst->forwarded) {
+            bool is_lf_source, is_lf_drain;
+            list<DynInstPtr> to_forward;
+            std::tie(is_lf_source, is_lf_drain) = archState.forwardAfter(inst, to_forward);
+            if (is_lf_source || is_lf_drain) {
+                DynInstPtr last = inst;
+                for (auto &it: to_forward) {
+                    insertForwarder(it, last, to_dispatch);
+                    last = to_dispatch.front(); // last forwarder
+                }
+                inst->forwarded = true;
+            }
+        }
+
         ++dispatchedInsts;
 #if TRACING_ON
         inst->dispatchTick = curTick() - inst->fetchTick;
@@ -1192,7 +1191,8 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         allocationToDIEWCDelay(params->allocationToDIEWCDelay),
         commitTraceInterval(params->commitTraceInterval),
         commitCounter(0),
-        largeFanoutThreshold(params->LargeFanoutThreshold)
+        largeFanoutThreshold(params->LargeFanoutThreshold),
+        EnableReshape(params->EnableReshape)
 {
     skidBufferMax = (allocationToDIEWCDelay + 1 + 4)*width;
     dq.setLSQ(&ldstQueue);
@@ -1322,7 +1322,7 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
     if (inst->isCall())
         statComFunctionCalls++;
 
-    if (!inst->isSquashed() && inst->numDestRegs() > 0) {
+    if (!inst->isSquashed() && inst->numDestRegs() > 0 && !inst->isForwarder()) {
         totalFanoutPredictions++;
         bool is_large_fanout = inst->numChildren > largeFanoutThreshold;
         bool mis_pred = false;
@@ -2214,10 +2214,6 @@ FFDIEWC<Impl>::insertForwarder(
             nullptr, forward_pc, forward_pc,
             anchor->seqNum + (++anchor->numFollowingFw), cpu);
 
-    DPRINTF(Reshape, "Inserting forwarder inst[%llu] after inst[%llu]"
-            "to forwarding value of inst[%llu]\n",
-            forwarder->seqNum, anchor->seqNum, parent_inst->seqNum);
-
     forwarder->setTid(DummyTid);
     forwarder->setASID(DummyTid);
     forwarder->setThreadState(cpu->thread[DummyTid]);
@@ -2226,10 +2222,20 @@ FFDIEWC<Impl>::insertForwarder(
                 anchor->getInstListIt()));
     if (parent_inst->predLargeFanout) {
         forwarder->numForwardRest = (parent_inst->predFanout - 3) / 3;
+        forwarder->ancestorPointer = parent_inst->dqPosition;
+        forwarder->ancestorPointer.valid = true;
     } else {
         assert(parent_inst->isForwarder());
         forwarder->numForwardRest = parent_inst->numForwardRest - 1;
+        forwarder->ancestorPointer = parent_inst->ancestorPointer;
     }
+
+    DPRINTF(Reshape, "Inserting forwarder inst[%llu] after inst[%llu]"
+            "to forwarding value of inst[%llu], set ancestor to (%i) (%i %i)\n",
+            forwarder->seqNum, anchor->seqNum, parent_inst->seqNum,
+            forwarder->ancestorPointer.valid,
+            forwarder->ancestorPointer.bank,
+            forwarder->ancestorPointer.index);
 
     inst_buffer.push_front(forwarder);
 }

@@ -220,4 +220,6 @@ class DerivFFCPU(BaseCPU):
 
     LargeFanoutThreshold = Param.Unsigned(3, "LargeFanoutThreshold")
 
-    readyQueueSize = Param.Unsigned(6, "readyQueueSize ")
+    readyQueueSize = Param.Unsigned(6, "readyQueueSize")
+
+    EnableReshape = Param.Bool(True, "EnableReshape")

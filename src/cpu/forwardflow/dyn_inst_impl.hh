@@ -131,6 +131,8 @@ BaseO3DynInst<Impl>::initVars()
         ptr.valid = false;
     }
     dqPosition.valid = false;
+    ancestorPointer.valid = false;
+
     std::fill(hasOp.begin(), hasOp.end(), false);
     std::fill(opReady.begin(), opReady.end(), false);
     std::fill(identicalTo.begin(), identicalTo.end(), 0);

@@ -443,6 +443,8 @@ public:
     bool forwarded;
 
     uint64_t ghr;
+
+    DQPointer ancestorPointer;
 private:
     FFRegValue destValue;
 
