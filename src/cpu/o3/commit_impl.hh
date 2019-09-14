@@ -1287,18 +1287,24 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
             head_inst->seqNum, head_inst->pcState());
 
     if (commitCounter == commitTraceInterval) {
-        DPRINTFR(ValueCommit, "@%llu Committing instruction with sn:%lli PC:%s",
-                curTick(), head_inst->seqNum, head_inst->pcState());
+        DPRINTFR(ValueCommit, "@%llu Committing %llu instruction with sn:%lli PC:%s",
+                curTick(), commitAll, head_inst->seqNum, head_inst->pcState());
         if (head_inst->numDestRegs() > 0) {
-            DPRINTFR(ValueCommit, ", with wb value: %llu\n",
+            DPRINTFR(ValueCommit, ", with wb value: %llu",
                     head_inst->getResult().asIntegerNoAssert());
         } else {
-            DPRINTFR(ValueCommit, ", with wb value: none\n");
+            DPRINTFR(ValueCommit, ", with wb value: none");
+        }
+        if (head_inst->isMemRef()) {
+            DPRINTFR(ValueCommit, ", with v_addr: 0x%x\n", head_inst->effAddr);
+        } else {
+            DPRINTFR(ValueCommit, ", with v_addr: none\n");
         }
         commitCounter = 0;
     } else {
         commitCounter++;
     }
+    commitAll++;
 
     if (head_inst->traceData) {
         head_inst->traceData->setFetchSeq(head_inst->seqNum);

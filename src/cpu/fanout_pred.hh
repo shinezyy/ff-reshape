@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "cpu/fanout_pred_features.hh"
+
 struct BaseCPUParams;
 
 class FanoutPred {

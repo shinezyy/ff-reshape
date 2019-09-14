@@ -97,7 +97,8 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivFFCPUParams *params)
       numThreads(params->numThreads),
       numFetchingThreads(params->smtNumFetchingThreads),
       finishTranslationEvent(this),
-      largeFanoutThreshold(params->LargeFanoutThreshold)
+      largeFanoutThreshold(params->LargeFanoutThreshold),
+      forwardThreshold(params->ForwardThreshold)
 {
     if (numThreads > Impl::MaxThreads)
         fatal("numThreads (%d) is larger than compiled limit (%d),\n"

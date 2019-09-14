@@ -473,6 +473,8 @@ private:
     void insertForwarder(DynInstPtr &inst, DynInstPtr &anchor,InstQueue &inst_buffer);
 
     bool EnableReshape;
+
+    uint64_t commitAll{};
 };
 
 

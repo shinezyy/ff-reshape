@@ -336,7 +336,8 @@ void FFDIEWC<Impl>::dispatch() {
         }
         to_dispatch.pop_front();
 
-        if (EnableReshape && !inst->forwarded) {
+        if (EnableReshape && !inst->forwarded &&
+                !(inst->isStoreConditional() || inst->isSerializeAfter())) {
             bool is_lf_source, is_lf_drain;
             list<DynInstPtr> to_forward;
             std::tie(is_lf_source, is_lf_drain) = archState.forwardAfter(inst, to_forward);
@@ -699,14 +700,19 @@ FFDIEWC<Impl>::
             head_inst->seqNum, head_inst->pcState(),
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
 
-    if (commitCounter == commitTraceInterval) {
-        DPRINTFR(ValueCommit, "@%llu Committing instruction with sn:%lli PC:%s",
-                curTick(), head_inst->seqNum, head_inst->pcState());
+    if (commitCounter >= commitTraceInterval && !head_inst->isForwarder()) {
+        DPRINTFR(ValueCommit, "@%llu Committing %llu instruction with sn:%lli PC:%s",
+                curTick(), commitAll, head_inst->seqNum, head_inst->pcState());
         if (head_inst->numDestRegs() > 0) {
-            DPRINTFR(ValueCommit, ", with wb value: %llu\n",
+            DPRINTFR(ValueCommit, ", with wb value: %llu",
                     head_inst->getResult().asIntegerNoAssert());
         } else {
-            DPRINTFR(ValueCommit, ", with wb value: none\n");
+            DPRINTFR(ValueCommit, ", with wb value: none");
+        }
+        if (head_inst->isMemRef()) {
+            DPRINTFR(ValueCommit, ", with v_addr: 0x%x\n", head_inst->effAddr);
+        } else {
+            DPRINTFR(ValueCommit, ", with v_addr: none\n");
         }
 
         if (head_inst->numDestRegs() > 0) {
@@ -718,6 +724,9 @@ FFDIEWC<Impl>::
         commitCounter = 0;
     } else {
         commitCounter++;
+    }
+    if (!head_inst->isForwarder()) {
+        commitAll++;
     }
 
     if (head_inst->traceData) {
@@ -2207,8 +2216,8 @@ FFDIEWC<Impl>::insertForwarder(
 
     StaticInstPtr static_forwarder = new ForwarderInst(lf_reg);
 
-    TheISA::PCState forward_pc(parent_inst->pcState().pc());
-    forward_pc.instNPC(parent_inst->pcState().pc());
+    TheISA::PCState forward_pc(anchor->pcState().npc());
+    forward_pc.instNPC(anchor->pcState().npc());
 
     DynInstPtr forwarder = new DynInst(static_forwarder,
             nullptr, forward_pc, forward_pc,

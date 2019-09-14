@@ -585,7 +585,7 @@ class DefaultFetch
 public:
     void setFanoutPred(FanoutPred *fanoutPred1);
 
-
+    const unsigned forwardThreshold;
 
 };
 

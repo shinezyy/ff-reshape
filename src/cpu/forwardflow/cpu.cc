@@ -1451,8 +1451,10 @@ FFCPU<Impl>::cleanUpRemovedInsts()
         instList.erase(removeList.front());
 
         removeList.pop();
+        DPRINTF(FFCommit, "Removed 1\n");
     }
 
+    DPRINTF(FFCommit, "Removed 2\n");
     if (Debug::FFCommit) {
         if (curTick() % 50000 == 0 || curTick() % 50500 == 0) {
             dumpInsts();
@@ -1460,6 +1462,7 @@ FFCPU<Impl>::cleanUpRemovedInsts()
     }
 
     removeInstsThisCycle = false;
+    DPRINTF(FFCommit, "Removed 3\n");
 }
 /*
 template <class Impl>

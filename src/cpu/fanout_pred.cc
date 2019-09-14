@@ -117,8 +117,9 @@ void FanoutPred::markAsPossible(uint64_t pc, unsigned reg_idx)
     if (numPossible >= disambgEntryMax) {
         //clear all
         numPossible = 0;
-        std::random_device rd;
-        std::mt19937 gen(rd());
+        // std::random_device rd;
+        // std::mt19937 gen(rd());
+        std::mt19937 gen(0xdeadbeaf);
         std::uniform_int_distribution<> dis(0, 10);
         for (unsigned u = 0; u < numDiambgFuncs; u++) {
             for (unsigned i = 0; i < privTable[u].size(); i++) {
