@@ -98,7 +98,12 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivFFCPUParams *params)
       numFetchingThreads(params->smtNumFetchingThreads),
       finishTranslationEvent(this),
       largeFanoutThreshold(params->LargeFanoutThreshold),
-      forwardThreshold(params->ForwardThreshold)
+      forwardThreshold(params->ForwardThreshold),
+
+      fpPathLen(params->FPPathLen),
+      fpPathBits(params->FPPathBits),
+      fpGHRLen(params->FPGHRLen),
+      fpLPHLen(params->FPLPHLen)
 {
     if (numThreads > Impl::MaxThreads)
         fatal("numThreads (%d) is larger than compiled limit (%d),\n"
@@ -160,6 +165,10 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivFFCPUParams *params)
         // Create space to buffer the cache line data,
         // which may not hold the entire cache line.
         fetchBuffer[tid] = new uint8_t[fetchBufferSize];
+    }
+
+    for (unsigned i = 0; i < fpPathLen; i++) {
+        recentBranchPCs.push_back(0xdeadbeef);
     }
 }
 
@@ -1691,20 +1700,34 @@ void DefaultFetch<Impl>::setFanoutPred(FanoutPred *fanoutPred1)
 template<class Impl>
 void DefaultFetch<Impl>::predictFanout(DynInstPtr &inst)
 {
+    if (inst->isControl()) {
+        recentBranchPCs.pop_front();
+        recentBranchPCs.push_front(inst->pcState().pc());
+    }
     if (inst->numDestRegs() == 0) {
         return;
     }
     const RegId& dest_reg = inst->destRegIdx(0);
-    inst->ghr = branchPred->getCurrentGHR(DummyTid);
 
-    unsigned pred = fanoutPred->lookup(
+    // fill features
+    for (const auto addr: recentBranchPCs) {
+        inst->fpFeat.pastPCs.push_back(addr);
+    }
+    inst->fpFeat.lastCallSite = branchPred->getLastCallsite(DummyTid);
+    inst->fpFeat.globalBranchHist = branchPred->getCurrentGHR(DummyTid);
+
+    // local bph not added yet!
+    bool pred;
+    unsigned pred_val;
+
+    std::tie(pred, pred_val) = fanoutPred->lookup(
             inst->instAddr(),
             hash<std::pair<RegClass, RegIndex>>{}(
                     std::make_pair(dest_reg.classValue(), dest_reg.index())),
-            inst->ghr);
+            &inst->fpFeat);
 
-    inst->predFanout = pred;
-    inst->predLargeFanout = pred > largeFanoutThreshold;
+    inst->predFanout = pred_val;
+    inst->predLargeFanout = pred;
 }
 
 }

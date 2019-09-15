@@ -511,3 +511,11 @@ BPredUnit::dump()
     }
 }
 
+
+Addr
+BPredUnit::getLastCallsite(ThreadID tid)
+{
+    TheISA::PCState rasTop = RAS[tid].top();
+    return rasTop.pc();
+}
+

@@ -230,6 +230,16 @@ class BaseCPU(MemObject):
     FanoutPredLambda = Param.Float(0.2, 'FanoutPredTableSize')
     FanoutPredTableSize = Param.Unsigned(8 * 2**10, 'FanoutPredTableSize')
 
+    FPPathLen = Param.Unsigned(5, 'The number of history branch PC')
+    FPPathBits = Param.Unsigned(5, 'The number of bits per path history')
+
+    FPGHRLen = Param.Unsigned(64, 'The length of GHR used for Fanout prediction')
+    FPLPHLen = Param.Unsigned(0, 'The length of local pattern history used for Fanout prediction')
+
+    FPCtrBits = Param.Unsigned(8, 'The bits per weight')
+
+    LargeFanoutThreshold = Param.Unsigned(3, "LargeFanoutThreshold")
+
     icache_port = MasterPort("Instruction Port")
     dcache_port = MasterPort("Data Port")
     _cached_ports = ['icache_port', 'dcache_port']

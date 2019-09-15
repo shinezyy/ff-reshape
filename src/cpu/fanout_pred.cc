@@ -5,11 +5,15 @@
 
 #include <cmath>
 #include <random>
+#include <debug/FanoutPred.hh>
 
 #include "base/intmath.hh"
 #include "base/trace.hh"
 #include "debug/FanoutPred1.hh"
 #include "params/BaseCPU.hh"
+
+using namespace boost;
+
 
 FanoutPred::FanoutPred(BaseCPUParams *params)
         : lambda(params->FanoutPredLambda),
@@ -22,14 +26,20 @@ FanoutPred::FanoutPred(BaseCPUParams *params)
           numDiambgFuncs(2),
           disambgTableSize(1024),
           disambgEntryMax(200),
-          table(depth, 0)
+          table(depth, Neuron(params)),
+
+          fpPathLen(params->FPPathLen),
+          fpPathBits(params->FPPathBits),
+          fpGHRLen(params->FPGHRLen),
+          fpLPHLen(params->FPLPHLen),
+          largeFanoutThreshold(params->LargeFanoutThreshold)
 {
     privTable[0].resize(disambgTableSize, false);
     privTable[1].resize(disambgTableSize, false);
 }
 
 void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
-        bool verbose, uint64_t history)
+        bool verbose, FPFeatures *fp_feat)
 {
     if (!isPossibleLF(pc, reg_idx)) {
         if (fanout > 3) {
@@ -39,47 +49,45 @@ void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
         }
     }
 
-    float lmd = lambda;
-    // if (fanout <= 3) {
-    //     lmd = lambda / 5;
-    // }
-    if (verbose) {
-        DPRINTF(FanoutPred1, "Updating hash slot[%u]\n", hash(pc, reg_idx, history));
-        DPRINTF(FanoutPred1, "Old prediction for [0x%llx ^ %u, history: 0x%x]"
+    const auto &ghr = fp_feat->globalBranchHist;
+    auto index = hash(pc, reg_idx, ghr);
+    auto &entry = table.at(index);
+
+    if (entry.probing && verbose) {
+        DPRINTF(FanoutPred1, "Updating hash slot[%u]\n", hash(pc, reg_idx, ghr));
+        DPRINTF(FanoutPred1, "Old prediction for [0x%llx ^ %u, history: 0x%lx]"
                 " is %u, groud truth is %u\n",
-                pc, reg_idx, history & history_mask,
-                table.at(hash(pc, reg_idx, history)), fanout);
-    }
-    auto &entry = table.at(hash(pc, reg_idx, history));
-    if (entry == 0) {
-        entry = fanout;
-    } else {
-        float new_fanout = lmd * fanout + (float) (1.0 - lmd) * entry;
-        assert(new_fanout >= 0);
-        entry = round(new_fanout);
+                pc, reg_idx, ghr.to_ulong(), fp_feat->predValue, fanout);
     }
 
-    if (verbose) {
-        DPRINTF(FanoutPred1, "New prediction for [0x%llx ^ %u, history: 0x%x]"
+    entry.fit(fp_feat, fanout > largeFanoutThreshold);
+//    entry.predict(history->globalHistory);
+//    if (entry.probing && Debug::ZPerceptron) {
+//        std::cout << "New local: " << entry.localHistory << std::endl;
+//    }
+    if (entry.probing && verbose) {
+        DPRINTF(FanoutPred1, "New prediction for [0x%llx ^ %u, history: 0x%lx]"
                 " is %u\n",
-                pc, reg_idx, history & history_mask,
-                table.at(hash(pc, reg_idx, history)));
+                pc, reg_idx, ghr.to_ulong(), entry.predict(fp_feat));
+    }
+
+    if (entry.predict(fp_feat) >= 0) {
+        // update value predictor
+        float lmd = lambda;
+        if (entry.fanout == 0) {
+            entry.fanout = fanout;
+        } else {
+            float new_fanout = lmd * fanout + (float) (1.0 - lmd) * entry.fanout;
+            assert(new_fanout >= 0);
+            entry.fanout = round(new_fanout);
+        }
     }
 }
 
-unsigned FanoutPred::lookup(uint64_t pc, unsigned reg_idx, uint64_t history)
-{
-    if (true) {
-        return table.at(hash(pc, reg_idx, history));
-    } else {
-        return 1;
-    }
-}
-
-unsigned FanoutPred::hash(uint64_t pc, unsigned reg_idx, uint64_t history)
+unsigned FanoutPred::hash(uint64_t pc, unsigned reg_idx, const dynamic_bitset<> &history)
 {
     pc = pc >> 2;
-    return static_cast<unsigned>(pc ^ (history & history_mask)) % depth;
+    return static_cast<unsigned>(pc % depth);
     // return static_cast<unsigned>(pc) % depth;
 }
 
@@ -120,10 +128,10 @@ void FanoutPred::markAsPossible(uint64_t pc, unsigned reg_idx)
         // std::random_device rd;
         // std::mt19937 gen(rd());
         std::mt19937 gen(0xdeadbeaf);
-        std::uniform_int_distribution<> dis(0, 10);
+        std::uniform_int_distribution<> dis(0, 100);
         for (unsigned u = 0; u < numDiambgFuncs; u++) {
             for (unsigned i = 0; i < privTable[u].size(); i++) {
-                privTable[u][i] = (dis(gen) > 1) & privTable[u][i];
+                privTable[u][i] = (dis(gen) > 5) & privTable[u][i];
                 numPossible += privTable[u][i];
             }
             // std::fill(privTable[u].begin(), privTable[u].end(), false);
@@ -134,4 +142,113 @@ void FanoutPred::markAsPossible(uint64_t pc, unsigned reg_idx)
         privTable[u][filterHash(u, pc, reg_idx)] = true;
         numPossible++;
     }
+}
+
+std::pair<bool, int32_t >
+FanoutPred::lookup(
+        uint64_t pc, unsigned reg_idx, FPFeatures *fp_feat)
+{
+    if (!isPossibleLF(pc, reg_idx)) {
+        return std::make_pair(false, 1);
+    }
+    uint32_t index = hash(pc, reg_idx, fp_feat->globalBranchHist);
+    dynamic_bitset<> &ghr = fp_feat->globalBranchHist;
+    Neuron &entry = table.at(index);
+
+    if (entry.probing && Debug::FanoutPred1) {
+        std::cout << "Using local: " << entry.localHistory
+                  << ", global: " << ghr << std::endl;
+    }
+
+    int32_t prediction = entry.predict(fp_feat);
+    bool result = prediction >= 0;
+    int32_t prediction_val = entry.fanout;
+
+    return std::make_pair(result, prediction_val);
+}
+
+FanoutPred::Neuron::Neuron(const BaseCPUParams *params) :
+        globalHistoryLen(params->FPGHRLen),
+        localHistoryLen(params->FPLPHLen),
+        localHistory(localHistoryLen),
+        pathLen(params->FPPathLen),
+        pathBitsWidth(params->FPPathBits),
+        weights(globalHistoryLen + 1, SignedSatCounter(params->FPCtrBits, 0)),
+        theta(static_cast<int32_t>(
+                1.93 * (globalHistoryLen + localHistoryLen + pathLen*pathBitsWidth)))
+{
+
+}
+
+int32_t FanoutPred::Neuron::predict(FPFeatures *fp_feat)
+{
+    int32_t sum = weights.back().read();
+
+    for (uint32_t i = 0; i < globalHistoryLen; i++) {
+        sum += b2s(fp_feat->globalBranchHist[i]) * weights[i].read();
+    }
+
+    for (uint32_t i = 0; i < localHistoryLen; i++) {
+        sum += b2s(fp_feat->localBranchHist[i]) *
+                weights[globalHistoryLen + i].read();
+    }
+
+    for (unsigned p = 0; p < pathLen; p++) {
+        for (unsigned b = 0; b < pathBitsWidth; b++) {
+            sum += b2s(extractBit(fp_feat->pastPCs[p], b))*
+            weights[globalHistoryLen + localHistoryLen + p*pathBitsWidth + b].read();
+        }
+    }
+    return sum;
+}
+
+void FanoutPred::Neuron::dump() const
+{
+
+}
+
+void FanoutPred::Neuron::fit(FPFeatures *fp_feat, bool large)
+{
+    if (fp_feat->pred == large &&
+        abs(fp_feat->predValue) > theta) {
+        return;
+    }
+
+    if (probing) {
+        DPRINTFR(FanoutPred1, "Old prediction: %d, theta: %d\n",
+                 fp_feat->predValue, theta);
+    }
+    if (large) {
+        weights.back().increment();
+    } else {
+        weights.back().decrement();
+    }
+
+    const auto &ghr = fp_feat->globalBranchHist;
+
+    for (uint32_t i = 0; i < globalHistoryLen; i++) {
+        weights[i].add(b2s(large) * b2s(ghr[i]));
+    }
+
+    for (uint32_t i = 0; i < localHistoryLen; i++) {
+        weights[globalHistoryLen + i].add(b2s(large) * b2s(localHistory[i]));
+    }
+
+    for (unsigned p = 0; p < pathLen; p++) {
+        for (unsigned b = 0; b < pathBitsWidth; b++) {
+            weights[globalHistoryLen + localHistoryLen + p*pathBitsWidth + b].add(
+                    b2s(large) * b2s(extractBit(fp_feat->pastPCs[p], b)));
+        }
+    }
+}
+
+int FanoutPred::Neuron::b2s(bool large)
+{
+    // 1 -> 1; 0 -> -1
+    return (large << 1) - 1;
+}
+
+bool FanoutPred::Neuron::extractBit(Addr addr, unsigned bit)
+{
+    return static_cast<bool>((addr >> (pcOffset + bit)) & 1);
 }

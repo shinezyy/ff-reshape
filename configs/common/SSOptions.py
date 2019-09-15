@@ -94,3 +94,8 @@ def addO3Options(parser):
             default=0.2,
             action='store', type='float',
             help='lambda for fanout predictor')
+
+    parser.add_option("--enable-reshape",
+            action='store_true',
+            help='enable reshape')
+

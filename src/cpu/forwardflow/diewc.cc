@@ -1351,7 +1351,7 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
                 hash<std::pair<RegClass, RegIndex>>{}(
                     std::make_pair(dest_reg.classValue(), dest_reg.index()) ),
                 inst->numChildren, mis_pred,
-                inst->ghr);
+                &inst->fpFeat);
     }
 }
 

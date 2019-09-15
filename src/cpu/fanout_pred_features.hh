@@ -8,6 +8,8 @@
 #include "base/types.hh"
 
 struct FPFeatures {
+    bool pred;
+    int32_t predValue;
     std::vector<Addr> pastPCs;
     Addr lastCallSite;
     boost::dynamic_bitset<> globalBranchHist;

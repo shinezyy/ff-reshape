@@ -582,11 +582,18 @@ class DefaultFetch
 
     const unsigned largeFanoutThreshold;
 
-public:
-    void setFanoutPred(FanoutPred *fanoutPred1);
-
     const unsigned forwardThreshold;
 
+    const unsigned fpPathLen;
+    const unsigned fpPathBits;
+
+    const unsigned fpGHRLen;
+    const unsigned fpLPHLen;
+
+    std::list<Addr> recentBranchPCs;
+
+public:
+    void setFanoutPred(FanoutPred *fanoutPred1);
 };
 
 }

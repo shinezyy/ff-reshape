@@ -103,7 +103,7 @@ class ZPerceptron: public BPredUnit{
 
     Tick nextDumpTick{0};
 
-    uint64_t getCurrentGHR(ThreadID tid) const override;
+    boost::dynamic_bitset<> getCurrentGHR(ThreadID tid) const override;
 };
 
 #endif

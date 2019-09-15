@@ -49,6 +49,8 @@
 
 #include <deque>
 
+#include <boost/dynamic_bitset.hpp>
+
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "cpu/pred/btb.hh"
@@ -190,7 +192,10 @@ class BPredUnit : public SimObject
 
     virtual unsigned getGHR(ThreadID tid, void* bp_history) const { return 0; }
 
-    virtual uint64_t getCurrentGHR(ThreadID tid) const {
+    virtual Addr getLastCallsite(ThreadID tid);
+
+
+    virtual boost::dynamic_bitset<> getCurrentGHR(ThreadID tid) const {
         panic("Not implemented\n");
     };
 

@@ -10,10 +10,47 @@
 #include <vector>
 
 #include "cpu/fanout_pred_features.hh"
+#include "cpu/pred/sat_counter.hh"
 
 struct BaseCPUParams;
 
 class FanoutPred {
+public:
+
+    struct Neuron {
+        bool probing{false};
+
+        const uint32_t globalHistoryLen;
+
+        const uint32_t localHistoryLen;
+        boost::dynamic_bitset<> localHistory;
+
+        const uint32_t pathLen;
+
+        const uint32_t pathBitsWidth;
+
+        std::vector<SignedSatCounter> weights;
+
+        explicit Neuron (const BaseCPUParams *params);
+
+        int32_t predict(FPFeatures *fp_feat);
+
+        void fit(FPFeatures *fp_feat, bool large);
+
+        int32_t theta;
+
+        // 1 -> 1; 0 -> -1; bool to signed
+        static int b2s(bool);
+
+        void dump() const;
+
+        const unsigned pcOffset{2};
+
+        bool extractBit(Addr addr, unsigned bit);
+
+        unsigned fanout;
+    };
+
 private:
     const float lambda;
 
@@ -47,19 +84,30 @@ private:
 
     unsigned numPossible{};
 
-    std::vector<unsigned> table;
+    std::vector<Neuron> table;
 
     std::array<std::vector<bool>, 2> privTable;
+
+    const unsigned fpPathLen;
+    const unsigned fpPathBits;
+
+    const unsigned fpGHRLen;
+    const unsigned fpLPHLen;
+
+    const unsigned largeFanoutThreshold;
 
 public:
     explicit FanoutPred(BaseCPUParams *params);
 
     void update(uint64_t pc, unsigned reg_idx, unsigned fanout,
-            bool verbose, uint64_t history);
+            bool verbose, FPFeatures *fp_feat);
 
-    unsigned lookup(uint64_t pc, unsigned reg_idx, uint64_t history);
+    std::pair<bool, int32_t> lookup(
+            uint64_t pc, unsigned reg_idx, FPFeatures *fp_feat);
 
-    unsigned hash(uint64_t pc, unsigned reg_idx, uint64_t history);
+    unsigned hash(uint64_t pc, unsigned reg_idx,
+            const boost::dynamic_bitset<> &history);
+
 };
 
 

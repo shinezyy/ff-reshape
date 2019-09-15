@@ -48,6 +48,7 @@
 
 #include "arch/isa_traits.hh"
 #include "config/the_isa.hh"
+#include "cpu/fanout_pred_features.hh"
 #include "cpu/ff_base_dyn_inst.hh"
 #include "cpu/forwardflow/cpu.hh"
 #include "cpu/forwardflow/isa_specific.hh"
@@ -443,6 +444,8 @@ public:
     bool forwarded;
 
     uint64_t ghr;
+
+    FPFeatures fpFeat;
 
     DQPointer ancestorPointer;
 private:

@@ -60,3 +60,4 @@ def modifyO3CPUConfig(options, cpu):
         cpu.branchPred.redundantBit = options.bp_redundant_bit
 
     cpu.FanoutPredLambda = options.fanout_lambda
+    cpu.EnableReshape = options.enable_reshape

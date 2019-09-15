@@ -464,8 +464,8 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
         }
 
         const auto &old = renameMap[src_reg];
-        if (predecessor->isForwarder() && old.op >= 1
-                && predecessor->numForwardRest > 0) {
+        if (predecessor->isForwarder() && old.op >= 1 &&
+                predecessor->numForwardRest > 0) {
             is_lf_drain = true;
             need_forward.push_back(predecessor);
         }
