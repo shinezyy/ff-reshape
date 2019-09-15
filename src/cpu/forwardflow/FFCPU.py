@@ -223,4 +223,4 @@ class DerivFFCPU(BaseCPU):
 
     readyQueueSize = Param.Unsigned(6, "readyQueueSize")
 
-    EnableReshape = Param.Bool(False, "EnableReshape")
+    EnableReshape = Param.Bool(True, "EnableReshape")

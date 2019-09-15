@@ -165,10 +165,10 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         if (!ptr.valid) {
             DPRINTF(DQ, "skip pointer: (%i) (%i %i) (%i)\n",
-                    ptr.valid, ptr.index, ptr.bank, ptr.op);
+                    ptr.valid, ptr.bank, ptr.index, ptr.op);
             continue;
         }
-        DPRINTF(DQ, "pointer: (%i %i) (%i)\n", ptr.index, ptr.bank, ptr.op);
+        DPRINTF(DQ, "pointer: (%i %i) (%i)\n", ptr.bank, ptr.index, ptr.op);
 
         if (!instArray.at(ptr.index) || instArray.at(ptr.index)->isSquashed()) {
             DPRINTF(DQWake, "Wakeup ignores null inst @%d\n", ptr.index);
@@ -1737,7 +1737,7 @@ void DataflowQueues<Impl>::tryFastCleanup()
     // todo: clean bubbles left by squashed instructions
     auto inst = getTail();
     if (inst) {
-        DPRINTF(FFSquash, "Strangely reaching fast cleanup when DQ head is not null!\n");
+        DPRINTF(FFSquash, "Strangely reaching fast cleanup when DQ tail is not null!\n");
     }
     while (!inst && !isEmpty()) {
         auto tail_ptr = uint2Pointer(tail);
@@ -1749,6 +1749,10 @@ void DataflowQueues<Impl>::tryFastCleanup()
         DPRINTF(DQ, "tail becomes %u in fast clean up\n", tail);
         inst = getTail();
         diewc->DQPointerJumped = true;
+    }
+    if (isEmpty()) {
+        tail = inc(tail);
+        head = inc(head);
     }
     DPRINTF(FFCommit, "Fastly advance youngest ptr to %d, olddest ptr to %d\n", head, tail);
 }
@@ -2211,9 +2215,12 @@ DataflowQueues<Impl>::advanceHead()
 {
     if (isEmpty()) {
         return;
+        // head = inc(head);
+        // tail = inc(tail);
+    } else {
+        assert(!isFull());
+        head = inc(head);
     }
-    assert(!isFull());
-    head = inc(head);
 
     auto allocated = uint2Pointer(head);
     auto dead_inst = dqs[allocated.bank]->readInstsFromBank(allocated);
