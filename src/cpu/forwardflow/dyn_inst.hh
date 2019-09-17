@@ -448,6 +448,12 @@ public:
     FPFeatures fpFeat;
 
     DQPointer ancestorPointer;
+
+    int reshapeContrib;
+
+    int gainFromReshape;
+
+    unsigned fwLevel;
 private:
     FFRegValue destValue;
 

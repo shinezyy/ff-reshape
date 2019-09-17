@@ -17,6 +17,9 @@ struct DQPointer{
     unsigned index;
     unsigned op;
 
+    int reshapeOp{-1};
+    unsigned fwLevel{};
+
     DQPointer() = default;
 
     DQPointer(bool, unsigned, unsigned, unsigned, unsigned);
@@ -44,6 +47,9 @@ struct WKPointer{
     unsigned bank{};
     unsigned index{};
     unsigned op{};
+
+    int reshapeOp{-1};
+    unsigned fwLevel{};
 
     WKPointer() = default;;
 

@@ -431,6 +431,9 @@ public:
     Stats::Scalar firstLevelFw;
     Stats::Scalar secondaryLevelFw;
 
+    Stats::Scalar gainFromReshape;
+    Stats::Scalar reshapeContrib;
+
     ArchState *getArchState() {return &archState;}
 
     XDataflowQueues *getDQ() {return &dq;}

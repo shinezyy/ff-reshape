@@ -13,6 +13,7 @@
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FUW.hh"
+#include "debug/Reshape.hh"
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
 
@@ -229,6 +230,22 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 DPRINTF(FFExec, "Setting src reg[%i] of inst[%llu] to %llu\n",
                         op-1, inst->seqNum, v.i);
                 inst->setSrcValue(op - 1, v);
+
+                if (!inst->isForwarder() &&
+                        ptr.reshapeOp >= 0 && ptr.reshapeOp <= 2 &&
+                        nearlyWakeup[ptr.index]) {
+
+                    inst->gainFromReshape = ptr.fwLevel*2 + (ptr.reshapeOp + 1) - 2;
+                    DynInstPtr parent = dq->checkAndGetParent(
+                            inst->ancestorPointer, inst->dqPosition);
+
+                    if (parent) {
+                        parent->reshapeContrib += inst->gainFromReshape;
+                        DPRINTF(Reshape, "inst[%llu] gain %i from reshape,"
+                                " ancestor cummulative contrib: %i\n",
+                                inst->seqNum, inst->gainFromReshape, parent->reshapeContrib);
+                    }
+                }
             }
 
             for (unsigned xop = op + 1; xop <= 3; xop++) {
@@ -350,6 +367,8 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                     for (unsigned out_op = 0; out_op < nOps; out_op++) {
                         auto &out_ptr = outputPointers[out_op];
                         out_ptr = inst->pointers[out_op];
+                        out_ptr.reshapeOp = out_op;
+                        out_ptr.fwLevel = inst->fwLevel;
 
                         if (out_ptr.valid) {
                             DPRINTF(FFSquash, "Put forwarding wakeup Pointer (%i %i) (%i)"
@@ -2238,6 +2257,24 @@ DataflowQueues<Impl>::advanceHead()
         DPRINTF(FFCommit, "Dead inst[%llu] found unexpectedly\n", dead_inst->seqNum);
         assert(!dead_inst);
     }
+}
+
+template<class Impl>
+typename Impl::DynInstPtr
+DataflowQueues<Impl>::checkAndGetParent(
+        const DQPointer &parent, const DQPointer &child) const
+{
+    assert(child.valid);
+    assert(parent.valid);
+    assert(readInst(child));
+
+    unsigned pu = pointer2uint(parent);
+
+    if (!validPosition(pu)) return nullptr;
+
+    if (!logicallyLT(pu, pointer2uint(child))) return nullptr;
+
+    return readInst(parent);
 }
 
 }

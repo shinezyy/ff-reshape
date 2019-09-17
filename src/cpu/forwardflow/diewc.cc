@@ -1364,6 +1364,9 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
                 inst->numChildren, mis_pred,
                 &inst->fpFeat);
     }
+
+    gainFromReshape += inst->gainFromReshape;
+    reshapeContrib += inst->reshapeContrib;
 }
 
 template<class Impl>
@@ -1804,6 +1807,14 @@ void FFDIEWC<Impl>::regStats()
     secondaryLevelFw
         .name(name() + ".secondaryLevelFw")
         .desc("secondaryLevelFw");
+
+    gainFromReshape
+        .name(name() + ".gainFromReshape")
+        .desc("gainFromReshape");
+
+    reshapeContrib
+        .name(name() + ".reshapeContrib")
+        .desc("reshapeContrib");
 
 }
 
@@ -2251,11 +2262,13 @@ FFDIEWC<Impl>::insertForwarder(
         forwarder->numForwardRest = (parent_inst->predFanout - 3) / 3;
         forwarder->ancestorPointer = parent_inst->dqPosition;
         forwarder->ancestorPointer.valid = true;
+        forwarder->fwLevel = 0;
     } else {
         assert(parent_inst->isForwarder());
         DPRINTF(Reshape, "Inserting secondary forwarder\n");
         forwarder->numForwardRest = parent_inst->numForwardRest - 1;
         forwarder->ancestorPointer = parent_inst->ancestorPointer;
+        forwarder->fwLevel = parent_inst->fwLevel + 1;
     }
 
     DPRINTF(Reshape, "Inserting forwarder inst[%llu] after inst[%llu]"
@@ -2267,6 +2280,7 @@ FFDIEWC<Impl>::insertForwarder(
 
     inst_buffer.push_front(forwarder);
 }
+
 
 }
 

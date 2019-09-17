@@ -160,6 +160,10 @@ BaseO3DynInst<Impl>::initVars()
     numFollowingFw = 0;
 
     forwarded = false;
+
+    reshapeContrib = 0;
+
+    gainFromReshape = 0;
 }
 
 template <class Impl>

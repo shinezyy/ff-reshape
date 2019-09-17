@@ -447,6 +447,8 @@ public:
     bool hasTooManyPendingInsts();
 
     void advanceHead();
+
+    DynInstPtr checkAndGetParent(const DQPointer &parent, const DQPointer &child) const;
 };
 
 }
