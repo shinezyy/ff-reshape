@@ -247,19 +247,29 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             if (nearlyWakeup[ptr.index]) {
                 assert(inst->numBusyOps() == 0);
                 DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
-                wakeup_count++;
-                if (!first) {
-                    DPRINTF(DQWake, "inst [%llu] is the gifted one in this bank\n", inst->seqNum);
-                    first = inst;
-                    first_index = ptr.index;
-                    if (anyPending) {
-                        DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
-                                ptr.bank, ptr.index, ptr.op);
-                        ptr.valid = false;
+                if (!inst->isForwarder()) {
+                    wakeup_count++;
+                    if (!first) {
+                        DPRINTF(DQWake, "inst [%llu] is the gifted one in this bank\n",
+                                inst->seqNum);
+                        first = inst;
+                        first_index = ptr.index;
+                        if (anyPending) {
+                            DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
+                                    ptr.bank, ptr.index, ptr.op);
+                            ptr.valid = false;
+                        }
+                    } else {
+                        DPRINTF(DQWake, "inst [%llu] has no luck in this bank\n", inst->seqNum);
+                        need_pending_ptr[op] = true;
                     }
                 } else {
-                    DPRINTF(DQWake, "inst [%llu] has no luck in this bank\n", inst->seqNum);
-                    need_pending_ptr[op] = true;
+                    DPRINTF(DQWake, "inst [%llu] is forwarder and skipped\n",
+                            inst->seqNum);
+                    inst->setIssued();
+                    inst->execute();
+                    inst->setExecuted();
+                    inst->setCanCommit();
                 }
             } else {
                 unsigned busy_count = inst->numBusyOps();

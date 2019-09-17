@@ -151,7 +151,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             pairs.push_back({old, dest});
 
             if (!predecessor_is_forwarder || old.op >= 3) {
-                DPRINTF(Rename, "Inst[%i] forward reg[%s %d]from (%d %d)(%d) "
+                DPRINTF(Rename, "Inst[%lu] forward reg[%s %d]from (%d %d)(%d) "
                         "to (%d %d)(%d)\n",
                         inst->seqNum, src_reg.className(), src_reg.index(),
                         old.bank, old.index, old.op,
@@ -167,21 +167,28 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
         }
     }
 
-    const RegId& dest_reg = inst->destRegIdx(0);
-    if (dest_reg.isZeroReg()) {
-        DPRINTF(Rename, "Skip zero dest reg\n");
-        inst->hasOp[0] = false;
+    if (inst->numDestRegs()) {
+        const RegId& dest_reg = inst->destRegIdx(0);
+        if (dest_reg.isZeroReg()) {
+            DPRINTF(Rename, "Skip zero dest reg\n");
+            inst->hasOp[0] = false;
 
+        } else {
+            auto dest_idx = make_pair(dest_reg.classValue(), dest_reg.index());
+            if (!inst->isForwarder()) {
+                scoreboard[dest_idx] = false;
+                reverseTable[dest_idx] = inst->dqPosition;
+                parentMap[dest_reg] = inst->dqPosition;
+            }
+            renameMap[dest_reg] = inst->dqPosition;
+            auto &m = renameMap[dest_reg];
+            DPRINTF(Rename, "Inst[%lu] defines reg[%s %d] (%d %d) (%d)\n",
+                    inst->seqNum, dest_reg.className(), dest_reg.index(),
+                    m.bank, m.index, m.op);
+        }
     } else {
-        auto dest_idx = make_pair(dest_reg.classValue(), dest_reg.index());
-        scoreboard[dest_idx] = false;
-        reverseTable[dest_idx] = inst->dqPosition;
-        parentMap[dest_reg] = inst->dqPosition;
-        renameMap[dest_reg] = inst->dqPosition;
-        auto &m = renameMap[dest_reg];
-        DPRINTF(Rename, "Inst[%i] define reg[%s %d] (%d %d)(%d)\n",
-                inst->seqNum, dest_reg.className(), dest_reg.index(),
-                m.bank, m.index, m.op);
+        inst->hasOp[0] = false;
+        DPRINTF(Rename, "Skip inst without dest reg\n");
     }
 
     if (inst->isControl() ||
@@ -464,7 +471,7 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
         }
 
         const auto &old = renameMap[src_reg];
-        if (predecessor->isForwarder() && old.op >= 1 &&
+        if (predecessor->isForwarder() && old.op >= 2 &&
                 predecessor->numForwardRest > 0) {
             is_lf_drain = true;
             need_forward.push_back(predecessor);

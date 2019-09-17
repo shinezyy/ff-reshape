@@ -428,6 +428,9 @@ public:
     Stats::Scalar falsePositiveLF;
     Stats::Formula fanoutMispredRate;
 
+    Stats::Scalar firstLevelFw;
+    Stats::Scalar secondaryLevelFw;
+
     ArchState *getArchState() {return &archState;}
 
     XDataflowQueues *getDQ() {return &dq;}

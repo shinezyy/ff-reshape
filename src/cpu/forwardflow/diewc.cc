@@ -348,6 +348,13 @@ void FFDIEWC<Impl>::dispatch() {
                     last = to_dispatch.front(); // last forwarder
                 }
                 inst->forwarded = true;
+
+                if (is_lf_source) {
+                    firstLevelFw++;
+                }
+                if (is_lf_drain) {
+                    secondaryLevelFw++;
+                }
             }
         }
 
@@ -1787,6 +1794,13 @@ void FFDIEWC<Impl>::regStats()
         .desc("largeFanoutInsts");
     fanoutMispredRate = (falseNegativeLF + falsePositiveLF) / totalFanoutPredictions;
 
+    firstLevelFw
+        .name(name() + ".firstLevelFw")
+        .desc("firstLevelFw");
+    secondaryLevelFw
+        .name(name() + ".secondaryLevelFw")
+        .desc("secondaryLevelFw");
+
 }
 
 template<class Impl>
@@ -2235,6 +2249,7 @@ FFDIEWC<Impl>::insertForwarder(
         forwarder->ancestorPointer.valid = true;
     } else {
         assert(parent_inst->isForwarder());
+        DPRINTF(Reshape, "Inserting secondary forwarder\n");
         forwarder->numForwardRest = parent_inst->numForwardRest - 1;
         forwarder->ancestorPointer = parent_inst->ancestorPointer;
     }
