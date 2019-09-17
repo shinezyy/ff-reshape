@@ -719,7 +719,7 @@ void DataflowQueues<Impl>::tick()
 
     for (auto &ptr : wakeup_granted_ptrs) {
         if (ptr->valid) {
-            DPRINTF(DQWake, "WakePtr[%d] (pointer(%d) (%d %d)(%d)) granted\n",
+            DPRINTF(DQWake, "WakePtr[%d] (pointer(%d) (%d %d) (%d)) granted\n",
                     ptr->source, ptr->payload.valid,
                     ptr->payload.bank, ptr->payload.index, ptr->payload.op);
         }
@@ -778,7 +778,7 @@ void DataflowQueues<Impl>::tick()
         const DQPointer &dest = fuWrappers[b].toWakeup[DestPtr];
 
         if (dest.valid) {
-            DPRINTF(DQWake, "Got wakeup pointer to (%d %d)(%d), pushed to wakeQueue[%i]\n",
+            DPRINTF(DQWake, "Got wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
                     dest.bank, dest.index, dest.op, b * nOps);
             wakeQueues[b * nOps].push_back(WKPointer(dest));
             numPendingWakeups++;
@@ -787,7 +787,7 @@ void DataflowQueues<Impl>::tick()
         }
 
         if (src.valid) {
-            DPRINTF(DQWake, "Got inverse wakeup pointer to (%d %d)(%d), pushed to wakeQueue[%i]\n",
+            DPRINTF(DQWake, "Got inverse wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
                     src.bank, src.index, src.op, b * nOps + 2);
             wakeQueues[b * nOps + 2].push_back(WKPointer(src));
             numPendingWakeups++;
@@ -1575,7 +1575,7 @@ void DataflowQueues<Impl>::dumpPairPackets(vector<DQPacket<PointerPair> *> &v)
         DPRINTF(DQOmega, "&pkt: %p, ", pkt);
         DPRINTFR(DQOmega, "v: %d, dest: %lu, src: %d,",
                  pkt->valid, pkt->destBits.to_ulong(), pkt->source);
-        DPRINTFR(DQOmega, " pair dest:(%d) (%d %d)(%d) \n",
+        DPRINTFR(DQOmega, " pair dest:(%d) (%d %d) (%d) \n",
                 pkt->payload.dest.valid, pkt->payload.dest.bank,
                 pkt->payload.dest.index, pkt->payload.dest.op);
     }

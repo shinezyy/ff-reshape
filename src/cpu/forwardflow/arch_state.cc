@@ -150,15 +150,17 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             dest.op = static_cast<unsigned int>(src_idx) + 1;
             pairs.push_back({old, dest});
 
-            if (!predecessor_is_forwarder || old.op >= 3) {
-                DPRINTF(Rename, "Inst[%lu] forward reg[%s %d]from (%d %d)(%d) "
-                        "to (%d %d)(%d)\n",
+            if (!predecessor_is_forwarder || old.op == 3) {
+                assert(old.op <= 3);
+                DPRINTF(Rename, "Inst[%lu] forward reg[%s %d]from (%d %d) (%d) "
+                        "to (%d %d) (%d)\n",
                         inst->seqNum, src_reg.className(), src_reg.index(),
                         old.bank, old.index, old.op,
                         dest.bank, dest.index, dest.op);
                 renameMap[src_reg] = dest;
 
             } else {
+                assert(old.op < 3);
                 old.op = old.op + 1;
                 DPRINTF(Reshape, "(%i %i) (%i) incremented to (%i %i) (%i)\n",
                         old.bank, old.index, old.op - 1,
@@ -175,7 +177,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
         } else {
             auto dest_idx = make_pair(dest_reg.classValue(), dest_reg.index());
-            if (!inst->isForwarder()) {
+             if (!inst->isForwarder()) {
                 scoreboard[dest_idx] = false;
                 reverseTable[dest_idx] = inst->dqPosition;
                 parentMap[dest_reg] = inst->dqPosition;
@@ -452,21 +454,24 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
     for (unsigned src_idx = 0; src_idx < num_src_regs; src_idx++) {
         const RegId& src_reg = inst->srcRegIdx(src_idx);
         if (src_reg.isZeroReg()) {
-            DPRINTF(Rename, "Skip zero reg\n");
+            DPRINTF(Reshape, "Skip zero reg\n");
             continue;
         }
         auto sb_index = make_pair(src_reg.classValue(), src_reg.index());
         if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
+            DPRINTF(Reshape, "Skip already ready\n");
             continue; // already ready
         }
 
         if (inst->destRegIdx(0) == src_reg) {
+            DPRINTF(Reshape, "Skip x = x\n");
             continue; // do not need to forward anymore
         }
 
         DQPointer renamed_ptr = renameMap[src_reg];
         DynInstPtr predecessor = dq->readInst(renamed_ptr); // sibling or parent
         if (!predecessor || predecessor->isSquashed()) {
+            DPRINTF(Reshape, "Skip squashed\n");
             continue; //squashed
         }
 
@@ -475,6 +480,15 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
                 predecessor->numForwardRest > 0) {
             is_lf_drain = true;
             need_forward.push_back(predecessor);
+        } else {
+            if (!predecessor->isForwarder()) {
+                DPRINTF(Reshape, "predecessor is not forwarder\n");
+            } else if (old.op < 2) {
+                DPRINTF(Reshape, "old.op < 2\n");
+            } else {
+                assert(predecessor->numForwardRest == 0);
+                DPRINTF(Reshape, "numForwardRest = %i\n", predecessor->numForwardRest);
+            }
         }
     }
     return std::make_pair(is_lf_source, is_lf_drain);

@@ -355,7 +355,11 @@ void FFDIEWC<Impl>::dispatch() {
                 if (is_lf_drain) {
                     secondaryLevelFw++;
                 }
+            } else {
+                DPRINTF(Reshape, "lf_source: %i, lf_drain: %i\n", is_lf_drain, is_lf_drain);
             }
+        } else {
+            DPRINTF(Reshape, "Will not insert after inst[%lu]\n", inst->seqNum);
         }
 
         ++dispatchedInsts;

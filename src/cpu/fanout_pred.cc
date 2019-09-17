@@ -173,7 +173,8 @@ FanoutPred::Neuron::Neuron(const BaseCPUParams *params) :
         localHistory(localHistoryLen),
         pathLen(params->FPPathLen),
         pathBitsWidth(params->FPPathBits),
-        weights(globalHistoryLen + 1, SignedSatCounter(params->FPCtrBits, 0)),
+        weights(globalHistoryLen + localHistoryLen + pathLen*pathBitsWidth + 1,
+                SignedSatCounter(params->FPCtrBits, 0)),
         theta(static_cast<int32_t>(
                 1.93 * (globalHistoryLen + localHistoryLen + pathLen*pathBitsWidth)))
 {
