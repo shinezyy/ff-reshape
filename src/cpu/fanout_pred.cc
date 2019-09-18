@@ -39,7 +39,7 @@ FanoutPred::FanoutPred(BaseCPUParams *params)
 }
 
 void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
-        bool verbose, FPFeatures *fp_feat)
+        bool verbose, FPFeatures *fp_feat, int contrib)
 {
     if (!isPossibleLF(pc, reg_idx)) {
         if (fanout > 3) {
@@ -76,10 +76,21 @@ void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
         float lmd = lambda;
         if (entry.fanout == 0) {
             entry.fanout = fanout;
+            entry.contrib = contrib;
         } else {
             float new_fanout = lmd * fanout + (float) (1.0 - lmd) * entry.fanout;
             assert(new_fanout >= 0);
             entry.fanout = round(new_fanout);
+
+            if (contrib != 0) {
+                entry.contrib = lmd * contrib + (float) (1.0 - lmd) * entry.contrib;
+            } else{
+                if (entry.contrib < 0.0) {
+                    entry.contrib = entry.contrib + 0.1;
+                } else {
+                    entry.contrib = entry.contrib - 0.1;
+                }
+            }
         }
     }
 }
@@ -144,12 +155,12 @@ void FanoutPred::markAsPossible(uint64_t pc, unsigned reg_idx)
     }
 }
 
-std::pair<bool, int32_t >
+std::tuple<bool, int32_t, int32_t>
 FanoutPred::lookup(
         uint64_t pc, unsigned reg_idx, FPFeatures *fp_feat)
 {
     if (!isPossibleLF(pc, reg_idx)) {
-        return std::make_pair(false, 1);
+        return std::make_tuple(false, 1, 0);
     }
     uint32_t index = hash(pc, reg_idx, fp_feat->globalBranchHist);
     dynamic_bitset<> &ghr = fp_feat->globalBranchHist;
@@ -162,9 +173,17 @@ FanoutPred::lookup(
 
     int32_t prediction = entry.predict(fp_feat);
     bool result = prediction >= 0;
-    int32_t prediction_val = entry.fanout;
 
-    return std::make_pair(result, prediction_val);
+    int contrib = round(entry.contrib);
+    if (entry.contrib < 0.0 and entry.contrib > -1.0) {
+        if (entry.contrib > -0.1) {
+            contrib = 0;
+        } else {
+            contrib = -1;
+        }
+    }
+
+    return std::make_tuple(result, entry.fanout, contrib);
 }
 
 FanoutPred::Neuron::Neuron(const BaseCPUParams *params) :

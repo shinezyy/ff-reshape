@@ -433,6 +433,8 @@ public:
 
     Stats::Scalar gainFromReshape;
     Stats::Scalar reshapeContrib;
+    Stats::Scalar nonCriticalForward;
+    Stats::Scalar negativeContrib;
 
     ArchState *getArchState() {return &archState;}
 

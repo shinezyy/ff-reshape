@@ -437,6 +437,8 @@ public:
 
     unsigned predFanout;
 
+    int predReshapeProfit;
+
     unsigned numForwardRest;
 
     unsigned numFollowingFw;
@@ -452,6 +454,10 @@ public:
     int reshapeContrib;
 
     int gainFromReshape;
+
+    int nonCriticalFw;
+
+    int negativeContrib;
 
     unsigned fwLevel;
 private:

@@ -1719,8 +1719,9 @@ void DefaultFetch<Impl>::predictFanout(DynInstPtr &inst)
     // local bph not added yet!
     bool pred;
     unsigned pred_val;
+    unsigned pred_profit;
 
-    std::tie(pred, pred_val) = fanoutPred->lookup(
+    std::tie(pred, pred_val, pred_profit) = fanoutPred->lookup(
             inst->instAddr(),
             hash<std::pair<RegClass, RegIndex>>{}(
                     std::make_pair(dest_reg.classValue(), dest_reg.index())),
@@ -1728,6 +1729,7 @@ void DefaultFetch<Impl>::predictFanout(DynInstPtr &inst)
 
     inst->predFanout = pred_val;
     inst->predLargeFanout = pred;
+    inst->predReshapeProfit = pred_profit;
 }
 
 }

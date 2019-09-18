@@ -1342,6 +1342,11 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
     if (inst->isCall())
         statComFunctionCalls++;
 
+    gainFromReshape += inst->gainFromReshape;
+    reshapeContrib += inst->reshapeContrib;
+    nonCriticalForward += inst->nonCriticalFw;
+    negativeContrib += inst->negativeContrib;
+
     if (!inst->isSquashed() && inst->numDestRegs() > 0 && !inst->isForwarder()) {
         totalFanoutPredictions++;
         bool is_large_fanout = inst->numChildren > largeFanoutThreshold;
@@ -1362,11 +1367,8 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
                 hash<std::pair<RegClass, RegIndex>>{}(
                     std::make_pair(dest_reg.classValue(), dest_reg.index()) ),
                 inst->numChildren, mis_pred,
-                &inst->fpFeat);
+                &inst->fpFeat, inst->reshapeContrib - inst->negativeContrib);
     }
-
-    gainFromReshape += inst->gainFromReshape;
-    reshapeContrib += inst->reshapeContrib;
 }
 
 template<class Impl>
@@ -1816,6 +1818,13 @@ void FFDIEWC<Impl>::regStats()
         .name(name() + ".reshapeContrib")
         .desc("reshapeContrib");
 
+    nonCriticalForward
+        .name(name() + ".nonCriticalForward")
+        .desc("nonCriticalForward");
+
+    negativeContrib
+        .name(name() + ".negativeContrib")
+        .desc("negativeContrib");
 }
 
 template<class Impl>

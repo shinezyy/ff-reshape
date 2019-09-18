@@ -232,18 +232,29 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 inst->setSrcValue(op - 1, v);
 
                 if (!inst->isForwarder() &&
-                        ptr.reshapeOp >= 0 && ptr.reshapeOp <= 2 &&
-                        nearlyWakeup[ptr.index]) {
+                        ptr.reshapeOp >= 0 && ptr.reshapeOp <= 2) {
+                    if (nearlyWakeup[ptr.index]) {
 
-                    inst->gainFromReshape = ptr.fwLevel*2 + (ptr.reshapeOp + 1) - 2;
-                    DynInstPtr parent = dq->checkAndGetParent(
-                            inst->getSrcPointer(op - 1), inst->dqPosition);
+                        inst->gainFromReshape = ptr.fwLevel*2 + (ptr.reshapeOp + 1) - 2;
+                        DynInstPtr parent = dq->checkAndGetParent(
+                                inst->getSrcPointer(op - 1), inst->dqPosition);
 
-                    if (parent) {
-                        parent->reshapeContrib += inst->gainFromReshape;
-                        DPRINTF(Reshape, "inst[%llu] gain %i from reshape,"
-                                " ancestor cummulative contrib: %i\n",
-                                inst->seqNum, inst->gainFromReshape, parent->reshapeContrib);
+                        if (parent) {
+                            parent->reshapeContrib += inst->gainFromReshape;
+                            DPRINTF(Reshape, "inst[%llu] gain %i from reshape,"
+                                    " ancestor cummulative contrib: %i\n",
+                                    inst->seqNum, inst->gainFromReshape, parent->reshapeContrib);
+                        }
+                    } else {
+                        inst->nonCriticalFw += 1;
+                        DPRINTF(Reshape, "inst[%llu] received non-critial fw %i from reshape\n",
+                                inst->seqNum, inst->nonCriticalFw);
+
+                        DynInstPtr parent = dq->checkAndGetParent(
+                                inst->getSrcPointer(op - 1), inst->dqPosition);
+                        if (parent) {
+                            parent->negativeContrib += 1;
+                        }
                     }
                 }
             }

@@ -164,6 +164,10 @@ BaseO3DynInst<Impl>::initVars()
     reshapeContrib = 0;
 
     gainFromReshape = 0;
+
+    nonCriticalFw = 0;
+
+    negativeContrib = 0;
 }
 
 template <class Impl>

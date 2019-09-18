@@ -48,7 +48,9 @@ public:
 
         bool extractBit(Addr addr, unsigned bit);
 
-        unsigned fanout;
+        unsigned fanout{};
+
+        float contrib{0.0};
     };
 
 private:
@@ -100,9 +102,9 @@ public:
     explicit FanoutPred(BaseCPUParams *params);
 
     void update(uint64_t pc, unsigned reg_idx, unsigned fanout,
-            bool verbose, FPFeatures *fp_feat);
+            bool verbose, FPFeatures *fp_feat, int contrib);
 
-    std::pair<bool, int32_t> lookup(
+    std::tuple<bool, int32_t, int32_t> lookup(
             uint64_t pc, unsigned reg_idx, FPFeatures *fp_feat);
 
     unsigned hash(uint64_t pc, unsigned reg_idx,

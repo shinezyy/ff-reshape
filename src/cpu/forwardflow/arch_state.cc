@@ -445,7 +445,7 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
 {
     bool is_lf_source = false;
     bool is_lf_drain = false;
-    if (inst->predLargeFanout) {
+    if (inst->predLargeFanout && inst->predReshapeProfit >= 0) {
         is_lf_source = true;
         need_forward.push_back(inst);
     }
