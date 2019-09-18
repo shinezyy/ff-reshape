@@ -237,7 +237,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
                     inst->gainFromReshape = ptr.fwLevel*2 + (ptr.reshapeOp + 1) - 2;
                     DynInstPtr parent = dq->checkAndGetParent(
-                            inst->ancestorPointer, inst->dqPosition);
+                            inst->getSrcPointer(op - 1), inst->dqPosition);
 
                     if (parent) {
                         parent->reshapeContrib += inst->gainFromReshape;
@@ -372,8 +372,8 @@ DataflowQueueBank<Impl>::readPointersFromBank()
 
                         if (out_ptr.valid) {
                             DPRINTF(FFSquash, "Put forwarding wakeup Pointer (%i %i) (%i)"
-                                    " to outputPointers\n",
-                                    out_ptr.bank, out_ptr.index, out_ptr.op);
+                                    " to outputPointers, reshapeOp: %i\n",
+                                    out_ptr.bank, out_ptr.index, out_ptr.op, out_op);
                         }
                     }
 
