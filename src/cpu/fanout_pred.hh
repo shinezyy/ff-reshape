@@ -100,6 +100,11 @@ private:
     const unsigned largeFanoutThreshold;
 
     std::mt19937 gen;
+
+    double overallProfit{0.0};
+
+    double overallReshapeTimes{0.0};
+
 public:
     explicit FanoutPred(BaseCPUParams *params);
 

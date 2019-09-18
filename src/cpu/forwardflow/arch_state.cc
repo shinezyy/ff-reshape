@@ -445,12 +445,15 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
 {
     bool is_lf_source = false;
     bool is_lf_drain = false;
-    if (inst->predLargeFanout && inst->predReshapeProfit >= 0) {
+    if (inst->predLargeFanout && inst->predReshapeProfit > 0) {
         is_lf_source = true;
         need_forward.push_back(inst);
     }
     // TODO! what if inst is  x = x !!!???
     unsigned num_src_regs = inst->numSrcRegs();
+
+    std::list<const RegId> forwarded;
+
     for (unsigned src_idx = 0; src_idx < num_src_regs; src_idx++) {
         const RegId& src_reg = inst->srcRegIdx(src_idx);
         if (src_reg.isZeroReg()) {
@@ -476,9 +479,11 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
         }
 
         const auto &old = renameMap[src_reg];
+        auto found = std::find(forwarded.begin(), forwarded.end(), src_reg);
         if (predecessor->isForwarder() && old.op >= 2 &&
-                predecessor->numForwardRest > 0) {
+                predecessor->numForwardRest > 0 && found == forwarded.end()) {
             is_lf_drain = true;
+            forwarded.push_back(src_reg);
             need_forward.push_back(predecessor);
         } else {
             if (!predecessor->isForwarder()) {
@@ -486,7 +491,7 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
             } else if (old.op < 2) {
                 DPRINTF(Reshape, "old.op < 2\n");
             } else {
-                assert(predecessor->numForwardRest == 0);
+                assert(predecessor->numForwardRest == 0 || found != forwarded.end());
                 DPRINTF(Reshape, "numForwardRest = %i\n", predecessor->numForwardRest);
             }
         }

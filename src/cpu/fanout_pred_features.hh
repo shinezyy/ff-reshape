@@ -10,6 +10,7 @@
 struct FPFeatures {
     bool pred;
     int32_t predValue;
+    int32_t predProfit;
     std::vector<Addr> pastPCs;
     Addr lastCallSite;
     boost::dynamic_bitset<> globalBranchHist;

@@ -17,6 +17,7 @@
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
 #include "debug/Reshape.hh"
+#include "debug/Reshape2.hh"
 #include "debug/ValueCommit.hh"
 #include "params/DerivFFCPU.hh"
 
@@ -343,10 +344,16 @@ void FFDIEWC<Impl>::dispatch() {
             std::tie(is_lf_source, is_lf_drain) = archState.forwardAfter(inst, to_forward);
             if (is_lf_source || is_lf_drain) {
                 DynInstPtr last = inst;
+                std::stack<DynInstPtr> stack;
                 for (auto &it: to_forward) {
-                    insertForwarder(it, last, to_dispatch);
-                    last = to_dispatch.front(); // last forwarder
+                    stack.push(insertForwarder(it, last));
+                    last = stack.top(); // last forwarder
                 }
+                while (!stack.empty()) {
+                    to_dispatch.push_front(stack.top());
+                    stack.pop();
+                }
+
                 inst->forwarded = true;
 
                 if (is_lf_source) {
@@ -1367,7 +1374,19 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
                 hash<std::pair<RegClass, RegIndex>>{}(
                     std::make_pair(dest_reg.classValue(), dest_reg.index()) ),
                 inst->numChildren, mis_pred,
-                &inst->fpFeat, inst->reshapeContrib - inst->negativeContrib);
+                &inst->fpFeat, inst->reshapeContrib);
+
+        if (inst->predLargeFanout) {
+            if (inst->reshapeContrib - inst->negativeContrib <= 0) {
+                DPRINTF(Reshape2, "Reshape on inst[%lu] pc: %s with large fanout has no profit, "
+                        "with profit: %i, negative contribution: %i\n",
+                        inst->seqNum, inst->pcState(), inst->reshapeContrib, inst->negativeContrib);
+            } else {
+                DPRINTF(Reshape2, "Reshape on inst[%lu] pc: %s with large fanout has profit, "
+                        "with profit: %i, negative contribution: %i\n",
+                        inst->seqNum, inst->pcState(), inst->reshapeContrib, inst->negativeContrib);
+            }
+        }
     }
 }
 
@@ -2246,9 +2265,9 @@ void FFDIEWC<Impl>::setFanoutPred(FanoutPred *fanoutPred1)
 }
 
 template<class Impl>
-void
+typename Impl::DynInstPtr
 FFDIEWC<Impl>::insertForwarder(
-        DynInstPtr &parent_inst, DynInstPtr &anchor, InstQueue &inst_buffer)
+        DynInstPtr &parent_inst, DynInstPtr &anchor)
 {
     const RegId &lf_reg = parent_inst->staticInst->destRegIdx(0);
 
@@ -2287,7 +2306,7 @@ FFDIEWC<Impl>::insertForwarder(
             forwarder->ancestorPointer.bank,
             forwarder->ancestorPointer.index);
 
-    inst_buffer.push_front(forwarder);
+    return forwarder;
 }
 
 

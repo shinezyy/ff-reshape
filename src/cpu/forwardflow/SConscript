@@ -95,6 +95,7 @@ if 'FFCPU' in env['CPU_MODELS']:
     DebugFlag('FanoutPred1')
     DebugFlag('FanoutLog')
     DebugFlag('Reshape')
+    DebugFlag('Reshape2')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',

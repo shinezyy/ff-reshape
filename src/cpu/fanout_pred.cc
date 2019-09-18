@@ -10,6 +10,7 @@
 #include "base/intmath.hh"
 #include "base/trace.hh"
 #include "debug/FanoutPred1.hh"
+#include "debug/Reshape2.hh"
 #include "params/BaseCPU.hh"
 
 using namespace boost;
@@ -24,8 +25,8 @@ FanoutPred::FanoutPred(BaseCPUParams *params)
           foldLen(10),
           foldMask((1 <<foldLen) - 1),
           numDiambgFuncs(2),
-          disambgTableSize(1024),
-          disambgEntryMax(200),
+          disambgTableSize(2048),
+          disambgEntryMax(400),
           table(depth, Neuron(params)),
 
           fpPathLen(params->FPPathLen),
@@ -54,6 +55,7 @@ void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
     auto index = hash(pc, reg_idx, fp_feat);
     auto &entry = table.at(index);
 
+    DPRINTF(Reshape2, "Updating hash slot[%u]\n", index);
     if (entry.probing && verbose) {
         DPRINTF(FanoutPred1, "Updating hash slot[%u]\n", index);
         DPRINTF(FanoutPred1, "Old prediction for [0x%llx ^ %u, history: 0x%lx]"
@@ -75,17 +77,18 @@ void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
     if (entry.predict(fp_feat) >= 0) {
         // update value predictor
         float lmd = lambda;
-        float contrib_lmd = 0.3;
         if (entry.fanout == 0) {
             entry.fanout = fanout;
-            entry.contrib = contrib;
         } else {
             float new_fanout = lmd * fanout + (float) (1.0 - lmd) * entry.fanout;
             assert(new_fanout >= 0);
             entry.fanout = round(new_fanout);
-
-            entry.contrib = contrib_lmd * contrib + (float) (1.0 - contrib_lmd) * entry.contrib;
         }
+    }
+    if (fp_feat->pred && fp_feat->predProfit) {
+        float contrib_lmd = 0.5;
+        entry.contrib = contrib_lmd * contrib + (float) (1.0 - contrib_lmd) * entry.contrib;
+        DPRINTF(Reshape2, "new contrib: %f\n", entry.contrib);
     }
 }
 
@@ -135,7 +138,7 @@ void FanoutPred::markAsPossible(uint64_t pc, unsigned reg_idx)
         std::uniform_int_distribution<> dis(0, 100);
         for (unsigned u = 0; u < numDiambgFuncs; u++) {
             for (unsigned i = 0; i < privTable[u].size(); i++) {
-                privTable[u][i] = (dis(gen) > 5) & privTable[u][i];
+                privTable[u][i] = (dis(gen) > 10) & privTable[u][i];
                 numPossible += privTable[u][i];
             }
             // std::fill(privTable[u].begin(), privTable[u].end(), false);
@@ -159,6 +162,8 @@ FanoutPred::lookup(
     dynamic_bitset<> &ghr = fp_feat->globalBranchHist;
     Neuron &entry = table.at(index);
 
+    DPRINTF(Reshape2, "Looking up hash slot %i\n",index);
+
     if (entry.probing && Debug::FanoutPred1) {
         std::cout << "Using local: " << entry.localHistory
                   << ", global: " << ghr << std::endl;
@@ -167,6 +172,9 @@ FanoutPred::lookup(
     int32_t prediction = entry.predict(fp_feat);
     bool result = prediction >= 0;
 
+    if (result && entry.contrib) {
+        DPRINTF(Reshape2, "Predicted to be LF with contrib %f\n", entry.contrib);
+    }
 
     return std::make_tuple(result, entry.fanout, entry.contrib);
 }

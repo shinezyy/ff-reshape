@@ -478,7 +478,7 @@ private:
 
     const unsigned largeFanoutThreshold;
 
-    void insertForwarder(DynInstPtr &inst, DynInstPtr &anchor,InstQueue &inst_buffer);
+    DynInstPtr insertForwarder(DynInstPtr &inst, DynInstPtr &anchor);
 
     bool EnableReshape;
 

@@ -67,6 +67,8 @@
 #include "debug/Drain.hh"
 #include "debug/Fetch.hh"
 #include "debug/O3PipeView.hh"
+#include "debug/Reshape.hh"
+#include "debug/Reshape2.hh"
 #include "mem/packet.hh"
 #include "params/DerivFFCPU.hh"
 #include "sim/byteswap.hh"
@@ -1733,6 +1735,14 @@ void DefaultFetch<Impl>::predictFanout(DynInstPtr &inst)
     inst->predFanout = pred_val;
     inst->predLargeFanout = pred;
     inst->predReshapeProfit = pred_profit > dist(gen);
+
+    inst->fpFeat.pred = pred;
+    inst->fpFeat.predProfit = inst->predReshapeProfit;
+
+    if (inst->predLargeFanout && inst->predReshapeProfit) {
+        DPRINTF(Reshape2, "inst[%lu] pc: %s with pred_profit: %f will be reshaped:%i\n",
+                inst->seqNum, inst->pcState(), pred_profit, inst->predReshapeProfit);
+    }
 }
 
 }
