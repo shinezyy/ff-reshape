@@ -50,7 +50,7 @@
 #include <list>
 #include <map>
 #include <queue>
-
+#include <random>
 
 #include "arch/generic/tlb.hh"
 #include "arch/isa_traits.hh"
@@ -103,7 +103,8 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivFFCPUParams *params)
       fpPathLen(params->FPPathLen),
       fpPathBits(params->FPPathBits),
       fpGHRLen(params->FPGHRLen),
-      fpLPHLen(params->FPLPHLen)
+      fpLPHLen(params->FPLPHLen),
+      gen(0x1dea1)
 {
     if (numThreads > Impl::MaxThreads)
         fatal("numThreads (%d) is larger than compiled limit (%d),\n"
@@ -1719,7 +1720,9 @@ void DefaultFetch<Impl>::predictFanout(DynInstPtr &inst)
     // local bph not added yet!
     bool pred;
     unsigned pred_val;
-    unsigned pred_profit;
+    float pred_profit;
+
+    std::uniform_real_distribution<> dist(0.0, 1.0);
 
     std::tie(pred, pred_val, pred_profit) = fanoutPred->lookup(
             inst->instAddr(),
@@ -1729,7 +1732,7 @@ void DefaultFetch<Impl>::predictFanout(DynInstPtr &inst)
 
     inst->predFanout = pred_val;
     inst->predLargeFanout = pred;
-    inst->predReshapeProfit = pred_profit;
+    inst->predReshapeProfit = pred_profit > dist(gen);
 }
 
 }

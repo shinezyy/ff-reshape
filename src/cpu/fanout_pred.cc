@@ -32,7 +32,8 @@ FanoutPred::FanoutPred(BaseCPUParams *params)
           fpPathBits(params->FPPathBits),
           fpGHRLen(params->FPGHRLen),
           fpLPHLen(params->FPLPHLen),
-          largeFanoutThreshold(params->LargeFanoutThreshold)
+          largeFanoutThreshold(params->LargeFanoutThreshold),
+          gen(0xdeadbeaf)
 {
     privTable[0].resize(disambgTableSize, false);
     privTable[1].resize(disambgTableSize, false);
@@ -50,11 +51,11 @@ void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
     }
 
     const auto &ghr = fp_feat->globalBranchHist;
-    auto index = hash(pc, reg_idx, ghr);
+    auto index = hash(pc, reg_idx, fp_feat);
     auto &entry = table.at(index);
 
     if (entry.probing && verbose) {
-        DPRINTF(FanoutPred1, "Updating hash slot[%u]\n", hash(pc, reg_idx, ghr));
+        DPRINTF(FanoutPred1, "Updating hash slot[%u]\n", index);
         DPRINTF(FanoutPred1, "Old prediction for [0x%llx ^ %u, history: 0x%lx]"
                 " is %u, groud truth is %u\n",
                 pc, reg_idx, ghr.to_ulong(), fp_feat->predValue, fanout);
@@ -74,6 +75,7 @@ void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
     if (entry.predict(fp_feat) >= 0) {
         // update value predictor
         float lmd = lambda;
+        float contrib_lmd = 0.3;
         if (entry.fanout == 0) {
             entry.fanout = fanout;
             entry.contrib = contrib;
@@ -82,23 +84,15 @@ void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
             assert(new_fanout >= 0);
             entry.fanout = round(new_fanout);
 
-            if (contrib != 0) {
-                entry.contrib = lmd * contrib + (float) (1.0 - lmd) * entry.contrib;
-            } else{
-                if (entry.contrib < 0.0) {
-                    entry.contrib = entry.contrib + 0.1;
-                } else {
-                    entry.contrib = entry.contrib - 0.1;
-                }
-            }
+            entry.contrib = contrib_lmd * contrib + (float) (1.0 - contrib_lmd) * entry.contrib;
         }
     }
 }
 
-unsigned FanoutPred::hash(uint64_t pc, unsigned reg_idx, const dynamic_bitset<> &history)
+unsigned FanoutPred::hash(uint64_t pc, unsigned reg_idx, FPFeatures *fp_feat)
 {
     pc = pc >> 2;
-    return static_cast<unsigned>(pc % depth);
+    return static_cast<unsigned>((pc ^ fp_feat->lastCallSite) % depth);
     // return static_cast<unsigned>(pc) % depth;
 }
 
@@ -138,7 +132,6 @@ void FanoutPred::markAsPossible(uint64_t pc, unsigned reg_idx)
         numPossible = 0;
         // std::random_device rd;
         // std::mt19937 gen(rd());
-        std::mt19937 gen(0xdeadbeaf);
         std::uniform_int_distribution<> dis(0, 100);
         for (unsigned u = 0; u < numDiambgFuncs; u++) {
             for (unsigned i = 0; i < privTable[u].size(); i++) {
@@ -155,14 +148,14 @@ void FanoutPred::markAsPossible(uint64_t pc, unsigned reg_idx)
     }
 }
 
-std::tuple<bool, int32_t, int32_t>
+std::tuple<bool, int32_t, float>
 FanoutPred::lookup(
         uint64_t pc, unsigned reg_idx, FPFeatures *fp_feat)
 {
     if (!isPossibleLF(pc, reg_idx)) {
-        return std::make_tuple(false, 1, 0);
+        return std::make_tuple(false, 1, 0.0);
     }
-    uint32_t index = hash(pc, reg_idx, fp_feat->globalBranchHist);
+    uint32_t index = hash(pc, reg_idx, fp_feat);
     dynamic_bitset<> &ghr = fp_feat->globalBranchHist;
     Neuron &entry = table.at(index);
 
@@ -174,16 +167,8 @@ FanoutPred::lookup(
     int32_t prediction = entry.predict(fp_feat);
     bool result = prediction >= 0;
 
-    int contrib = round(entry.contrib);
-    if (entry.contrib < 0.0 and entry.contrib > -1.0) {
-        if (entry.contrib > -0.1) {
-            contrib = 0;
-        } else {
-            contrib = -1;
-        }
-    }
 
-    return std::make_tuple(result, entry.fanout, contrib);
+    return std::make_tuple(result, entry.fanout, entry.contrib);
 }
 
 FanoutPred::Neuron::Neuron(const BaseCPUParams *params) :
@@ -195,7 +180,8 @@ FanoutPred::Neuron::Neuron(const BaseCPUParams *params) :
         weights(globalHistoryLen + localHistoryLen + pathLen*pathBitsWidth + 1,
                 SignedSatCounter(params->FPCtrBits, 0)),
         theta(static_cast<int32_t>(
-                1.93 * (globalHistoryLen + localHistoryLen + pathLen*pathBitsWidth)))
+                1.93 * (globalHistoryLen + localHistoryLen + pathLen*pathBitsWidth))),
+        contrib(0.5)
 {
 
 }

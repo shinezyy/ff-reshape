@@ -44,6 +44,8 @@
 #ifndef __CPU_FF_FETCH_HH__
 #define __CPU_FF_FETCH_HH__
 
+#include <random>
+
 #include "arch/decoder.hh"
 #include "arch/utility.hh"
 #include "base/statistics.hh"
@@ -592,6 +594,7 @@ class DefaultFetch
 
     std::list<Addr> recentBranchPCs;
 
+    std::mt19937 gen;
 public:
     void setFanoutPred(FanoutPred *fanoutPred1);
 };

@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstdint>
+#include <random>
 #include <vector>
 
 #include "cpu/fanout_pred_features.hh"
@@ -50,7 +51,7 @@ public:
 
         unsigned fanout{};
 
-        float contrib{0.0};
+        float contrib;
     };
 
 private:
@@ -98,17 +99,17 @@ private:
 
     const unsigned largeFanoutThreshold;
 
+    std::mt19937 gen;
 public:
     explicit FanoutPred(BaseCPUParams *params);
 
     void update(uint64_t pc, unsigned reg_idx, unsigned fanout,
             bool verbose, FPFeatures *fp_feat, int contrib);
 
-    std::tuple<bool, int32_t, int32_t> lookup(
+    std::tuple<bool, int32_t, float> lookup(
             uint64_t pc, unsigned reg_idx, FPFeatures *fp_feat);
 
-    unsigned hash(uint64_t pc, unsigned reg_idx,
-            const boost::dynamic_bitset<> &history);
+    unsigned hash(uint64_t pc, unsigned reg_idx, FPFeatures *fp_feat);
 
 };
 
