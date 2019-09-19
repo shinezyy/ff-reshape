@@ -89,6 +89,12 @@ void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
         float contrib_lmd = 0.5;
         entry.contrib = contrib_lmd * contrib + (float) (1.0 - contrib_lmd) * entry.contrib;
         DPRINTF(Reshape2, "new contrib: %f\n", entry.contrib);
+
+        overallReshapeTimes += 1;
+        overallProfit += contrib;
+        if (overallReshapeTimes >= 1) {
+            expectedProfit = overallProfit / overallReshapeTimes;
+        }
     }
 }
 
@@ -176,7 +182,7 @@ FanoutPred::lookup(
         DPRINTF(Reshape2, "Predicted to be LF with contrib %f\n", entry.contrib);
     }
 
-    return std::make_tuple(result, entry.fanout, entry.contrib);
+    return std::make_tuple(result, entry.fanout, entry.contrib + expectedProfit/15.0);
 }
 
 FanoutPred::Neuron::Neuron(const BaseCPUParams *params) :
@@ -189,7 +195,7 @@ FanoutPred::Neuron::Neuron(const BaseCPUParams *params) :
                 SignedSatCounter(params->FPCtrBits, 0)),
         theta(static_cast<int32_t>(
                 1.93 * (globalHistoryLen + localHistoryLen + pathLen*pathBitsWidth))),
-        contrib(0.5)
+        contrib(1.001)
 {
 
 }

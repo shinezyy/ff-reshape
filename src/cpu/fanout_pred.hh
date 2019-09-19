@@ -105,6 +105,8 @@ private:
 
     double overallReshapeTimes{0.0};
 
+    double expectedProfit{0.0};
+
 public:
     explicit FanoutPred(BaseCPUParams *params);
 
