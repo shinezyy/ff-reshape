@@ -15,6 +15,8 @@ DQPointer::DQPointer(const WKPointer &wk)
 
     reshapeOp = wk.reshapeOp;
     fwLevel = wk.fwLevel;
+
+    queueTime = wk.queueTime;
 }
 
 DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o)
@@ -27,6 +29,8 @@ DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o)
 
     reshapeOp = -1;
     fwLevel = 0;
+
+    queueTime = 0;
 }
 
 WKPointer::WKPointer(const DQPointer &dqPointer)
@@ -40,4 +44,6 @@ WKPointer::WKPointer(const DQPointer &dqPointer)
 
     reshapeOp = dqPointer.reshapeOp;
     fwLevel = dqPointer.fwLevel;
+
+    queueTime = dqPointer.queueTime;
 }

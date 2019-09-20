@@ -277,6 +277,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
                 if (!inst->isForwarder()) {
                     wakeup_count++;
+                    inst->wkDelayedCycle = ptr.queueTime;
                     if (!first) {
                         DPRINTF(DQWake, "inst [%llu] is the gifted one in this bank\n",
                                 inst->seqNum);
@@ -785,6 +786,8 @@ void DataflowQueues<Impl>::tick()
             }
         }
     }
+
+    countUpPointers();
 
     // todo: write forward pointers from bank to time buffer!
     for (unsigned b = 0; b < nBanks; b++) {
@@ -2286,6 +2289,19 @@ DataflowQueues<Impl>::checkAndGetParent(
     if (!logicallyLT(pu, pointer2uint(child))) return nullptr;
 
     return readInst(parent);
+}
+
+template<class Impl>
+void
+DataflowQueues<Impl>::countUpPointers()
+{
+    for (deque<WKPointer> &q :wakeQueues) {
+        for (WKPointer &p: q) {
+            if (p.valid) {
+                p.queueTime++;
+            }
+        }
+    }
 }
 
 }

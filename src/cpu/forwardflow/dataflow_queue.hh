@@ -429,6 +429,8 @@ private:
     void processFWQueueFull();
 
     std::vector<unsigned> opPrioList;
+
+    void countUpPointers();
 public:
     void maintainOldestUsed();
 

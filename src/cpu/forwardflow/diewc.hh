@@ -436,6 +436,8 @@ public:
     Stats::Scalar nonCriticalForward;
     Stats::Scalar negativeContrib;
 
+    Stats::Scalar wkDelayedCycles;
+
     ArchState *getArchState() {return &archState;}
 
     XDataflowQueues *getDQ() {return &dq;}

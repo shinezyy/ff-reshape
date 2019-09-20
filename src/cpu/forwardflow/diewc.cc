@@ -1354,6 +1354,8 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
     nonCriticalForward += inst->nonCriticalFw;
     negativeContrib += inst->negativeContrib;
 
+    wkDelayedCycles += inst->wkDelayedCycle;
+
     if (!inst->isSquashed() && inst->numDestRegs() > 0 && !inst->isForwarder()) {
         totalFanoutPredictions++;
         bool is_large_fanout = inst->numChildren > largeFanoutThreshold;
@@ -1844,6 +1846,10 @@ void FFDIEWC<Impl>::regStats()
     negativeContrib
         .name(name() + ".negativeContrib")
         .desc("negativeContrib");
+
+    wkDelayedCycles
+        .name(name() + ".wkDelayedCycles")
+        .desc("wkDelayedCycles");
 }
 
 template<class Impl>

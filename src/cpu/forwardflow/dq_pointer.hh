@@ -20,6 +20,8 @@ struct DQPointer{
     int reshapeOp{-1};
     unsigned fwLevel{};
 
+    unsigned queueTime{};
+
     DQPointer() = default;
 
     DQPointer(bool, unsigned, unsigned, unsigned, unsigned);
@@ -50,6 +52,8 @@ struct WKPointer{
 
     int reshapeOp{-1};
     unsigned fwLevel{};
+
+    unsigned queueTime{};
 
     WKPointer() = default;;
 

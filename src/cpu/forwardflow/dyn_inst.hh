@@ -460,6 +460,8 @@ public:
     int negativeContrib;
 
     unsigned fwLevel;
+
+    unsigned wkDelayedCycle{};
 private:
     FFRegValue destValue;
 
