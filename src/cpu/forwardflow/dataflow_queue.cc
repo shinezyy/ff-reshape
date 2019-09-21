@@ -116,9 +116,12 @@ DataflowQueueBank<Impl>::tryWakeDirect()
         return nullptr;
     }
 
+    DPRINTF(DQWake, "Checking inst[%lu] which is supposed to be directly wakenup\n",
+            inst->seqNum);
+
     for (unsigned op = 1; op < nOps; op++) {
         if (inst->hasOp[op] && !inst->opReady[op]) {
-            panic("inst[%d] has op [%d] not ready and cannot execute\n",
+            panic("inst[%lu] has op [%d] not ready and cannot execute\n",
                     inst->seqNum, op);
         }
     }
@@ -229,9 +232,9 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 assert(inst->indirectRegIndices.at(op).size());
                 int src_reg_idx = inst->indirectRegIndices.at(op).front();
                 FFRegValue v = dq->readReg(inst->getSrcPointer(src_reg_idx), DQPointer(ptr));
-                DPRINTF(FFExec, "Setting src reg[%i] of inst[%llu] to %llu\n",
-                        op-1, inst->seqNum, v.i);
                 for (const auto i: inst->indirectRegIndices.at(op)) {
+                    DPRINTF(FFExec, "Setting src reg[%i] of inst[%llu] to %llu\n",
+                            i, inst->seqNum, v.i);
                     inst->setSrcValue(i, v);
                 }
 
@@ -241,7 +244,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
                         inst->gainFromReshape = ptr.fwLevel*2 + (ptr.reshapeOp + 1) - 2;
                         DynInstPtr parent = dq->checkAndGetParent(
-                                inst->getSrcPointer(op - 1), inst->dqPosition);
+                                inst->getSrcPointer(src_reg_idx), inst->dqPosition);
 
                         if (parent) {
                             parent->reshapeContrib += inst->gainFromReshape;
@@ -255,7 +258,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                                 inst->seqNum, inst->nonCriticalFw);
 
                         DynInstPtr parent = dq->checkAndGetParent(
-                                inst->getSrcPointer(op - 1), inst->dqPosition);
+                                inst->getSrcPointer(src_reg_idx), inst->dqPosition);
                         if (parent) {
                             parent->negativeContrib += 1;
                         }
@@ -368,7 +371,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                     outputPointers[0].valid = false; // dest register should never be forwarded
                 }
 
-                if (op == 1 && inst->isForwarder()) {
+                if (inst->isForwarder() && op == inst->forwardOp) {
                     served_forwarder = true;
                     for (unsigned out_op = 0; out_op < nOps; out_op++) {
                         auto &out_ptr = outputPointers[out_op];
@@ -437,6 +440,19 @@ bool DataflowQueueBank<Impl>::canServeNew()
 template<class Impl>
 bool DataflowQueueBank<Impl>::wakeup(WKPointer pointer)
 {
+    auto &inst = instArray[pointer.index];
+    if (!inst) {
+        DPRINTF(DQWake, "Ignored squashed inst@(%i %i)\n", pointer.bank, pointer.index);
+        return true;
+    }
+
+    if (inst->isForwarder() && (servedNonForwarder || servedForwarder) ) {
+        return false;
+
+    } else if (servedForwarder) { //not forwarder
+        return false;
+    }
+
     DPRINTF(DQWake, "Mark waking up: (%i %i) (%i) in inputPointers\n",
             pointer.bank, pointer.index, pointer.op);
 
@@ -444,9 +460,11 @@ bool DataflowQueueBank<Impl>::wakeup(WKPointer pointer)
     assert(!inputPointers[op].valid);
     inputPointers[op] = pointer;
 
-    auto &inst = instArray[pointer.index];
+
     if (inst && inst->isForwarder()) {
         servedForwarder = true;
+    } else if (inst){
+        servedNonForwarder = true;
     }
 
     return true;
@@ -579,6 +597,7 @@ void DataflowQueueBank<Impl>::cycleStart()
         p.valid = false;
     }
     servedForwarder = false;
+    servedNonForwarder = false;
 }
 
 template<class Impl>
@@ -749,6 +768,8 @@ void DataflowQueues<Impl>::tick()
                     ptr->payload.bank, ptr->payload.index, ptr->payload.op);
         }
     }
+
+    assert(opPrioList.size() == 4);
     // check whether each bank can really accept
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op: opPrioList) {
@@ -764,22 +785,29 @@ void DataflowQueues<Impl>::tick()
                     continue;
                 }
                 WKPointer &ptr = pkt->payload;
-                wake_req_granted[pkt->source] = true;
-                assert(dqs[b]->wakeup(ptr));
 
-                // pop accepted pointers.
-                assert(!wakeQueues[pkt->source].empty());
-                if (wakeQueues[pkt->source].size() == numPendingWakeupMax) {
-                    numPendingWakeupMax--;
+                if (dqs[b]->wakeup(ptr)) {
+
+                    wake_req_granted[pkt->source] = true;
+                    // pop accepted pointers.
+                    assert(!wakeQueues[pkt->source].empty());
+                    if (wakeQueues[pkt->source].size() == numPendingWakeupMax) {
+                        numPendingWakeupMax--;
+                    }
+                    DPRINTF(DQWake, "Pop WakePtr (%i %i) (%i)from wakequeue[%u]\n",
+                            ptr.bank, ptr.index, ptr.op, pkt->source);
+                    wakeQueues[pkt->source].pop_front();
+                    numPendingWakeups--;
+                    DPRINTF(DQWake, "After pop, numPendingWakeups = %u\n", numPendingWakeups);
+
+                } else {
+                    DPRINTF(Reshape, "Skipped because conflict to/by forwarder\n");
                 }
-                DPRINTF(DQWake, "Pop WakePtr (%i %i) (%i)from wakequeue[%u]\n",
-                        ptr.bank, ptr.index, ptr.op, pkt->source);
-                wakeQueues[pkt->source].pop_front();
-                numPendingWakeups--;
-                DPRINTF(DQWake, "After pop, numPendingWakeups = %u\n", numPendingWakeups);
             }
         }
     }
+
+    rearrangePrioList();
 
     countUpPointers();
 
@@ -950,7 +978,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         numPendingFwPointers(0),
         numPendingFwPointerMax(0),
         PendingFwPointerThreshold(params->PendingFwPointerThreshold),
-        opPrioList{1, 0, 2, 3}
+        opPrioList{1, 2, 3, 0}
 
 {
     // init inputs to omega networks
@@ -1402,12 +1430,16 @@ DataflowQueues<Impl>::markFwPointers(
         std::array<DQPointer, 4> &pointers, PointerPair &pair, DynInstPtr &inst)
 {
     unsigned op = pair.dest.op;
+    if (inst) {
+        DPRINTF(Reshape, "Source inst[%lu] is forwarder: %i, forwardOp: %i\n",
+                inst->seqNum, inst->isForwarder(), inst->forwardOp);
+    }
     if (pointers[op].valid) {
         DPRINTF(FFSquash, "Overriding previous (squashed) sibling:(%d %d) (%d)\n",
                 pointers[op].bank, pointers[op].index, pointers[op].op);
 
-        if (inst && (inst->isExecuted() || inst->opReady[op] ||
-                    (inst->isForwarder() && inst->opReady[1]))) {
+        if (inst && (inst->isExecuted() || (!inst->isForwarder() && inst->opReady[op]) ||
+                    (inst->isForwarder() && inst->forwardOpReady()))) {
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
             extraWakeup(WKPointer(pair.payload));
             if (op == 0) {
@@ -1418,9 +1450,14 @@ DataflowQueues<Impl>::markFwPointers(
             DPRINTF(FFSquash, "And mark it to wakeup new child\n");
             inst->destReforward = true;
         }
-    } else if (inst && (inst->opReady[op] ||
-                (inst->isForwarder() && inst->opReady[1]))) {
-        DPRINTF(DQWake, "which has already been waken up!\n");
+    } else if (inst && ( (!inst->isForwarder() && inst->opReady[op]) ||
+                (inst->isForwarder() && inst->forwardOpReady()))) {
+        DPRINTF(DQWake, "which has already been waken up! op[%i] ready: %i\n",
+                op, inst->opReady[op]);
+        if (inst->isForwarder()) {
+            DPRINTF(DQWake, "fw op(%i) ready: %i\n",
+                    inst->forwardOp, inst->forwardOpReady());
+        }
         extraWakeup(WKPointer(pair.payload));
     }
     pointers[op] = pair.payload;
@@ -2296,6 +2333,14 @@ DataflowQueues<Impl>::countUpPointers()
             }
         }
     }
+}
+
+template<class Impl>
+void
+DataflowQueues<Impl>::rearrangePrioList()
+{
+    opPrioList.push_back(opPrioList.front());
+    opPrioList.pop_front();
 }
 
 }

@@ -138,6 +138,8 @@ public:
 
     bool servedForwarder;
 
+    bool servedNonForwarder;
+
     void dumpOutPointers() const;
 };
 
@@ -428,7 +430,9 @@ private:
 
     void processFWQueueFull();
 
-    std::vector<unsigned> opPrioList;
+    std::list<unsigned> opPrioList;
+
+    void rearrangePrioList();
 
     void countUpPointers();
 public:

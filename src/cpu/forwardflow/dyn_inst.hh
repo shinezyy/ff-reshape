@@ -466,6 +466,10 @@ public:
     unsigned fwLevel;
 
     unsigned wkDelayedCycle{};
+
+    unsigned forwardOp{100000};
+
+    bool forwardOpReady();
 private:
     FFRegValue destValue;
 

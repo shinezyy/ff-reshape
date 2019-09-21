@@ -351,7 +351,7 @@ typename BaseO3DynInst<Impl>::FloatRegBits
 BaseO3DynInst<Impl>::readFloatRegOperandBits(const StaticInst *si, int idx)
 {
     assert(idx < 3);
-    assert(opReady[idx + 1] || srcTakenWithInst[idx + 1]);
+    // assert(opReady[idx + 1] || srcTakenWithInst[idx + 1]);
     DPRINTFR(FFExec, "Reading float (bits) op %i: %llu\n", idx, srcValues[idx].i);
     return srcValues[idx].i;
 }
@@ -361,7 +361,7 @@ typename BaseO3DynInst<Impl>::FloatReg
 BaseO3DynInst<Impl>::readFloatRegOperand(const StaticInst *si, int idx)
 {
     assert(idx < 3);
-    assert(opReady[idx + 1] || srcTakenWithInst[idx + 1]);
+    // assert(opReady[idx + 1] || srcTakenWithInst[idx + 1]);
     DPRINTFR(FFExec, "Reading float op %i: %f\n", idx, srcValues[idx].f);
     return srcValues[idx].f;
 }
@@ -371,9 +371,17 @@ typename BaseO3DynInst<Impl>::IntReg
 BaseO3DynInst<Impl>::readIntRegOperand(const StaticInst *si, int idx)
 {
     assert(idx < 3);
-    assert(opReady[idx + 1] || srcTakenWithInst[idx + 1]);
+    // assert(opReady[idx + 1] || srcTakenWithInst[idx + 1]);
     DPRINTFR(FFExec, "Reading int op %i: %llu\n", idx, srcValues[idx].i);
     return srcValues[idx].i;
+}
+
+template<class Impl>
+bool
+BaseO3DynInst<Impl>::forwardOpReady()
+{
+    assert(forwardOp <= Impl::MaxOps);
+    return opReady[forwardOp];
 }
 
 }

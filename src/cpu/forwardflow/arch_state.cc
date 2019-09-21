@@ -44,7 +44,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                     "src reg %u\n", src_idx, identical - 1);
             inst->identicalTo[src_idx + 1] = identical;
 
-            inst->indirectRegIndices.at(src_idx + 1).push_back(identical - 1);
+            inst->indirectRegIndices.at(identical).push_back(src_idx);
             DPRINTF(Rename, "phy op %i point to src reg %i\n", src_idx + 1, identical - 1);
 
         } else {
@@ -73,15 +73,24 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
             DPRINTF(Reshape, "After randomization, phy op %i point to src reg %i\n",
                     phy_op, indirect_index.front());
+            if (inst->isForwarder()) {
+                inst->forwardOp = phy_op;
+                DPRINTF(Reshape, "Set forward op to %i\n", phy_op);
+            }
         }
     }
 
     for (unsigned phy_op = 1; phy_op < Impl::MaxOps; phy_op++) {
-        inst->hasOp[phy_op] = true;
         auto &indirect_indices = inst->indirectRegIndices.at(phy_op);
-        if (inst->identicalTo[phy_op]) {
+
+        if (indirect_indices.size() == 0) {
             continue;
         }
+        DPRINTF(Rename, "Play with op [%i] -> src reg [%i]\n",
+                phy_op, indirect_indices.front());
+
+        inst->hasOp[phy_op] = true;
+
         const RegId& src_reg = inst->indirectRegIds[phy_op];
 
         if (src_reg.isZeroReg()) {
