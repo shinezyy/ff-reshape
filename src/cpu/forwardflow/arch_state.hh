@@ -5,6 +5,7 @@
 #ifndef __FF_ARCH_REGFILE_HH__
 #define __FF_ARCH_REGFILE_HH__
 
+#include <random>
 #include <tuple>
 #include <unordered_map>
 
@@ -115,6 +116,13 @@ public:
 
     // is LF source, is LF drain
     std::pair<bool, bool> forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forward);
+
+private:
+    std::mt19937 gen;
+
+    void randomizeOp(DynInstPtr& inst);
+
+    const bool decoupleOpPosition;
 };
 
 }

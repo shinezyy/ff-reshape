@@ -31,38 +31,89 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
     invalid_pair.dest.valid = false;
 
     for (unsigned src_idx = 0; src_idx < num_src_regs; src_idx++) {
-        const RegId& src_reg = inst->srcRegIdx(src_idx);
-        inst->hasOp[src_idx + 1] = true;
+        unsigned identical = 0;
+        for (unsigned src_idx_x = 0; src_idx_x < src_idx; src_idx_x++) {
+            if (inst->srcRegIdx(src_idx_x) == inst->srcRegIdx(src_idx)) {
+                identical = src_idx_x + 1;
+                break;
+            }
+        }
+
+        if (identical) {
+            DPRINTF(Rename, "Skipped to forward because src reg %i is identical to"
+                    "src reg %u\n", src_idx, identical - 1);
+            inst->identicalTo[src_idx + 1] = identical;
+
+            inst->indirectRegIndices.at(src_idx + 1).push_back(identical - 1);
+            DPRINTF(Rename, "phy op %i point to src reg %i\n", src_idx + 1, identical - 1);
+
+        } else {
+            inst->indirectRegIndices.at(src_idx + 1).push_back(src_idx);
+            DPRINTF(Rename, "phy op %i point to src reg %i\n", src_idx + 1, src_idx);
+        }
+    }
+
+    for (unsigned phy_op = 1; phy_op < Impl::MaxOps; phy_op++) {
+        auto &indirect_index = inst->indirectRegIndices.at(phy_op);
+        if (indirect_index.size() > 0) {
+            DPRINTF(Reshape, "Before randomization, phy op %i point to src reg %i\n",
+                    phy_op, indirect_index.front());
+        }
+    }
+
+    if (decoupleOpPosition) {
+        randomizeOp(inst);
+    }
+
+    for (unsigned phy_op = 1; phy_op < Impl::MaxOps; phy_op++) {
+        auto &indirect_index = inst->indirectRegIndices.at(phy_op);
+        if (indirect_index.size() > 0) {
+            inst->indirectRegIds.at(phy_op) =
+                inst->srcRegIdx(indirect_index.front());
+
+            DPRINTF(Reshape, "After randomization, phy op %i point to src reg %i\n",
+                    phy_op, indirect_index.front());
+        }
+    }
+
+    for (unsigned phy_op = 1; phy_op < Impl::MaxOps; phy_op++) {
+        inst->hasOp[phy_op] = true;
+        auto &indirect_indices = inst->indirectRegIndices.at(phy_op);
+        if (inst->identicalTo[phy_op]) {
+            continue;
+        }
+        const RegId& src_reg = inst->indirectRegIds[phy_op];
 
         if (src_reg.isZeroReg()) {
             DPRINTF(Rename, "Skip zero reg\n");
             FFRegValue v;
             v.i = 0;
-            inst->setSrcValue(src_idx, v);
-            inst->srcTakenWithInst[src_idx] = true;
-            inst->opReady[src_idx + 1] = true;
+            for (const auto i: indirect_indices) {
+                inst->setSrcValue(i, v);
+            }
+            inst->srcTakenWithInst[phy_op] = true;
+            inst->opReady[phy_op] = true;
             pairs.push_back(invalid_pair);
             continue;
         }
-
         auto sb_index = make_pair(src_reg.classValue(), src_reg.index());
 
         if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
-            if (src_reg.classValue() == FloatRegClass) {
-                inst->setSrcValue(src_idx, floatArchRF[src_reg.index()]);
-            } else if (src_reg.classValue() == IntRegClass) {
-                inst->setSrcValue(src_idx, intArchRF[src_reg.index()]);
-            } else {
-                panic("Unexpected reg type\n");
+            for (const auto i: indirect_indices) {
+                if (src_reg.classValue() == FloatRegClass) {
+                    inst->setSrcValue(i, floatArchRF[src_reg.index()]);
+                } else if (src_reg.classValue() == IntRegClass) {
+                    inst->setSrcValue(i, intArchRF[src_reg.index()]);
+                } else {
+                    panic("Unexpected reg type\n");
+                }
             }
-            inst->srcTakenWithInst[src_idx] = true;
-            // inst->markSrcRegReady(src_idx);
+            inst->srcTakenWithInst[phy_op] = true;
+            inst->opReady[phy_op] = true;
             pairs.push_back(invalid_pair);
 
             DPRINTF(Rename,"Inst[%llu] read reg[%s %d] directly from arch RF\n",
                     inst->seqNum, src_reg.className(), src_reg.index());
-
-            inst->opReady[src_idx + 1] = true;
 
         } else {
             if (!parentMap.count(src_reg) || !renameMap.count(src_reg)) {
@@ -70,6 +121,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                 assert(parentMap.count(src_reg)); // to parents only
                 assert(renameMap.count(src_reg)); // to parents or siblings
             }
+
             DQPointer parent_ptr = parentMap[src_reg];
 
             DPRINTF(Rename, "Looking up %s arch reg %i"
@@ -119,21 +171,10 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                 warn("Parent is null ptr at renaming\n");
             }
 
-            inst->renameSrcReg(src_idx, parent_ptr);
-
-            unsigned identical = 0;
-            for (unsigned src_idx_x = 0; src_idx_x < src_idx; src_idx_x++) {
-                if (inst->srcRegIdx(src_idx_x) == inst->srcRegIdx(src_idx)) {
-                    identical = src_idx_x + 1;
-                    break;
-                }
-            }
-
-            if (identical) {
-                DPRINTF(Rename, "Skipped to forward because src reg %i is identical to"
-                        "src reg %u\n", src_idx, identical - 1);
-                inst->identicalTo[src_idx + 1] = identical;
-                continue;
+            for (const auto i: indirect_indices) {
+                inst->renameSrcReg(i, parent_ptr);
+                DPRINTF(Reshape, "Rename src reg(%i) to (%i %i) (%i)\n",
+                         i, parent_ptr.bank, parent_ptr.index, parent_ptr.op);
             }
 
             auto renamed_ptr = renameMap[src_reg];
@@ -147,7 +188,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
             auto &old = renameMap[src_reg];
             auto dest = inst->dqPosition;
-            dest.op = static_cast<unsigned int>(src_idx) + 1;
+            dest.op = phy_op;
             pairs.push_back({old, dest});
 
             if (!predecessor_is_forwarder || old.op == 3) {
@@ -285,7 +326,9 @@ void ArchState<Impl>::recoverCPT(InstSeqNum &num)
 
 template<class Impl>
 ArchState<Impl>::ArchState(DerivFFCPUParams *params)
-: MaxCheckpoints(params->MaxCheckpoints)
+    : MaxCheckpoints(params->MaxCheckpoints),
+    gen(0xa2c57a7e),
+    decoupleOpPosition(params->DecoupleOpPosition)
 {
 }
 
@@ -497,6 +540,14 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
         }
     }
     return std::make_pair(is_lf_source, is_lf_drain);
+}
+
+template<class Impl>
+void
+ArchState<Impl>::randomizeOp(DynInstPtr &inst)
+{
+    std::shuffle(std::begin(inst->indirectRegIndices) + 1,
+            std::end(inst->indirectRegIndices), gen);
 }
 
 }

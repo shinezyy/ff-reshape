@@ -401,7 +401,13 @@ public:
     std::array<bool, 4> opReady;
     bool opFulfilled(unsigned);
 
+    std::array<std::list<int>, 4> indirectRegIndices;
+
+    std::array<RegId, 4> indirectRegIds;
+
     std::array<unsigned, 4> identicalTo;
+
+    std::array<bool, 4> srcTakenWithInst;
 
     bool hasMemDep;
     bool memDepReady;
@@ -424,8 +430,6 @@ public:
     bool fuGranted;
 
     bool destReforward;
-
-    std::array<bool, 3> srcTakenWithInst;
 
     unsigned numBusyOps();
 
@@ -466,6 +470,7 @@ private:
     FFRegValue destValue;
 
     std::array<FFRegValue, 3> srcValues;
+
 };
 
 }

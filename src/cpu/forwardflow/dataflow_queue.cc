@@ -226,10 +226,14 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             handle_wakeup = true;
             inst->opReady[op] = true;
             if (op != 0) {
-                FFRegValue v = dq->readReg(inst->getSrcPointer(op - 1), DQPointer(ptr));
+                assert(inst->indirectRegIndices.at(op).size());
+                int src_reg_idx = inst->indirectRegIndices.at(op).front();
+                FFRegValue v = dq->readReg(inst->getSrcPointer(src_reg_idx), DQPointer(ptr));
                 DPRINTF(FFExec, "Setting src reg[%i] of inst[%llu] to %llu\n",
                         op-1, inst->seqNum, v.i);
-                inst->setSrcValue(op - 1, v);
+                for (const auto i: inst->indirectRegIndices.at(op)) {
+                    inst->setSrcValue(i, v);
+                }
 
                 if (!inst->isForwarder() &&
                         ptr.reshapeOp >= 0 && ptr.reshapeOp <= 2) {
@@ -256,16 +260,6 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                             parent->negativeContrib += 1;
                         }
                     }
-                }
-            }
-
-            for (unsigned xop = op + 1; xop <= 3; xop++) {
-                if (inst->identicalTo[xop] && inst->identicalTo[xop] == op) {
-                    inst->opReady[xop] = true;
-                    FFRegValue v = dq->readReg(inst->getSrcPointer(xop - 1), DQPointer(ptr));
-                    DPRINTF(FFExec, "Setting src reg[%i] of inst[%llu] to %llu\n",
-                            xop-1, inst->seqNum, v.i);
-                    inst->setSrcValue(xop - 1, v);
                 }
             }
             DPRINTF(DQWake, "Mark op[%d] of inst [%llu] ready\n", op, inst->seqNum);
