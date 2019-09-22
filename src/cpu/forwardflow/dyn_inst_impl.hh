@@ -333,7 +333,7 @@ unsigned BaseO3DynInst<Impl>::numBusyOps()
 {
     unsigned busy = 0;
     for (unsigned op = 1; op <= 3; op++) {
-        busy += (!opFulfilled(op)) && !identicalTo[op];  // a little tricky..
+        busy += !opFulfilled(op);  // a little tricky..
     }
     busy += !miscOpFulfilled();
     busy += !orderFulfilled();

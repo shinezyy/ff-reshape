@@ -2,17 +2,21 @@
 // Created by zyy on 19-6-10.
 //
 
+#include <random>
+
 #include "cpu/forwardflow/dataflow_queue.hh"
 #include "debug/DQ.hh"
 #include "debug/DQB.hh"  // DQ bank
 #include "debug/DQOmega.hh"
 #include "debug/DQRead.hh"  // DQ read
-#include "debug/DQWake.hh"  // DQ wakeup
+#include "debug/DQWake.hh"
+#include "debug/DQWakeV1.hh"
 #include "debug/DQWrite.hh"  // DQ write
 #include "debug/FFCommit.hh"
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FUW.hh"
+#include "debug/QClog.hh"
 #include "debug/Reshape.hh"
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
@@ -664,6 +668,16 @@ void DataflowQueueBank<Impl>::dumpOutPointers() const
 }
 
 template<class Impl>
+void DataflowQueueBank<Impl>::dumpInputPointers() const
+{
+    unsigned op = 0;
+    for (const auto &ptr: inputPointers) {
+        DPRINTF(DQ, "inputPointers[%i]: (%i) (%i %i) (%i)\n",
+                op++, ptr.valid, ptr.bank, ptr.index, ptr.op);
+    }
+}
+
+template<class Impl>
 void DataflowQueues<Impl>::tick()
 {
     // fu preparation
@@ -749,7 +763,7 @@ void DataflowQueues<Impl>::tick()
                     processWKQueueFull();
                 }
             } else {
-                DPRINTF(DQWake, "Ignore Invalid WakePtr (%i) (%i %i) (%i)\n",
+                DPRINTF(DQWakeV1, "Ignore Invalid WakePtr (%i) (%i %i) (%i)\n",
                         ptr.valid, ptr.bank, ptr.index, ptr.op);
             }
         }
@@ -807,6 +821,10 @@ void DataflowQueues<Impl>::tick()
         }
     }
 
+    if (Debug::QClog) {
+        dumpQueues();
+    }
+
     rearrangePrioList();
 
     countUpPointers();
@@ -832,19 +850,23 @@ void DataflowQueues<Impl>::tick()
         const DQPointer &src = fuWrappers[b].toWakeup[SrcPtr];
         const DQPointer &dest = fuWrappers[b].toWakeup[DestPtr];
 
+        int q1 = -1, q2 = -1;
         if (dest.valid) {
+            q1 = allocateWakeQ();
             DPRINTF(DQWake, "Got wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
-                    dest.bank, dest.index, dest.op, b * nOps);
-            wakeQueues[b * nOps].push_back(WKPointer(dest));
+                    dest.bank, dest.index, dest.op, q1);
+            wakeQueues[q1].push_back(WKPointer(dest));
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 
         }
 
         if (src.valid) {
-            DPRINTF(DQWake, "Got inverse wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
-                    src.bank, src.index, src.op, b * nOps + 2);
-            wakeQueues[b * nOps + 2].push_back(WKPointer(src));
+            q2 = allocateWakeQ();
+            DPRINTF(DQWake, "Got inverse wakeup pointer to (%d %d) (%d),"
+                    " pushed to wakeQueue[%i]\n",
+                    src.bank, src.index, src.op, q2);
+            wakeQueues[q2].push_back(WKPointer(src));
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 
@@ -854,8 +876,8 @@ void DataflowQueues<Impl>::tick()
             }
         }
 
-        if (wakeQueues[b * nOps].size() > maxQueueDepth ||
-                wakeQueues[b * nOps + 2].size() > maxQueueDepth) {
+        if ((q1 >= 0 && wakeQueues[q1].size() > maxQueueDepth) ||
+                (q2 >= 0 && wakeQueues[q2].size() > maxQueueDepth)) {
             processWKQueueFull();
         }
     }
@@ -978,7 +1000,9 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         numPendingFwPointers(0),
         numPendingFwPointerMax(0),
         PendingFwPointerThreshold(params->PendingFwPointerThreshold),
-        opPrioList{1, 2, 3, 0}
+        opPrioList{1, 2, 3, 0},
+        gen(0xdeadbeef),
+        randAllocator(0, nBanks * nOps)
 
 {
     // init inputs to omega networks
@@ -1937,7 +1961,7 @@ void DataflowQueues<Impl>::extraWakeup(const WKPointer &wk)
 {
     DPRINTF(DQWake, "Push Wake (extra) Ptr (%i %i) (%i) to wakequeue[%u]\n",
             wk.bank, wk.index, wk.op, extraWKPtr * nOps + 3);
-    wakeQueues[extraWKPtr * nOps + 3].push_back(wk);
+    wakeQueues[allocateWakeQ()].push_back(wk);
     numPendingWakeups++;
     DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
     incExtraWKptr();
@@ -2341,6 +2365,23 @@ DataflowQueues<Impl>::rearrangePrioList()
 {
     opPrioList.push_back(opPrioList.front());
     opPrioList.pop_front();
+}
+
+template<class Impl>
+unsigned
+DataflowQueues<Impl>::allocateWakeQ()
+{
+    unsigned start = qAllocPtr;
+    while (!wakeQueues[qAllocPtr].empty()) {
+        qAllocPtr = (qAllocPtr + 1) % (nOps * nBanks);
+        if (qAllocPtr == start) {
+            qAllocPtr = randAllocator(gen) % (nOps * nBanks);
+            break;
+        }
+    }
+    unsigned tmp = qAllocPtr;
+    qAllocPtr = (qAllocPtr + 1) % (nOps * nBanks);
+    return tmp;
 }
 
 }

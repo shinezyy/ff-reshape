@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <random>
 #include <unordered_map>
 #include <vector>
 
@@ -141,6 +142,8 @@ public:
     bool servedNonForwarder;
 
     void dumpOutPointers() const;
+
+    void dumpInputPointers() const;
 };
 
 
@@ -455,6 +458,16 @@ public:
     void advanceHead();
 
     DynInstPtr checkAndGetParent(const DQPointer &parent, const DQPointer &child) const;
+
+private:
+
+    unsigned qAllocPtr{};
+
+    unsigned allocateWakeQ();
+
+    std::mt19937 gen;
+
+    std::uniform_int_distribution<unsigned> randAllocator;
 };
 
 }
