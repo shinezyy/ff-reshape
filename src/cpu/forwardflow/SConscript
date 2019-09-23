@@ -98,6 +98,9 @@ if 'FFCPU' in env['CPU_MODELS']:
     DebugFlag('Reshape2')
     DebugFlag('QClog')
     DebugFlag('DQWakeV1')
+    DebugFlag('RSProbe1')
+    DebugFlag('RSProbe2')
+    DebugFlag('RSProbe3')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',

@@ -17,6 +17,7 @@
 #include "debug/FFSquash.hh"
 #include "debug/FUW.hh"
 #include "debug/QClog.hh"
+#include "debug/RSProbe1.hh"
 #include "debug/Reshape.hh"
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
@@ -136,7 +137,7 @@ DataflowQueueBank<Impl>::tryWakeDirect()
         readyQueue.pop_front();
         return nullptr;
     }
-    DPRINTF(DQWake, "inst[%d] is ready but not waken up!,"
+    DPRINTF(DQWake||Debug::RSProbe1, "inst[%d] is ready but not waken up!,"
             " and is waken up by direct wake-up checker\n", inst->seqNum);
     readyQueue.pop_front();
     directWakenUp++;
@@ -188,7 +189,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         auto &inst = instArray[ptr.index];
 
-        DPRINTF(DQWake, "Pointer (%i %i) (%i) working on inst[%llu]\n",
+        DPRINTF(DQWake||Debug::RSProbe1, "Pointer (%i %i) (%i) working on inst[%llu]\n",
                 ptr.bank, ptr.index, ptr.op, inst->seqNum);
 
         if (op == 0 && !(ptr.wkType == WKPointer::WKMem ||
@@ -244,7 +245,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
                 if (!inst->isForwarder() &&
                         ptr.reshapeOp >= 0 && ptr.reshapeOp <= 2 &&
-                        (ptr.wkType == WKPointer::WKOp && !ptr.isFwExtra)) {
+                        (ptr.wkType == WKPointer::WKOp && !ptr.isFwExtra &&
+                         !anyPending)) {
                     if (nearlyWakeup[ptr.index]) {
 
                         inst->gainFromReshape = ptr.fwLevel*2 + (ptr.reshapeOp + 1) - 2;
@@ -253,13 +255,14 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
                         if (parent) {
                             parent->reshapeContrib += inst->gainFromReshape;
-                            DPRINTF(Reshape, "inst[%llu] gain %i from reshape,"
+                            DPRINTF(Reshape||Debug::RSProbe1, "inst[%llu] gain %i from reshape,"
                                     " ancestor cummulative contrib: %i\n",
                                     inst->seqNum, inst->gainFromReshape, parent->reshapeContrib);
                         }
                     } else {
                         inst->nonCriticalFw += 1;
-                        DPRINTF(Reshape, "inst[%llu] received non-critial fw %i from reshape\n",
+                        DPRINTF(Reshape||Debug::RSProbe1,
+                                "inst[%llu] received non-critial fw %i from reshape\n",
                                 inst->seqNum, inst->nonCriticalFw);
 
                         DynInstPtr parent = dq->checkAndGetParent(
@@ -270,7 +273,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                     }
                 }
             }
-            DPRINTF(DQWake, "Mark op[%d] of inst [%llu] ready\n", op, inst->seqNum);
+            DPRINTF(DQWake||Debug::RSProbe1,
+                    "Mark op[%d] of inst [%llu] ready\n", op, inst->seqNum);
         }
 
         if (handle_wakeup) {
@@ -285,7 +289,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                         inst->wkDelayedCycle = ptr.queueTime;
                     }
                     if (!first) {
-                        DPRINTF(DQWake, "inst [%llu] is the gifted one in this bank\n",
+                        DPRINTF(DQWake||Debug::RSProbe1,
+                                "inst [%llu] is the gifted one in this bank\n",
                                 inst->seqNum);
                         first = inst;
                         first_index = ptr.index;
@@ -295,7 +300,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                             ptr.valid = false;
                         }
                     } else {
-                        DPRINTF(DQWake, "inst [%llu] has no luck in this bank\n", inst->seqNum);
+                        DPRINTF(DQWake||Debug::RSProbe1,
+                                "inst [%llu] has no luck in this bank\n", inst->seqNum);
                         need_pending_ptr[op] = true;
                     }
                 } else {
@@ -389,7 +395,8 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                         out_ptr.fwLevel = inst->fwLevel;
 
                         if (out_ptr.valid) {
-                            DPRINTF(FFSquash, "Put forwarding wakeup Pointer (%i %i) (%i)"
+                            DPRINTF(FFSquash||Debug::RSProbe1,
+                                    "Put forwarding wakeup Pointer (%i %i) (%i)"
                                     " to outputPointers, reshapeOp: %i\n",
                                     out_ptr.bank, out_ptr.index, out_ptr.op, out_op);
                         }
@@ -567,7 +574,8 @@ void DataflowQueueBank<Impl>::checkReadiness(DQPointer pointer)
     unsigned busy_count = inst->numBusyOps();
 
     if (busy_count == 0) {
-        DPRINTF(DQWake, "inst [%llu] becomes ready on dispatch\n", inst->seqNum);
+        DPRINTF(DQWake||Debug::RSProbe1,
+                "inst [%llu] becomes ready on dispatch\n", inst->seqNum);
         directReady++;
         nearlyWakeup.set(index);
         readyQueue.push_back(pointer);
@@ -759,7 +767,8 @@ void DataflowQueues<Impl>::tick()
         for (unsigned op = 0; op <= 3; op++) {
             auto &ptr = fromLastCycle->pointers[b * nOps + op];
             if (ptr.valid) {
-                DPRINTF(DQWake, "Push WakePtr (%i %i) (%i) to wakequeue[%u]\n",
+                DPRINTF(DQWake||Debug::RSProbe1,
+                        "Push WakePtr (%i %i) (%i) to wakequeue[%u]\n",
                         ptr.bank, ptr.index, ptr.op, b);
                 wakeQueues[b * nOps + op].push_back(WKPointer(ptr));
                 numPendingWakeups++;
@@ -782,7 +791,8 @@ void DataflowQueues<Impl>::tick()
 
     for (auto &ptr : wakeup_granted_ptrs) {
         if (ptr->valid) {
-            DPRINTF(DQWake, "WakePtr[%d] (pointer(%d) (%d %d) (%d)) granted\n",
+            DPRINTF(DQWake||Debug::RSProbe1,
+                    "WakePtr[%d] (pointer(%d) (%d %d) (%d)) granted\n",
                     ptr->source, ptr->payload.valid,
                     ptr->payload.bank, ptr->payload.index, ptr->payload.op);
         }
@@ -1628,7 +1638,7 @@ void DataflowQueues<Impl>::readQueueHeads()
                 wk_pkt.valid = false;
             } else {
                 const WKPointer &ptr = q.front();
-                DPRINTF(DQWake, "Found valid wakePtr:(%i) (%i %i) (%i)\n",
+                DPRINTF(DQWake||Debug::RSProbe1, "Found valid wakePtr:(%i) (%i %i) (%i)\n",
                         ptr.valid, ptr.bank, ptr.index, ptr.op);
                 wk_pkt.valid = ptr.valid;
                 wk_pkt.payload = ptr;
@@ -1964,7 +1974,7 @@ template<class Impl>
 void DataflowQueues<Impl>::extraWakeup(const WKPointer &wk)
 {
     auto q = allocateWakeQ();
-    DPRINTF(DQWake, "Push Wake (extra) Ptr (%i %i) (%i) to wakequeue[%u]\n",
+    DPRINTF(DQWake||Debug::RSProbe1, "Push Wake (extra) Ptr (%i %i) (%i) to wakequeue[%u]\n",
             wk.bank, wk.index, wk.op, q);
     wakeQueues[q].push_back(wk);
     numPendingWakeups++;

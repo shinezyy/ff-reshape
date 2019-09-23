@@ -8,6 +8,7 @@
 #include "debug/FFCommit.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FanoutPred.hh"
+#include "debug/RSProbe1.hh"
 #include "debug/Rename.hh"
 #include "debug/Reshape.hh"
 #include "params/DerivFFCPU.hh"
@@ -121,7 +122,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             inst->opReady[phy_op] = true;
             pairs.push_back(invalid_pair);
 
-            DPRINTF(Rename,"Inst[%llu] read reg[%s %d] directly from arch RF\n",
+            DPRINTF(Rename||Debug::RSProbe1,
+                    "Inst[%llu] read reg[%s %d] directly from arch RF\n",
                     inst->seqNum, src_reg.className(), src_reg.index());
 
         } else {
@@ -141,7 +143,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             DynInstPtr parent = dq->readInst(parent_ptr);
             if (parent && !inst->isForwarder()) {
                 parent->numChildren++;
-                DPRINTF(FanoutPred, "inc num children of inst[%lu] to %u\n",
+                DPRINTF(FanoutPred||Debug::RSProbe1,
+                        "inc num children of inst[%lu] to %u\n",
                         parent->seqNum, parent->numChildren);
 
                 const auto &ancestorPtr = parent->ancestorPointer;
@@ -182,7 +185,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
             for (const auto i: indirect_indices) {
                 inst->renameSrcReg(i, parent_ptr);
-                DPRINTF(Reshape, "Rename src reg(%i) to (%i %i) (%i)\n",
+                DPRINTF(Reshape||Debug::RSProbe1,
+                        "Rename src reg(%i) to (%i %i) (%i)\n",
                          i, parent_ptr.bank, parent_ptr.index, parent_ptr.op);
             }
 
@@ -202,7 +206,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
             if (!predecessor_is_forwarder || old.op == 3) {
                 assert(old.op <= 3);
-                DPRINTF(Rename, "Inst[%lu] forward reg[%s %d]from (%d %d) (%d) "
+                DPRINTF(Rename||Debug::RSProbe1,
+                        "Inst[%lu] forward reg[%s %d]from (%d %d) (%d) "
                         "to (%d %d) (%d)\n",
                         inst->seqNum, src_reg.className(), src_reg.index(),
                         old.bank, old.index, old.op,
@@ -212,9 +217,12 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             } else {
                 assert(old.op < 3);
                 old.op = old.op + 1;
-                DPRINTF(Reshape, "(%i %i) (%i) incremented to (%i %i) (%i)\n",
+                DPRINTF(Reshape||Debug::RSProbe1,
+                        "(%i %i) (%i) incremented to (%i %i) (%i) "
+                        "with dest: (%i %i) (%i)\n",
                         old.bank, old.index, old.op - 1,
-                        old.bank, old.index, old.op);
+                        old.bank, old.index, old.op,
+                        dest.bank, dest.index, dest.op);
             }
         }
     }
@@ -234,7 +242,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             }
             renameMap[dest_reg] = inst->dqPosition;
             auto &m = renameMap[dest_reg];
-            DPRINTF(Rename, "Inst[%lu] defines reg[%s %d] (%d %d) (%d)\n",
+            DPRINTF(Rename||Debug::RSProbe1,
+                    "Inst[%lu] defines reg[%s %d] (%d %d) (%d)\n",
                     inst->seqNum, dest_reg.className(), dest_reg.index(),
                     m.bank, m.index, m.op);
         }

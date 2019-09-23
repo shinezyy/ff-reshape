@@ -16,6 +16,7 @@
 #include "debug/FanoutLog.hh"
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
+#include "debug/RSProbe1.hh"
 #include "debug/Reshape.hh"
 #include "debug/Reshape2.hh"
 #include "debug/ValueCommit.hh"
@@ -249,7 +250,7 @@ void FFDIEWC<Impl>::dispatch() {
         inst->dqPosition = dq.uint2Pointer(dq.getHeadPtr());
 
         bool jumped = false;
-        DPRINTF(DIEWC, "Dispatching inst[%llu] %s PC: %s\n",
+        DPRINTF(DIEWC||Debug::RSProbe1, "Dispatching inst[%llu] %s PC: %s\n",
                 inst->seqNum, inst->staticInst->disassemble(inst->instAddr()),
                 inst->pcState());
         if (inst->isLoad()) {
@@ -1864,7 +1865,7 @@ template<class Impl>
 void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
 {
     assert(inst);
-    DPRINTF(DIEWC, "Executing inst[%d] %s\n", inst->seqNum,
+    DPRINTF(DIEWC||Debug::RSProbe1, "Executing inst[%d] %s\n", inst->seqNum,
             inst->staticInst->disassemble(inst->instAddr()));
 
     activityThisCycle();
@@ -2299,13 +2300,13 @@ FFDIEWC<Impl>::insertForwarder(
         forwarder->fwLevel = 0;
     } else {
         assert(parent_inst->isForwarder());
-        DPRINTF(Reshape, "Inserting secondary forwarder\n");
+        DPRINTF(Reshape||Debug::RSProbe1, "Inserting secondary forwarder\n");
         forwarder->numForwardRest = parent_inst->numForwardRest - 1;
         forwarder->ancestorPointer = parent_inst->ancestorPointer;
         forwarder->fwLevel = parent_inst->fwLevel + 1;
     }
 
-    DPRINTF(Reshape, "Inserting forwarder inst[%llu] after inst[%llu]"
+    DPRINTF(Reshape||Debug::RSProbe1, "Inserting forwarder inst[%llu] after inst[%llu]"
             "to forwarding value of inst[%llu], set ancestor to (%i) (%i %i)\n",
             forwarder->seqNum, anchor->seqNum, parent_inst->seqNum,
             forwarder->ancestorPointer.valid,

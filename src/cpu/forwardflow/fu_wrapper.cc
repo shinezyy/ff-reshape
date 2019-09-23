@@ -12,6 +12,7 @@
 #include "debug/FUSched.hh"
 #include "debug/FUW.hh"
 #include "debug/FUW2.hh"
+#include "debug/RSProbe1.hh"
 #include "fu_wrapper.hh"
 #include "params/FFFUPool.hh"
 #include "params/FUDesc.hh"
@@ -55,7 +56,8 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
     insts[inst->seqNum] = inst;
     inst->fuGranted = true;
 
-    DPRINTF(FUW, "w(%i, %i) Consuming inst[%d]\n", wrapperID, inst->opClass(), inst->seqNum);
+    DPRINTF(FUW||Debug::RSProbe1,
+            "w(%i, %i) Consuming inst[%d]\n", wrapperID, inst->opClass(), inst->seqNum);
 
     DQPointer &dest = inst->pointers[0];
 
