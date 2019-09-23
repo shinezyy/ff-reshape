@@ -241,6 +241,8 @@ class BaseCPU(MemObject):
 
     LargeFanoutThreshold = Param.Unsigned(3, "LargeFanoutThreshold")
 
+    ProfitDiscount = Param.Float(15.0, "ProfitDiscount")
+
     icache_port = MasterPort("Instruction Port")
     dcache_port = MasterPort("Data Port")
     _cached_ports = ['icache_port', 'dcache_port']

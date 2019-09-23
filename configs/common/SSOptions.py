@@ -99,3 +99,11 @@ def addO3Options(parser):
             action='store_true',
             help='enable reshape')
 
+    parser.add_option("--rand-op-position",
+            action='store_true',
+            help='rand on position')
+
+    parser.add_option("--profit-discount",
+            default=15.0,
+            action='store', type='float',
+            help='profit-discount')

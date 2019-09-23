@@ -60,6 +60,8 @@ struct WKPointer{
     explicit WKPointer(const DQPointer &dqPointer);
 
     // explicit WKPointer(DQPointer &&dqPointer);
+
+    bool isFwExtra{false};
 };
 
 

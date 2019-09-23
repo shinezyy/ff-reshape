@@ -243,7 +243,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 }
 
                 if (!inst->isForwarder() &&
-                        ptr.reshapeOp >= 0 && ptr.reshapeOp <= 2) {
+                        ptr.reshapeOp >= 0 && ptr.reshapeOp <= 2 &&
+                        (ptr.wkType == WKPointer::WKOp && !ptr.isFwExtra)) {
                     if (nearlyWakeup[ptr.index]) {
 
                         inst->gainFromReshape = ptr.fwLevel*2 + (ptr.reshapeOp + 1) - 2;
@@ -278,7 +279,11 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
                 if (!inst->isForwarder()) {
                     wakeup_count++;
-                    inst->wkDelayedCycle = ptr.queueTime;
+                    if (ptr.wkType != WKPointer::WKOp || ptr.isFwExtra) {
+                        inst->wkDelayedCycle = std::max((int) 0, ((int) ptr.queueTime) - 1);
+                    } else {
+                        inst->wkDelayedCycle = ptr.queueTime;
+                    }
                     if (!first) {
                         DPRINTF(DQWake, "inst [%llu] is the gifted one in this bank\n",
                                 inst->seqNum);
@@ -893,11 +898,6 @@ void DataflowQueues<Impl>::tick()
         inst = dqs[i]->wakeupInstsFromBank();
         // todo ! this function must be called after readPointersFromBank(),
 
-        // fixup for late-arrival fw pointers
-//        if (dqs[i]->extraWakeupPointer.valid) {
-//            extraWakeup(WKPointer(dqs[i]->extraWakeupPointer));
-//        }
-
         // read fu requests from banks
         //  and set fields for packets
         //  fu_req_ptrs = xxx
@@ -1465,7 +1465,9 @@ DataflowQueues<Impl>::markFwPointers(
         if (inst && (inst->isExecuted() || (!inst->isForwarder() && inst->opReady[op]) ||
                     (inst->isForwarder() && inst->forwardOpReady()))) {
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
-            extraWakeup(WKPointer(pair.payload));
+            auto wk_ptr = WKPointer(pair.payload);
+            wk_ptr.isFwExtra = true;
+            extraWakeup(wk_ptr);
             if (op == 0) {
                 inst->destReforward = false;
             }
@@ -1482,7 +1484,9 @@ DataflowQueues<Impl>::markFwPointers(
             DPRINTF(DQWake, "fw op(%i) ready: %i\n",
                     inst->forwardOp, inst->forwardOpReady());
         }
-        extraWakeup(WKPointer(pair.payload));
+        auto wk_ptr = WKPointer(pair.payload);
+        wk_ptr.isFwExtra = true;
+        extraWakeup(wk_ptr);
     }
     pointers[op] = pair.payload;
     DPRINTF(DQ, "And let it forward its value to (%d) (%d %d) (%d)\n",
@@ -1959,12 +1963,12 @@ void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
 template<class Impl>
 void DataflowQueues<Impl>::extraWakeup(const WKPointer &wk)
 {
+    auto q = allocateWakeQ();
     DPRINTF(DQWake, "Push Wake (extra) Ptr (%i %i) (%i) to wakequeue[%u]\n",
-            wk.bank, wk.index, wk.op, extraWKPtr * nOps + 3);
-    wakeQueues[allocateWakeQ()].push_back(wk);
+            wk.bank, wk.index, wk.op, q);
+    wakeQueues[q].push_back(wk);
     numPendingWakeups++;
     DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
-    incExtraWKptr();
 }
 
 template<class Impl>

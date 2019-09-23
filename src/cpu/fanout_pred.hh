@@ -107,6 +107,8 @@ private:
 
     double expectedProfit{0.0};
 
+    float profitDiscount;
+
 public:
     explicit FanoutPred(BaseCPUParams *params);
 

@@ -34,7 +34,8 @@ FanoutPred::FanoutPred(BaseCPUParams *params)
           fpGHRLen(params->FPGHRLen),
           fpLPHLen(params->FPLPHLen),
           largeFanoutThreshold(params->LargeFanoutThreshold),
-          gen(0xdeadbeaf)
+          gen(0xdeadbeaf),
+          profitDiscount(params->ProfitDiscount)
 {
     privTable[0].resize(disambgTableSize, false);
     privTable[1].resize(disambgTableSize, false);
@@ -182,7 +183,8 @@ FanoutPred::lookup(
         DPRINTF(Reshape2, "Predicted to be LF with contrib %f\n", entry.contrib);
     }
 
-    return std::make_tuple(result, entry.fanout, entry.contrib + expectedProfit/15.0);
+    return std::make_tuple(result, entry.fanout, entry.contrib +
+            expectedProfit/profitDiscount);
 }
 
 FanoutPred::Neuron::Neuron(const BaseCPUParams *params) :

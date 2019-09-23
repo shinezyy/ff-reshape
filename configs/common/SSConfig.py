@@ -61,3 +61,6 @@ def modifyO3CPUConfig(options, cpu):
 
     cpu.FanoutPredLambda = options.fanout_lambda
     cpu.EnableReshape = options.enable_reshape
+    cpu.DecoupleOpPosition = options.rand_op_position
+    if options.profit_discount:
+        cpu.ProfitDiscount = options.profit_discount
