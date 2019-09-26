@@ -225,3 +225,5 @@ class DerivFFCPU(BaseCPU):
     EnableReshape = Param.Bool(False, "EnableReshape")
 
     DecoupleOpPosition = Param.Bool(False, "DecoupleOpPosition")
+
+    ReadyHint = Param.Bool(False, "ReadyHint")

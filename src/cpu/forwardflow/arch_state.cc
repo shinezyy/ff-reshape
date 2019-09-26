@@ -126,6 +126,36 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                     "Inst[%llu] read reg[%s %d] directly from arch RF\n",
                     inst->seqNum, src_reg.className(), src_reg.index());
 
+        } else if (readyHint && hintSB.count(sb_index) && hintSB[sb_index]) {
+
+            for (const auto i: indirect_indices) {
+                if (src_reg.classValue() == FloatRegClass) {
+                    inst->setSrcValue(i, hintFloatRF[src_reg.index()]);
+                } else if (src_reg.classValue() == IntRegClass) {
+                    inst->setSrcValue(i, hintIntRF[src_reg.index()]);
+                } else {
+                    panic("Unexpected reg type\n");
+                }
+            }
+            inst->srcTakenWithInst[phy_op] = true;
+            inst->opReady[phy_op] = true;
+            pairs.push_back(invalid_pair);
+
+            DQPointer parent_ptr = parentMap[src_reg];
+
+            countChild(parent_ptr, inst);
+
+            DPRINTF(Rename||Debug::RSProbe1,
+                    "Inst[%llu] read reg[%s %d] fortunately from hint RF",
+                    inst->seqNum, src_reg.className(), src_reg.index());
+            if (src_reg.classValue() == FloatRegClass) {
+                DPRINTFR(Rename||Debug::RSProbe1,
+                        " with value: %f\n", hintFloatRF[src_reg.index()].f);
+            } else {
+                DPRINTFR(Rename||Debug::RSProbe1,
+                        " with value: %llu\n", hintIntRF[src_reg.index()].f);
+            }
+
         } else {
             if (!parentMap.count(src_reg) || !renameMap.count(src_reg)) {
                 dumpMaps();
@@ -140,48 +170,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                     src_reg.className(), src_reg.index(),
                     parent_ptr.bank, parent_ptr.index);
 
-            DynInstPtr parent = dq->readInst(parent_ptr);
-            if (parent && !inst->isForwarder()) {
-                parent->numChildren++;
-                DPRINTF(FanoutPred||Debug::RSProbe1,
-                        "inc num children of inst[%lu] to %u\n",
-                        parent->seqNum, parent->numChildren);
-
-                const auto &ancestorPtr = parent->ancestorPointer;
-                if (parent->isForwarder()) {
-                    DPRINTF(Reshape, "Parent is forwarder, trying to add to ancestor"
-                            "(%i) (%i %i)\n", ancestorPtr.valid,
-                            ancestorPtr.bank, ancestorPtr.index);
-                    if (dq->validPosition(dq->pointer2uint(ancestorPtr))) {
-                        if (dq->logicallyLT(dq->pointer2uint(ancestorPtr),
-                                    dq->pointer2uint(inst->dqPosition))) {
-                            DPRINTF(Reshape, "Ancestor found!\n");
-                        } else {
-                            DPRINTF(Reshape, "Ancestor has been committed!\n");
-                        }
-                    } else {
-                        DPRINTF(Reshape, "Ancestor not valid!\n");
-                    }
-                }
-                if (parent->isForwarder() && ancestorPtr.valid &&
-                        dq->validPosition(dq->pointer2uint(ancestorPtr)) &&
-                        dq->logicallyLT(dq->pointer2uint(ancestorPtr),
-                            dq->pointer2uint(inst->dqPosition))) {
-                    DynInstPtr ancestor = dq->readInst(ancestorPtr);
-                    if (ancestor) {
-                        inst->ancestorPointer = ancestorPtr;
-                        ancestor->numChildren++;
-                        DPRINTF(FanoutPred, "inc num children of ancestor[%lu] to %u\n",
-                                ancestor->seqNum, ancestor->numChildren);
-                    } else {
-                        DPRINTF(Reshape, "Ancestor (%i %i) is squashed\n",
-                                ancestorPtr.bank, ancestorPtr.index);
-                    }
-                }
-            }
-            if (!parent) {
-                warn("Parent is null ptr at renaming\n");
-            }
+            countChild(parent_ptr, inst);
 
             for (const auto i: indirect_indices) {
                 inst->renameSrcReg(i, parent_ptr);
@@ -237,7 +226,9 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             auto dest_idx = make_pair(dest_reg.classValue(), dest_reg.index());
              if (!inst->isForwarder()) {
                 scoreboard[dest_idx] = false;
+                hintSB[dest_idx] = false;
                 reverseTable[dest_idx] = inst->dqPosition;
+                hintRT[dest_idx] = inst->dqPosition;
                 parentMap[dest_reg] = inst->dqPosition;
             }
             renameMap[dest_reg] = inst->dqPosition;
@@ -266,6 +257,7 @@ template<class Impl>
 void ArchState<Impl>::setIntReg(int reg_idx, uint64_t val)
 {
     scoreboard[make_pair(IntRegClass, reg_idx)] = true;
+    hintSB[make_pair(IntRegClass, reg_idx)] = true;
     intArchRF[reg_idx].i = val;
 }
 
@@ -273,6 +265,7 @@ template<class Impl>
 void ArchState<Impl>::setFloatReg(int reg_idx, double val)
 {
     scoreboard[make_pair(FloatRegClass, reg_idx)] = true;
+    hintSB[make_pair(FloatRegClass, reg_idx)] = true;
     floatArchRF[reg_idx].f = val;
 }
 
@@ -280,6 +273,7 @@ template<class Impl>
 void ArchState<Impl>::setFloatRegBits(int reg_idx, uint64_t val)
 {
     scoreboard[make_pair(FloatRegClass, reg_idx)] = true;
+    hintSB[make_pair(FloatRegClass, reg_idx)] = true;
     floatArchRF[reg_idx].i = val;
 }
 
@@ -332,6 +326,9 @@ void ArchState<Impl>::recoverCPT(InstSeqNum &num)
     scoreboard = cpt.scoreboard;
     reverseTable = cpt.reverseTable;
 
+    hintSB = cpt.scoreboard;
+    hintRT = cpt.reverseTable;
+
     auto it = cpts.begin();
     while (it != cpts.end()) {
         if (it->first > num) {
@@ -346,7 +343,8 @@ template<class Impl>
 ArchState<Impl>::ArchState(DerivFFCPUParams *params)
     : MaxCheckpoints(params->MaxCheckpoints),
     gen(0xa2c57a7e),
-    decoupleOpPosition(params->DecoupleOpPosition)
+    decoupleOpPosition(params->DecoupleOpPosition),
+    readyHint(params->ReadyHint)
 {
 }
 
@@ -478,6 +476,9 @@ void ArchState<Impl>::squashAll()
     renameMap.clear();
     parentMap.clear();
     reverseTable.clear();
+    hintRT.clear();
+    hintSB.clear();
+
     for (auto &pair: scoreboard) {
         pair.second = true;
     }
@@ -522,7 +523,8 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
             continue;
         }
         auto sb_index = make_pair(src_reg.classValue(), src_reg.index());
-        if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
+        if ((scoreboard.count(sb_index) && scoreboard[sb_index]) ||
+                (readyHint && hintSB.count(sb_index) && hintSB[sb_index])) {
             DPRINTF(Reshape, "Skip already ready\n");
             continue; // already ready
         }
@@ -566,6 +568,84 @@ ArchState<Impl>::randomizeOp(DynInstPtr &inst)
 {
     std::shuffle(std::begin(inst->indirectRegIndices) + 1,
             std::end(inst->indirectRegIndices), gen);
+}
+
+template<class Impl>
+void
+ArchState<Impl>::postExecInst(DynInstPtr &inst) {
+    FFRegValue val = FFRegValue();
+    if (inst->numDestRegs() > 0) {
+        // in RV it must be 1
+        assert (inst->numDestRegs() == 1);
+
+        const RegId &dest = inst->staticInst->destRegIdx(0);
+
+        SBIndex idx = make_pair(dest.classValue(), dest.index());
+        if (hintRT.count(idx) && hintRT[idx] == inst->dqPosition) {
+            hintSB[idx] = true;
+
+            val = inst->getDestValue();
+            if (dest.isIntReg()) {
+                hintIntRF[dest.index()] = val;
+
+            } else if (dest.isFloatReg()) {
+                hintFloatRF[dest.index()] = val;
+
+            } else {
+                panic("not ready for other instructions!");
+            }
+        }
+    }
+
+}
+
+template<class Impl>
+void
+ArchState<Impl>::countChild(DQPointer parent_ptr, DynInstPtr &inst)
+{
+    DynInstPtr parent = dq->readInst(parent_ptr);
+    if (!parent) {
+        warn("Parent is null ptr at renaming\n");
+    }
+
+    if (parent && !inst->isForwarder()) {
+        parent->numChildren++;
+        DPRINTF(FanoutPred||Debug::RSProbe1,
+                "inc num children of inst[%lu] to %u\n",
+                parent->seqNum, parent->numChildren);
+
+        const auto &ancestorPtr = parent->ancestorPointer;
+        if (parent->isForwarder()) {
+            DPRINTF(Reshape, "Parent is forwarder, trying to add to ancestor"
+                    "(%i) (%i %i)\n", ancestorPtr.valid,
+                    ancestorPtr.bank, ancestorPtr.index);
+            if (dq->validPosition(dq->pointer2uint(ancestorPtr))) {
+                if (dq->logicallyLT(dq->pointer2uint(ancestorPtr),
+                            dq->pointer2uint(inst->dqPosition))) {
+                    DPRINTF(Reshape, "Ancestor found!\n");
+                } else {
+                    DPRINTF(Reshape, "Ancestor has been committed!\n");
+                }
+            } else {
+                DPRINTF(Reshape, "Ancestor not valid!\n");
+            }
+        }
+        if (parent->isForwarder() && ancestorPtr.valid &&
+                dq->validPosition(dq->pointer2uint(ancestorPtr)) &&
+                dq->logicallyLT(dq->pointer2uint(ancestorPtr),
+                    dq->pointer2uint(inst->dqPosition))) {
+            DynInstPtr ancestor = dq->readInst(ancestorPtr);
+            if (ancestor) {
+                inst->ancestorPointer = ancestorPtr;
+                ancestor->numChildren++;
+                DPRINTF(FanoutPred, "inc num children of ancestor[%lu] to %u\n",
+                        ancestor->seqNum, ancestor->numChildren);
+            } else {
+                DPRINTF(Reshape, "Ancestor (%i %i) is squashed\n",
+                        ancestorPtr.bank, ancestorPtr.index);
+            }
+        }
+    }
 }
 
 }

@@ -131,6 +131,7 @@ public:
     Stats::Scalar directReady;
     Stats::Scalar directWakenUp;
 
+
     void regStats();
 
     bool hasTooManyPendingInsts();
@@ -458,6 +459,10 @@ public:
     void advanceHead();
 
     DynInstPtr checkAndGetParent(const DQPointer &parent, const DQPointer &child) const;
+
+    Stats::Vector readyWaitTime;
+
+    Stats::Scalar oldWaitYoung;
 
 private:
 

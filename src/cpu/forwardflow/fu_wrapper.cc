@@ -25,23 +25,32 @@ namespace FF{
 using namespace std;
 
 template<class Impl>
-bool FUWrapper<Impl>::canServe(DynInstPtr &inst) {
+bool FUWrapper<Impl>::canServe(DynInstPtr &inst, InstSeqNum &waitee) {
     assert(inst);
     DPRINTF(FUW2, "FUW , opclass:%d\n", inst->opClass());
     auto lat = opLat[inst->opClass()];
     auto has_capability = capabilityList[inst->opClass()];
     bool fu_free = true;
 
-    if (has_capability) {
-        const auto &wrapper = wrappers[inst->opClass()];
-        fu_free = !wrapper.isLongLatency || !wrapper.hasPendingInst;
-    }
-
     DPRINTF(FUSched, "wbScheduled now in %s: ", __func__);
     if (Debug::FUSched) {
         cout << wbScheduled << endl;
     }
+
     bool wb_port_already_scheduled = wbScheduled[lat - 1] || wbScheduledNext[lat - 2];
+
+
+    if (has_capability) {
+        const auto &wrapper = wrappers[inst->opClass()];
+        fu_free = !wrapper.isLongLatency || !wrapper.hasPendingInst;
+
+        if (has_capability && !wb_port_already_scheduled && !fu_free) {
+            waitee = wrapper.seq;
+        } else {
+            waitee = 0;
+        }
+    }
+
     return has_capability && !wb_port_already_scheduled && fu_free;
 }
 
@@ -53,6 +62,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
     SingleFUWrapper &wrapper = wrappers[inst->opClass()];
     assert(lat == wrapper.latency);
 
+    inst->opLat = lat;
     insts[inst->seqNum] = inst;
     inst->fuGranted = true;
 

@@ -107,3 +107,8 @@ def addO3Options(parser):
             default=15.0,
             action='store', type='float',
             help='profit-discount')
+
+    parser.add_option("--ready-hint",
+            action='store_true',
+            help='ready hint')
+

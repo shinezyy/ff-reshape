@@ -60,7 +60,13 @@ def modifyO3CPUConfig(options, cpu):
         cpu.branchPred.redundantBit = options.bp_redundant_bit
 
     cpu.FanoutPredLambda = options.fanout_lambda
-    cpu.EnableReshape = options.enable_reshape
-    cpu.DecoupleOpPosition = options.rand_op_position
+    if options.enable_reshape:
+        cpu.EnableReshape = options.enable_reshape
+
+    if options.rand_op_position:
+        cpu.DecoupleOpPosition = options.rand_op_position
     if options.profit_discount:
         cpu.ProfitDiscount = options.profit_discount
+
+    if options.ready_hint:
+        cpu.ReadyHint = options.ready_hint

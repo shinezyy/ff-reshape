@@ -73,8 +73,18 @@ private:
 
     void commitInstInSB(DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest);
 
+
+    std::unordered_map<int, FFRegValue> hintIntRF;
+    std::unordered_map<int, FFRegValue> hintFloatRF;
+
+    ReverseTable hintRT;
+
+    Scoreboard hintSB;
+
 public:
     std::pair<bool, FFRegValue> commitInst(DynInstPtr &inst);
+
+    void postExecInst(DynInstPtr &inst);
 
     // todo: update map to tell its parent or sibling where to forward
     std::list<PointerPair> recordAndUpdateMap(DynInstPtr &inst);
@@ -123,6 +133,10 @@ private:
     void randomizeOp(DynInstPtr& inst);
 
     const bool decoupleOpPosition;
+
+    const bool readyHint;
+
+    void countChild(DQPointer parent_ptr, DynInstPtr &inst);
 };
 
 }

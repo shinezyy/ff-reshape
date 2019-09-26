@@ -210,6 +210,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         } else if (ptr.wkType == WKPointer::WKMem) {
             inst->memDepReady = true;
+            wakeup_count++;
             DPRINTF(DQWake, "Mem inst [%llu] received wakeup pkt\n",
                     inst->seqNum);
             if (!inst->fuGranted) {
@@ -645,6 +646,7 @@ void DataflowQueueBank<Impl>::regStats()
     directReady
         .name(name() + ".directReady")
         .desc("directReady");
+
 }
 
 template<class Impl>
@@ -742,12 +744,17 @@ void DataflowQueues<Impl>::tick()
             dqs[fu_granted_ptrs[b]->source]->clearPending();
 
         } else {
-            bool can_accept = fuWrappers[b].canServe(inst);
+            InstSeqNum waitee;
+            bool can_accept = fuWrappers[b].canServe(inst, waitee);
+            if (waitee && waitee > inst->seqNum) {
+                oldWaitYoung++;
+            }
             if (can_accept) {
                 fu_req_granted[fu_granted_ptrs[b]->source] = true;
                 fuWrappers[b].consume(inst);
                 dqs[fu_granted_ptrs[b]->source]->clearPending();
             } else if (opLat[inst->opClass()] > 1){
+                readyWaitTime[b] += 1;
                 llBlockedNext = true;
             }
         }
@@ -1614,6 +1621,15 @@ void DataflowQueues<Impl>::regStats()
     for (auto &dq: dqs) {
         dq->regStats();
     }
+    readyWaitTime
+        .init(nBanks)
+        .name(name() + ".readyWaitTime")
+        .desc("readyWaitTime")
+        .flags(Stats::total);
+
+    oldWaitYoung
+        .name(name() + ".oldWaitYoung")
+        .desc("oldWaitYoung");
 }
 
 template<class Impl>

@@ -465,6 +465,10 @@ FFCPU<Impl>::regStats()
         .name(name() + ".misc_regfile_writes")
         .desc("number of misc regfile writes")
         .prereq(miscRegfileWrites);
+
+    squashedFUTime
+        .name(name() + ".squashedFUTime")
+        .desc("squashedFUTime");
 }
 
 template <class Impl>
@@ -1432,6 +1436,10 @@ FFCPU<Impl>::squashInstIt(const ListIt &instIt, ThreadID tid)
         // instructions from the instruction list
         // Remove the instruction from the list.
         removeList.push(instIt);
+
+        if ((*instIt)->isExecuted()) {
+            squashedFUTime += (*instIt)->opLat;
+        }
     }
 }
 

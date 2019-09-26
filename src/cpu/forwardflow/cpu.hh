@@ -750,6 +750,8 @@ class FFCPU : public BaseO3CPU
     Stats::Scalar miscRegfileReads;
     Stats::Scalar miscRegfileWrites;
 
+    Stats::Scalar squashedFUTime;
+
 private:
     void setPointers();
 

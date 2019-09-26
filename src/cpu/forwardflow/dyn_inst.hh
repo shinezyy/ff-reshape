@@ -470,6 +470,8 @@ public:
     unsigned forwardOp{100000};
 
     bool forwardOpReady();
+
+    unsigned opLat{};
 private:
     FFRegValue destValue;
 

@@ -97,7 +97,7 @@ public:
 
     void setExec(Exec *_exec);
 
-    bool canServe(DynInstPtr &inst);
+    bool canServe(DynInstPtr &inst, InstSeqNum &waitee);
 
     bool consume(DynInstPtr &inst);
 

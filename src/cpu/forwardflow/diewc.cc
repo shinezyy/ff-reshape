@@ -1438,6 +1438,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
     inst->setCanCommit();
     // assert(inst->sfuWrapper);
     // inst->sfuWrapper->markWb();
+    archState.postExecInst(inst);
     dq.writebackLoad(inst);
 }
 
@@ -1946,6 +1947,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
         inst->completeTick = curTick() - inst->fetchTick;
         DPRINTF(DIEWC, "set completeTick to %u\n", inst->completeTick);
         inst->setCanCommit();
+        archState.postExecInst(inst);
     }
 
     if (inst->isMemBarrier() || inst->isWriteBarrier()) {
