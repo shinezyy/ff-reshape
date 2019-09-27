@@ -74,7 +74,7 @@ DataflowQueueBank<Impl>::tryWakeTail()
         return nullptr;
     }
 
-    if (tail_inst->fuGranted) {
+    if (tail_inst->fuGranted || (tail_inst->isForwarder() && tail_inst->isExecuted())) {
         DPRINTF(DQWake, "Tail[%d] has been granted, skip\n", tail);
         return nullptr;
     }
@@ -115,7 +115,7 @@ DataflowQueueBank<Impl>::tryWakeDirect()
         readyQueue.pop_front();
         return nullptr;
     }
-    if (inst->fuGranted) {
+    if (inst->fuGranted || (inst->isForwarder() && inst->isExecuted())) {
         DPRINTF(DQWake, "Inst at [%d] has been granted, skip\n", tail);
         readyQueue.pop_front();
         return nullptr;
@@ -341,8 +341,6 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
     if (first) {
         wakenUpByPointer++;
-        DPRINTF(DQWake, "Setting pending inst[%llu]\n", first->seqNum);
-        pendingInst = first; // if it's rejected, then marks valid in tick()
     }
 
     if (wakeup_count == 0) {
@@ -351,9 +349,13 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
     if (wakeup_count == 0 && !first) {
         first = tryWakeDirect();
+    } else {
+        DPRINTF(DQWake, "No directReady!\n");
     }
     if (first) {
         DPRINTF(DQWake, "Wakeup valid inst: %llu\n", first->seqNum);
+        DPRINTF(DQWake, "Setting pending inst[%llu]\n", first->seqNum);
+        pendingInst = first; // if it's rejected, then marks valid in tick()
     }
 
     return first;
@@ -704,6 +706,8 @@ void DataflowQueues<Impl>::tick()
 
     digestForwardPointer();
 
+    diewc->tryResetRef();
+
     DPRINTF(DQ, "Setup fu requests\n");
     // For each bank
     //  get ready instructions produced by last tick from time struct
@@ -764,6 +768,15 @@ void DataflowQueues<Impl>::tick()
     // mark it for banks
     for (unsigned b = 0; b < nBanks; b++) {
         dqs[b]->instGranted = fu_req_granted[b];
+    }
+
+    // For each bank, check
+    //  whether there's an inst to be waken up
+    //  whether there are multiple instruction to wake up, if so
+    //      buffer it and reject further requests in following cycles
+    DPRINTF(DQ, "Bank check pending\n");
+    for (auto bank: dqs) {
+        bank->checkPending();
     }
 
     replayMemInsts();
@@ -851,6 +864,8 @@ void DataflowQueues<Impl>::tick()
 
     countUpPointers();
 
+    tryResetRef();
+
     // todo: write forward pointers from bank to time buffer!
     for (unsigned b = 0; b < nBanks; b++) {
         std::vector<DQPointer> forward_ptrs = dqs[b]->readPointersFromBank();
@@ -927,14 +942,6 @@ void DataflowQueues<Impl>::tick()
         }
     }
 
-    // For each bank, check
-    //  whether there's an inst to be waken up
-    //  whether there are multiple instruction to wake up, if so
-    //      buffer it and reject further requests in following cycles
-    DPRINTF(DQ, "Bank check pending\n");
-    for (auto bank: dqs) {
-        bank->checkPending();
-    }
 }
 
 template<class Impl>
@@ -2119,19 +2126,6 @@ void DataflowQueues<Impl>::endCycle()
         wrapper.endCycle();
     }
 
-    if (numPendingWakeups == 0) {
-        oldestUsed = getHeadPtr();
-        DPRINTF(DQ, "Set oldestUsed to youngest inst on wake queue empty\n");
-    } else {
-        DPRINTF(DQ, "wake queue in flight = %i, cannot reset oldestUsed\n", numPendingWakeups);
-        for (unsigned b = 0; b < nBanks; b++) {
-            for (unsigned op = 0; op < nOps; op++) {
-                DPRINTFR(DQ, "wake queue %i.%i size: %llu\n",
-                        b, op, wakeQueues[b*nOps + op].size());
-            }
-        }
-    }
-
     DPRINTF(DQ, "Size of blockedMemInsts: %llu, size of retryMemInsts: %llu\n",
             blockedMemInsts.size(), retryMemInsts.size());
 }
@@ -2412,6 +2406,24 @@ DataflowQueues<Impl>::allocateWakeQ()
     unsigned tmp = qAllocPtr;
     qAllocPtr = (qAllocPtr + 1) % (nOps * nBanks);
     return tmp;
+}
+
+template<class Impl>
+void
+DataflowQueues<Impl>::tryResetRef()
+{
+    if (numPendingWakeups == 0) {
+        oldestUsed = getHeadPtr();
+        DPRINTF(DQ, "Set oldestUsed to youngest inst on wake queue empty\n");
+    } else {
+        DPRINTF(DQ, "wake queue in flight = %i, cannot reset oldestUsed\n", numPendingWakeups);
+        for (unsigned b = 0; b < nBanks; b++) {
+            for (unsigned op = 0; op < nOps; op++) {
+                DPRINTFR(DQ, "wake queue %i.%i size: %llu\n",
+                        b, op, wakeQueues[b*nOps + op].size());
+            }
+        }
+    }
 }
 
 }

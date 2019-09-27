@@ -9,6 +9,7 @@
 #include "debug/FFSquash.hh"
 #include "debug/FanoutPred.hh"
 #include "debug/RSProbe1.hh"
+#include "debug/ReadyHint.hh"
 #include "debug/Rename.hh"
 #include "debug/Reshape.hh"
 #include "params/DerivFFCPU.hh"
@@ -153,7 +154,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                         " with value: %f\n", hintFloatRF[src_reg.index()].f);
             } else {
                 DPRINTFR(Rename||Debug::RSProbe1,
-                        " with value: %llu\n", hintIntRF[src_reg.index()].f);
+                        " with value: %llu\n", hintIntRF[src_reg.index()].i);
             }
 
         } else {
@@ -587,9 +588,11 @@ ArchState<Impl>::postExecInst(DynInstPtr &inst) {
             val = inst->getDestValue();
             if (dest.isIntReg()) {
                 hintIntRF[dest.index()] = val;
+                DPRINTF(ReadyHint, "Set Hint Int reg (%i) to %llu\n", dest.index(), val.i);
 
             } else if (dest.isFloatReg()) {
                 hintFloatRF[dest.index()] = val;
+                DPRINTF(ReadyHint, "Set Hint Float reg (%i) to %f\n", dest.index(), val.f);
 
             } else {
                 panic("not ready for other instructions!");

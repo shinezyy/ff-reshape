@@ -2178,11 +2178,6 @@ InstSeqNum FFDIEWC<Impl>::getOldestFw()
 template<class Impl>
 void FFDIEWC<Impl>::clearAtEnd()
 {
-    if (dq.numInFlightFw() == 0) {
-        resetOldestFw();
-    } else {
-        dq.dumpFwQSize();
-    }
     dq.endCycle();
 }
 
@@ -2318,6 +2313,16 @@ FFDIEWC<Impl>::insertForwarder(
     return forwarder;
 }
 
+template<class Impl>
+void
+FFDIEWC<Impl>::tryResetRef()
+{
+    if (dq.numInFlightFw() == 0) {
+        resetOldestFw();
+    } else {
+        dq.dumpFwQSize();
+    }
+}
 
 }
 

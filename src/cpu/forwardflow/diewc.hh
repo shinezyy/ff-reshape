@@ -466,6 +466,7 @@ public:
 
     void setFanoutPred(FanoutPred *fanoutPred1);
 
+    void tryResetRef();
 private:
     const unsigned commitTraceInterval;
     unsigned commitCounter;

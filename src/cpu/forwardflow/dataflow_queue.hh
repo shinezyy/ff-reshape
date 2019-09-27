@@ -473,6 +473,8 @@ private:
     std::mt19937 gen;
 
     std::uniform_int_distribution<unsigned> randAllocator;
+
+    void tryResetRef();
 };
 
 }
