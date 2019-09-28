@@ -475,6 +475,18 @@ private:
     std::uniform_int_distribution<unsigned> randAllocator;
 
     void tryResetRef();
+
+    std::vector<std::deque<WKPointer>> tempWakeQueues;
+
+    void mergeExtraWKPointers();
+
+    void dumpWkQSize();
+
+    void readPointersToWkQ();
+
+    void clearInflightPackets();
+
+    void clearPending2SquashedRange(unsigned start, unsigned end);
 };
 
 }

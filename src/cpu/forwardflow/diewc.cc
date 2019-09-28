@@ -2155,7 +2155,9 @@ void FFDIEWC<Impl>::setOldestFw(DQPointer _ptr)
 {
     auto ptr = dq.pointer2uint(_ptr);
     assert(dq.validPosition(ptr));
-    if (dq.logicallyLT(ptr, oldestForwarded)) {
+    if (!dq.validPosition(oldestForwarded)) {
+        oldestForwarded = dq.getTailPtr();
+    } else if (dq.logicallyLT(ptr, oldestForwarded)) {
         oldestForwarded = ptr;
         DPRINTF(FFCommit, "Setting oldest forwarded to %d\n", oldestForwarded);
     }

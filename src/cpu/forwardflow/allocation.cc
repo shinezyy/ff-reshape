@@ -503,11 +503,9 @@ void Allocation<Impl>::readFreeEntries() {
         DPRINTF(DAllocation, "read freeDQEntries = %i from DIEWC\n",
                 freeEntries.dqEntries);
     }
-    if (fromDIEWC->diewcInfo.updateDQTail) {
+    if (fromDIEWC->diewcInfo.updateDQTail || fromDIEWC->diewcInfo.updateDQHead) {
         flatTail = fromDIEWC->diewcInfo.dqTail;
         DPRINTF(FFSquash, "read tail (%d) form DIEWC\n", flatTail);
-    }
-    if (fromDIEWC->diewcInfo.updateDQHead) {
         flatHead = fromDIEWC->diewcInfo.dqHead;
         DPRINTF(FFSquash, "read head (%d) form DIEWC\n", flatHead);
     }
@@ -672,6 +670,8 @@ void Allocation<Impl>::squash()
             serializeInst = nullptr;
         }
     }
+
+    serializeOnNextInst = false;
 
     // Set the status to Squashing.
     allocationStatus = Squashing;

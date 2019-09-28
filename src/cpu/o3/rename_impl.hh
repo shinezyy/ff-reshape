@@ -360,6 +360,8 @@ DefaultRename<Impl>::squash(const InstSeqNum &squash_seq_num, ThreadID tid)
         }
     }
 
+    serializeOnNextInst[tid] = false;
+
     // Set the status to Squashing.
     renameStatus[tid] = Squashing;
 
