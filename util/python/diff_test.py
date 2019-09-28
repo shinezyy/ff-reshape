@@ -1,4 +1,7 @@
 import re
+import sys
+
+assert len(sys.argv) == 3
 
 golden = []
 test = []
@@ -13,7 +16,7 @@ def match_and_append(p, line):
     else:
         return None
 
-with open('./reshape_out.txt') as f, open('./short_gem5_out.txt') as golden_f:
+with open(sys.argv[1]) as f, open(sys.argv[2]) as golden_f:
     count = 0
     for lt, lg in zip(f, golden_f):
         count += 1
