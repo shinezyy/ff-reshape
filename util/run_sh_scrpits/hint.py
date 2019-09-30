@@ -12,10 +12,25 @@ from multiprocessing import Pool
 import common as c
 
 lmd = 0.55
-# tag = str(sh.git("describe")).strip()
-tag = 'wk-delay'
-outdir =  f'/work/gem5-results/tune-1'
-#outdir =  f'/work/gem5-results/op_rand-full'
+num_thread = 5
+
+full = False
+
+if full:
+    d = '-full'
+    insts = 220*10**6
+else:
+    d = ''
+    insts = 19*10**6
+
+outdir =  f'/home/auser/gem5-results/hint{d}'
+
+exp_options = [
+        # '--enable-reshape',
+        # '--rand-op-position',
+        # '--profit-discount=1.0',
+        '--ready-hint',
+        ]
 
 arch = 'RISCV'
 
@@ -29,7 +44,7 @@ def op_rand(benchmark, some_extra_args, outdir_b):
     panic_tick = 254980806320500
     options = [
             '--outdir=' + outdir_b,
-            '--stats-file=op_rand_stats.txt',
+            '--stats-file=stats.txt',
             #'--debug-flags=ValueCommit',
             #'--debug-start={}'.format (panic_tick - 2000000),
             #'--debug-end={}'.format   (panic_tick + 200000),
@@ -38,8 +53,7 @@ def op_rand(benchmark, some_extra_args, outdir_b):
             '-b', '{}'.format(benchmark),
             '--benchmark-stdout={}/out'.format(outdir_b),
             '--benchmark-stderr={}/err'.format(outdir_b),
-            #'-I {}'.format(220*10**6),
-            '-I {}'.format(19*10**6),
+            '-I {}'.format(insts),
             # '-m', '254890101819500',
             # '--rel-max-tick=100',
             '--mem-size=4GB',
@@ -78,9 +92,7 @@ def op_rand(benchmark, some_extra_args, outdir_b):
             '--num-PhysReg=168',
             '--use-zperceptron',
             f'--fanout-lambda={lmd}',
-            '--enable-reshape',
-            '--rand-op-position',
-            '--profit-discount=1.0',
+            *exp_options,
             ]
     else:
         assert False
@@ -114,8 +126,6 @@ def run(benchmark):
 
 
 def main():
-    num_thread = 4
-
     benchmarks = []
 
     with open('./all_function_spec.txt') as f:

@@ -23,13 +23,13 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir =  f'/home/auser/gem5-results/reshape{d}'
+outdir =  f'/home/auser/gem5-results/rand-reshape-hint{d}'
 
 exp_options = [
         '--enable-reshape',
-        #'--rand-op-position',
+        '--rand-op-position',
         '--profit-discount=1.0',
-        #'--ready-hint',
+        '--ready-hint',
         ]
 
 arch = 'RISCV'

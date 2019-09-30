@@ -16,13 +16,15 @@ lmd = 0.55
 # tag = 'naive_pc'
 # outdir =  f'/work/gem5-results/debug-pred-{tag}/'
 outdir =  f'/work/gem5-results/op-rand-debug/'
-
 arch = 'RISCV'
+cycles_after = 100000000000
+log_file = f'300-t-before-last-commit.txt'
 
-def debug(benchmark, some_extra_args, outdir_b):
+large_enough = 2**62
+
+def debug_1(benchmark, some_extra_args, outdir_b):
 
     benchmark, panic_tick = benchmark
-    # panic_tick = int(panic_tick) - 15000000
     panic_tick = int(panic_tick)
     interval = 200*10**6
     warmup = 20*10**6
@@ -32,21 +34,27 @@ def debug(benchmark, some_extra_args, outdir_b):
     options = [
             '--outdir=' + outdir_b,
             '--stats-file=debug_stats.txt',
-            '--debug-flags=DAllocation,DIEWC,IEW,Rename,Commit,DQRead,' + \
-                    'DQWrite,DQWake,FFCommit,FFSquash,DQ,FUW,ValueCommit,'+ \
-                    'FFInit,FFExec,FUSched,FanoutPred1,Reshape',
-            '--debug-flags=ValueCommit',
-            #'--debug-start={}'.format (panic_tick),
-            #'--debug-start={}'.format (panic_tick - 3000000),
-            #'--debug-end={}'.format   (panic_tick + 3000000),
+            # '--debug-flags=Fetch,DAllocation,DIEWC,IEW,Rename,Commit,DQRead,' + \
+            #         'DQWrite,DQWake,FFCommit,FFSquash,DQ,FUW,ValueCommit,'+ \
+            #         'Cache,DRAMSim2,MemoryAccess,DRAM,'+ \
+            #         'FFInit,FFExec,FUSched,FanoutPred1,Reshape,ReadyHint',
+            '--debug-flags=Fetch,DAllocation,DIEWC,IEW,Rename,Commit,DQRead,' + \
+                    'DQWrite,DQWake,FFCommit,FFSquash,DQ,FUW,'+ \
+                    'FFInit,FFExec,FUSched,FanoutPred1',
+            # '--debug-flags=ValueCommit',
+            '--debug-flags=RSProbe1',
+            #'--debug-start={}'.format (102498195336000),
+            '--debug-start={}'.format (panic_tick - 3000000),
+            '--debug-end={}'.format   (panic_tick + 3000000),
+            # '--debug-start={}'.format (large_enough-100),
+            # '--debug-end={}'.format   (large_enough),
             pjoin(c.gem5_home(), 'configs/spec2006/se_spec06.py'),
             '--spec-2006-bench',
             '-b', '{}'.format(benchmark),
             '--benchmark-stdout={}/out'.format(outdir_b),
             '--benchmark-stderr={}/err'.format(outdir_b),
-            #'-I {}'.format(220*10**6),
-            '-I {}'.format(190*10**5),
-            # '-m', '254890101819500',
+            '-I {}'.format(220*10**6),
+            #'-I {}'.format(190*10**5),
             # '--rel-max-tick=100',
             '--mem-size=4GB',
             '-r 1',
@@ -84,7 +92,10 @@ def debug(benchmark, some_extra_args, outdir_b):
             '--num-PhysReg=168',
             '--use-zperceptron',
             f'--fanout-lambda={lmd}',
-            '--enable-reshape',
+            # '--enable-reshape',
+            # '--rand-op-position',
+            # '--profit-discount=1.0',
+            # '--ready-hint',
             ]
     else:
         assert False
@@ -92,7 +103,7 @@ def debug(benchmark, some_extra_args, outdir_b):
     gem5 = sh.Command(pjoin(c.gem5_build(arch), 'gem5.opt'))
     # sys.exit(0)
     gem5(
-            _out=pjoin(outdir_b, 'debug_out.txt'),
+            _out=pjoin(outdir_b, log_file),
             _err=pjoin(outdir_b, 'debug_err.txt'),
             *options
             )
@@ -110,7 +121,7 @@ def run(benchmark):
 
     if prerequisite:
         print('cpt flag found, is going to run gem5 on', benchmark[0])
-        c.avoid_repeated(debug, outdir_b,
+        c.avoid_repeated(debug_1, outdir_b,
                 pjoin(c.gem5_build(arch), 'gem5.opt'),
                 benchmark, some_extra_args, outdir_b)
     else:

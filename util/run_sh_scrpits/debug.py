@@ -15,7 +15,7 @@ tag = str(sh.git("describe")).strip()
 lmd = 0.55
 # tag = 'naive_pc'
 # outdir =  f'/work/gem5-results/debug-pred-{tag}/'
-outdir =  f'/work/gem5-results/reshape-debug/'
+outdir =  f'/work/gem5-results/op-rand-debug/'
 
 arch = 'RISCV'
 
@@ -30,10 +30,12 @@ def debug(benchmark, some_extra_args, outdir_b):
     options = [
             '--outdir=' + outdir_b,
             '--stats-file=debug_stats.txt',
-            #'--debug-flags=DAllocation,DIEWC,IEW,Rename,Commit,DQRead,DQWrite,DQWake,FUW,FFInit,FFReg,FFCommit,FFSquash,DQ,Fetch,FUW,Branch,LSQ,LSQUnit,Cache,CachePort,FFLSQ,ValueCommit,FFExec',
-            '--debug-flags=DAllocation,DIEWC,IEW,Rename,Commit,DQRead,DQWrite,DQWake,FUW,FFCommit,FFSquash,DQ,Fetch,FUW,LSQ,LSQUnit,Cache,CachePort,FFLSQ,ValueCommit,FFInit,FFExec,FUSched',
-            #'--debug-flags=DAllocation,DIEWC,IEW,Rename,Commit,DQRead,DQWrite,DQWake,FUW,FFCommit,FFSquash,DQ,Fetch,FUW,ValueCommit,FFInit,FFExec,FUSched,FanoutPred1,Reshape',
-            #'--debug-flags=FanoutPred1',
+            # '--debug-flags=Fetch,DAllocation,DIEWC,IEW,Rename,Commit,DQRead,' + \
+            #         'DQWrite,DQWake,FFCommit,FFSquash,DQ,FUW,ValueCommit,'+ \
+            #         'Cache,DRAMSim2,MemoryAccess,DRAM,'+ \
+            #         'FFInit,FFExec,FUSched,FanoutPred1,Reshape,ReadyHint',
+            '--debug-flags=ValueCommit',
+            #'--debug-flags=RSProbe1',
             #'--debug-start={}'.format (panic_tick - 2000000),
             #'--debug-end={}'.format   (panic_tick + 200000),
             pjoin(c.gem5_home(), 'configs/spec2006/se_spec06.py'),
@@ -41,8 +43,9 @@ def debug(benchmark, some_extra_args, outdir_b):
             '-b', '{}'.format(benchmark),
             '--benchmark-stdout={}/out'.format(outdir_b),
             '--benchmark-stderr={}/err'.format(outdir_b),
-            #'-I {}'.format(220*10**6),
-            '-I {}'.format(19*10**6),
+            '-I {}'.format(220*10**6),
+            #'-I {}'.format(19*10**6),
+            #'-I {}'.format(300),
             # '-m', '254890101819500',
             # '--rel-max-tick=100',
             '--mem-size=4GB',
@@ -81,6 +84,10 @@ def debug(benchmark, some_extra_args, outdir_b):
             '--num-PhysReg=168',
             '--use-zperceptron',
             f'--fanout-lambda={lmd}',
+            # '--enable-reshape',
+            # '--rand-op-position',
+            # '--profit-discount=1.0',
+            # '--ready-hint',
             ]
     else:
         assert False
@@ -114,7 +121,7 @@ def run(benchmark):
 
 
 def main():
-    num_thread = 1
+    num_thread = 2
 
     benchmarks = []
 
