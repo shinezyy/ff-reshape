@@ -721,19 +721,19 @@ FFDIEWC<Impl>::
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
 
     if (commitCounter >= commitTraceInterval && !head_inst->isForwarder()) {
-        printf("@%lu Committing %lu instruction with sn:%lu PC:",
+        DPRINTF(ValueCommit, "@%lu Committing %lu instruction with sn:%lu PC:",
                 curTick(), commitAll, head_inst->seqNum);
         std::cout << head_inst->pcState();
         if (head_inst->numDestRegs() > 0) {
-            printf(", with wb value: %lu",
+            DPRINTF(ValueCommit, ", with wb value: %lu",
                     head_inst->getResult().asIntegerNoAssert());
         } else {
-            printf(", with wb value: none");
+            DPRINTF(ValueCommit, ", with wb value: none");
         }
         if (head_inst->isMemRef()) {
-            printf(", with v_addr: 0x%lx\n", head_inst->effAddr);
+            DPRINTF(ValueCommit, ", with v_addr: 0x%lx\n", head_inst->effAddr);
         } else {
-            printf(", with v_addr: none\n");
+            DPRINTF(ValueCommit, ", with v_addr: none\n");
         }
 
         if (head_inst->numDestRegs() > 0) {
@@ -1870,8 +1870,10 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
     assert(inst);
     DPRINTF(DIEWC||Debug::RSProbe1, "Executing inst[%lu] %s\n", inst->seqNum,
             inst->staticInst->disassemble(inst->instAddr()));
-    printf("Executing inst[%lu] ", inst->seqNum);
-    std::cout << inst->staticInst->disassemble(inst->instAddr()) << endl;
+    DPRINTF(ValueCommit, "Executing inst[%lu] ", inst->seqNum);
+    if (Debug::ValueCommit) {
+        std::cout << inst->staticInst->disassemble(inst->instAddr()) << endl;
+    }
 
     activityThisCycle();
     if (inst->isSquashed()) {
