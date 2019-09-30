@@ -226,7 +226,7 @@ class BaseCPU(MemObject):
     tracer = Param.InstTracer(default_tracer, "Instruction tracer")
 
     #commitTraceInterval = Param.Unsigned(19, 'commitTraceInterval')
-    commitTraceInterval = Param.Unsigned(0, 'commitTraceInterval')
+    commitTraceInterval = Param.Unsigned(49, 'commitTraceInterval')
 
     FanoutPredLambda = Param.Float(0.2, 'FanoutPredTableSize')
     FanoutPredTableSize = Param.Unsigned(8 * 2**10, 'FanoutPredTableSize')

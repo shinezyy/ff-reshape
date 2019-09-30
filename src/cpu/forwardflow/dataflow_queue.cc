@@ -192,6 +192,15 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         DPRINTF(DQWake||Debug::RSProbe1, "Pointer (%i %i) (%i) working on inst[%llu]\n",
                 ptr.bank, ptr.index, ptr.op, inst->seqNum);
 
+        if (inst->dqPosition.term != ptr.term) {
+            DPRINTF(DQWake, "Term not match on WK: ptr: %d, inst: %d\n",
+                    ptr.term, inst->dqPosition.term);
+            if (anyPending) {
+                ptr.valid = false;
+            }
+            continue;
+        }
+
         if (op == 0 && !(ptr.wkType == WKPointer::WKMem ||
                     ptr.wkType == WKPointer::WKMisc || ptr.wkType == WKPointer::WKOrder)) {
             DPRINTF(DQWake, "Wakeup ignores op wakeup pointer to Dest\n");
@@ -384,6 +393,12 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                 DPRINTF(FFSquash, "Ignore forwarded pointer to (%i %i) (%i) (squashed)\n",
                         ptr.bank, ptr.index, ptr.op);
                 optr.valid = false;
+
+            } else if (inst->dqPosition.term != ptr.term) {
+                DPRINTF(DQWake, "Term not match on FW: ptr: %d, inst: %d\n",
+                        ptr.term, inst->dqPosition.term);
+                optr.valid = false;
+
             } else {
                 if (op == 0) {
                     outputPointers[0].valid = false; // dest register should never be forwarded
@@ -915,7 +930,7 @@ void DataflowQueues<Impl>::tick()
         toNextCycle->instValids[i] = !!inst && !inst->fuGranted;
         toNextCycle->insts[i] = inst;
         if (toNextCycle->instValids[i]) {
-            DPRINTF(Omega, "notNext cycle inst[%d] valid, &inst: %p\n",
+            DPRINTF(Omega, "toNext cycle inst[%d] valid, &inst: %p\n",
                     i, toNextCycle->insts[i]);
         }
     }
@@ -1005,7 +1020,9 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         opPrioList{1, 2, 3, 0},
         gen(0xdeadbeef),
         randAllocator(0, nBanks * nOps),
-        tempWakeQueues(nBanks * nOps)
+        tempWakeQueues(nBanks * nOps),
+        headTerm(0),
+        termMax(params->TermMax)
 
 {
     // init inputs to omega networks
@@ -1640,8 +1657,9 @@ void DataflowQueues<Impl>::readQueueHeads()
                 wk_pkt.valid = false;
             } else {
                 const WKPointer &ptr = q.front();
-                DPRINTF(DQWake||Debug::RSProbe1, "Found valid wakePtr:(%i) (%i %i) (%i)\n",
-                        ptr.valid, ptr.bank, ptr.index, ptr.op);
+                DPRINTF(DQWake||Debug::RSProbe1,
+                        "WKQ[%i] Found valid wakePtr:(%i) (%i %i) (%i)\n",
+                        i, ptr.valid, ptr.bank, ptr.index, ptr.op);
                 wk_pkt.valid = ptr.valid;
                 wk_pkt.payload = ptr;
                 wk_pkt.destBits = uint2Bits(ptr.bank * nOps + ptr.op);
@@ -1732,8 +1750,8 @@ void DataflowQueues<Impl>::violation(DynInstPtr store, DynInstPtr violator)
 template<class Impl>
 void DataflowQueues<Impl>::scheduleNonSpec()
 {
+    WKPointer wk = WKPointer(getTail()->dqPosition);
     auto p = uint2Pointer(tail);
-    WKPointer wk(p);
     DPRINTF(DQ, "Scheduling non spec inst @ (%i %i)\n", p.bank, p.index);
     wk.wkType = WKPointer::WKMisc;
     extraWakeup(wk);
@@ -2328,6 +2346,10 @@ DataflowQueues<Impl>::advanceHead()
         head = inc(head);
     }
 
+    if (head == 0) {
+        headTerm = (headTerm + 1) % termMax;
+    }
+
     auto allocated = uint2Pointer(head);
     auto dead_inst = dqs[allocated.bank]->readInstsFromBank(allocated);
     if (dead_inst) {
@@ -2413,6 +2435,10 @@ DataflowQueues<Impl>::mergeExtraWKPointers()
     DPRINTF(DQWake, "Before cycle-end push, numPendingWakeups = %u\n", numPendingWakeups);
     for (unsigned i = 0; i < nOps*nBanks; i++) {
         while (!tempWakeQueues[i].empty()) {
+            const auto &dest = tempWakeQueues[i].front();
+            DPRINTF(DQWake,
+                    "Got temped wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
+                    dest.bank, dest.index, dest.op, i);
             wakeQueues[i].push_back(tempWakeQueues[i].front());
             tempWakeQueues[i].pop_front();
             numPendingWakeups++;

@@ -227,3 +227,5 @@ class DerivFFCPU(BaseCPU):
     DecoupleOpPosition = Param.Bool(False, "DecoupleOpPosition")
 
     ReadyHint = Param.Bool(False, "ReadyHint")
+
+    TermMax = Param.Unsigned(8, "TermMax")

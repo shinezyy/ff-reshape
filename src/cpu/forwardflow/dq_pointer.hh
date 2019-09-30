@@ -26,7 +26,11 @@ struct DQPointer{
 
     DQPointer(bool, unsigned, unsigned, unsigned, unsigned);
 
+    DQPointer(bool, unsigned, unsigned, unsigned, unsigned, int);
+
     explicit DQPointer(const WKPointer&);
+
+    int term{-1};
 
     bool operator==(const DQPointer& that) const {
         return group == that.group &&
@@ -54,6 +58,8 @@ struct WKPointer{
     unsigned fwLevel{};
 
     unsigned queueTime{};
+
+    int term{-1};
 
     WKPointer() = default;;
 

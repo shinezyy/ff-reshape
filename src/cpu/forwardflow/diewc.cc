@@ -248,6 +248,7 @@ void FFDIEWC<Impl>::dispatch() {
         // postponed allocation;
         dq.advanceHead();
         inst->dqPosition = dq.uint2Pointer(dq.getHeadPtr());
+        inst->dqPosition.term = dq.getHeadTerm();
 
         bool jumped = false;
         DPRINTF(DIEWC||Debug::RSProbe1, "Dispatching inst[%llu] %s PC: %s\n",
@@ -720,18 +721,19 @@ FFDIEWC<Impl>::
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
 
     if (commitCounter >= commitTraceInterval && !head_inst->isForwarder()) {
-        DPRINTFR(ValueCommit, "@%llu Committing %llu instruction with sn:%lli PC:%s",
-                curTick(), commitAll, head_inst->seqNum, head_inst->pcState());
+        printf("@%lu Committing %lu instruction with sn:%lu PC:",
+                curTick(), commitAll, head_inst->seqNum);
+        std::cout << head_inst->pcState();
         if (head_inst->numDestRegs() > 0) {
-            DPRINTFR(ValueCommit, ", with wb value: %llu",
+            printf(", with wb value: %lu",
                     head_inst->getResult().asIntegerNoAssert());
         } else {
-            DPRINTFR(ValueCommit, ", with wb value: none");
+            printf(", with wb value: none");
         }
         if (head_inst->isMemRef()) {
-            DPRINTFR(ValueCommit, ", with v_addr: 0x%x\n", head_inst->effAddr);
+            printf(", with v_addr: 0x%lx\n", head_inst->effAddr);
         } else {
-            DPRINTFR(ValueCommit, ", with v_addr: none\n");
+            printf(", with v_addr: none\n");
         }
 
         if (head_inst->numDestRegs() > 0) {
@@ -1866,8 +1868,10 @@ template<class Impl>
 void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
 {
     assert(inst);
-    DPRINTF(DIEWC||Debug::RSProbe1, "Executing inst[%d] %s\n", inst->seqNum,
+    DPRINTF(DIEWC||Debug::RSProbe1, "Executing inst[%lu] %s\n", inst->seqNum,
             inst->staticInst->disassemble(inst->instAddr()));
+    printf("Executing inst[%lu] ", inst->seqNum);
+    std::cout << inst->staticInst->disassemble(inst->instAddr()) << endl;
 
     activityThisCycle();
     if (inst->isSquashed()) {

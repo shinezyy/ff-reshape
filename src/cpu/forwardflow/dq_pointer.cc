@@ -12,6 +12,7 @@ DQPointer::DQPointer(const WKPointer &wk)
     bank = wk.bank;
     index = wk.index;
     op = wk.op;
+    term = wk.term;
 
     reshapeOp = wk.reshapeOp;
     fwLevel = wk.fwLevel;
@@ -33,6 +34,23 @@ DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o)
     queueTime = 0;
 }
 
+
+
+DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o, int t)
+{
+    valid = v;
+    group = g;
+    bank = b;
+    index = i;
+    op = o;
+
+    reshapeOp = -1;
+    fwLevel = 0;
+
+    queueTime = 0;
+    term = t;
+}
+
 WKPointer::WKPointer(const DQPointer &dqPointer)
 {
     valid = dqPointer.valid;
@@ -41,6 +59,7 @@ WKPointer::WKPointer(const DQPointer &dqPointer)
     bank = dqPointer.bank;
     index = dqPointer.index;
     op = dqPointer.op;
+    term = dqPointer.term;
 
     reshapeOp = dqPointer.reshapeOp;
     fwLevel = dqPointer.fwLevel;

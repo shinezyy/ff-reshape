@@ -258,6 +258,8 @@ public:
     unsigned getHeadPtr() const {return head;}
     unsigned getTailPtr() const {return tail;}
 
+    unsigned getHeadTerm() const {return headTerm;}
+
     void retireHead(bool isSquashed, FFRegValue v);
 
     std::unordered_map<DQPointer, FFRegValue> committedValues;
@@ -487,6 +489,10 @@ private:
     void clearInflightPackets();
 
     void clearPending2SquashedRange(unsigned start, unsigned end);
+
+    int headTerm;
+
+    const unsigned termMax;
 };
 
 }
