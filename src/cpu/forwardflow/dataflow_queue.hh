@@ -484,6 +484,8 @@ private:
 
     void dumpWkQSize();
 
+    void dumpWkQ();
+
     void readPointersToWkQ();
 
     void clearInflightPackets();
@@ -493,6 +495,8 @@ private:
     int headTerm;
 
     const unsigned termMax;
+
+    void genFUValidMask();
 };
 
 }

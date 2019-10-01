@@ -18,6 +18,7 @@
 #include "debug/FUW.hh"
 #include "debug/QClog.hh"
 #include "debug/RSProbe1.hh"
+#include "debug/RSProbe2.hh"
 #include "debug/Reshape.hh"
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
@@ -800,11 +801,12 @@ void DataflowQueues<Impl>::tick()
     DPRINTF(DQ, "Selecting wakeup pointers from requests\n");
     // For each bank: check status: whether I can consume from queue this cycle?
     // record the state
+    genFUValidMask();
     wakeup_granted_ptrs = wakeupQueueBankNet.select(wakeup_req_ptrs);
 
     for (auto &ptr : wakeup_granted_ptrs) {
         if (ptr->valid) {
-            DPRINTF(DQWake||Debug::RSProbe1,
+            DPRINTF(DQWake||Debug::RSProbe2,
                     "WakePtr[%d] (pointer(%d) (%d %d) (%d)) granted\n",
                     ptr->source, ptr->payload.valid,
                     ptr->payload.bank, ptr->payload.index, ptr->payload.op);
@@ -836,7 +838,7 @@ void DataflowQueues<Impl>::tick()
                     if (wakeQueues[pkt->source].size() == numPendingWakeupMax) {
                         numPendingWakeupMax--;
                     }
-                    DPRINTF(DQWake, "Pop WakePtr (%i %i) (%i)from wakequeue[%u]\n",
+                    DPRINTF(DQWake || RSProbe2, "Pop WakePtr (%i %i) (%i)from wakequeue[%u]\n",
                             ptr.bank, ptr.index, ptr.op, pkt->source);
                     wakeQueues[pkt->source].pop_front();
                     numPendingWakeups--;
@@ -883,7 +885,8 @@ void DataflowQueues<Impl>::tick()
         int q1 = -1, q2 = -1;
         if (dest.valid) {
             q1 = allocateWakeQ();
-            DPRINTF(DQWake, "Got wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
+            DPRINTF(DQWake || Debug::RSProbe2,
+                    "Got wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
                     dest.bank, dest.index, dest.op, q1);
             wakeQueues[q1].push_back(WKPointer(dest));
             numPendingWakeups++;
@@ -893,7 +896,8 @@ void DataflowQueues<Impl>::tick()
 
         if (src.valid) {
             q2 = allocateWakeQ();
-            DPRINTF(DQWake, "Got inverse wakeup pointer to (%d %d) (%d),"
+            DPRINTF(DQWake || Debug::RSProbe2,
+                    "Got inverse wakeup pointer to (%d %d) (%d),"
                     " pushed to wakeQueue[%i]\n",
                     src.bank, src.index, src.op, q2);
             wakeQueues[q2].push_back(WKPointer(src));
@@ -1996,7 +2000,7 @@ template<class Impl>
 void DataflowQueues<Impl>::extraWakeup(const WKPointer &wk)
 {
     auto q = allocateWakeQ();
-    DPRINTF(DQWake||Debug::RSProbe1,
+    DPRINTF(DQWake||Debug::RSProbe2,
             "Push Wake (extra) Ptr (%i %i) (%i) to temp wakequeue[%u]\n",
             wk.bank, wk.index, wk.op, q);
     tempWakeQueues[q].push_back(wk);
@@ -2134,10 +2138,10 @@ void DataflowQueues<Impl>::endCycle()
 template<class Impl>
 void DataflowQueues<Impl>::dumpFwQSize()
 {
-    DPRINTF(DQ, "fw queue in flight = %i, cannot reset oldestRef\n", numPendingFwPointers);
+    DPRINTF(DQ || Debug::RSProbe1, "fw queue in flight = %i, cannot reset oldestRef\n", numPendingFwPointers);
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
-            DPRINTFR(DQ, "fw queue %i.%i size: %llu\n",
+            DPRINTFR(DQ || Debug::RSProbe1, "fw queue %i.%i size: %llu\n",
                     b, op, forwardPointerQueue[b*nOps + op].size());
         }
     }
@@ -2148,7 +2152,7 @@ void DataflowQueues<Impl>::maintainOldestUsed()
 {
     if (!validPosition(oldestUsed)) {
         oldestUsed = getTailPtr();
-        DPRINTF(DQ, "Set oldestUsed to tail: %u\n", oldestUsed);
+        DPRINTF(DQ || Debug::RSProbe1, "Set oldestUsed to tail: %u\n", oldestUsed);
     }
 }
 
@@ -2247,7 +2251,7 @@ void DataflowQueues<Impl>::processWKQueueFull()
     halfSquash = true;
 
     DPRINTF(DQ, "Dump before clear:\n");
-    if (Debug::DQ) {
+    if (Debug::DQ || Debug::RSProbe1) {
         dumpQueues();
     }
 
@@ -2271,7 +2275,7 @@ void DataflowQueues<Impl>::processWKQueueFull()
     }
 
     DPRINTF(DQ, "Dump after clear:\n");
-    if (Debug::DQ) {
+    if (Debug::DQ || Debug::RSProbe1) {
         dumpQueues();
     }
 }
@@ -2281,8 +2285,8 @@ void DataflowQueues<Impl>::processFWQueueFull()
 {
     halfSquash = true;
 
-    DPRINTF(DQ, "Dump before clear:\n");
-    if (Debug::DQ) {
+    DPRINTF(DQ || Debug::RSProbe1, "Dump before clear:\n");
+    if (Debug::DQ || Debug::RSProbe1) {
         dumpQueues();
     }
 
@@ -2305,8 +2309,8 @@ void DataflowQueues<Impl>::processFWQueueFull()
         }
     }
 
-    DPRINTF(DQ, "Dump after clear:\n");
-    if (Debug::DQ) {
+    DPRINTF(DQ || Debug::RSProbe1, "Dump after clear:\n");
+    if (Debug::DQ || Debug::RSProbe1) {
         dumpQueues();
     }
 }
@@ -2420,10 +2424,10 @@ DataflowQueues<Impl>::tryResetRef()
 {
     if (numPendingWakeups == 0) {
         oldestUsed = getHeadPtr();
-        DPRINTF(DQ, "Set oldestUsed to youngest inst on wake queue empty\n");
+        DPRINTF(DQ || Debug::RSProbe1, "Set oldestUsed to youngest inst on wake queue empty\n");
 
     } else {
-        DPRINTF(DQ, "wake queue in flight = %i, cannot reset oldestUsed\n", numPendingWakeups);
+        DPRINTF(DQ || Debug::RSProbe1, "wake queue in flight = %i, cannot reset oldestUsed\n", numPendingWakeups);
         dumpWkQSize();
     }
 }
@@ -2436,7 +2440,7 @@ DataflowQueues<Impl>::mergeExtraWKPointers()
     for (unsigned i = 0; i < nOps*nBanks; i++) {
         while (!tempWakeQueues[i].empty()) {
             const auto &dest = tempWakeQueues[i].front();
-            DPRINTF(DQWake,
+            DPRINTF(DQWake || Debug::RSProbe2,
                     "Got temped wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
                     dest.bank, dest.index, dest.op, i);
             wakeQueues[i].push_back(tempWakeQueues[i].front());
@@ -2444,8 +2448,12 @@ DataflowQueues<Impl>::mergeExtraWKPointers()
             numPendingWakeups++;
         }
     }
-    DPRINTF(DQWake, "After cycle-end push, numPendingWakeups = %u\n", numPendingWakeups);
+    DPRINTF(DQWake || RSProbe1,
+            "After cycle-end push, numPendingWakeups = %u\n", numPendingWakeups);
     dumpWkQSize();
+    if (Debug::RSProbe2) {
+        dumpWkQ();
+    }
 }
 
 template<class Impl>
@@ -2454,7 +2462,7 @@ DataflowQueues<Impl>::dumpWkQSize()
 {
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
-            DPRINTFR(DQ, "wake queue %i.%i size: %llu\n",
+            DPRINTFR(DQ || RSProbe1, "wake queue %i.%i size: %llu\n",
                     b, op, wakeQueues[b*nOps + op].size());
         }
     }
@@ -2470,7 +2478,7 @@ DataflowQueues<Impl>::readPointersToWkQ()
         for (unsigned op = 0; op < nOps; op++) {
             auto &ptr = fromLastCycle->pointers[b * nOps + op];
             if (ptr.valid) {
-                DPRINTF(DQWake||Debug::RSProbe1,
+                DPRINTF(DQWake||Debug::RSProbe2,
                         "Push WakePtr (%i %i) (%i) to wakequeue[%u]\n",
                         ptr.bank, ptr.index, ptr.op, b);
                 wakeQueues[b * nOps + op].push_back(WKPointer(ptr));
@@ -2513,6 +2521,35 @@ DataflowQueues<Impl>::clearPending2SquashedRange(unsigned start, unsigned end)
             if (!validPosition(pointer2uint(DQPointer(wk_ptr)))) {
                 wk_ptr.valid = false;
             }
+        }
+    }
+}
+
+template<class Impl>
+void
+DataflowQueues<Impl>::dumpWkQ()
+{
+    printf("Dump wakeQueues:\n");
+    for (unsigned b = 0; b < nBanks; b++) {
+        for (unsigned op = 0; op < nOps; op++) {
+            printf("Q[%i]: ", b*nOps+op);
+            auto &q = wakeQueues[b*nOps + op];
+            for (const auto &p: q) {
+                printf("(%i) (%i %i) (%i), ",
+                        p.valid, p.bank, p.index, p.op);
+            }
+            printf("\n");
+        }
+    }
+}
+
+template<class Impl>
+void
+DataflowQueues<Impl>::genFUValidMask()
+{
+    for (auto &req: wakeup_requests) {
+        if (req.valid && !dqs[req.payload.bank]->canServeNew()) {
+            req.valid = false;
         }
     }
 }

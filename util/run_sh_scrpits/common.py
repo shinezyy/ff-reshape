@@ -68,3 +68,6 @@ def gem5_cpt_dir(arch):
             'RISCV': '/home/share/spec-simpoint-cpt-riscv-gcc-8.2',
             }
     return cpt_dirs[arch]
+
+stats_base_dir = '/work/gem5-results'
+

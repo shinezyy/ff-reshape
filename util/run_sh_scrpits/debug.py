@@ -11,13 +11,30 @@ from os.path import expanduser as uexp
 from multiprocessing import Pool
 import common as c
 
-tag = str(sh.git("describe")).strip()
 lmd = 0.55
-# tag = 'naive_pc'
-# outdir =  f'/work/gem5-results/debug-pred-{tag}/'
-outdir =  f'/work/gem5-results/op-rand-debug/'
 
 arch = 'RISCV'
+
+num_thread = 5
+
+full = False
+
+if full:
+    d = '-full'
+    insts = 220*10**6
+else:
+    d = ''
+    insts = 19*10**6
+
+outdir = pjoin(c.stats_base_dir, f'debug{d}')
+
+exp_options = [
+        #'--enable-reshape',
+        '--rand-op-position',
+        #'--profit-discount=1.0',
+        #'--ready-hint',
+        ]
+
 
 def debug(benchmark, some_extra_args, outdir_b):
 
@@ -34,8 +51,8 @@ def debug(benchmark, some_extra_args, outdir_b):
             #         'DQWrite,DQWake,FFCommit,FFSquash,DQ,FUW,ValueCommit,'+ \
             #         'Cache,DRAMSim2,MemoryAccess,DRAM,'+ \
             #         'FFInit,FFExec,FUSched,FanoutPred1,Reshape,ReadyHint',
-            '--debug-flags=ValueCommit',
-            #'--debug-flags=RSProbe1',
+            #'--debug-flags=ValueCommit',
+            '--debug-flags=RSProbe2',
             #'--debug-start={}'.format (panic_tick - 2000000),
             #'--debug-end={}'.format   (panic_tick + 200000),
             pjoin(c.gem5_home(), 'configs/spec2006/se_spec06.py'),
@@ -43,9 +60,7 @@ def debug(benchmark, some_extra_args, outdir_b):
             '-b', '{}'.format(benchmark),
             '--benchmark-stdout={}/out'.format(outdir_b),
             '--benchmark-stderr={}/err'.format(outdir_b),
-            '-I {}'.format(220*10**6),
-            #'-I {}'.format(19*10**6),
-            #'-I {}'.format(300),
+            '-I {}'.format(insts),
             # '-m', '254890101819500',
             # '--rel-max-tick=100',
             '--mem-size=4GB',
@@ -84,10 +99,7 @@ def debug(benchmark, some_extra_args, outdir_b):
             '--num-PhysReg=168',
             '--use-zperceptron',
             f'--fanout-lambda={lmd}',
-            # '--enable-reshape',
-            # '--rand-op-position',
-            # '--profit-discount=1.0',
-            # '--ready-hint',
+            *exp_options,
             ]
     else:
         assert False

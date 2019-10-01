@@ -12,13 +12,29 @@ from multiprocessing import Pool
 import common as c
 
 lmd = 0.55
-# tag = str(sh.git("describe")).strip()
-tag = 'perceptron'
-outdir =  f'/home/auser/gem5-results/base-ff-full'
+num_thread = 5
+
+full = False
+
+if full:
+    d = '-full'
+    insts = 220*10**6
+else:
+    d = ''
+    insts = 19*10**6
+
+outdir =  f'/home/auser/gem5-results/base-ff{d}'
+
+exp_options = [
+        #'--enable-reshape',
+        #'--rand-op-position',
+        #'--profit-discount=1.0',
+        #'--ready-hint',
+        ]
 
 arch = 'RISCV'
 
-def reshape(benchmark, some_extra_args, outdir_b):
+def op_rand(benchmark, some_extra_args, outdir_b):
 
     interval = 200*10**6
     warmup = 20*10**6
@@ -37,8 +53,7 @@ def reshape(benchmark, some_extra_args, outdir_b):
             '-b', '{}'.format(benchmark),
             '--benchmark-stdout={}/out'.format(outdir_b),
             '--benchmark-stderr={}/err'.format(outdir_b),
-            '-I {}'.format(220*10**6),
-            #'-I {}'.format(19*10**6),
+            '-I {}'.format(insts),
             # '-m', '254890101819500',
             # '--rel-max-tick=100',
             '--mem-size=4GB',
@@ -77,6 +92,7 @@ def reshape(benchmark, some_extra_args, outdir_b):
             '--num-PhysReg=168',
             '--use-zperceptron',
             f'--fanout-lambda={lmd}',
+            *exp_options,
             ]
     else:
         assert False
@@ -84,8 +100,8 @@ def reshape(benchmark, some_extra_args, outdir_b):
     gem5 = sh.Command(pjoin(c.gem5_build(arch), 'gem5.opt'))
     # sys.exit(0)
     gem5(
-            _out=pjoin(outdir_b, 'reshape_out.txt'),
-            _err=pjoin(outdir_b, 'reshape_err.txt'),
+            _out=pjoin(outdir_b, 'op_rand_out.txt'),
+            _err=pjoin(outdir_b, 'op_rand_err.txt'),
             *options
             )
 
@@ -102,7 +118,7 @@ def run(benchmark):
 
     if prerequisite:
         print('cpt flag found, is going to run gem5 on', benchmark)
-        c.avoid_repeated(reshape, outdir_b,
+        c.avoid_repeated(op_rand, outdir_b,
                 pjoin(c.gem5_build(arch), 'gem5.opt'),
                 benchmark, some_extra_args, outdir_b)
     else:
@@ -110,8 +126,6 @@ def run(benchmark):
 
 
 def main():
-    num_thread = 15
-
     benchmarks = []
 
     with open('./all_function_spec.txt') as f:

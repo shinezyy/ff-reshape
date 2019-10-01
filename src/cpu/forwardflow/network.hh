@@ -12,6 +12,7 @@
 #include <boost/dynamic_bitset.hpp>
 
 #include "base/intmath.hh"
+#include "base/random.hh"
 #include "base/trace.hh"
 #include "debug/Omega.hh"
 
@@ -82,6 +83,7 @@ CrossBar<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
 {
     int low = 1- ascendPrio;
     int high = ascendPrio;
+    // ascendPrio = random_mt.random(0, 1);
     ascendPrio = 1 - ascendPrio;
     int direction_bit = bits - stage - 1;
 

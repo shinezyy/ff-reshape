@@ -11,7 +11,18 @@ from os.path import expanduser as uexp
 from multiprocessing import Pool
 import common as c
 
-outdir =  '/work/gem5-results/o3-4-issue-same-fu/'
+num_thread = 10
+
+full = False
+
+if full:
+    d = '-full'
+    insts = 220*10**6
+else:
+    d = ''
+    insts = 19*10**6
+
+outdir = f'/home/auser/gem5-results/o3-4-issue-same-fu{d}/'
 
 arch = 'RISCV'
 
@@ -24,11 +35,11 @@ def o3_origin(benchmark, some_extra_args, outdir_b):
 
     panic_tick = 84334713043000
     options = [
-            '--stats-file=short_stats.txt',
+            '--stats-file=stats.txt',
             '--outdir=' + outdir_b,
             #'--debug-flags=Fetch,Decode,IEW,Commit,O3CPU,LSQ,LSQUnit',
             #'--debug-flags=Commit',
-            '--debug-flags=ValueCommit',
+            #'--debug-flags=ValueCommit',
             #'--debug-start={}'.format  (panic_tick - 2000000),
             #'--debug-end={}'.format    (panic_tick + 2000000),
             pjoin(c.gem5_home(), 'configs/spec2006/se_spec06.py'),
@@ -36,8 +47,7 @@ def o3_origin(benchmark, some_extra_args, outdir_b):
             '-b', '{}'.format(benchmark),
             '--benchmark-stdout={}/out'.format(outdir_b),
             '--benchmark-stderr={}/err'.format(outdir_b),
-            # '-I {}'.format(20 * 10**6 + 9618090 + 10000),
-            '-I {}'.format(19 * 10**6),
+            '-I {}'.format(insts),
             # '-m', '254890101819500',
             # '--rel-max-tick=100',
             '--mem-size=4GB',
@@ -108,8 +118,6 @@ def run(benchmark):
 
 
 def main():
-    num_thread = 8
-
     benchmarks = []
 
     with open('./all_function_spec.txt') as f:
