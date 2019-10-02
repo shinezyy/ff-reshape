@@ -515,7 +515,7 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
     // TODO! what if inst is  x = x !!!???
     unsigned num_src_regs = inst->numSrcRegs();
 
-    std::list<const RegId> forwarded;
+    std::list<RegId> forwarded;
 
     for (unsigned src_idx = 0; src_idx < num_src_regs; src_idx++) {
         const RegId& src_reg = inst->srcRegIdx(src_idx);

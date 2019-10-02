@@ -121,7 +121,7 @@ class OGBBP: public BPredUnit{
                   nLocal(_nLocal),
                   treeHeight(_treeHeight),
                   eta(0.07),
-                  zoomFactor(static_cast<const int32_t>(
+                  zoomFactor(static_cast<int32_t>(
                           (_nTrees + 1) * power(2, (_ctrBits - 1)/2))),
 
                   _name("OGBEntry"),
@@ -130,7 +130,7 @@ class OGBBP: public BPredUnit{
                   localHistory(localHistoryLen),
                   trees(_nTrees, Tree(_treeHeight, _ctrBits)),
                   sigma(_nTrees, SatCounter(_factorBits, 0)),
-                  sigma_deno(static_cast<const int32_t>(power(2, _factorBits)))
+                  sigma_deno(static_cast<int32_t>(power(2, _factorBits)))
         {}
 
         void init(myClock::time_point beginning);

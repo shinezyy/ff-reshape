@@ -14,20 +14,13 @@
 #include "base/intmath.hh"
 #include "base/random.hh"
 #include "base/trace.hh"
+#include "cpu/forwardflow/network_common.hh"
 #include "debug/Omega.hh"
 
 namespace FF{
 
 using std::tie;
 using std::tuple;
-
-template <class T>
-struct DQPacket{
-    bool valid{};
-    T payload;
-    uint32_t source{};
-    boost::dynamic_bitset<> destBits;
-};
 
 template <class T>
 class CrossBar {

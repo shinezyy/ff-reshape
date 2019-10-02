@@ -229,7 +229,7 @@ NBBP::NBEntry::NBEntry(const NBBPParams *params)
 
          localHistory(params->localHistoryLen),
 
-         counterMax(static_cast<const uint32_t>(power(2, params->ctrBits))),
+         counterMax(static_cast<uint32_t>(power(2, params->ctrBits))),
          origin(counterMax/2),
 
          prioriProb(origin),
