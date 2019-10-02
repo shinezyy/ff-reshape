@@ -23,7 +23,7 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir =  f'/home/auser/gem5-results/rand{d}'
+outdir =  f'{c.stats_base_dir}/rand{d}'
 
 exp_options = [
         #'--enable-reshape',

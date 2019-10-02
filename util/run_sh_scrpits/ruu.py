@@ -22,7 +22,7 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir = f'/home/auser/gem5-results/ruu-4-issue{d}/'
+outdir = f'{c.stats_base_dir}/ruu-4-issue{d}/'
 
 arch = 'RISCV'
 

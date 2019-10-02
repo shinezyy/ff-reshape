@@ -11,7 +11,8 @@ from os.path import expanduser as uexp
 from multiprocessing import Pool
 import common as c
 
-num_thread = 10
+lmd = 0.55
+num_thread = 22
 
 full = False
 
@@ -22,26 +23,33 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir = f'{c.stats_base_dir}/o3-4-issue-same-fu{d}/'
+outdir =  f'{c.stats_base_dir}/xbar-rand{d}'
+
+exp_options = [
+        #'--enable-reshape',
+        '--rand-op-position',
+        #'--profit-discount=1.0',
+        #'--ready-hint',
+        '--xbar-wk', 1,
+        '--min-wk', 0,
+        ]
 
 arch = 'RISCV'
 
-def o3_origin(benchmark, some_extra_args, outdir_b):
+def op_rand(benchmark, some_extra_args, outdir_b):
 
     interval = 200*10**6
     warmup = 20*10**6
 
     os.chdir(c.gem5_exec())
 
-    panic_tick = 84334713043000
+    panic_tick = 254980806320500
     options = [
-            '--stats-file=stats.txt',
             '--outdir=' + outdir_b,
-            #'--debug-flags=Fetch,Decode,IEW,Commit,O3CPU,LSQ,LSQUnit',
-            #'--debug-flags=Commit',
+            '--stats-file=stats.txt',
             #'--debug-flags=ValueCommit',
-            #'--debug-start={}'.format  (panic_tick - 2000000),
-            #'--debug-end={}'.format    (panic_tick + 2000000),
+            #'--debug-start={}'.format (panic_tick - 2000000),
+            #'--debug-end={}'.format   (panic_tick + 200000),
             pjoin(c.gem5_home(), 'configs/spec2006/se_spec06.py'),
             '--spec-2006-bench',
             '-b', '{}'.format(benchmark),
@@ -65,7 +73,7 @@ def o3_origin(benchmark, some_extra_args, outdir_b):
                 ]
     elif cpu_model == 'OoO':
         options += [
-            '--cpu-type=DerivO3CPU',
+            '--cpu-type=DerivFFCPU',
             '--mem-type=DDR3_1600_8x8',
 
             '--caches',
@@ -85,6 +93,8 @@ def o3_origin(benchmark, some_extra_args, outdir_b):
             '--num-SQ=42',
             '--num-PhysReg=168',
             '--use-zperceptron',
+            f'--fanout-lambda={lmd}',
+            *exp_options,
             ]
     else:
         assert False
@@ -92,8 +102,8 @@ def o3_origin(benchmark, some_extra_args, outdir_b):
     gem5 = sh.Command(pjoin(c.gem5_build(arch), 'gem5.opt'))
     # sys.exit(0)
     gem5(
-            _out=pjoin(outdir_b, 'short_gem5_out.txt'),
-            _err=pjoin(outdir_b, 'short_gem5_err.txt'),
+            _out=pjoin(outdir_b, 'op_rand_out.txt'),
+            _err=pjoin(outdir_b, 'op_rand_err.txt'),
             *options
             )
 
@@ -110,7 +120,7 @@ def run(benchmark):
 
     if prerequisite:
         print('cpt flag found, is going to run gem5 on', benchmark)
-        c.avoid_repeated(o3_origin, outdir_b,
+        c.avoid_repeated(op_rand, outdir_b,
                 pjoin(c.gem5_build(arch), 'gem5.opt'),
                 benchmark, some_extra_args, outdir_b)
     else:
