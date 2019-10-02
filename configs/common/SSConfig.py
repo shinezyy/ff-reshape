@@ -70,3 +70,8 @@ def modifyO3CPUConfig(options, cpu):
 
     if options.ready_hint:
         cpu.ReadyHint = options.ready_hint
+
+    if options.xbar_wk == '1':
+        cpu.XBarWakeup = True
+    if options.min_wk == '1':
+        cpu.MinWakeup = True

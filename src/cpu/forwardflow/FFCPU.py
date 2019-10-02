@@ -229,3 +229,7 @@ class DerivFFCPU(BaseCPU):
     ReadyHint = Param.Bool(False, "ReadyHint")
 
     TermMax = Param.Unsigned(8, "TermMax")
+
+    MINWakeup = Param.Bool(False, "MINWakeup")
+
+    XBarWakeup = Param.Bool(False, "XBarWakeup")

@@ -23,10 +23,10 @@ using std::tie;
 using std::tuple;
 
 template <class T>
-class CrossBar {
+class Switch {
 public:
 
-    CrossBar(uint32_t bits, uint32_t stage, bool ascendPrio);
+    Switch(uint32_t bits, uint32_t stage, bool ascendPrio);
 
     tuple<DQPacket<T>*, DQPacket<T>*> cross(DQPacket<T>*, DQPacket<T>*);
 
@@ -40,7 +40,7 @@ protected:
 template <class T>
 class OmegaNetwork {
     const uint32_t size;
-    std::vector<std::vector<CrossBar<T>>> switches;
+    std::vector<std::vector<Switch<T>>> switches;
 
 public:
     std::vector<DQPacket<T>*> select(std::vector<DQPacket<T>*> &);
@@ -62,7 +62,7 @@ namespace FF{
 using namespace std;
 
 template<class T>
-CrossBar<T>::CrossBar(uint32_t bits, uint32_t stage, bool ascendPrio)
+Switch<T>::Switch(uint32_t bits, uint32_t stage, bool ascendPrio)
 :bits(bits),
 stage(stage),
 ascendPrio(ascendPrio)
@@ -72,7 +72,7 @@ ascendPrio(ascendPrio)
 
 template<class T>
 tuple<DQPacket<T>*, DQPacket<T>*>
-CrossBar<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
+Switch<T>::cross(DQPacket<T> *input0, DQPacket<T> *input1)
 {
     int low = 1- ascendPrio;
     int high = ascendPrio;
@@ -131,10 +131,10 @@ OmegaNetwork<T>::OmegaNetwork(uint32_t size, bool ascendPrio)
         size(size)
 {
     for (auto y = 0; y < size/2; y++) {
-        switches.push_back(vector<CrossBar<T>>());
-        vector<CrossBar<T>> &row = switches.back();
+        switches.push_back(vector<Switch<T>>());
+        vector<Switch<T>> &row = switches.back();
         for (auto x = 0; x < ceilLog2(size); x++) {
-            row.push_back(CrossBar<T>(static_cast<uint32_t>(ceilLog2(size)),
+            row.push_back(Switch<T>(static_cast<uint32_t>(ceilLog2(size)),
                     static_cast<uint32_t>(x), ascendPrio));
         }
     }

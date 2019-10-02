@@ -11,6 +11,7 @@ struct DQPacket{
     bool valid{};
     T payload;
     uint32_t source{};
+    uint32_t dest{};
     boost::dynamic_bitset<> destBits;
 };
 

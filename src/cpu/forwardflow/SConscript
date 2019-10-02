@@ -102,6 +102,7 @@ if 'FFCPU' in env['CPU_MODELS']:
     DebugFlag('RSProbe2')
     DebugFlag('RSProbe3')
     DebugFlag('ReadyHint')
+    DebugFlag('CrossBar')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',

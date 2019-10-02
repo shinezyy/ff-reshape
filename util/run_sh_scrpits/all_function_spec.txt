@@ -18,5 +18,5 @@ sjeng
 perlbench
 gamess
 hmmer
-h264ref
 dealII
+h264ref

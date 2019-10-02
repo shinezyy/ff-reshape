@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "cpu/forwardflow/comm.hh"
-//#include "cpu/forwardflow/dyn_inst.hh"
+#include "cpu/forwardflow/crossbar.hh"
 #include "cpu/forwardflow/network.hh"
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
@@ -207,11 +207,13 @@ private:
 //    std::vector<bool> wakenValids;
 //    std::vector<DynInstPtr> wakenInsts;
 
-    OmegaNetwork<DynInstPtr> bankFUNet;
+    OmegaNetwork<DynInstPtr> bankFUMIN;
+    OmegaNetwork<WKPointer> wakeupQueueBankMIN;
+    OmegaNetwork<PointerPair> pointerQueueBankMIN;
 
-    OmegaNetwork<WKPointer> wakeupQueueBankNet;
-
-    OmegaNetwork<PointerPair> pointerQueueBankNet;
+    CrossBar<DynInstPtr> bankFUXBar;
+    CrossBar<WKPointer> wakeupQueueBankXBar;
+    CrossBar<PointerPair> pointerQueueBankXBar;
 
     std::vector<DQPacket<DynInstPtr>> fu_requests;
     std::vector<bool> fu_req_granted;
@@ -232,7 +234,8 @@ private:
 
     FFFUPool *fuPool;
 
-    boost::dynamic_bitset<> coordinateFU(DynInstPtr &inst, unsigned bank);
+    std::pair<unsigned, boost::dynamic_bitset<> > coordinateFU(
+            DynInstPtr &inst, unsigned bank);
 
     std::vector<std::vector<bool>> fuGroupCaps;
     std::unordered_map<OpClass, unsigned> opLat;
@@ -497,6 +500,9 @@ private:
     const unsigned termMax;
 
     void genFUValidMask();
+
+    const bool MINWakeup;
+    const bool XBarWakeup;
 };
 
 }

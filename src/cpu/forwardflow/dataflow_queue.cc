@@ -736,7 +736,8 @@ void DataflowQueues<Impl>::tick()
                     i, fromLastCycle->insts[i]);
 
             fu_requests[i].payload = fromLastCycle->insts[i];
-            fu_requests[i].destBits = coordinateFU(fromLastCycle->insts[i], i);
+            std::tie(fu_requests[i].dest, fu_requests[i].destBits) =
+                coordinateFU(fromLastCycle->insts[i], i);
         }
     }
     // For each bank
@@ -749,7 +750,7 @@ void DataflowQueues<Impl>::tick()
     DPRINTF(DQ, "FU selecting ready insts from banks\n");
     DPRINTF(DQWake, "FU req packets:\n");
     dumpInstPackets(fu_req_ptrs);
-    fu_granted_ptrs = bankFUNet.select(fu_req_ptrs);
+    fu_granted_ptrs = bankFUMIN.select(fu_req_ptrs);
     for (unsigned b = 0; b < nBanks; b++) {
         assert(fu_granted_ptrs[b]);
         if (!fu_granted_ptrs[b]->valid || !fu_granted_ptrs[b]->payload) {
@@ -802,7 +803,12 @@ void DataflowQueues<Impl>::tick()
     // For each bank: check status: whether I can consume from queue this cycle?
     // record the state
     genFUValidMask();
-    wakeup_granted_ptrs = wakeupQueueBankNet.select(wakeup_req_ptrs);
+
+    if (MINWakeup) {
+        wakeup_granted_ptrs = wakeupQueueBankMIN.select(wakeup_req_ptrs);
+    } else {
+        wakeup_granted_ptrs = wakeupQueueBankXBar.select(wakeup_req_ptrs);
+    }
 
     for (auto &ptr : wakeup_granted_ptrs) {
         if (ptr->valid) {
@@ -977,9 +983,13 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         forwardPointerQueue(nBanks * nOps),
 //        wakenValids(nBanks, false),
 //        wakenInsts(nBanks, nullptr),
-        bankFUNet(nBanks, true),
-        wakeupQueueBankNet(nBanks * nOps, true),
-        pointerQueueBankNet(nBanks * nOps, true),
+        bankFUMIN(nBanks, true),
+        wakeupQueueBankMIN(nBanks * nOps, true),
+        pointerQueueBankMIN(nBanks * nOps, true),
+
+        bankFUXBar(nBanks),
+        wakeupQueueBankXBar(nBanks * nOps),
+        pointerQueueBankXBar(nBanks * nOps),
 
         fu_requests(nBanks),
         fu_req_granted(nBanks),
@@ -1026,9 +1036,11 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         randAllocator(0, nBanks * nOps),
         tempWakeQueues(nBanks * nOps),
         headTerm(0),
-        termMax(params->TermMax)
-
+        termMax(params->TermMax),
+        MINWakeup(params->MINWakeup),
+        XBarWakeup(params->XBarWakeup)
 {
+    assert(MINWakeup ^ XBarWakeup);
     // init inputs to omega networks
     for (unsigned b = 0; b < nBanks; b++) {
         DQPacket<DynInstPtr> &fu_pkt = fu_requests[b];
@@ -1092,7 +1104,7 @@ unsigned DataflowQueues<Impl>::pointer2uint(DQPointer ptr) const
 }
 
 template<class Impl>
-boost::dynamic_bitset<>
+std::pair<unsigned, boost::dynamic_bitset<> >
 DataflowQueues<Impl>::coordinateFU(
         DataflowQueues::DynInstPtr &inst, unsigned bank)
 {
@@ -1109,7 +1121,7 @@ DataflowQueues<Impl>::coordinateFU(
         fuPointer[bank] = bank;
         DPRINTF(FUW, "reset to origin\n");
     }
-    return uint2Bits(fuPointer[bank]);
+    return std::make_pair(fuPointer[bank], uint2Bits(fuPointer[bank]));
 }
 
 template<class Impl>
@@ -1122,7 +1134,9 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
         pkt.valid = pair.dest.valid;
         pkt.source = forwardPtrIndex;
         pkt.payload = pair;
-        pkt.destBits = uint2Bits(pair.dest.bank * nOps + pair.dest.op);
+        unsigned d = pair.dest.bank * nOps + pair.dest.op;
+        pkt.dest = d;
+        pkt.destBits = uint2Bits(d);
 
         DPRINTF(DQWake, "Insert Fw Pointer (%i %i) (%i)-> (%i %i) (%i)\n",
                 pair.dest.bank, pair.dest.index, pair.dest.op,
@@ -1666,7 +1680,9 @@ void DataflowQueues<Impl>::readQueueHeads()
                         i, ptr.valid, ptr.bank, ptr.index, ptr.op);
                 wk_pkt.valid = ptr.valid;
                 wk_pkt.payload = ptr;
-                wk_pkt.destBits = uint2Bits(ptr.bank * nOps + ptr.op);
+                unsigned d = ptr.bank * nOps + ptr.op;
+                wk_pkt.dest = d;
+                wk_pkt.destBits = uint2Bits(d);
 //                wk_pkt.source = i;
             }
         }
@@ -1906,7 +1922,7 @@ void DataflowQueues<Impl>::digestForwardPointer()
 {
     DPRINTF(DQ, "Pair packets before selection\n");
     dumpPairPackets(insert_req_ptrs);
-    insert_granted_ptrs = pointerQueueBankNet.select(insert_req_ptrs);
+    insert_granted_ptrs = pointerQueueBankMIN.select(insert_req_ptrs);
 
     DPRINTF(DQ, "Selected pairs:\n");
     dumpPairPackets(insert_granted_ptrs);
