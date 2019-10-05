@@ -723,7 +723,9 @@ FFDIEWC<Impl>::
     if (commitCounter >= commitTraceInterval && !head_inst->isForwarder()) {
         DPRINTF(ValueCommit, "@%lu Committing %lu instruction with sn:%lu PC:",
                 curTick(), commitAll, head_inst->seqNum);
-        std::cout << head_inst->pcState();
+        if (Debug::ValueCommit) {
+            std::cout << head_inst->pcState();
+        }
         if (head_inst->numDestRegs() > 0) {
             DPRINTF(ValueCommit, ", with wb value: %lu",
                     head_inst->getResult().asIntegerNoAssert());

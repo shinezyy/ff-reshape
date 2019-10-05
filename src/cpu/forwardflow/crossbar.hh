@@ -21,7 +21,7 @@ class CrossBar {
     std::list<uint32_t> prioList;
 
 public:
-    std::vector<DQPacket<T>*> select(std::vector<DQPacket<T>*> &);
+    std::vector<DQPacket<T>*> select(std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null);
 
     CrossBar(uint32_t size);
 
@@ -38,11 +38,9 @@ CrossBar<T>::CrossBar(uint32_t size): size(size)
 
 template<class T>
 std::vector<DQPacket<T>*>
-CrossBar<T>::select(std::vector<DQPacket<T>*> &inputs)
+CrossBar<T>::select(std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null)
 {
-    DQPacket<T> null;
-    null.valid = false;
-    std::vector<DQPacket<T>*> outputs(size, &null);
+    std::vector<DQPacket<T>*> outputs(size, null);
     assert(inputs.size() == size);
 
     for (uint32_t i: prioList) {

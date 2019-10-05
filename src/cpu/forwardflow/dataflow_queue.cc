@@ -806,8 +806,15 @@ void DataflowQueues<Impl>::tick()
 
     if (MINWakeup) {
         wakeup_granted_ptrs = wakeupQueueBankMIN.select(wakeup_req_ptrs);
+
+    } else if (XBarWakeup) {
+        wakeup_granted_ptrs = wakeupQueueBankXBar.select(wakeup_req_ptrs, &nullWKPkt);
+
+    } else if (NarrowXBarWakeup) {
+        wakeup_granted_ptrs = wakeupQueueBankNarrowXBar.select(wakeup_req_ptrs, &nullWKPkt);
+
     } else {
-        wakeup_granted_ptrs = wakeupQueueBankXBar.select(wakeup_req_ptrs);
+        panic("Unknown topology\n");
     }
 
     for (auto &ptr : wakeup_granted_ptrs) {
@@ -825,15 +832,17 @@ void DataflowQueues<Impl>::tick()
         for (unsigned op: opPrioList) {
             if (dqs[b]->canServeNew()) {
                 const auto &pkt = wakeup_granted_ptrs[b * nOps + op];
-
+                if (!pkt->valid) {
+                    continue;
+                }
+                DPRINTF(DQWake, "granted[%i.%i]: dest:(%i) (%i %i) (%i)\n",
+                        b, op, pkt->valid,
+                        pkt->payload.bank, pkt->payload.index, pkt->payload.op);
                 DPRINTF(DQWake, "granted[%i.%i]: dest:(%llu) (%i) (%i %i) (%i)\n",
                         b, op, pkt->destBits.to_ulong(),
                         pkt->valid,
                         pkt->payload.bank, pkt->payload.index, pkt->payload.op);
 
-                if (!pkt->valid) {
-                    continue;
-                }
                 WKPointer &ptr = pkt->payload;
 
                 if (dqs[b]->wakeup(ptr)) {
@@ -991,6 +1000,8 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         wakeupQueueBankXBar(nBanks * nOps),
         pointerQueueBankXBar(nBanks * nOps),
 
+        wakeupQueueBankNarrowXBar(nBanks * nOps, nOps),
+
         fu_requests(nBanks),
         fu_req_granted(nBanks),
         fu_req_ptrs(nBanks),
@@ -1038,9 +1049,10 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         headTerm(0),
         termMax(params->TermMax),
         MINWakeup(params->MINWakeup),
-        XBarWakeup(params->XBarWakeup)
+        XBarWakeup(params->XBarWakeup),
+        NarrowXBarWakeup(params->NarrowXBarWakeup)
 {
-    assert(MINWakeup ^ XBarWakeup);
+    assert(MINWakeup + XBarWakeup + NarrowXBarWakeup == 1);
     // init inputs to omega networks
     for (unsigned b = 0; b < nBanks; b++) {
         DQPacket<DynInstPtr> &fu_pkt = fu_requests[b];
@@ -1073,6 +1085,9 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
     memDepUnit.init(params, DummyTid);
     memDepUnit.setIQ(this);
     resetState();
+
+    nullWKPkt.valid = false;
+    nullWKPkt.destBits = boost::dynamic_bitset<>(ceilLog2(nOps * nBanks) + 1);
 }
 
 template<class Impl>

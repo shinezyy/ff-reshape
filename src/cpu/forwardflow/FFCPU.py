@@ -231,5 +231,5 @@ class DerivFFCPU(BaseCPU):
     TermMax = Param.Unsigned(8, "TermMax")
 
     MINWakeup = Param.Bool(False, "MINWakeup")
-
     XBarWakeup = Param.Bool(False, "XBarWakeup")
+    NarrowXBarWakeup = Param.Bool(False, "NarrowXBarWakeup")

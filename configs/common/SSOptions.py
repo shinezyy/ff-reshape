@@ -116,13 +116,21 @@ def addO3Options(parser):
             action='store',
             type='choice',
             choices=['0', '1'],
-            default='1',
+            default='0',
             help='xbar wakeup')
 
     parser.add_option("--min-wk",
             action='store',
             type='choice',
             choices=['0', '1'],
-            default='0',
+            default='1',
             help='MIN wakeup')
+
+    parser.add_option("--narrow-xbar-wk",
+            action='store',
+            type='choice',
+            choices=['0', '1'],
+            default='0',
+            help='narrow xbar wakeup')
+
 

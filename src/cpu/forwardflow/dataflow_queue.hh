@@ -13,6 +13,7 @@
 
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/crossbar.hh"
+#include "cpu/forwardflow/crossbar_narrow.hh"
 #include "cpu/forwardflow/network.hh"
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
@@ -211,9 +212,13 @@ private:
     OmegaNetwork<WKPointer> wakeupQueueBankMIN;
     OmegaNetwork<PointerPair> pointerQueueBankMIN;
 
+    DQPacket<WKPointer> nullWKPkt;
+
     CrossBar<DynInstPtr> bankFUXBar;
     CrossBar<WKPointer> wakeupQueueBankXBar;
     CrossBar<PointerPair> pointerQueueBankXBar;
+
+    CrossBarNarrow<WKPointer> wakeupQueueBankNarrowXBar;
 
     std::vector<DQPacket<DynInstPtr>> fu_requests;
     std::vector<bool> fu_req_granted;
@@ -503,6 +508,7 @@ private:
 
     const bool MINWakeup;
     const bool XBarWakeup;
+    const bool NarrowXBarWakeup;
 };
 
 }
