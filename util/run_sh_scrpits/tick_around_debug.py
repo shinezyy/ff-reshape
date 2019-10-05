@@ -12,18 +12,36 @@ from multiprocessing import Pool
 import common as c
 
 tag = str(sh.git("describe")).strip()
-lmd = 0.55
 # tag = 'naive_pc'
 # outdir =  f'/work/gem5-results/debug-pred-{tag}/'
-outdir =  f'/work/gem5-results/op-rand-debug/'
+outdir =  f'/work/gem5-results/tick-debug/'
 arch = 'RISCV'
-cycles_after = 100000000000
 log_file = f'300-t-before-last-commit.txt'
+
+lmd = 0.55
+num_thread = 10
+
+full = True
+
+if full:
+    d = '-full'
+    insts = 220*10**6
+else:
+    d = ''
+    insts = 19*10**6
+
+exp_options = [
+        #'--enable-reshape',
+        '--rand-op-position',
+        #'--profit-discount=1.0',
+        '--ready-hint',
+        '--xbar-wk', 1,
+        '--min-wk', 0,
+        ]
 
 large_enough = 2**62
 
 def debug_1(benchmark, some_extra_args, outdir_b):
-
     benchmark, panic_tick = benchmark
     panic_tick = int(panic_tick)
     interval = 200*10**6
@@ -39,12 +57,13 @@ def debug_1(benchmark, some_extra_args, outdir_b):
             #         'Cache,DRAMSim2,MemoryAccess,DRAM,'+ \
             #         'FFInit,FFExec,FUSched,FanoutPred1,Reshape,ReadyHint',
             '--debug-flags=Fetch,DAllocation,DIEWC,IEW,Rename,Commit,DQRead,' + \
-                    'DQWrite,DQWake,FFCommit,FFSquash,DQ,FUW,'+ \
-                    'FFInit,FFExec,FUSched,FanoutPred1',
+                    'DQWrite,DQWake,FFCommit,FFSquash,DQ,FUW,' + \
+                    'FFInit,FFExec,FUSched,FanoutPred1,' + \
+                    'CrossBar,CrossBarNarrow,ReadyHint',
             # '--debug-flags=ValueCommit',
             '--debug-flags=RSProbe1',
             #'--debug-start={}'.format (102498195336000),
-            '--debug-start={}'.format (panic_tick - 3000000),
+            '--debug-start={}'.format (panic_tick - 5000000),
             '--debug-end={}'.format   (panic_tick + 3000000),
             # '--debug-start={}'.format (large_enough-100),
             # '--debug-end={}'.format   (large_enough),
@@ -92,10 +111,7 @@ def debug_1(benchmark, some_extra_args, outdir_b):
             '--num-PhysReg=168',
             '--use-zperceptron',
             f'--fanout-lambda={lmd}',
-            # '--enable-reshape',
-            # '--rand-op-position',
-            # '--profit-discount=1.0',
-            # '--ready-hint',
+            *exp_options,
             ]
     else:
         assert False
@@ -129,8 +145,6 @@ def run(benchmark):
 
 
 def main():
-    num_thread = 5
-
     benchmarks = []
 
     with open('./tick_around_debug.txt') as f:

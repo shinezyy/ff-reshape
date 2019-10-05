@@ -11,9 +11,9 @@ from os.path import expanduser as uexp
 from multiprocessing import Pool
 import common as c
 
-num_thread = 10
+num_thread = 22
 
-full = False
+full = True
 
 if full:
     d = '-full'
@@ -21,6 +21,16 @@ if full:
 else:
     d = ''
     insts = 19*10**6
+
+exp_options = [
+        #'--enable-reshape',
+        #'--rand-op-position',
+        #'--profit-discount=1.0',
+        #'--ready-hint',
+        '--narrow-xbar-wk', 0,
+        '--xbar-wk', 0,
+        '--min-wk', 0,
+        ]
 
 outdir = f'{c.stats_base_dir}/ruu-4-issue{d}/'
 
@@ -85,6 +95,7 @@ def o3_origin(benchmark, some_extra_args, outdir_b):
             '--num-SQ=42',
             '--num-PhysReg=168',
             '--use-zperceptron',
+            *exp_options,
             ]
     else:
         assert False

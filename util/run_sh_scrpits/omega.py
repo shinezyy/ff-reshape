@@ -12,6 +12,7 @@ from multiprocessing import Pool
 import common as c
 
 lmd = 0.55
+
 num_thread = 10
 
 full = True
@@ -23,15 +24,13 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir =  f'{c.stats_base_dir}/xbar-rand-hint{d}'
+outdir =  f'{c.stats_base_dir}/omega{d}'
 
 exp_options = [
-        #'--enable-reshape',
-        '--rand-op-position',
-        #'--profit-discount=1.0',
-        '--ready-hint',
-        '--xbar-wk', 1,
-        '--min-wk', 0,
+        # '--enable-reshape',
+        # '--rand-op-position',
+        # '--profit-discount=1.0',
+        # '--ready-hint',
         ]
 
 arch = 'RISCV'
