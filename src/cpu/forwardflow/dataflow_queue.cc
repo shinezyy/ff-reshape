@@ -1094,6 +1094,9 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
 
     nullWKPkt.valid = false;
     nullWKPkt.destBits = boost::dynamic_bitset<>(ceilLog2(nOps * nBanks) + 1);
+
+    nullFWPkt.valid = false;
+    nullFWPkt.destBits = boost::dynamic_bitset<>(ceilLog2(nOps * nBanks) + 1);
 }
 
 template<class Impl>
@@ -1960,7 +1963,7 @@ void DataflowQueues<Impl>::digestForwardPointer()
 {
     DPRINTF(DQ, "Pair packets before selection\n");
     dumpPairPackets(insert_req_ptrs);
-    insert_granted_ptrs = pointerQueueBankMIN.select(insert_req_ptrs);
+    insert_granted_ptrs = pointerQueueBankXBar.select(insert_req_ptrs, &nullFWPkt);
 
     DPRINTF(DQ, "Selected pairs:\n");
     dumpPairPackets(insert_granted_ptrs);
