@@ -828,6 +828,7 @@ void DataflowQueues<Impl>::tick()
 
     assert(opPrioList.size() == 4);
     // check whether each bank can really accept
+    unsigned wk_pkt_passed = 0;
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op: opPrioList) {
             if (dqs[b]->canServeNew()) {
@@ -857,6 +858,7 @@ void DataflowQueues<Impl>::tick()
                             ptr.bank, ptr.index, ptr.op, pkt->source);
                     wakeQueues[pkt->source].pop_front();
                     numPendingWakeups--;
+                    wk_pkt_passed++;
                     DPRINTF(DQWake, "After pop, numPendingWakeups = %u\n", numPendingWakeups);
 
                 } else {
@@ -864,6 +866,10 @@ void DataflowQueues<Impl>::tick()
                 }
             }
         }
+    }
+    if (wk_pkt_passed != 0) {
+        assert(wk_pkt_passed < nOps * nBanks);
+        WKFlowUsage[wk_pkt_passed]++;
     }
 
     if (Debug::QClog) {
@@ -1666,6 +1672,23 @@ void DataflowQueues<Impl>::regStats()
     oldWaitYoung
         .name(name() + ".oldWaitYoung")
         .desc("oldWaitYoung");
+
+    WKFlowUsage
+        .init(nOps * nBanks + 1)
+        .name(name() + ".WKFlowUsage")
+        .desc("WKFlowUsage")
+        .flags(Stats::total | Stats::cdf);
+
+    WKQueueLen
+        .init(nOps * nBanks * maxQueueDepth + 1)
+        .prereq(WKQueueLen)
+        .name(name() + ".WKQueueLen")
+        .desc("WKQueueLen")
+        .flags(Stats::cdf);
+
+    HalfSquashes
+        .name(name() + ".HalfSquashes")
+        .desc("HalfSquashes");
 }
 
 template<class Impl>
@@ -2280,6 +2303,7 @@ template<class Impl>
 void DataflowQueues<Impl>::processWKQueueFull()
 {
     halfSquash = true;
+    HalfSquashes++;
 
     DPRINTF(DQ, "Dump before clear:\n");
     if (Debug::DQ || Debug::RSProbe1) {
@@ -2315,6 +2339,7 @@ template<class Impl>
 void DataflowQueues<Impl>::processFWQueueFull()
 {
     halfSquash = true;
+    HalfSquashes++;
 
     DPRINTF(DQ || Debug::RSProbe1, "Dump before clear:\n");
     if (Debug::DQ || Debug::RSProbe1) {
@@ -2415,12 +2440,18 @@ template<class Impl>
 void
 DataflowQueues<Impl>::countUpPointers()
 {
+    unsigned total_queue_len = 0;
     for (deque<WKPointer> &q :wakeQueues) {
+        total_queue_len += q.size();
         for (WKPointer &p: q) {
             if (p.valid) {
                 p.queueTime++;
             }
         }
+    }
+    assert(total_queue_len < nOps * nBanks * maxQueueDepth);
+    if (total_queue_len != 0) {
+        WKQueueLen[total_queue_len]++;
     }
 }
 

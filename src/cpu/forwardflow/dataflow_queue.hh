@@ -213,6 +213,7 @@ private:
     OmegaNetwork<PointerPair> pointerQueueBankMIN;
 
     DQPacket<WKPointer> nullWKPkt;
+    DQPacket<PointerPair> nullFWPkt;
 
     CrossBar<DynInstPtr> bankFUXBar;
     CrossBar<WKPointer> wakeupQueueBankXBar;
@@ -474,6 +475,12 @@ public:
 
     Stats::Scalar oldWaitYoung;
 
+
+    Stats::Vector WKFlowUsage;
+
+    Stats::Vector WKQueueLen;
+
+    Stats::Scalar HalfSquashes;
 private:
 
     unsigned qAllocPtr{};
