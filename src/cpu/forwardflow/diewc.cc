@@ -196,8 +196,7 @@ void FFDIEWC<Impl>::dispatch() {
 
 //    DPRINTF(DIEWC, "dispatch reach 1\n");
     for (; dispatched < num_insts_to_disp &&
-           dispatched < dispatchWidth;
-           ++dispatched) {
+           dispatched < dispatchWidth && !to_dispatch.empty();) {
 //        DPRINTF(DIEWC, "dispatch reach 2\n");
         inst = to_dispatch.front();
         assert(inst);
@@ -219,6 +218,7 @@ void FFDIEWC<Impl>::dispatch() {
                 toAllocation->diewcInfo.dispatched++;
             }
 
+            dispatched++;
             continue;
         }
 
@@ -376,6 +376,10 @@ void FFDIEWC<Impl>::dispatch() {
         inst->dispatchTick = curTick() - inst->fetchTick;
 #endif
         ppDispatch->notify(inst);
+
+        if (!inst->isForwarder()) {
+            dispatched++;
+        }
     }
 
     if (dispatched) {
@@ -822,13 +826,13 @@ FFDIEWC<Impl>::commitInsts()
 
     DPRINTF(Commit, "Trying to commit instructions in the DQ.\n");
 
-    unsigned num_committed = 0;
+    unsigned num_committed = 0, commit_limit = width;
 
     DynInstPtr head_inst;
 
     // Commit as many instructions as possible until the commit bandwidth
     // limit is reached, or it becomes impossible to commit any more.
-    while (num_committed < width && !skipThisCycle) {
+    while (num_committed < commit_limit && !skipThisCycle) {
         // Check for any interrupt that we've already squashed for
         // and start processing it.
         if (interrupt != NoFault)
@@ -893,7 +897,9 @@ FFDIEWC<Impl>::commitInsts()
 
                 toAllocation->diewcInfo.updateDQTail = true;
                 toAllocation->diewcInfo.updateDQHead = true;
-                ++num_committed;
+                if (head_inst->isForwarder()) {
+                    commit_limit++;
+                }
                 statCommittedInstType[head_inst->opClass()]++;
                 ppCommit->notify(head_inst);
 
