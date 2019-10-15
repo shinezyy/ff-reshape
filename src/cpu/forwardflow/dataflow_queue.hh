@@ -146,6 +146,10 @@ public:
     void dumpOutPointers() const;
 
     void dumpInputPointers() const;
+
+    void countUpPendingPointers();
+
+    void countUpPendingInst();
 };
 
 
@@ -516,6 +520,9 @@ private:
     const bool MINWakeup;
     const bool XBarWakeup;
     const bool NarrowXBarWakeup;
+
+public:
+    void countCycles(DynInstPtr &inst, WKPointer *wk);
 };
 
 }

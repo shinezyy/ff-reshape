@@ -465,6 +465,14 @@ public:
 
     unsigned fwLevel;
 
+    unsigned ssrDelay{};
+
+    unsigned queueingDelay{};
+
+    unsigned pendingDelay{};
+
+    unsigned FUContentionDelay{};
+
     unsigned wkDelayedCycle{};
 
     unsigned forwardOp{100000};

@@ -438,6 +438,11 @@ public:
 
     Stats::Scalar wkDelayedCycles;
 
+    Stats::Scalar ssrDelay;
+    Stats::Scalar queueingDelay;
+    Stats::Scalar pendingDelay;
+    Stats::Scalar FUContentionDelay;
+
     ArchState *getArchState() {return &archState;}
 
     XDataflowQueues *getDQ() {return &dq;}

@@ -1366,6 +1366,10 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
     negativeContrib += inst->negativeContrib;
 
     wkDelayedCycles += inst->wkDelayedCycle;
+    queueingDelay += inst->queueingDelay;
+    ssrDelay += inst->ssrDelay;
+    pendingDelay += inst->pendingDelay;
+    FUContentionDelay += inst->FUContentionDelay;
 
     if (!inst->isSquashed() && inst->numDestRegs() > 0 && !inst->isForwarder()) {
         totalFanoutPredictions++;
@@ -1862,6 +1866,22 @@ void FFDIEWC<Impl>::regStats()
     wkDelayedCycles
         .name(name() + ".wkDelayedCycles")
         .desc("wkDelayedCycles");
+
+    ssrDelay
+        .name(name() + ".ssrDelay")
+        .desc("ssrDelay");
+
+    queueingDelay
+        .name(name() + ".queueingDelay")
+        .desc("queueingDelay");
+
+    pendingDelay
+        .name(name() + ".pendingDelay")
+        .desc("pendingDelay");
+
+    FUContentionDelay
+        .name(name() + ".FUContentionDelay")
+        .desc("FUContentionDelay");
 }
 
 template<class Impl>

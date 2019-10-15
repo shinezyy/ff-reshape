@@ -220,6 +220,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         } else if (ptr.wkType == WKPointer::WKMem) {
             inst->memDepReady = true;
+            inst->queueingDelay += ptr.queueTime;
             wakeup_count++;
             DPRINTF(DQWake, "Mem inst [%llu] received wakeup pkt\n",
                     inst->seqNum);
@@ -294,12 +295,13 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
                 if (!inst->isForwarder()) {
                     wakeup_count++;
-                    if (ptr.wkType != WKPointer::WKOp || ptr.isFwExtra) {
-                        inst->wkDelayedCycle = std::max((int) 0, ((int) ptr.queueTime) - 1);
-                    } else {
-                        inst->wkDelayedCycle = ptr.queueTime;
-                    }
                     if (!first) {
+                        if (ptr.wkType != WKPointer::WKOp || ptr.isFwExtra) {
+                            inst->wkDelayedCycle = std::max((int) 0, ((int) ptr.queueTime) - 1);
+                        } else {
+                            inst->wkDelayedCycle = ptr.queueTime;
+                        }
+                        dq->countCycles(inst, &ptr);
                         DPRINTF(DQWake||Debug::RSProbe1,
                                 "inst [%llu] is the gifted one in this bank\n",
                                 inst->seqNum);
@@ -412,6 +414,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                         out_ptr = inst->pointers[out_op];
                         out_ptr.reshapeOp = out_op;
                         out_ptr.fwLevel = inst->fwLevel;
+                        out_ptr.ssrDelay = ptr.ssrDelay + 1;
 
                         if (out_ptr.valid) {
                             DPRINTF(FFSquash||Debug::RSProbe1,
@@ -429,6 +432,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                                     " it is still forwarded because of destReforward flag\n");
                         }
                         optr = inst->pointers[op];
+                        optr.ssrDelay = ptr.ssrDelay + 1;
                         if (op == 0 && optr.valid && inst->destReforward) {
                             inst->destReforward = false;
                         }
@@ -711,6 +715,25 @@ void DataflowQueueBank<Impl>::dumpInputPointers() const
 }
 
 template<class Impl>
+void DataflowQueueBank<Impl>::countUpPendingPointers()
+{
+    for (auto &ptr: pendingWakeupPointers) {
+        if (ptr.valid) {
+            ptr.pendingTime++;
+        }
+    }
+}
+
+template<class Impl>
+void DataflowQueueBank<Impl>::countUpPendingInst()
+{
+    if (pendingInstValid) {
+        assert(pendingInst);
+        pendingInst->FUContentionDelay++;
+    }
+}
+
+template<class Impl>
 void DataflowQueues<Impl>::tick()
 {
     // fu preparation
@@ -786,6 +809,7 @@ void DataflowQueues<Impl>::tick()
     // mark it for banks
     for (unsigned b = 0; b < nBanks; b++) {
         dqs[b]->instGranted = fu_req_granted[b];
+        dqs[b]->countUpPendingInst();
     }
 
     // For each bank, check
@@ -958,6 +982,7 @@ void DataflowQueues<Impl>::tick()
             DPRINTF(Omega, "toNext cycle inst[%d] valid, &inst: %p\n",
                     i, toNextCycle->insts[i]);
         }
+        dqs[i]->countUpPendingPointers();
     }
 
 }
@@ -2617,6 +2642,15 @@ DataflowQueues<Impl>::genFUValidMask()
             req.valid = false;
         }
     }
+}
+
+template<class Impl>
+void
+DataflowQueues<Impl>::countCycles(typename Impl::DynInstPtr &inst, WKPointer *wk)
+{
+    inst->ssrDelay = wk->ssrDelay;
+    inst->queueingDelay = wk->queueTime;
+    inst->pendingDelay = wk->pendingTime;
 }
 
 }

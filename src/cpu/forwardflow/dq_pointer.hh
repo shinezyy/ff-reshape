@@ -18,9 +18,11 @@ struct DQPointer{
     unsigned op;
 
     int reshapeOp{-1};
+    unsigned ssrDelay{};
     unsigned fwLevel{};
 
     unsigned queueTime{};
+    unsigned pendingTime{};
 
     DQPointer() = default;
 
@@ -55,9 +57,11 @@ struct WKPointer{
     unsigned op{};
 
     int reshapeOp{-1};
+    unsigned ssrDelay{};
     unsigned fwLevel{};
 
     unsigned queueTime{};
+    unsigned pendingTime{};
 
     int term{-1};
 
