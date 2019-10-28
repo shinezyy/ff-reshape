@@ -318,6 +318,9 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                         need_pending_ptr[op] = true;
                     }
                 } else {
+                    inst->queueingDelay = ptr.queueTime;
+                    inst->pendingDelay = ptr.pendingTime;
+
                     DPRINTF(DQWake, "inst [%llu] is forwarder and skipped\n",
                             inst->seqNum);
                     inst->setIssued();
