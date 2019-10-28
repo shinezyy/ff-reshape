@@ -12,7 +12,7 @@ from multiprocessing import Pool
 import common as c
 
 lmd = 0.55
-num_thread = 20
+num_thread = 30
 
 full = False
 
@@ -56,8 +56,8 @@ def op_rand(benchmark, some_extra_args, outdir_b, cpt_id):
             '-b', '{}'.format(benchmark),
             '--benchmark-stdout={}/out'.format(outdir_b),
             '--benchmark-stderr={}/err'.format(outdir_b),
-            # '-I {}'.format(insts),
-            '-I {}'.format(300),
+            '-I {}'.format(insts),
+            # '-I {}'.format(300),
             # '-m', '254890101819500',
             # '--rel-max-tick=100',
             '--mem-size=16GB',
