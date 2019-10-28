@@ -13,7 +13,7 @@ import common as c
 
 lmd = 0.55
 
-num_thread = 10
+num_thread = 5
 
 full = True
 
@@ -24,7 +24,7 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir =  f'{c.stats_base_dir}/rand-hint{d}'
+outdir =  f'{c.stats_base_dir}/omega-rand-hint{d}'
 
 exp_options = [
         # '--enable-reshape',

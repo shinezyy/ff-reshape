@@ -45,6 +45,8 @@ EventQueue::schedule(Event *event, Tick when, bool global)
     assert(!event->scheduled());
     assert(event->initialized());
 
+    // printf("Scheduling event @ tick %lu\n", when);
+
     event->setWhen(when, this);
 
     // The check below is to make sure of two things

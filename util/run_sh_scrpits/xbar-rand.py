@@ -12,9 +12,9 @@ from multiprocessing import Pool
 import common as c
 
 lmd = 0.55
-num_thread = 22
+num_thread = 15
 
-full = False
+full = True
 
 if full:
     d = '-full'
