@@ -2333,6 +2333,9 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfFWQueue()
 template<class Impl>
 void DataflowQueues<Impl>::processWKQueueFull()
 {
+    if (halfSquash) {
+        panic("There should never be twice half squash in one cycle: not possible and not handled!\n");
+    }
     halfSquash = true;
     HalfSquashes++;
 
@@ -2499,7 +2502,7 @@ unsigned
 DataflowQueues<Impl>::allocateWakeQ()
 {
     unsigned start = qAllocPtr;
-    while (!wakeQueues[qAllocPtr].empty()) {
+    while (!(wakeQueues[qAllocPtr].empty() && tempWakeQueues[qAllocPtr].empty())) {
         qAllocPtr = (qAllocPtr + 1) % (nOps * nBanks);
         if (qAllocPtr == start) {
             qAllocPtr = randAllocator(gen) % (nOps * nBanks);
