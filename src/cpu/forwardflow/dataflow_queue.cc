@@ -2333,18 +2333,28 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfFWQueue()
 template<class Impl>
 void DataflowQueues<Impl>::processWKQueueFull()
 {
+    bool old_seq_valid = false;
     if (halfSquash) {
-        panic("There should never be twice half squash in one cycle: not possible and not handled!\n");
+        old_seq_valid = true;
+    } else {
+        HalfSquashes++;
+        halfSquash = true;
     }
-    halfSquash = true;
-    HalfSquashes++;
 
     DPRINTF(DQ, "Dump before clear:\n");
     if (Debug::DQ || Debug::RSProbe1) {
         dumpQueues();
     }
 
-    std::tie(halfSquashSeq, halfSquashPC) = clearHalfWKQueue();
+    if (old_seq_valid) {
+        InstSeqNum another_seq;
+        Addr another_pc;
+        std::tie(another_seq, another_pc) = clearHalfWKQueue();
+        checkUpdateSeq(halfSquashSeq, halfSquashPC, another_seq, another_pc);
+    } else {
+        std::tie(halfSquashSeq, halfSquashPC) = clearHalfWKQueue();
+    }
+
 
     bool clear_another_queue = false;
     for (auto q: forwardPointerQueue) {
@@ -2357,10 +2367,7 @@ void DataflowQueues<Impl>::processWKQueueFull()
         InstSeqNum another_seq;
         Addr another_pc;
         std::tie(another_seq, another_pc) = clearHalfFWQueue();
-        if (another_seq <= halfSquashSeq) {
-            halfSquashSeq = another_seq;
-            halfSquashPC = another_pc;
-        }
+        checkUpdateSeq(halfSquashSeq, halfSquashPC, another_seq, another_pc);
     }
 
     DPRINTF(DQ, "Dump after clear:\n");
@@ -2372,15 +2379,27 @@ void DataflowQueues<Impl>::processWKQueueFull()
 template<class Impl>
 void DataflowQueues<Impl>::processFWQueueFull()
 {
-    halfSquash = true;
-    HalfSquashes++;
+    bool old_seq_valid = false;
+    if (halfSquash) {
+        old_seq_valid = true;
+    } else {
+        HalfSquashes++;
+        halfSquash = true;
+    }
 
     DPRINTF(DQ || Debug::RSProbe1, "Dump before clear:\n");
     if (Debug::DQ || Debug::RSProbe1) {
         dumpQueues();
     }
 
-    std::tie(halfSquashSeq, halfSquashPC) = clearHalfFWQueue();
+    if (old_seq_valid) {
+        InstSeqNum another_seq;
+        Addr another_pc;
+        std::tie(another_seq, another_pc) = clearHalfFWQueue();
+        checkUpdateSeq(halfSquashSeq, halfSquashPC, another_seq, another_pc);
+    } else {
+        std::tie(halfSquashSeq, halfSquashPC) = clearHalfFWQueue();
+    }
 
     bool clear_another_queue = false;
     for (auto q: wakeQueues) {
@@ -2393,10 +2412,7 @@ void DataflowQueues<Impl>::processFWQueueFull()
         InstSeqNum another_seq;
         Addr another_pc;
         std::tie(another_seq, another_pc) = clearHalfWKQueue();
-        if (another_seq <= halfSquashSeq) {
-            halfSquashSeq = another_seq;
-            halfSquashPC = another_pc;
-        }
+        checkUpdateSeq(halfSquashSeq, halfSquashPC, another_seq, another_pc);
     }
 
     DPRINTF(DQ || Debug::RSProbe1, "Dump after clear:\n");
@@ -2657,6 +2673,17 @@ DataflowQueues<Impl>::countCycles(typename Impl::DynInstPtr &inst, WKPointer *wk
     inst->ssrDelay = wk->ssrDelay;
     inst->queueingDelay = wk->queueTime;
     inst->pendingDelay = wk->pendingTime;
+}
+
+template<class Impl>
+void
+DataflowQueues<Impl>::checkUpdateSeq(InstSeqNum &seq, Addr &addr,
+        InstSeqNum seq_new, Addr addr_new)
+{
+    if (seq_new <= seq) {
+        seq = seq_new;
+        addr = addr_new;
+    }
 }
 
 }

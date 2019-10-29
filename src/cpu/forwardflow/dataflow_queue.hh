@@ -521,8 +521,10 @@ private:
     const bool XBarWakeup;
     const bool NarrowXBarWakeup;
 
+    void checkUpdateSeq(InstSeqNum &seq, Addr &addr, InstSeqNum seq_new, Addr addr_new);
 public:
     void countCycles(DynInstPtr &inst, WKPointer *wk);
+
 };
 
 }
