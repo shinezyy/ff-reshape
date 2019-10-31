@@ -45,8 +45,10 @@ from FuncUnit import *
 import copy
 
 commonOpList = [OpDesc(opClass='No_OpClass'), OpDesc(opClass='IntAlu'),
+
         OpDesc(opClass='MemRead'), OpDesc(opClass='MemWrite'),
         OpDesc(opClass='FloatMemRead'), OpDesc(opClass='FloatMemWrite'),
+
         OpDesc(opClass='Forwarder'),]
 
 class GroupCommon(FUDesc):
@@ -63,13 +65,14 @@ class Group0(GroupCommon):
             OpDesc(opClass='FloatMisc', opLat=3),
             OpDesc(opClass='FloatDiv', opLat=12, pipelined=False),
             OpDesc(opClass='FloatSqrt', opLat=24, pipelined=False) ]
+    # FP convert
+    opList += [ OpDesc(opClass='FloatCvt', opLat=2)]
 
 class Group1(GroupCommon):
     opList = copy.deepcopy(commonOpList)
     # FP ALU
     opList += [ OpDesc(opClass='FloatAdd', opLat=2),
-        OpDesc(opClass='FloatCmp', opLat=2),
-        OpDesc(opClass='FloatCvt', opLat=2) ]
+        OpDesc(opClass='FloatCmp', opLat=2)]
 
 
 class Group2(GroupCommon):
@@ -83,13 +86,14 @@ class Group2(GroupCommon):
             OpDesc(opClass='FloatMisc', opLat=3),
             OpDesc(opClass='FloatDiv', opLat=12, pipelined=False),
             OpDesc(opClass='FloatSqrt', opLat=24, pipelined=False) ]
+    # FP convert
+    opList += [ OpDesc(opClass='FloatCvt', opLat=2)]
 
 class Group3(GroupCommon):
     opList = copy.deepcopy(commonOpList)
     # FP ALU
     opList += [ OpDesc(opClass='FloatAdd', opLat=2),
-            OpDesc(opClass='FloatCmp', opLat=2),
-            OpDesc(opClass='FloatCvt', opLat=2) ]
+            OpDesc(opClass='FloatCmp', opLat=2)]
 
     # IPR (not available in RV?)
     opList += [ OpDesc(opClass='IprAccess', opLat = 3, pipelined = False) ]

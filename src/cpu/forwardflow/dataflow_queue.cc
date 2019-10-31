@@ -121,6 +121,8 @@ DataflowQueueBank<Impl>::tryWakeDirect()
         readyQueue.pop_front();
         return nullptr;
     }
+    DPRINTF(DQWake, "Ptr(%i) (%i %i) (%i) is in readyQueue\n",
+            ptr.valid, ptr.bank, ptr.index, ptr.op);
 
     DPRINTF(DQWake, "Checking inst[%lu] which is supposed to be directly wakenup\n",
             inst->seqNum);
@@ -360,6 +362,17 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
     if (wakeup_count == 0) {
         first = tryWakeTail();
+        if (first) {
+            for (auto it = readyQueue.begin(); it != readyQueue.end(); it++) {
+                if (*it == first->dqPosition) {
+                    DPRINTF(DQWake,
+                            "Direct waken-up inst[%lu] is waken up by tail check\n",
+                            first->seqNum);
+                    readyQueue.erase(it);
+                    break;
+                }
+            }
+        }
     }
 
     if (wakeup_count == 0 && !first) {
@@ -605,6 +618,9 @@ void DataflowQueueBank<Impl>::checkReadiness(DQPointer pointer)
         directReady++;
         nearlyWakeup.set(index);
         readyQueue.push_back(pointer);
+        DPRINTF(DQWake,
+                "Push (%i) (%i %i) (%i) into ready queue\n",
+                pointer.valid, pointer.bank, pointer.index, pointer.op);
     }
     if (busy_count == 1) {
         DPRINTF(DQWake, "inst [%llu] becomes nearly waken up\n", inst->seqNum);
