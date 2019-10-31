@@ -20,6 +20,7 @@
 #include "debug/Reshape.hh"
 #include "debug/Reshape2.hh"
 #include "debug/ValueCommit.hh"
+#include "debug/ValueExec.hh"
 #include "params/DerivFFCPU.hh"
 
 namespace FF{
@@ -1898,8 +1899,8 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
     assert(inst);
     DPRINTF(DIEWC||Debug::RSProbe1, "Executing inst[%lu] %s\n", inst->seqNum,
             inst->staticInst->disassemble(inst->instAddr()));
-    DPRINTF(ValueCommit, "Executing inst[%lu] ", inst->seqNum);
-    if (Debug::ValueCommit) {
+    DPRINTF(ValueExec, "Executing inst[%lu] ", inst->seqNum);
+    if (Debug::ValueExec) {
         std::cout << inst->staticInst->disassemble(inst->instAddr()) << endl;
     }
 
