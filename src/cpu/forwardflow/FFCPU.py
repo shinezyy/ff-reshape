@@ -233,3 +233,6 @@ class DerivFFCPU(BaseCPU):
     MINWakeup = Param.Bool(False, "MINWakeup")
     XBarWakeup = Param.Bool(False, "XBarWakeup")
     NarrowXBarWakeup = Param.Bool(False, "NarrowXBarWakeup")
+
+    AgedWakeQueuePush = Param.Bool(True, "AgedWakeQueuePush")
+    AgedWakeQueuePktSel = Param.Bool(False, "AgedWakeQueuePktSel")

@@ -952,7 +952,7 @@ void DataflowQueues<Impl>::tick()
             DPRINTF(DQWake || Debug::RSProbe2,
                     "Got wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
                     dest.bank, dest.index, dest.op, q1);
-            wakeQueues[q1].push_back(WKPointer(dest));
+            pushToWakeQueue(q1, WKPointer(dest));
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 
@@ -964,7 +964,7 @@ void DataflowQueues<Impl>::tick()
                     "Got inverse wakeup pointer to (%d %d) (%d),"
                     " pushed to wakeQueue[%i]\n",
                     src.bank, src.index, src.op, q2);
-            wakeQueues[q2].push_back(WKPointer(src));
+            pushToWakeQueue(q2, WKPointer(src));
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 
@@ -1100,7 +1100,11 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         termMax(params->TermMax),
         MINWakeup(params->MINWakeup),
         XBarWakeup(params->XBarWakeup),
-        NarrowXBarWakeup(params->NarrowXBarWakeup)
+        NarrowXBarWakeup(params->NarrowXBarWakeup),
+        AgedWakeQueuePush(params->AgedWakeQueuePush),
+        AgedWakeQueuePktSel(params->AgedWakeQueuePktSel),
+        pushFF(nBanks * nOps, false)
+
 {
     assert(MINWakeup + XBarWakeup + NarrowXBarWakeup == 1);
     // init inputs to omega networks
@@ -1166,7 +1170,12 @@ DataflowQueues<Impl>::uint2Pointer(unsigned u) const
 
 
 template<class Impl>
-unsigned DataflowQueues<Impl>::pointer2uint(DQPointer ptr) const
+unsigned DataflowQueues<Impl>::pointer2uint(const DQPointer &ptr) const
+{
+    return (ptr.index << bankWidth) | ptr.bank;
+}
+template<class Impl>
+unsigned DataflowQueues<Impl>::pointer2uint(const WKPointer &ptr) const
 {
     return (ptr.index << bankWidth) | ptr.bank;
 }
@@ -2571,7 +2580,7 @@ DataflowQueues<Impl>::mergeExtraWKPointers()
             DPRINTF(DQWake || Debug::RSProbe2,
                     "Got temped wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
                     dest.bank, dest.index, dest.op, i);
-            wakeQueues[i].push_back(tempWakeQueues[i].front());
+            pushToWakeQueue(i, tempWakeQueues[i].front());
             tempWakeQueues[i].pop_front();
             numPendingWakeups++;
         }
@@ -2609,7 +2618,7 @@ DataflowQueues<Impl>::readPointersToWkQ()
                 DPRINTF(DQWake||Debug::RSProbe2,
                         "Push WakePtr (%i %i) (%i) to wakequeue[%u]\n",
                         ptr.bank, ptr.index, ptr.op, b);
-                wakeQueues[b * nOps + op].push_back(WKPointer(ptr));
+                pushToWakeQueue(b * nOps + op, WKPointer(ptr));
                 numPendingWakeups++;
                 DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
                 if (wakeQueues[b * nOps + op].size() > maxQueueDepth) {
@@ -2700,6 +2709,95 @@ DataflowQueues<Impl>::checkUpdateSeq(InstSeqNum &seq, Addr &addr,
         seq = seq_new;
         addr = addr_new;
     }
+}
+
+template<class Impl>
+void
+DataflowQueues<Impl>::pushToWakeQueue(unsigned q_index, WKPointer ptr)
+{
+    auto &q = wakeQueues[q_index];
+    if (!AgedWakeQueuePush) {
+        q.push_back(ptr);
+
+    } else {
+        if (q.empty()) {
+            q.push_back(ptr);
+            return;
+        }
+
+        const WKPointer &front = q.front();
+        const WKPointer &back = q.back();
+        if (q.size() > 1) {
+
+            if (notYoungerThan(ptr, front)) {
+                q.push_front(ptr);
+
+            } else if (notOlderThan(ptr, back)) {
+                q.push_back(ptr);
+
+            } else {
+                if (pushFF[q_index]) {
+                    WKPointer tmp = q.front();
+                    q.front() = ptr;
+                    q.push_front(tmp);
+                } else {
+                    WKPointer tmp = q.back();
+                    q.back() = ptr;
+                    q.push_back(tmp);
+                }
+                pushFF[q_index] = !pushFF[q_index];
+            }
+
+        } else {
+            if (notYoungerThan(ptr, front) != 1) {
+                q.push_front(ptr);
+            } else {
+                q.push_back(ptr);
+            }
+        }
+    }
+}
+
+template<class Impl>
+int
+DataflowQueues<Impl>::pointerCmp(const WKPointer &lptr, const WKPointer &rptr)
+{
+    // in the same term
+    if (rptr.term == lptr.term) {
+        if (pointer2uint(lptr) < pointer2uint(rptr)) {
+            return -1;
+        } else if (pointer2uint(lptr) > pointer2uint(rptr)) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    // not in the same term
+    int term_diff = lptr.term - rptr.term;
+    if (term_diff == 1 || term_diff == -1) {
+        return term_diff;
+    }
+
+    // wrapped around
+    if (term_diff > 0) {
+        return -1;
+    } else {
+        return 1;
+    }
+}
+
+template<class Impl>
+bool
+DataflowQueues<Impl>::notOlderThan(const WKPointer &lptr, const WKPointer &rptr)
+{
+    return pointerCmp(lptr, rptr) != -1;
+}
+template<class Impl>
+bool
+DataflowQueues<Impl>::notYoungerThan(const WKPointer &lptr, const WKPointer &rptr)
+{
+    return pointerCmp(lptr, rptr) != 1;
 }
 
 }

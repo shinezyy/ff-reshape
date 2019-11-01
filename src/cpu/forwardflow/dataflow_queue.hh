@@ -266,7 +266,9 @@ private:
 public:
     DQPointer uint2Pointer(unsigned) const;
 
-    unsigned pointer2uint(DQPointer) const;
+    unsigned pointer2uint(const DQPointer &) const;
+
+    unsigned pointer2uint(const WKPointer &) const;
 
     unsigned getHeadPtr() const {return head;}
     unsigned getTailPtr() const {return tail;}
@@ -522,6 +524,21 @@ private:
     const bool NarrowXBarWakeup;
 
     void checkUpdateSeq(InstSeqNum &seq, Addr &addr, InstSeqNum seq_new, Addr addr_new);
+
+    void pushToWakeQueue(unsigned q_index, WKPointer ptr);
+
+    const bool AgedWakeQueuePush;
+    const bool AgedWakeQueuePktSel;
+
+    int pointerCmp(const WKPointer &lptr, const WKPointer &rptr);
+
+    bool notOlderThan(const WKPointer &lptr, const WKPointer &rptr);
+    bool notYoungerThan(const WKPointer &lptr, const WKPointer &rptr);
+
+    // l < r: l is oldder, return -1
+    // l == r: return 0
+    // l > r: return 1
+    std::vector<bool> pushFF;
 public:
     void countCycles(DynInstPtr &inst, WKPointer *wk);
 

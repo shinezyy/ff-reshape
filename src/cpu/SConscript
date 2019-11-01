@@ -103,6 +103,7 @@ DebugFlag('PCEvent')
 DebugFlag('Quiesce')
 DebugFlag('Mwait')
 DebugFlag('ValueCommit')
+DebugFlag('ValueExec')
 
 CompoundFlag('ExecAll', [ 'ExecEnable', 'ExecCPSeq', 'ExecEffAddr',
     'ExecFaulting', 'ExecFetchSeq', 'ExecOpClass', 'ExecRegDelta',
