@@ -34,6 +34,7 @@
 #include <sstream>
 #include <string>
 
+#include "arch/riscv/insts/bitfields.hh"
 #include "arch/riscv/utility.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/static_inst.hh"
@@ -47,8 +48,15 @@ string LoadReserved::generateDisassembly(Addr pc,
     const SymbolTable *symtab) const
 {
     stringstream ss;
-    ss << mnemonic << ' ' << registerName(_destRegIdx[0]) << ", ("
-            << registerName(_srcRegIdx[0]) << ')';
+    ss << mnemonic;
+    if (AQ || RL)
+        ss << '_';
+    if (AQ)
+        ss << "aq";
+    if (RL)
+        ss << "rl";
+    ss << ' ' << registerName(RegId(IntRegClass, RD)) << ", ("
+            << registerName(RegId(IntRegClass, RS1)) << ')';
     return ss.str();
 }
 
@@ -56,9 +64,16 @@ string StoreCond::generateDisassembly(Addr pc,
     const SymbolTable *symtab) const
 {
     stringstream ss;
-    ss << mnemonic << ' ' << registerName(_destRegIdx[0]) << ", "
-            << registerName(_srcRegIdx[1]) << ", ("
-            << registerName(_srcRegIdx[0]) << ')';
+    ss << mnemonic;
+    if (AQ || RL)
+        ss << '_';
+    if (AQ)
+        ss << "aq";
+    if (RL)
+        ss << "rl";
+    ss << ' ' << registerName(RegId(IntRegClass, RD)) << ", "
+            << registerName(RegId(IntRegClass, RS2)) << ", ("
+            << registerName(RegId(IntRegClass, RS1)) << ')';
     return ss.str();
 }
 
@@ -66,9 +81,16 @@ string AtomicMemOp::generateDisassembly(Addr pc,
     const SymbolTable *symtab) const
 {
     stringstream ss;
-    ss << mnemonic << ' ' << registerName(_destRegIdx[0]) << ", "
-            << registerName(_srcRegIdx[1]) << ", ("
-            << registerName(_srcRegIdx[0]) << ')';
+    ss << mnemonic;
+    if (AQ || RL)
+        ss << '_';
+    if (AQ)
+        ss << "aq";
+    if (RL)
+        ss << "rl";
+    ss << ' ' << registerName(RegId(IntRegClass, RD)) << ", "
+            << registerName(RegId(IntRegClass, RS2)) << ", ("
+            << registerName(RegId(IntRegClass, RS1)) << ')';
     return ss.str();
 }
 
