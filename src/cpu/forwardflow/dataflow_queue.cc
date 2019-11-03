@@ -29,6 +29,7 @@ using namespace std;
 
 using boost::dynamic_bitset;
 
+
 template<class Impl>
 void
 DataflowQueueBank<Impl>::clear(bool markSquashed)
@@ -987,20 +988,48 @@ void DataflowQueues<Impl>::tick()
     // todo: write insts from bank to time buffer!
     for (unsigned i = 0; i < nBanks; i++) {
         DynInstPtr inst;
-
         inst = dqs[i]->wakeupInstsFromBank();
+
+        auto &ready_insts_queue = readyInstsQueues[i];
+
+        // 应该在wakeupInstsFromBank函数中插入下面的队列，而不是这里
+        if (matchInGroup(inst->opClass(), OpGroups::MultDiv)) {
+            ready_insts_queue->insertInst(OpGroups::MultDiv, inst);
+
+        } else if (matchInGroup(inst->opClass(), OpGroups::FPAdd)) {
+            ready_insts_queue->insertInst(OpGroups::FPAdd, inst);
+
+        } else {
+            ready_insts_queue->insertEmpirically(inst);
+        }
         // todo ! this function must be called after readPointersFromBank(),
 
         // read fu requests from banks
         //  and set fields for packets
         //  fu_req_ptrs = xxx
         //  update valid, dest bits and payload only (source need not be changed)
-        toNextCycle->instValids[i] = !!inst && !inst->fuGranted;
-        toNextCycle->insts[i] = inst;
-        if (toNextCycle->instValids[i]) {
+
+        // TODO: coordinate here!
+
+        DynInstPtr fp_add_group = ready_insts_queue->getInst(OpGroups::FPAdd);
+        DynInstPtr md_group = ready_insts_queue->getInst(OpGroups::MultDiv);
+
+        toNextCycle->instValids[2*i] = !!fp_add_group && !fp_add_group->fuGranted;
+        toNextCycle->insts[2*i] = fp_add_group;
+
+        toNextCycle->instValids[2*i + 1] = !!md_group && !md_group->fuGranted;
+        toNextCycle->insts[2*i + 1] = md_group;
+
+        if (toNextCycle->instValids[2*i]) {
             DPRINTF(Omega, "toNext cycle inst[%d] valid, &inst: %p\n",
-                    i, toNextCycle->insts[i]);
+                    2*i, toNextCycle->insts[2*i]);
         }
+
+        if (toNextCycle->instValids[2*i + 1]) {
+            DPRINTF(Omega, "toNext cycle inst[%d] valid, &inst: %p\n",
+                    2*i + 1, toNextCycle->insts[2*i + 1]);
+        }
+
         dqs[i]->countUpPendingPointers();
     }
 
@@ -1052,7 +1081,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
 
         wakeupQueueBankNarrowXBar(nBanks * nOps, nOps),
 
-        fu_requests(nBanks),
+        fu_requests(nBanks * OpGroups::nOpGroups),
         fu_req_granted(nBanks),
         fu_req_ptrs(nBanks),
         fu_granted_ptrs(nBanks),
@@ -2793,11 +2822,35 @@ DataflowQueues<Impl>::notOlderThan(const WKPointer &lptr, const WKPointer &rptr)
 {
     return pointerCmp(lptr, rptr) != -1;
 }
+
 template<class Impl>
 bool
 DataflowQueues<Impl>::notYoungerThan(const WKPointer &lptr, const WKPointer &rptr)
 {
     return pointerCmp(lptr, rptr) != 1;
+}
+
+template<class Impl>
+bool
+DataflowQueues<Impl>::matchInGroup(OpClass op, OpGroups op_group)
+{
+    if (op_group == OpGroups::MultDiv) {
+        for (int i: MultDivOps) {
+            if (i == op) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (op_group == OpGroups::FPAdd) {
+        for (int i: FPAddOps) {
+            if (i == op) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return false;
 }
 
 }

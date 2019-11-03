@@ -488,6 +488,11 @@ struct DQOut {
 
 };
 
+enum OpGroups {
+    MultDiv = 0,
+    FPAdd,
+    nOpGroups
+};
 
 
 }

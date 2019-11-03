@@ -21,7 +21,12 @@ class CrossBar {
     std::list<uint32_t> prioList;
 
 public:
-    std::vector<DQPacket<T>*> select(std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null);
+    std::vector<DQPacket<T>*> select(
+            std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null);
+
+    std::vector<DQPacket<T>*> select(
+            std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null,
+            size_t output_size);
 
     CrossBar(uint32_t size);
 
@@ -38,14 +43,16 @@ CrossBar<T>::CrossBar(uint32_t size): size(size)
 
 template<class T>
 std::vector<DQPacket<T>*>
-CrossBar<T>::select(std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null)
+CrossBar<T>::select(std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null,
+        size_t output_size)
 {
-    std::vector<DQPacket<T>*> outputs(size, null);
+    std::vector<DQPacket<T>*> outputs(output_size, null);
     assert(inputs.size() == size);
 
     for (uint32_t i: prioList) {
         const auto &pkt = inputs[i];
         if (pkt && pkt->valid) {
+            assert(outputs.size() > pkt->dest);
             if (!outputs[pkt->dest]->valid) {
                 DPRINTF(CrossBar, "Pass pkt[%i] to [%i]\n", i, pkt->dest);
                 outputs[pkt->dest] = inputs[i];
@@ -59,6 +66,15 @@ CrossBar<T>::select(std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null)
     prioList.push_back(prioList.front());
     prioList.pop_front();
     return outputs;
+}
+
+
+
+template<class T>
+std::vector<DQPacket<T>*>
+CrossBar<T>::select(std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null)
+{
+    return select(inputs, null, inputs.size());
 }
 
 }

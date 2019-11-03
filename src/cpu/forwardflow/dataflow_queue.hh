@@ -22,6 +22,32 @@ struct DerivFFCPUParams;
 
 namespace FF{
 
+template <class Impl>
+class ReadyInstsQueue{
+
+public:
+    typedef typename Impl::DynInstPtr DynInstPtr;
+
+    ReadyInstsQueue(DerivFFCPUParams *params);
+
+    void squash(InstSeqNum inst_seq);
+
+    DynInstPtr getInst(OpGroups group);
+
+    void insertInst(OpGroups group, DynInstPtr &inst);
+
+    void insertEmpirically(DynInstPtr &inst);
+
+    bool isFull();
+
+    bool isFull(OpGroups group);
+
+    unsigned targetGroup;
+
+private:
+    std::vector<std::list<DynInstPtr> > preScheduledQueus;
+
+};
 
 template <class Impl>
 class DataflowQueueBank{
@@ -175,6 +201,8 @@ public:
 
     typedef typename Impl::CPUPol::DataflowQueueBank XDataflowQueueBank;
 //    using XDataflowQueueBank = DataflowQueueBank<Impl>;
+//
+    typedef typename Impl::CPUPol::ReadyInstsQueue XReadyInstsQueue;
 
     const unsigned WritePorts, ReadPorts;
 
@@ -539,8 +567,27 @@ private:
     // l == r: return 0
     // l > r: return 1
     std::vector<bool> pushFF;
+
+    std::vector<XReadyInstsQueue*> readyInstsQueues;
 public:
     void countCycles(DynInstPtr &inst, WKPointer *wk);
+
+    int FPAddOps[3]{OpClass::FloatAdd,
+        OpClass::FloatCmp,
+        OpClass::FloatCvt};
+
+    int MultDivOps[7]{OpClass::IntMult,
+        OpClass::IntDiv,
+
+        OpClass::FloatMult,
+        OpClass::FloatMultAcc,
+
+        OpClass::FloatMisc,
+
+        OpClass::FloatDiv,
+        OpClass::FloatSqrt};
+
+    bool matchInGroup(OpClass op, OpGroups op_group);
 
 };
 
