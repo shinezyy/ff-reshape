@@ -38,14 +38,15 @@ public:
 
     void insertEmpirically(DynInstPtr &inst);
 
+    const size_t maxReadyQueueSize;
+
     bool isFull();
 
     bool isFull(OpGroups group);
 
     unsigned targetGroup;
 
-private:
-    std::vector<std::list<DynInstPtr> > preScheduledQueus;
+    std::vector<std::list<DynInstPtr> > preScheduledQueues;
 
 };
 
@@ -60,6 +61,7 @@ public:
 
     typedef typename Impl::CPUPol CPUPolicy;
 
+    typedef typename Impl::CPUPol::ReadyInstsQueue XReadyInstsQueue;
 private:
     typedef typename CPUPolicy::DataflowQueues DQ;
 
@@ -83,10 +85,6 @@ private:
 
     // input forward pointers
     std::vector<WKPointer> inputPointers;
-
-    // inst rejected by FU
-    DynInstPtr pendingInst;
-    bool pendingInstValid;
 
     // output forward pointers
     // init according to nops
@@ -122,8 +120,6 @@ public:
 
     DynInstPtr findInst(InstSeqNum) const;
 
-    bool instGranted;
-
     void checkPending();
 
     std::vector<std::array<DQPointer, 4>> prematureFwPointers;
@@ -144,7 +140,7 @@ public:
 
     void cycleStart();
 
-    void clearPending();
+    void clearPending(DynInstPtr &inst);
 
     DQPointer extraWakeupPointer;
 
@@ -176,6 +172,8 @@ public:
     void countUpPendingPointers();
 
     void countUpPendingInst();
+
+    XReadyInstsQueue *readyInstsQueue;
 };
 
 
@@ -246,6 +244,7 @@ private:
 
     DQPacket<WKPointer> nullWKPkt;
     DQPacket<PointerPair> nullFWPkt;
+    DQPacket<DynInstPtr> nullInstPkt;
 
     CrossBar<DynInstPtr> bankFUXBar;
     CrossBar<WKPointer> wakeupQueueBankXBar;
@@ -254,7 +253,6 @@ private:
     CrossBarNarrow<WKPointer> wakeupQueueBankNarrowXBar;
 
     std::vector<DQPacket<DynInstPtr>> fu_requests;
-    std::vector<bool> fu_req_granted;
     std::vector<DQPacket<DynInstPtr>*> fu_req_ptrs;
     std::vector<DQPacket<DynInstPtr>*> fu_granted_ptrs;
 
@@ -278,7 +276,6 @@ private:
     std::vector<std::vector<bool>> fuGroupCaps;
     std::unordered_map<OpClass, unsigned> opLat;
 
-    std::vector<unsigned> fuPointer;
     bool llBlocked;
     bool llBlockedNext;
 
@@ -569,6 +566,10 @@ private:
     std::vector<bool> pushFF;
 
     std::vector<XReadyInstsQueue*> readyInstsQueues;
+
+    std::vector<unsigned> fuPointer[OpGroups::nOpGroups];
+
+    void shuffleNeighbors();
 public:
     void countCycles(DynInstPtr &inst, WKPointer *wk);
 

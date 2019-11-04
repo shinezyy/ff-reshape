@@ -236,3 +236,5 @@ class DerivFFCPU(BaseCPU):
 
     AgedWakeQueuePush = Param.Bool(True, "AgedWakeQueuePush")
     AgedWakeQueuePktSel = Param.Bool(False, "AgedWakeQueuePktSel")
+
+    MaxReadyQueueSize = Param.Unsigned(4, "MaxReadyQueueSize")

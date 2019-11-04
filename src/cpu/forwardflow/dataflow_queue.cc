@@ -29,6 +29,76 @@ using namespace std;
 
 using boost::dynamic_bitset;
 
+template<class Impl>
+ReadyInstsQueue<Impl>::ReadyInstsQueue(DerivFFCPUParams *params)
+:   maxReadyQueueSize(params->MaxReadyQueueSize),
+    preScheduledQueues(nOpGroups)
+{
+}
+
+template<class Impl>
+void
+ReadyInstsQueue<Impl>::squash(InstSeqNum seq)
+{
+    for (auto &q: preScheduledQueues) {
+        const auto end = q.end();
+        auto it = q.begin();
+        while (it != end) {
+            if ((*it)->seqNum > seq) {
+                it = q.erase(it);
+            } else {
+                it++;
+            }
+        }
+    }
+}
+
+template<class Impl>
+typename Impl::DynInstPtr
+ReadyInstsQueue<Impl>::getInst(OpGroups group)
+{
+    assert(group < preScheduledQueues.size());
+    if (!preScheduledQueues[group].empty()) {
+        return preScheduledQueues[group].front();
+    } else {
+        return nullptr;
+    }
+}
+
+template<class Impl>
+void
+ReadyInstsQueue<Impl>::insertInst(OpGroups group, DynInstPtr &inst)
+{
+    preScheduledQueues[group].push_back(inst);
+}
+
+template<class Impl>
+void
+ReadyInstsQueue<Impl>::insertEmpirically(DynInstPtr &inst)
+{
+    if (preScheduledQueues[OpGroups::MultDiv].size() <
+            preScheduledQueues[OpGroups::FPAdd].size()) {
+        preScheduledQueues[OpGroups::MultDiv].push_back(inst);
+
+    } else {
+        preScheduledQueues[OpGroups::FPAdd].push_back(inst);
+    }
+}
+
+template<class Impl>
+bool
+ReadyInstsQueue<Impl>::isFull()
+{
+    return isFull(OpGroups::FPAdd) || isFull(OpGroups::MultDiv);
+}
+
+template<class Impl>
+bool
+ReadyInstsQueue<Impl>::isFull(OpGroups group)
+{
+    assert(group < preScheduledQueues.size());
+    return preScheduledQueues[group].size() >= maxReadyQueueSize;
+}
 
 template<class Impl>
 void
@@ -152,11 +222,6 @@ template<class Impl>
 typename Impl::DynInstPtr
 DataflowQueueBank<Impl>::wakeupInstsFromBank()
 {
-    if (pendingInstValid) {
-        DPRINTF(DQWake, "Return pending inst[%llu]\n", pendingInst->seqNum);
-        return pendingInst;
-    }
-
     DynInstPtr first = nullptr;
     auto first_index = -1;
     auto first_op = 0;
@@ -384,7 +449,6 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
     if (first) {
         DPRINTF(DQWake, "Wakeup valid inst: %llu\n", first->seqNum);
         DPRINTF(DQWake, "Setting pending inst[%llu]\n", first->seqNum);
-        pendingInst = first; // if it's rejected, then marks valid in tick()
     }
 
     return first;
@@ -479,11 +543,8 @@ bool DataflowQueueBank<Impl>::canServeNew()
             flag &= false;
         }
     }
-    flag &= !pendingInstValid;
-    if (pendingInstValid) {
-        assert(pendingInst);
-        DPRINTF(DQWake, "Pending inst[%llu]\n", pendingInst->seqNum);
-    }
+    flag &= !readyInstsQueue->isFull(); // it returns true if any queue is full
+
     anyPending = !flag;
 
     flag &= !servedForwarder;
@@ -529,11 +590,6 @@ bool DataflowQueueBank<Impl>::wakeup(WKPointer pointer)
 template<class Impl>
 void DataflowQueueBank<Impl>::checkPending()
 {
-    if (pendingInst && !instGranted) {
-        DPRINTF(DQWake, "Setting pending inst valid because of inst[%llu]\n",
-                pendingInst->seqNum);
-        pendingInstValid = true;
-    }
 }
 
 template<class Impl>
@@ -548,8 +604,6 @@ DataflowQueueBank<Impl>::DataflowQueueBank(
           pendingWakeupPointers(nOps),
           anyPending(false),
           inputPointers(nOps),
-          pendingInst(nullptr),
-          pendingInstValid(false),
           outputPointers(nOps, nullDQPointer),
           tail(0),
           readyQueueSize(params->readyQueueSize),
@@ -661,10 +715,15 @@ void DataflowQueueBank<Impl>::cycleStart()
 }
 
 template<class Impl>
-void DataflowQueueBank<Impl>::clearPending()
+void DataflowQueueBank<Impl>::clearPending(DynInstPtr &inst)
 {
-    pendingInstValid = false;
-    pendingInst = nullptr;
+    for (auto &q: readyInstsQueue->preScheduledQueues) {
+        if (!q.empty() && inst->seqNum == q.front()->seqNum) {
+            q.pop_front();
+            return;
+        }
+    }
+    panic("Clearing non-exsting inst[%lu]", inst->seqNum);
 }
 
 template<class Impl>
@@ -712,6 +771,7 @@ void DataflowQueueBank<Impl>::squash(const DQPointer &squash_ptr)
                     ptr.bank, ptr.index);
         }
     }
+
 }
 
 template<class Impl>
@@ -747,9 +807,10 @@ void DataflowQueueBank<Impl>::countUpPendingPointers()
 template<class Impl>
 void DataflowQueueBank<Impl>::countUpPendingInst()
 {
-    if (pendingInstValid) {
-        assert(pendingInst);
-        pendingInst->FUContentionDelay++;
+    for (auto &q: readyInstsQueue->preScheduledQueues) {
+        for (auto &inst: q) {
+            inst->FUContentionDelay++;
+        }
     }
 }
 
@@ -771,7 +832,8 @@ void DataflowQueues<Impl>::tick()
     DPRINTF(DQ, "Setup fu requests\n");
     // For each bank
     //  get ready instructions produced by last tick from time struct
-    for (unsigned i = 0; i < nBanks; i++) {
+    for (unsigned i = 0; i < nBanks*OpGroups::nOpGroups; i++) {
+
         fu_requests[i].valid = fromLastCycle->instValids[i];
         if (fromLastCycle->instValids[i]) {
 
@@ -783,6 +845,7 @@ void DataflowQueues<Impl>::tick()
                 coordinateFU(fromLastCycle->insts[i], i);
         }
     }
+    shuffleNeighbors();
     // For each bank
 
     //  For each valid ready instruction compete for a FU via the omega network
@@ -793,7 +856,7 @@ void DataflowQueues<Impl>::tick()
     DPRINTF(DQ, "FU selecting ready insts from banks\n");
     DPRINTF(DQWake, "FU req packets:\n");
     dumpInstPackets(fu_req_ptrs);
-    fu_granted_ptrs = bankFUMIN.select(fu_req_ptrs);
+    fu_granted_ptrs = bankFUXBar.select(fu_req_ptrs, &nullInstPkt, nFUGroups);
     for (unsigned b = 0; b < nBanks; b++) {
         assert(fu_granted_ptrs[b]);
         if (!fu_granted_ptrs[b]->valid || !fu_granted_ptrs[b]->payload) {
@@ -805,8 +868,7 @@ void DataflowQueues<Impl>::tick()
 
         if (inst->isSquashed()) {
             DPRINTF(FFSquash, "Skip squashed inst[%llu]\n", inst->seqNum);
-            fu_req_granted[fu_granted_ptrs[b]->source] = true;
-            dqs[fu_granted_ptrs[b]->source]->clearPending();
+            dqs[fu_granted_ptrs[b]->source]->clearPending(inst);
 
         } else {
             InstSeqNum waitee;
@@ -815,9 +877,8 @@ void DataflowQueues<Impl>::tick()
                 oldWaitYoung++;
             }
             if (can_accept) {
-                fu_req_granted[fu_granted_ptrs[b]->source] = true;
                 fuWrappers[b].consume(inst);
-                dqs[fu_granted_ptrs[b]->source]->clearPending();
+                dqs[fu_granted_ptrs[b]->source]->clearPending(inst);
             } else if (opLat[inst->opClass()] > 1){
                 readyWaitTime[b] += 1;
                 llBlockedNext = true;
@@ -828,7 +889,6 @@ void DataflowQueues<Impl>::tick()
     DPRINTF(DQ, "Tell dq banks who was granted\n");
     // mark it for banks
     for (unsigned b = 0; b < nBanks; b++) {
-        dqs[b]->instGranted = fu_req_granted[b];
         dqs[b]->countUpPendingInst();
     }
 
@@ -1039,7 +1099,6 @@ template<class Impl>
 void DataflowQueues<Impl>::cycleStart()
 {
 //    fill(wakenValids.begin(), wakenValids.end(), false);
-    fill(fu_req_granted.begin(), fu_req_granted.end(), false);
     fill(wake_req_granted.begin(), wake_req_granted.end(), false);
     for (auto bank: dqs) {
         bank->cycleStart();
@@ -1082,8 +1141,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         wakeupQueueBankNarrowXBar(nBanks * nOps, nOps),
 
         fu_requests(nBanks * OpGroups::nOpGroups),
-        fu_req_granted(nBanks),
-        fu_req_ptrs(nBanks),
+        fu_req_ptrs(nBanks * OpGroups::nOpGroups),
         fu_granted_ptrs(nBanks),
 
         wakeup_requests(nBanks * nOps),
@@ -1099,9 +1157,6 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         fuWrappers(nBanks), // todo: fix it
         fuPool(params->fuPool),
         fuGroupCaps(Num_OpClasses, vector<bool>(nBanks)),
-        fuPointer(nBanks),
-
-
 
 
         bankWidth((unsigned) ceilLog2(params->numDQBanks)),
@@ -1133,17 +1188,10 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         AgedWakeQueuePush(params->AgedWakeQueuePush),
         AgedWakeQueuePktSel(params->AgedWakeQueuePktSel),
         pushFF(nBanks * nOps, false)
-
 {
     assert(MINWakeup + XBarWakeup + NarrowXBarWakeup == 1);
     // init inputs to omega networks
     for (unsigned b = 0; b < nBanks; b++) {
-        DQPacket<DynInstPtr> &fu_pkt = fu_requests[b];
-        fu_pkt.valid = false;
-        fu_pkt.source = b;
-
-        fu_req_ptrs[b] = &fu_requests[b];
-
         for (unsigned op = 0; op < nBanks; op++) {
             unsigned index = b * nOps + op;
             DQPacket<WKPointer> &dq_pkt = wakeup_requests[index];
@@ -1163,8 +1211,20 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         fuWrappers[b].setDQ(this);
 
         dqs.emplace_back(new XDataflowQueueBank(params, b, this));
-        fuPointer[b] = b;
+        readyInstsQueues.emplace_back(new XReadyInstsQueue(params));
+        dqs[b]->readyInstsQueue = readyInstsQueues[b];
     }
+
+    for (unsigned i = 0; i < nBanks * OpGroups::nOpGroups; i++) {
+        DQPacket<DynInstPtr> &fu_pkt = fu_requests[i];
+        fu_pkt.valid = false;
+        fu_pkt.source = i;
+
+        fu_req_ptrs[i] = &fu_requests[i];
+    }
+    fuPointer[OpGroups::MultDiv] = std::vector<unsigned>{0, 0, 2, 2};
+    fuPointer[OpGroups::FPAdd] = std::vector<unsigned>{1, 1, 3, 3};
+
     memDepUnit.init(params, DummyTid);
     memDepUnit.setIQ(this);
     resetState();
@@ -1174,6 +1234,9 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
 
     nullFWPkt.valid = false;
     nullFWPkt.destBits = boost::dynamic_bitset<>(ceilLog2(nOps * nBanks) + 1);
+
+    nullInstPkt.valid = false;
+    nullInstPkt.destBits = boost::dynamic_bitset<>(ceilLog2(nBanks) + 1);
 }
 
 template<class Impl>
@@ -1215,19 +1278,32 @@ DataflowQueues<Impl>::coordinateFU(
         DataflowQueues::DynInstPtr &inst, unsigned bank)
 {
     // find another FU group with desired capability.
-    DPRINTF(FUW, "Coordinating bank %u with llb:%i\n", bank, llBlocked);
-    if (llBlocked) {
-        auto fu_bitmap = fuGroupCaps[inst->opClass()];
-        do {
-            fuPointer[bank] = (fuPointer[bank] + 1) % nBanks;
-        } while (!fu_bitmap[fuPointer[bank]]);
-        DPRINTF(FUW, "switch to req fu %u\n", fuPointer[bank]);
+    DPRINTF(FUW, "Coordinating req %u.%u  with llb:%i\n", bank/2, bank%2, llBlocked);
+    // if (llBlocked) {
+    //     auto fu_bitmap = fuGroupCaps[inst->opClass()];
+    //     do {
+    //         fuPointer[bank] = (fuPointer[bank] + 1) % nBanks;
+    //     } while (!fu_bitmap[fuPointer[bank]]);
+    //     DPRINTF(FUW, "switch to req fu %u\n", fuPointer[bank]);
 
-    } else if (opLat[inst->opClass()] == 1) {
-        fuPointer[bank] = bank;
-        DPRINTF(FUW, "reset to origin\n");
+    // } else if (opLat[inst->opClass()] == 1) {
+    //     fuPointer[bank] = bank;
+    //     DPRINTF(FUW, "reset to origin\n");
+    // }
+
+    int from = bank%2;
+    int md = OpGroups::MultDiv,
+        fa = OpGroups::FPAdd;
+    const int group_ipr = 3;
+    if (inst->opClass() == OpClass::IprAccess) {
+        return std::make_pair(group_ipr, uint2Bits(group_ipr));
+    } else if (from == md){ //OpGroups::MultDiv
+        return std::make_pair(fuPointer[md][bank],
+                uint2Bits(fuPointer[md][bank]));
     }
-    return std::make_pair(fuPointer[bank], uint2Bits(fuPointer[bank]));
+    //else (from == fa){ //OpGroups::FPadd
+    return std::make_pair(fuPointer[fa][bank],
+            uint2Bits(fuPointer[fa][bank]));
 }
 
 template<class Impl>
@@ -1527,6 +1603,10 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
 
         for (auto &bank: dqs) {
             bank->squash(p);
+        }
+
+        for (auto &q: readyInstsQueues) {
+            q->squash(head_inst_next->seqNum);
         }
     } else {
         DPRINTF(FFSquash, "Very rare case: the youngset inst mispredicted, do nothing\n");
@@ -2851,6 +2931,15 @@ DataflowQueues<Impl>::matchInGroup(OpClass op, OpGroups op_group)
         return false;
     }
     return false;
+}
+template<class Impl>
+void
+DataflowQueues<Impl>::shuffleNeighbors()
+{
+    std::shuffle(std::begin(fuPointer[OpGroups::MultDiv]),
+            std::end(fuPointer[OpGroups::MultDiv]), gen);
+    std::shuffle(std::begin(fuPointer[OpGroups::FPAdd]),
+            std::end(fuPointer[OpGroups::FPAdd]), gen);
 }
 
 }
