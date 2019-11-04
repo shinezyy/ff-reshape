@@ -429,6 +429,8 @@ public:
 
     bool fuGranted;
 
+    bool inReadyQueue;
+
     bool destReforward;
 
     unsigned numBusyOps();

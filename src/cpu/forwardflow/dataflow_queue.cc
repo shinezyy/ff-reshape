@@ -79,9 +79,11 @@ ReadyInstsQueue<Impl>::insertEmpirically(DynInstPtr &inst)
     if (preScheduledQueues[OpGroups::MultDiv].size() <
             preScheduledQueues[OpGroups::FPAdd].size()) {
         preScheduledQueues[OpGroups::MultDiv].push_back(inst);
+        DPRINTF(DQWake, "Inst[%lu] inserted into MD queue empirically\n", inst->seqNum);
 
     } else {
         preScheduledQueues[OpGroups::FPAdd].push_back(inst);
+        DPRINTF(DQWake, "Inst[%lu] inserted into FPAdd queue empirically\n", inst->seqNum);
     }
 }
 
@@ -146,7 +148,8 @@ DataflowQueueBank<Impl>::tryWakeTail()
         return nullptr;
     }
 
-    if (tail_inst->fuGranted || (tail_inst->isForwarder() && tail_inst->isExecuted())) {
+    if (tail_inst->inReadyQueue || tail_inst->fuGranted ||
+            (tail_inst->isForwarder() && tail_inst->isExecuted())) {
         DPRINTF(DQWake, "Tail[%d] has been granted, skip\n", tail);
         return nullptr;
     }
@@ -187,7 +190,7 @@ DataflowQueueBank<Impl>::tryWakeDirect()
         readyQueue.pop_front();
         return nullptr;
     }
-    if (inst->fuGranted || (inst->isForwarder() && inst->isExecuted())) {
+    if (inst->inReadyQueue || inst->fuGranted || (inst->isForwarder() && inst->isExecuted())) {
         DPRINTF(DQWake, "Inst at [%d] has been granted, skip\n", tail);
         readyQueue.pop_front();
         return nullptr;
@@ -292,7 +295,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             wakeup_count++;
             DPRINTF(DQWake, "Mem inst [%llu] received wakeup pkt\n",
                     inst->seqNum);
-            if (!inst->fuGranted) {
+            if (!inst->inReadyQueue && !inst->fuGranted) {
                 first = inst;
             } else {
                 DPRINTF(DQWake, "But ignore it because inst [%llu] has already been granted\n",
@@ -303,7 +306,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             inst->orderDepReady = true;
             DPRINTF(DQWake, "Mem inst [%llu] (has order dep) received wakeup pkt\n",
                     inst->seqNum);
-            if (!inst->fuGranted) {
+            if (!inst->inReadyQueue && !inst->fuGranted) {
                 handle_wakeup = true;
             } else {
                 DPRINTF(DQWake, "But ignore it because inst [%llu] has already been granted\n",
@@ -543,9 +546,9 @@ bool DataflowQueueBank<Impl>::canServeNew()
             flag &= false;
         }
     }
-    flag &= !readyInstsQueue->isFull(); // it returns true if any queue is full
-
     anyPending = !flag;
+
+    flag &= !readyInstsQueue->isFull(); // it returns true if any queue is full
 
     flag &= !servedForwarder;
     if (!flag) {
@@ -723,7 +726,9 @@ void DataflowQueueBank<Impl>::clearPending(DynInstPtr &inst)
             return;
         }
     }
-    panic("Clearing non-exsting inst[%lu]", inst->seqNum);
+    if (!inst->isSquashed()) {
+        panic("Clearing non-exsting inst[%lu]", inst->seqNum);
+    }
 }
 
 template<class Impl>
@@ -837,8 +842,8 @@ void DataflowQueues<Impl>::tick()
         fu_requests[i].valid = fromLastCycle->instValids[i];
         if (fromLastCycle->instValids[i]) {
 
-            DPRINTF(DQ, "inst[%d] valid, &inst: %p\n",
-                    i, fromLastCycle->insts[i]);
+            DPRINTF(DQ, "inst[%d] valid, &inst: %lu\n",
+                    i, fromLastCycle->insts[i]->seqNum);
 
             fu_requests[i].payload = fromLastCycle->insts[i];
             std::tie(fu_requests[i].dest, fu_requests[i].destBits) =
@@ -858,6 +863,7 @@ void DataflowQueues<Impl>::tick()
     dumpInstPackets(fu_req_ptrs);
     fu_granted_ptrs = bankFUXBar.select(fu_req_ptrs, &nullInstPkt, nFUGroups);
     for (unsigned b = 0; b < nBanks; b++) {
+
         assert(fu_granted_ptrs[b]);
         if (!fu_granted_ptrs[b]->valid || !fu_granted_ptrs[b]->payload) {
             continue;
@@ -865,10 +871,11 @@ void DataflowQueues<Impl>::tick()
         DynInstPtr &inst = fu_granted_ptrs[b]->payload;
 
         DPRINTF(DQWake, "Inst[%d] selected by fu%u\n", inst->seqNum, b);
+        unsigned source_bank = fu_granted_ptrs[b]->source/2;
 
         if (inst->isSquashed()) {
             DPRINTF(FFSquash, "Skip squashed inst[%llu]\n", inst->seqNum);
-            dqs[fu_granted_ptrs[b]->source]->clearPending(inst);
+            dqs[source_bank]->clearPending(inst);
 
         } else {
             InstSeqNum waitee;
@@ -877,8 +884,10 @@ void DataflowQueues<Impl>::tick()
                 oldWaitYoung++;
             }
             if (can_accept) {
+                DPRINTF(DQWake, "Inst[%d] accepted\n", inst->seqNum);
                 fuWrappers[b].consume(inst);
-                dqs[fu_granted_ptrs[b]->source]->clearPending(inst);
+                dqs[source_bank]->clearPending(inst);
+
             } else if (opLat[inst->opClass()] > 1){
                 readyWaitTime[b] += 1;
                 llBlockedNext = true;
@@ -1048,48 +1057,55 @@ void DataflowQueues<Impl>::tick()
     // todo: write insts from bank to time buffer!
     for (unsigned i = 0; i < nBanks; i++) {
         DynInstPtr inst;
+        // todo ! this function must be called after readPointersFromBank(),
         inst = dqs[i]->wakeupInstsFromBank();
 
         auto &ready_insts_queue = readyInstsQueues[i];
-
-        // 应该在wakeupInstsFromBank函数中插入下面的队列，而不是这里
-        if (matchInGroup(inst->opClass(), OpGroups::MultDiv)) {
-            ready_insts_queue->insertInst(OpGroups::MultDiv, inst);
-
-        } else if (matchInGroup(inst->opClass(), OpGroups::FPAdd)) {
-            ready_insts_queue->insertInst(OpGroups::FPAdd, inst);
+        if (!inst) {
+            DPRINTF(DQWake, "No inst from bank %i this cycle\n", i);
 
         } else {
-            ready_insts_queue->insertEmpirically(inst);
+            DPRINTF(DQWake, "Pushing valid inst[%lu]\n", inst->seqNum);
+            inst->inReadyQueue = true;
+            // 应该在wakeupInstsFromBank函数中插入下面的队列，而不是这里
+            if (matchInGroup(inst->opClass(), OpGroups::MultDiv)) {
+                ready_insts_queue->insertInst(OpGroups::MultDiv, inst);
+                DPRINTF(DQWake, "Inst[%lu] inserted into MD queue\n", inst->seqNum);
+
+            } else if (matchInGroup(inst->opClass(), OpGroups::FPAdd)) {
+                ready_insts_queue->insertInst(OpGroups::FPAdd, inst);
+                DPRINTF(DQWake, "Inst[%lu] inserted into FPadd queue\n", inst->seqNum);
+
+            } else {
+                ready_insts_queue->insertEmpirically(inst);
+            }
         }
-        // todo ! this function must be called after readPointersFromBank(),
 
-        // read fu requests from banks
-        //  and set fields for packets
-        //  fu_req_ptrs = xxx
-        //  update valid, dest bits and payload only (source need not be changed)
-
-        // TODO: coordinate here!
-
-        DynInstPtr fp_add_group = ready_insts_queue->getInst(OpGroups::FPAdd);
         DynInstPtr md_group = ready_insts_queue->getInst(OpGroups::MultDiv);
+        DynInstPtr fp_add_group = ready_insts_queue->getInst(OpGroups::FPAdd);
 
-        toNextCycle->instValids[2*i] = !!fp_add_group && !fp_add_group->fuGranted;
-        toNextCycle->insts[2*i] = fp_add_group;
+        toNextCycle->instValids[2*i] = !!md_group && !md_group->fuGranted;
+        toNextCycle->insts[2*i] = md_group;
 
-        toNextCycle->instValids[2*i + 1] = !!md_group && !md_group->fuGranted;
-        toNextCycle->insts[2*i + 1] = md_group;
+        toNextCycle->instValids[2*i + 1] = !!fp_add_group && !fp_add_group->fuGranted;
+        toNextCycle->insts[2*i + 1] = fp_add_group;
+        if (!toNextCycle->instValids[2*i + 1]) {
+            DPRINTF(DQWake, "Inst from FP add valid: %i\n", fp_add_group);
+            if (fp_add_group) {
+                DPRINTF(DQWake, "Inst[%lu] fu granted: %i\n", fp_add_group->seqNum,
+                        fp_add_group->fuGranted);
+            }
+        }
 
         if (toNextCycle->instValids[2*i]) {
-            DPRINTF(Omega, "toNext cycle inst[%d] valid, &inst: %p\n",
-                    2*i, toNextCycle->insts[2*i]);
+            DPRINTF(DQWake, "toNext cycle inst[%lu]\n", toNextCycle->insts[2*i]->seqNum);
         }
 
         if (toNextCycle->instValids[2*i + 1]) {
-            DPRINTF(Omega, "toNext cycle inst[%d] valid, &inst: %p\n",
-                    2*i + 1, toNextCycle->insts[2*i + 1]);
+            DPRINTF(DQWake, "toNext cycle inst[%lu]\n", toNextCycle->insts[2*i + 1]->seqNum);
         }
-
+    }
+    for (unsigned i = 0; i < nBanks; i++) {
         dqs[i]->countUpPendingPointers();
     }
 
@@ -1134,7 +1150,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         wakeupQueueBankMIN(nBanks * nOps, true),
         pointerQueueBankMIN(nBanks * nOps, true),
 
-        bankFUXBar(nBanks),
+        bankFUXBar(nBanks * OpGroups::nOpGroups),
         wakeupQueueBankXBar(nBanks * nOps),
         pointerQueueBankXBar(nBanks * nOps),
 
@@ -1275,33 +1291,37 @@ unsigned DataflowQueues<Impl>::pointer2uint(const WKPointer &ptr) const
 template<class Impl>
 std::pair<unsigned, boost::dynamic_bitset<> >
 DataflowQueues<Impl>::coordinateFU(
-        DataflowQueues::DynInstPtr &inst, unsigned bank)
+        DataflowQueues::DynInstPtr &inst, unsigned from)
 {
     // find another FU group with desired capability.
-    DPRINTF(FUW, "Coordinating req %u.%u  with llb:%i\n", bank/2, bank%2, llBlocked);
+    DPRINTF(FUW, "Coordinating req %u.%u  with llb:%i\n", from/2, from%2, llBlocked);
     // if (llBlocked) {
     //     auto fu_bitmap = fuGroupCaps[inst->opClass()];
     //     do {
-    //         fuPointer[bank] = (fuPointer[bank] + 1) % nBanks;
-    //     } while (!fu_bitmap[fuPointer[bank]]);
-    //     DPRINTF(FUW, "switch to req fu %u\n", fuPointer[bank]);
+    //         fuPointer[from] = (fuPointer[from] + 1) % nBanks;
+    //     } while (!fu_bitmap[fuPointer[from]]);
+    //     DPRINTF(FUW, "switch to req fu %u\n", fuPointer[from]);
 
     // } else if (opLat[inst->opClass()] == 1) {
-    //     fuPointer[bank] = bank;
+    //     fuPointer[from] = from;
     //     DPRINTF(FUW, "reset to origin\n");
     // }
 
-    int from = bank%2;
+    int type = from%2,
+        bank = from/2;
     int md = OpGroups::MultDiv,
         fa = OpGroups::FPAdd;
     const int group_ipr = 3;
     if (inst->opClass() == OpClass::IprAccess) {
+        DPRINTF(FUW, "Routing inst[%lu] to %i\n", inst->seqNum, group_ipr);
         return std::make_pair(group_ipr, uint2Bits(group_ipr));
-    } else if (from == md){ //OpGroups::MultDiv
+    } else if (type == md){ //OpGroups::MultDiv
+        DPRINTF(FUW, "Routing inst[%lu] to %i\n", inst->seqNum, fuPointer[md][bank]);
         return std::make_pair(fuPointer[md][bank],
                 uint2Bits(fuPointer[md][bank]));
     }
-    //else (from == fa){ //OpGroups::FPadd
+    //else (type == fa){ //OpGroups::FPadd
+    DPRINTF(FUW, "Routing inst[%lu] to %i\n", inst->seqNum, fuPointer[fa][bank]);
     return std::make_pair(fuPointer[fa][bank],
             uint2Bits(fuPointer[fa][bank]));
 }
@@ -1729,6 +1749,8 @@ void DataflowQueues<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrde
         inst->clearCanIssue();
     }
     inst->fuGranted = false;
+    inst->inReadyQueue = false;
+
     if (isStrictOrdered) {
         inst->hasMiscDep = true;  // this is rare, do not send a packet here
     } else {
@@ -1762,6 +1784,7 @@ void DataflowQueues<Impl>::blockMemInst(DataflowQueues::DynInstPtr &inst)
     inst->clearCanIssue();
     inst->clearIssued();
     inst->fuGranted = false;
+    inst->inReadyQueue = false;
     inst->hasMemDep = true;
     inst->memDepReady = false;
     blockedMemInsts.push_back(inst);
@@ -2940,6 +2963,15 @@ DataflowQueues<Impl>::shuffleNeighbors()
             std::end(fuPointer[OpGroups::MultDiv]), gen);
     std::shuffle(std::begin(fuPointer[OpGroups::FPAdd]),
             std::end(fuPointer[OpGroups::FPAdd]), gen);
+    DPRINTF(FUW, "shuffled pointers:\n");
+    for (const auto x:fuPointer[OpGroups::MultDiv]) {
+        DPRINTFR(FUW, "%i ", x);
+    }
+    DPRINTFR(FUW, "\n");
+    for (const auto x:fuPointer[OpGroups::FPAdd]) {
+        DPRINTFR(FUW, "%i ", x);
+    }
+    DPRINTFR(FUW, "\n");
 }
 
 }

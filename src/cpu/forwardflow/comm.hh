@@ -476,24 +476,23 @@ struct TimeBufStruct {
     DIEWC2DIEWC diewc2diewc;
 };
 
-/** Struct that defines the information read from DQ banks. */
-template<class Impl>
-struct DQOut {
-    typedef typename Impl::DynInstPtr DynInstPtr;
-
-    bool instValids[Impl::MaxBanks];
-    DynInstPtr insts[Impl::MaxBanks];
-
-    DQPointer pointers[Impl::MaxBanks * Impl::MaxOps];
-
-};
-
 enum OpGroups {
     MultDiv = 0,
     FPAdd,
     nOpGroups
 };
 
+/** Struct that defines the information read from DQ banks. */
+template<class Impl>
+struct DQOut {
+    typedef typename Impl::DynInstPtr DynInstPtr;
+
+    bool instValids[Impl::MaxBanks * nOpGroups];
+    DynInstPtr insts[Impl::MaxBanks * nOpGroups];
+
+    DQPointer pointers[Impl::MaxBanks * Impl::MaxOps];
+
+};
 
 }
 #endif //__CPU_FF_COMM_HH__

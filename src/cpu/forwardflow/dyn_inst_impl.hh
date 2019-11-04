@@ -137,6 +137,7 @@ BaseO3DynInst<Impl>::initVars()
     std::fill(opReady.begin(), opReady.end(), false);
     std::fill(identicalTo.begin(), identicalTo.end(), 0);
     fuGranted = false;
+    inReadyQueue = false;
     std::fill(srcTakenWithInst.begin(), srcTakenWithInst.end(), false);
 
     hasMemDep = false;
