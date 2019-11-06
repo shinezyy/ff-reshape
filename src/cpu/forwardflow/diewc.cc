@@ -1802,6 +1802,7 @@ void FFDIEWC<Impl>::regStats()
 
     dq.regStats();
     ldstQueue.regStats();
+    archState.regStats();
 
     iewExecutedInsts
             .name(name() + ".iewExecutedInsts")

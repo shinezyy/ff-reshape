@@ -67,9 +67,12 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
         randomizeOp(inst);
     }
 
+    int num_src_ops = 0, num_busy_ops = 0;
     for (unsigned phy_op = 1; phy_op < Impl::MaxOps; phy_op++) {
         auto &indirect_index = inst->indirectRegIndices.at(phy_op);
         if (indirect_index.size() > 0) {
+
+            num_src_ops++;
             inst->indirectRegIds.at(phy_op) =
                 inst->srcRegIdx(indirect_index.front());
 
@@ -163,6 +166,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                 assert(parentMap.count(src_reg)); // to parents only
                 assert(renameMap.count(src_reg)); // to parents or siblings
             }
+            num_busy_ops++;
 
             DQPointer parent_ptr = parentMap[src_reg];
 
@@ -216,6 +220,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             }
         }
     }
+    numBusyOperands[num_src_ops] += num_busy_ops;
+    numDispInsts[num_src_ops]++;
 
     if (inst->numDestRegs()) {
         const RegId& dest_reg = inst->destRegIdx(0);
@@ -648,6 +654,28 @@ ArchState<Impl>::countChild(DQPointer parent_ptr, DynInstPtr &inst)
                         ancestorPtr.bank, ancestorPtr.index);
             }
         }
+    }
+}
+
+template<class Impl>
+void
+ArchState<Impl>::regStats()
+{
+    numBusyOperands
+        .init(Impl::MaxOps)
+        .name(name() + ".numBusyOperands")
+        .desc("numBusyOperands");
+
+    numDispInsts
+        .init(Impl::MaxOps)
+        .name(name() + ".numDispInsts")
+        .desc("numDispInsts");
+
+    for (int n_busy_op = 0; n_busy_op < Impl::MaxOps; n_busy_op++) {
+        meanBusyOp[n_busy_op]
+            .name(name() + ".meanBusyOp_" + std::to_string(n_busy_op))
+            .desc("meanBusyOp");
+        meanBusyOp[n_busy_op] = numBusyOperands[n_busy_op] / numDispInsts[n_busy_op];
     }
 }
 

@@ -127,6 +127,12 @@ public:
     // is LF source, is LF drain
     std::pair<bool, bool> forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forward);
 
+    void regStats();
+
+    Stats::Vector numBusyOperands;
+    Stats::Vector numDispInsts;
+    Stats::Formula meanBusyOp[Impl::MaxOps];
+
 private:
     std::mt19937 gen;
 

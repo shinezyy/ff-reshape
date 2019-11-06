@@ -512,6 +512,14 @@ public:
     Stats::Vector WKQueueLen;
 
     Stats::Scalar HalfSquashes;
+
+    Stats::Scalar SrcOpPackets;
+    Stats::Scalar DestOpPackets;
+    Stats::Scalar MemPackets;
+    Stats::Scalar OrderPackets;
+    Stats::Scalar MiscPackets;
+    Stats::Formula TotalPackets;
+
 private:
 
     unsigned qAllocPtr{};

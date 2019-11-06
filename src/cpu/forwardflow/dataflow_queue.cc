@@ -958,6 +958,23 @@ void DataflowQueues<Impl>::tick()
                         pkt->payload.bank, pkt->payload.index, pkt->payload.op);
 
                 WKPointer &ptr = pkt->payload;
+                if (ptr.wkType == WKPointer::WKOp) {
+                    if (ptr.op == 0) {
+                        SrcOpPackets++;
+                    } else {
+                        DestOpPackets++;
+                    }
+
+                } else if (ptr.wkType == WKPointer::WKMem) {
+                    MemPackets++;
+
+                } else if (ptr.wkType == WKPointer::WKOrder) {
+                    OrderPackets++;
+
+                } else {
+                    assert(ptr.wkType == WKPointer::WKMisc);
+                    MiscPackets++;
+                }
 
                 if (dqs[b]->wakeup(ptr)) {
 
@@ -981,7 +998,7 @@ void DataflowQueues<Impl>::tick()
         }
     }
     if (wk_pkt_passed != 0) {
-        assert(wk_pkt_passed < nOps * nBanks);
+        assert(wk_pkt_passed <= nOps * nBanks);
         WKFlowUsage[wk_pkt_passed]++;
     }
 
@@ -1877,6 +1894,28 @@ void DataflowQueues<Impl>::regStats()
     HalfSquashes
         .name(name() + ".HalfSquashes")
         .desc("HalfSquashes");
+
+    SrcOpPackets
+        .name(name() + ".SrcOpPackets")
+        .desc("SrcOpPackets");
+    DestOpPackets
+        .name(name() + ".DestOpPackets")
+        .desc("DestOpPackets");
+    MemPackets
+        .name(name() + ".MemPackets")
+        .desc("MemPackets");
+    OrderPackets
+        .name(name() + ".OrderPackets")
+        .desc("OrderPackets");
+    MiscPackets
+        .name(name() + ".MiscPackets")
+        .desc("MiscPackets");
+    TotalPackets
+        .name(name() + ".TotalPackets")
+        .desc("TotalPackets");
+    TotalPackets = SrcOpPackets + DestOpPackets + MemPackets + \
+                   OrderPackets + MiscPackets;
+
 }
 
 template<class Impl>
