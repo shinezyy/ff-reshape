@@ -45,7 +45,7 @@ CrossBarNarrow<T>::CrossBarNarrow(uint32_t size, uint32_t n_ops):
     for (uint32_t i = 0; i < nChannels; i++) {
         prioList.push_back(i);
     }
-    for (uint32_t i = 0; i < nChannels; i++) {
+    for (uint32_t i = 0; i < nOps; i++) {
         opPrioList.push_back(i);
     }
 }
@@ -71,6 +71,7 @@ CrossBarNarrow<T>::select(std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null)
             if (!channelUsed[dest_chan]) {
                 DPRINTF(CrossBarNarrow, "Pass pkt[%i] to [%i]\n", i, pkt->dest);
                 outputs[pkt->dest] = pkt;
+                channelUsed[dest_chan] = true;
             } else {
                 DPRINTF(CrossBarNarrow, "Reject pkt[%i] req to [%i], conflicted\n",
                         i, pkt->dest);

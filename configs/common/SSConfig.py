@@ -75,5 +75,7 @@ def modifyO3CPUConfig(options, cpu):
         cpu.XBarWakeup = True
     if options.narrow_xbar_wk == '1':
         cpu.NarrowXBarWakeup = True
+    if options.dedi_xbar_wk == '1':
+        cpu.DediXBarWakeup = True
     if options.min_wk == '1':
         cpu.MINWakeup = True

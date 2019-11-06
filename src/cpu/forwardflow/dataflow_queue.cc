@@ -926,6 +926,9 @@ void DataflowQueues<Impl>::tick()
     } else if (NarrowXBarWakeup) {
         wakeup_granted_ptrs = wakeupQueueBankNarrowXBar.select(wakeup_req_ptrs, &nullWKPkt);
 
+    } else if (DediXBarWakeup) {
+        wakeup_granted_ptrs = wakeupQueueBankDediXBar.select(wakeup_req_ptrs, &nullWKPkt);
+
     } else {
         panic("Unknown topology\n");
     }
@@ -1173,6 +1176,8 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
 
         wakeupQueueBankNarrowXBar(nBanks * nOps, nOps),
 
+        wakeupQueueBankDediXBar(nBanks * nOps, nOps),
+
         fu_requests(nBanks * OpGroups::nOpGroups),
         fu_req_ptrs(nBanks * OpGroups::nOpGroups),
         fu_granted_ptrs(nBanks),
@@ -1218,11 +1223,12 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         MINWakeup(params->MINWakeup),
         XBarWakeup(params->XBarWakeup),
         NarrowXBarWakeup(params->NarrowXBarWakeup),
+        DediXBarWakeup(params->DediXBarWakeup),
         AgedWakeQueuePush(params->AgedWakeQueuePush),
         AgedWakeQueuePktSel(params->AgedWakeQueuePktSel),
         pushFF(nBanks * nOps, false)
 {
-    assert(MINWakeup + XBarWakeup + NarrowXBarWakeup == 1);
+    assert(MINWakeup + XBarWakeup + NarrowXBarWakeup + DediXBarWakeup == 1);
     // init inputs to omega networks
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nBanks; op++) {
@@ -1882,7 +1888,7 @@ void DataflowQueues<Impl>::regStats()
         .init(nOps * nBanks + 1)
         .name(name() + ".WKFlowUsage")
         .desc("WKFlowUsage")
-        .flags(Stats::total | Stats::cdf);
+        .flags(Stats::total);
 
     WKQueueLen
         .init(nOps * nBanks * maxQueueDepth + 1)

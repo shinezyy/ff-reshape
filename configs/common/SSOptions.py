@@ -133,4 +133,10 @@ def addO3Options(parser):
             default='0',
             help='narrow xbar wakeup')
 
+    parser.add_option("--dedi-xbar-wk",
+            action='store',
+            type='choice',
+            choices=['0', '1'],
+            default='0',
+            help='dedicated narrow xbar wakeup for dest registers')
 

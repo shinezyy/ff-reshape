@@ -13,6 +13,7 @@
 
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/crossbar.hh"
+#include "cpu/forwardflow/crossbar_dedi_dest.hh"
 #include "cpu/forwardflow/crossbar_narrow.hh"
 #include "cpu/forwardflow/network.hh"
 #include "cpu/timebuf.hh"
@@ -251,6 +252,7 @@ private:
     CrossBar<PointerPair> pointerQueueBankXBar;
 
     CrossBarNarrow<WKPointer> wakeupQueueBankNarrowXBar;
+    CrossBarDedi<WKPointer> wakeupQueueBankDediXBar;
 
     std::vector<DQPacket<DynInstPtr>> fu_requests;
     std::vector<DQPacket<DynInstPtr>*> fu_req_ptrs;
@@ -555,6 +557,7 @@ private:
     const bool MINWakeup;
     const bool XBarWakeup;
     const bool NarrowXBarWakeup;
+    const bool DediXBarWakeup;
 
     void checkUpdateSeq(InstSeqNum &seq, Addr &addr, InstSeqNum seq_new, Addr addr_new);
 
