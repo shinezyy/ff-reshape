@@ -12,7 +12,7 @@ from multiprocessing import Pool
 import common as c
 
 lmd = 0.55
-num_thread = 30
+num_thread = 25
 
 full = False
 
@@ -30,6 +30,7 @@ exp_options = [
         #'--rand-op-position',
         #'--profit-discount=1.0',
         #'--ready-hint',
+        '--dedi-xbar-wk', 0,
         '--narrow-xbar-wk', 1,
         '--xbar-wk', 0,
         '--min-wk', 0,

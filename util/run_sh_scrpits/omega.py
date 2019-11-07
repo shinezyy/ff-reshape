@@ -12,7 +12,7 @@ from multiprocessing import Pool
 import common as c
 
 lmd = 0.55
-num_thread = 30
+num_thread = 13
 
 full = False
 

@@ -12,7 +12,7 @@ from multiprocessing import Pool
 import common as c
 
 lmd = 0.55
-num_thread = 8
+num_thread = 20
 
 full = False
 
@@ -50,6 +50,7 @@ def op_rand(benchmark, some_extra_args, outdir_b, cpt_id):
             '--outdir=' + outdir_b,
             '--stats-file=stats.txt',
             #'--debug-flags=ValueCommit',
+            # '--debug-flags=ValueExec',
             #'--debug-start={}'.format (panic_tick - 2000000),
             #'--debug-end={}'.format   (panic_tick + 200000),
             pjoin(c.gem5_home(), 'configs/spec2017/se_spec17.py'),

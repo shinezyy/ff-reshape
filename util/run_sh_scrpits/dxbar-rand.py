@@ -23,15 +23,15 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir =  f'{c.stats_base_dir}/xbar4-rand-hint{d}'
+outdir =  f'{c.stats_base_dir}/dedi-xbar4-rand-hint{d}'
 
 exp_options = [
         #'--enable-reshape',
         '--rand-op-position',
         #'--profit-discount=1.0',
         #'--ready-hint',
-        '--dedi-xbar-wk', 0,
-        '--narrow-xbar-wk', 1,
+        '--dedi-xbar-wk', 1,
+        '--narrow-xbar-wk', 0,
         '--xbar-wk', 0,
         '--min-wk', 0,
         ]
