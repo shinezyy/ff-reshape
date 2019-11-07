@@ -1,6 +1,7 @@
 import os
 import sh
 from os.path import join as pjoin
+import os.path as osp
 
 
 def avoid_repeated(func, outdir, binary=None, *args, **kwargs):
@@ -69,13 +70,13 @@ def gem5_cpt_dir(arch, version=2006):
     cpt_dirs = {
             2006: {
                 'ARM': None,
-                'RISCV': '/home/auser/spec-simpoint-cpt-riscv-gcc-8.2',
+                'RISCV': osp.expanduser('~/spec-simpoint-cpt-riscv-gcc-8.2'),
                 },
             2017: {
                 'ARM': None,
-                'RISCV': '/home/auser/spec2017_simpoint_cpts',
+                'RISCV': osp.expanduser('~/spec2017_simpoint_cpts'),
                 },
             }
     return cpt_dirs[version][arch]
 
-stats_base_dir = '/home/auser/gem5-results-2017'
+stats_base_dir = osp.expanduser('~/gem5-results-2017')
