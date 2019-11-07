@@ -23,7 +23,7 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir =  f'{c.stats_base_dir}/xbar4-rand-hint{d}'
+outdir =  f'{c.stats_base_dir}/xbar4-rand{d}'
 
 exp_options = [
         #'--enable-reshape',
