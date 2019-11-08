@@ -79,3 +79,4 @@ def modifyO3CPUConfig(options, cpu):
         cpu.DediXBarWakeup = True
     if options.min_wk == '1':
         cpu.MINWakeup = True
+    cpu.commitTraceInterval = options.trace_interval

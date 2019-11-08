@@ -140,3 +140,9 @@ def addO3Options(parser):
             default='0',
             help='dedicated narrow xbar wakeup for dest registers')
 
+    parser.add_option("--trace-interval",
+            action='store',
+            type='int',
+            default=49,
+            help='commit/exec trace interval')
+
