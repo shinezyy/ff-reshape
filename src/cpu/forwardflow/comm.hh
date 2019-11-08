@@ -61,11 +61,6 @@ namespace FF{
  */
 using PhysRegIndex = short int;
 
-typedef union {
-    double f;
-    uint64_t i;
-} FFRegValue;
-
 enum PointerIndex {
     SrcPtr = 0,
     DestPtr

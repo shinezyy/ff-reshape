@@ -20,6 +20,9 @@ DQPointer::DQPointer(const WKPointer &wk)
 
     queueTime = wk.queueTime;
     pendingTime = wk.pendingTime;
+
+    hasVal = wk.hasVal;
+    val = wk.val;
 }
 
 DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o)
@@ -36,6 +39,9 @@ DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o)
 
     queueTime = 0;
     pendingTime = 0;
+
+    hasVal = false;
+    val.i = ~0;
 }
 
 
@@ -55,6 +61,9 @@ DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o, int
     queueTime = 0;
     pendingTime = 0;
     term = t;
+
+    hasVal = false;
+    val.i = ~0;
 }
 
 WKPointer::WKPointer(const DQPointer &dqPointer)
@@ -73,4 +82,7 @@ WKPointer::WKPointer(const DQPointer &dqPointer)
 
     queueTime = dqPointer.queueTime;
     pendingTime = dqPointer.pendingTime;
+
+    hasVal = dqPointer.hasVal;
+    val = dqPointer.val;
 }

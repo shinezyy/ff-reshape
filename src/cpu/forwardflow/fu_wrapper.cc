@@ -261,6 +261,8 @@ template<class Impl>
 void FUWrapper<Impl>::startCycle() {
     toWakeup[SrcPtr].valid = false;
     toWakeup[DestPtr].valid = false;
+    toWakeup[SrcPtr].hasVal = false;
+    toWakeup[DestPtr].hasVal = false;
     toExec = false;
     seqToExec = 0;
 
@@ -449,9 +451,16 @@ void FUWrapper<Impl>::executeInsts()
         DPRINTF(FUW, "toExec is valid, execute now!\n");
         assert(insts.count(seqToExec));
         assert(insts[seqToExec]);
-        exec->executeInst(insts[seqToExec]);
-        insts.erase(seqToExec);
 
+        auto &inst = insts[seqToExec];
+        exec->executeInst(inst);
+
+        if (inst->numDestRegs() && inst->isExecuted()) {
+            toWakeup[DestPtr].hasVal = true;
+            toWakeup[DestPtr].val = inst->getDestValue();
+        }
+
+        insts.erase(seqToExec);
     }
     DPRINTF(FUSched, "wbScheduled at end: ");
     if (Debug::FUSched) {

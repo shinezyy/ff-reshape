@@ -33,7 +33,7 @@ void FFDIEWC<Impl>::tick() {
     clearAtStart();
 
     // todo: Execute ready insts
-    execute();
+    // execute();
 
     dq.cycleStart();
 
@@ -726,21 +726,21 @@ FFDIEWC<Impl>::
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
 
     if (commitCounter >= commitTraceInterval && !head_inst->isForwarder()) {
-        DPRINTF(ValueCommit, "@%lu Committing %lu instruction with sn:%lu PC:",
+        DPRINTFR(ValueCommit, "@%lu Committing %lu instruction with sn:%lu PC:",
                 curTick(), commitAll, head_inst->seqNum);
         if (Debug::ValueCommit) {
             std::cout << head_inst->pcState();
         }
         if (head_inst->numDestRegs() > 0) {
-            DPRINTF(ValueCommit, ", with wb value: %lu",
+            DPRINTFR(ValueCommit, ", with wb value: %lu",
                     head_inst->getResult().asIntegerNoAssert());
         } else {
-            DPRINTF(ValueCommit, ", with wb value: none");
+            DPRINTFR(ValueCommit, ", with wb value: none");
         }
         if (head_inst->isMemRef()) {
-            DPRINTF(ValueCommit, ", with v_addr: 0x%lx\n", head_inst->effAddr);
+            DPRINTFR(ValueCommit, ", with v_addr: 0x%lx\n", head_inst->effAddr);
         } else {
-            DPRINTF(ValueCommit, ", with v_addr: none\n");
+            DPRINTFR(ValueCommit, ", with v_addr: none\n");
         }
 
         if (head_inst->numDestRegs() > 0) {

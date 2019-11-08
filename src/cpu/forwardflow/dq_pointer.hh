@@ -8,6 +8,8 @@
 #include <cstddef>
 #include <functional>
 
+#include "base/types.hh"
+
 struct WKPointer;
 
 struct DQPointer{
@@ -16,6 +18,9 @@ struct DQPointer{
     unsigned bank;
     unsigned index;
     unsigned op;
+
+    bool hasVal;
+    FFRegValue val;
 
     int reshapeOp{-1};
     unsigned ssrDelay{};
@@ -55,6 +60,9 @@ struct WKPointer{
     unsigned bank{};
     unsigned index{};
     unsigned op{};
+
+    bool hasVal;
+    FFRegValue val;
 
     int reshapeOp{-1};
     unsigned ssrDelay{};

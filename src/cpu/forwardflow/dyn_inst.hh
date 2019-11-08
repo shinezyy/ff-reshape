@@ -437,6 +437,8 @@ public:
 
     void setSrcValue(unsigned idx, FFRegValue val);
 
+    FFRegValue getOpValue(unsigned op);
+
     unsigned numChildren;
 
     bool predLargeFanout;

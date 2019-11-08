@@ -318,8 +318,11 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             inst->opReady[op] = true;
             if (op != 0) {
                 assert(inst->indirectRegIndices.at(op).size());
+                assert(ptr.hasVal);
+
                 int src_reg_idx = inst->indirectRegIndices.at(op).front();
-                FFRegValue v = dq->readReg(inst->getSrcPointer(src_reg_idx), DQPointer(ptr));
+                FFRegValue v = ptr.val;
+
                 for (const auto i: inst->indirectRegIndices.at(op)) {
                     DPRINTF(FFExec, "Setting src reg[%i] of inst[%llu] to %llu\n",
                             i, inst->seqNum, v.i);
@@ -511,18 +514,24 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                 } else if (inst->pointers[op].valid) {
                     DPRINTF(DQ, "op now = %i\n", op);
                     if (op != 0 || inst->destReforward) {
+                        optr = inst->pointers[op];
+
+                        optr.hasVal = true;
                         if (op == 0 && inst->destReforward) {
                             DPRINTF(DQ, "Although its wakeup ptr to dest,"
                                     " it is still forwarded because of destReforward flag\n");
+                            optr.val = inst->getDestValue();
+                        } else {
+                            optr.val = ptr.val;
                         }
-                        optr = inst->pointers[op];
+
                         optr.ssrDelay = ptr.ssrDelay + 1;
                         if (op == 0 && optr.valid && inst->destReforward) {
                             inst->destReforward = false;
                         }
                         DPRINTF(FFSquash, "Put forwarding wakeup Pointer(%i) (%i %i) (%i)"
-                                " to outputPointers\n",
-                                optr.valid, optr.bank, optr.index, optr.op);
+                                " to outputPointers with val: (%i) (%llu)\n",
+                                optr.valid, optr.bank, optr.index, optr.op, optr.hasVal, optr.val.i);
                     }
                 } else {
                     DPRINTF(DQ, "Skip invalid pointer on op[%i]\n", op);
@@ -1032,6 +1041,10 @@ void DataflowQueues<Impl>::tick()
         wrapper.setWakeup();
     }
 
+    for (auto &wrapper: fuWrappers) {
+        wrapper.executeInsts();
+    }
+
     for (unsigned b = 0; b < nBanks; b++) {
         const DQPointer &src = fuWrappers[b].toWakeup[SrcPtr];
         const DQPointer &dest = fuWrappers[b].toWakeup[DestPtr];
@@ -1068,10 +1081,6 @@ void DataflowQueues<Impl>::tick()
                 (q2 >= 0 && wakeQueues[q2].size() > maxQueueDepth)) {
             processWKQueueFull();
         }
-    }
-
-    for (auto &wrapper: fuWrappers) {
-        wrapper.executeInsts();
     }
 
     // todo: write insts from bank to time buffer!
@@ -1734,6 +1743,12 @@ DataflowQueues<Impl>::markFwPointers(
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
             auto wk_ptr = WKPointer(pair.payload);
             wk_ptr.isFwExtra = true;
+            wk_ptr.hasVal = true;
+            if (op == 0) {
+                wk_ptr.val = inst->getDestValue();
+            } else {
+                wk_ptr.val = inst->getOpValue(op);
+            }
             extraWakeup(wk_ptr);
             if (op == 0) {
                 inst->destReforward = false;
@@ -1753,6 +1768,16 @@ DataflowQueues<Impl>::markFwPointers(
         }
         auto wk_ptr = WKPointer(pair.payload);
         wk_ptr.isFwExtra = true;
+        wk_ptr.hasVal = true;
+        if (inst->isForwarder()) {
+            wk_ptr.val = inst->getOpValue(inst->forwardOp);
+        } else {
+            if (op == 0) {
+                wk_ptr.val = inst->getDestValue();
+            } else {
+                wk_ptr.val = inst->getOpValue(op);
+            }
+        }
         extraWakeup(wk_ptr);
     }
     pointers[op] = pair.payload;
@@ -2227,7 +2252,10 @@ void DataflowQueues<Impl>::digestForwardPointer()
 
                 if (op == 0 && inst->destReforward && inst->isExecuted()) {
                     // already executed but not forwarded
-                    extraWakeup(WKPointer(pair.payload));
+                    WKPointer wk(pair.payload);
+                    wk.hasVal = true;
+                    wk.val = inst->getDestValue();
+                    extraWakeup(wk);
                     inst->destReforward = false;
                 }
 
@@ -2266,6 +2294,8 @@ void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
                         inst->dqPosition.bank, inst->dqPosition.index,
                         inst->getDestValue().i
                );
+        wk.hasVal = true;
+        wk.val = inst->getDestValue();
         extraWakeup(wk);
 
         unsigned used = pointer2uint(inst->dqPosition);
@@ -2741,7 +2771,8 @@ DataflowQueues<Impl>::tryResetRef()
         DPRINTF(DQ || Debug::RSProbe1, "Set oldestUsed to youngest inst on wake queue empty\n");
 
     } else {
-        DPRINTF(DQ || Debug::RSProbe1, "wake queue in flight = %i, cannot reset oldestUsed\n", numPendingWakeups);
+        DPRINTF(DQ || Debug::RSProbe1,
+                "wake queue in flight = %i, cannot reset oldestUsed\n", numPendingWakeups);
         dumpWkQSize();
     }
 }

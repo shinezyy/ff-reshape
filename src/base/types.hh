@@ -211,4 +211,11 @@ enum ByteOrder {
     LittleEndianByteOrder
 };
 
+typedef union {
+    double f;
+    uint64_t i;
+} FFRegValue;
+
+
+
 #endif // __BASE_TYPES_HH__

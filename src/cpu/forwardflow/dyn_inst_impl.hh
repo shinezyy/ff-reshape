@@ -348,6 +348,12 @@ void BaseO3DynInst<Impl>::setSrcValue(unsigned idx, FFRegValue val)
 }
 
 template<class Impl>
+FFRegValue BaseO3DynInst<Impl>::getOpValue(unsigned op)
+{
+    return srcValues[indirectRegIndices.at(op).front()];
+}
+
+template<class Impl>
 typename BaseO3DynInst<Impl>::FloatRegBits
 BaseO3DynInst<Impl>::readFloatRegOperandBits(const StaticInst *si, int idx)
 {
