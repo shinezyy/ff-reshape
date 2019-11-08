@@ -275,7 +275,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         if (op == 0 && !(ptr.wkType == WKPointer::WKMem ||
                     ptr.wkType == WKPointer::WKMisc || ptr.wkType == WKPointer::WKOrder)) {
-            DPRINTF(DQWake, "Wakeup ignores op wakeup pointer to Dest\n");
+            DPRINTF(DQWake, "Mark received dest after ont wakeup pointer to Dest\n");
+            inst->receivedDest = true;
             if (anyPending) {
                 ptr.valid = false;
             }
@@ -358,6 +359,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                         }
                     }
                 }
+            } else {
             }
             DPRINTF(DQWake||Debug::RSProbe1,
                     "Mark op[%d] of inst [%llu] ready\n", op, inst->seqNum);
@@ -1071,10 +1073,6 @@ void DataflowQueues<Impl>::tick()
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 
-            unsigned used = pointer2uint(src);
-            if (validPosition(used) && logicallyLET(used, oldestUsed)) {
-                oldestUsed = used;
-            }
         }
 
         if ((q1 >= 0 && wakeQueues[q1].size() > maxQueueDepth) ||
@@ -1779,6 +1777,10 @@ DataflowQueues<Impl>::markFwPointers(
             }
         }
         extraWakeup(wk_ptr);
+
+    } else if (inst && (op == 0 && inst->fuGranted && !inst->opReady[op])) {
+        DPRINTF(FFSquash, "And mark it to new coming child\n");
+        inst->destReforward = true;
     }
     pointers[op] = pair.payload;
     DPRINTF(DQ, "And let it forward its value to (%d) (%d %d) (%d)\n",
@@ -2298,11 +2300,6 @@ void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
         wk.val = inst->getDestValue();
         extraWakeup(wk);
 
-        unsigned used = pointer2uint(inst->dqPosition);
-        if (validPosition(used) && logicallyLET(used, oldestUsed)) {
-            oldestUsed = used;
-        }
-
         completeMemInst(inst);
     } else {
         auto &p = inst->dqPosition;
@@ -2345,6 +2342,7 @@ void DataflowQueues<Impl>::wakeMemRelated(DynInstPtr &inst)
 template<class Impl>
 void DataflowQueues<Impl>::completeMemInst(DynInstPtr &inst)
 {
+    inst->receivedDest = true;
     if (inst->isMemRef()) {
         // complateMemInst
         inst->memOpDone(true);
@@ -2467,10 +2465,6 @@ void DataflowQueues<Impl>::dumpFwQSize()
 template<class Impl>
 void DataflowQueues<Impl>::maintainOldestUsed()
 {
-    if (!validPosition(oldestUsed)) {
-        oldestUsed = getTailPtr();
-        DPRINTF(DQ || Debug::RSProbe1, "Set oldestUsed to tail: %u\n", oldestUsed);
-    }
 }
 
 template<class Impl>
@@ -2485,14 +2479,13 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfWKQueue()
             const auto &ele = q[e - 1 - i];
             if (ele.valid) {
                 unsigned p = pointer2uint(DQPointer(ele));
-                if (!validPosition(p)) {
-                    panic("WTF, a pointer in wk queue is not valid!\n");
-                }
-                auto p_ptr = uint2Pointer(p);
-                auto p_inst = dqs[p_ptr.bank]->readInstsFromBank(p_ptr);
+                if (validPosition(p)) {
+                    auto p_ptr = uint2Pointer(p);
+                    auto p_inst = dqs[p_ptr.bank]->readInstsFromBank(p_ptr);
 
-                if (logicallyLT(p, oldest_to_squash) && p_inst) {
-                    oldest_to_squash = p;
+                    if (logicallyLT(p, oldest_to_squash) && p_inst) {
+                        oldest_to_squash = p;
+                    }
                 }
             }
             q.pop_back();
@@ -2531,11 +2524,12 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfFWQueue()
             const auto &ele = q[e - 1 - i];
             if (ele.valid) {
                 unsigned p = pointer2uint(ele.payload.payload);
-                if (!validPosition(p)) {
-                    panic("WTF, a receiver pointer in fw queue is not valid!\n");
-                }
-                if (logicallyLT(p, oldest_to_squash)) {
-                    oldest_to_squash = p;
+                if (validPosition(p)) {
+                    auto p_ptr = uint2Pointer(p);
+                    auto p_inst = dqs[p_ptr.bank]->readInstsFromBank(p_ptr);
+                    if (logicallyLT(p, oldest_to_squash) && p_inst) {
+                        oldest_to_squash = p;
+                    }
                 }
             }
             q.pop_back();
@@ -2766,15 +2760,6 @@ template<class Impl>
 void
 DataflowQueues<Impl>::tryResetRef()
 {
-    if (numPendingWakeups == 0) {
-        oldestUsed = getHeadPtr();
-        DPRINTF(DQ || Debug::RSProbe1, "Set oldestUsed to youngest inst on wake queue empty\n");
-
-    } else {
-        DPRINTF(DQ || Debug::RSProbe1,
-                "wake queue in flight = %i, cannot reset oldestUsed\n", numPendingWakeups);
-        dumpWkQSize();
-    }
 }
 
 template<class Impl>

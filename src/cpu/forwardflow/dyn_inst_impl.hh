@@ -169,6 +169,8 @@ BaseO3DynInst<Impl>::initVars()
     nonCriticalFw = 0;
 
     negativeContrib = 0;
+
+    receivedDest = false;
 }
 
 template <class Impl>

@@ -628,12 +628,18 @@ FFDIEWC<Impl>::
                           head_inst->dqPosition.index);
         return false;
     }
-    if (!dq.logicallyLT(dq.pointer2uint(head_inst->dqPosition), dq.getOldestUsed()) &&
-            !(head_inst->isStoreConditional() || head_inst->isSerializeAfter())) {
-        DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is referenced recently,"
-                          " and cannot be committed right now\n",
-                          head_inst->seqNum, head_inst->dqPosition.bank,
-                          head_inst->dqPosition.index);
+    // if (!dq.logicallyLT(dq.pointer2uint(head_inst->dqPosition), dq.getOldestUsed()) &&
+    //         !(head_inst->isStoreConditional() || head_inst->isSerializeAfter())) {
+    //     DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is referenced recently,"
+    //                       " and cannot be committed right now\n",
+    //                       head_inst->seqNum, head_inst->dqPosition.bank,
+    //                       head_inst->dqPosition.index);
+    //     return false;
+    // }
+
+    if (head_inst->numDestRegs() && !head_inst->receivedDest) {
+        DPRINTF(FFCommit, "Instruction[%lu] has not obtained its value from "
+                "interconnect network", head_inst->seqNum);
         return false;
     }
 

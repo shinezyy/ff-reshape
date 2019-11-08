@@ -484,6 +484,8 @@ public:
     bool forwardOpReady();
 
     unsigned opLat{};
+
+    bool receivedDest;
 private:
     FFRegValue destValue;
 
