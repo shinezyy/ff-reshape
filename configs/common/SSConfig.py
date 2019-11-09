@@ -80,3 +80,11 @@ def modifyO3CPUConfig(options, cpu):
     if options.min_wk == '1':
         cpu.MINWakeup = True
     cpu.commitTraceInterval = options.trace_interval
+
+    if options.local_fw:
+        cpu.NarrowLocalForward = True
+
+    if options.dq_depth:
+        cpu.DQDepth = options.dq_depth
+    if options.max_wkq_depth:
+        cpu.pendingQueueDepth = options.max_wkq_depth

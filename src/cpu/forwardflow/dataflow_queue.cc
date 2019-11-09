@@ -410,6 +410,11 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                     DPRINTF(DQWake, "inst [%llu] becomes nearly waken up\n", inst->seqNum);
                     nearlyWakeup.set(ptr.index);
                 }
+                if (anyPending) {
+                    DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
+                            ptr.bank, ptr.index, ptr.op);
+                    ptr.valid = false;
+                }
             }
         }
     }
@@ -469,17 +474,26 @@ DataflowQueueBank<Impl>::readPointersFromBank()
     DPRINTF(DQWake, "Reading pointers from banks\n");
     DPRINTF(DQ, "Tail: %i\n", tail);
     bool served_forwarder = false;
+
+    bool grab_from_local_fw = dq->NarrowXBarWakeup && dq->NarrowLocalForward && anyPending;
+
     for (unsigned op = 0; op < nOps; op++) {
         if (served_forwarder) {
             break;
         }
-        const auto &ptr = inputPointers[op];
+        auto &ptr = grab_from_local_fw ? pendingWakeupPointers[op] : inputPointers[op];
         auto &optr = outputPointers[op];
 
         if (!ptr.valid) {
             optr.valid = false;
+
+        } else if (grab_from_local_fw && !ptr.isLocal) {
+            optr.valid = false;
+
         } else {
             DPRINTF(DQ, "op = %i\n", op);
+            DPRINTF(DQWake, "Reading forward pointer according to (%i %i) (%i)\n",
+                    ptr.bank, ptr.index, ptr.op);
             const auto &inst = instArray.at(ptr.index);
             if (!inst) {
                 DPRINTF(FFSquash, "Ignore forwarded pointer to (%i %i) (%i) (squashed)\n",
@@ -531,6 +545,11 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                         if (op == 0 && optr.valid && inst->destReforward) {
                             inst->destReforward = false;
                         }
+                        if (grab_from_local_fw && ptr.isLocal) {
+                            ptr.isLocal = false;
+                            DPRINTF(DQWake, "Pointer (%i) (%i %i) (%i) isLocal <- false\n",
+                                    optr.valid, optr.bank, optr.index, optr.op);
+                        }
                         DPRINTF(FFSquash, "Put forwarding wakeup Pointer(%i) (%i %i) (%i)"
                                 " to outputPointers with val: (%i) (%llu)\n",
                                 optr.valid, optr.bank, optr.index, optr.op, optr.hasVal, optr.val.i);
@@ -538,6 +557,11 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                 } else {
                     DPRINTF(DQ, "Skip invalid pointer on op[%i]\n", op);
                     optr.valid = false;
+                    if (grab_from_local_fw && ptr.isLocal) {
+                        ptr.isLocal = false;
+                        DPRINTF(DQWake, "Pointer (%i) (%i %i) (%i) isLocal <- false\n",
+                                optr.valid, optr.bank, optr.index, optr.op);
+                    }
                 }
             }
         }
@@ -584,13 +608,12 @@ bool DataflowQueueBank<Impl>::wakeup(WKPointer pointer)
         return false;
     }
 
-    DPRINTF(DQWake, "Mark waking up: (%i %i) (%i) in inputPointers\n",
+    DPRINTF(DQWake, "Mark to wake up: (%i %i) (%i) in inputPointers\n",
             pointer.bank, pointer.index, pointer.op);
 
     auto op = pointer.op;
     assert(!inputPointers[op].valid);
     inputPointers[op] = pointer;
-
 
     if (inst && inst->isForwarder()) {
         servedForwarder = true;
@@ -616,6 +639,7 @@ DataflowQueueBank<Impl>::DataflowQueueBank(
           instArray(depth, nullptr),
           nearlyWakeup(dynamic_bitset<>(depth)),
           pendingWakeupPointers(nOps),
+          localWKPointers(nOps),
           anyPending(false),
           inputPointers(nOps),
           outputPointers(nOps, nullDQPointer),
@@ -627,6 +651,9 @@ DataflowQueueBank<Impl>::DataflowQueueBank(
         for (auto &ptr: line) {
             ptr.valid = false;
         }
+    }
+    for (auto &ptr: localWKPointers) {
+        ptr.valid = false;
     }
     std::ostringstream s;
     s << "DQBank" << bankID;
@@ -831,6 +858,19 @@ void DataflowQueueBank<Impl>::countUpPendingInst()
 }
 
 template<class Impl>
+void DataflowQueueBank<Impl>::mergeLocalWKPoineters()
+{
+    for (unsigned op = 0; op < nOps; op++) {
+        auto &p_ptr = pendingWakeupPointers[op];
+        auto &l_ptr = localWKPointers[op];
+        if (l_ptr.valid && !p_ptr.valid) {
+            p_ptr = l_ptr;
+            l_ptr.valid = false;
+        }
+    }
+}
+
+template<class Impl>
 void DataflowQueues<Impl>::tick()
 {
     // fu preparation
@@ -1026,9 +1066,31 @@ void DataflowQueues<Impl>::tick()
 
     tryResetRef();
 
+    if (NarrowXBarWakeup && NarrowLocalForward) {
+        mergeLocalWKPoineters();
+    }
+
     // todo: write forward pointers from bank to time buffer!
     for (unsigned b = 0; b < nBanks; b++) {
         std::vector<DQPointer> forward_ptrs = dqs[b]->readPointersFromBank();
+
+        if (NarrowXBarWakeup && NarrowLocalForward) {
+            for (unsigned op = 0; op < nOps; op++) {
+                auto &ptr = forward_ptrs[op];
+                if (ptr.valid && (ptr.bank == b)) {
+                    // TODO: move to time buf
+                    auto &pending_ptr = dqs[b]->localWKPointers[ptr.op];
+                    if (!pending_ptr.valid) {
+                        pending_ptr = WKPointer(ptr);
+                        pending_ptr.isLocal = true;
+                        DPRINTF(DQ, "Move wk ptr (%i) (%i %i) (%i) to local\n",
+                                ptr.valid, ptr.bank, ptr.index, ptr.op);
+                        ptr.valid = false;
+                    }
+                }
+            }
+        }
+
         for (unsigned op = 0; op < nOps; op++) {
             const auto &ptr = forward_ptrs[op];
             // dqs[b]->dumpOutPointers();
@@ -1231,6 +1293,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         XBarWakeup(params->XBarWakeup),
         NarrowXBarWakeup(params->NarrowXBarWakeup),
         DediXBarWakeup(params->DediXBarWakeup),
+        NarrowLocalForward(params->NarrowLocalForward),
         AgedWakeQueuePush(params->AgedWakeQueuePush),
         AgedWakeQueuePktSel(params->AgedWakeQueuePktSel),
         pushFF(nBanks * nOps, false)
@@ -3044,7 +3107,16 @@ DataflowQueues<Impl>::shuffleNeighbors()
     DPRINTFR(FUW, "\n");
 }
 
+template<class Impl>
+void
+DataflowQueues<Impl>::mergeLocalWKPoineters()
+{
+    for (auto bank: dqs) {
+        bank->mergeLocalWKPoineters();
+    }
 }
+
+} // namespace
 
 #include "cpu/forwardflow/isa_specific.hh"
 

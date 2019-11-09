@@ -81,7 +81,12 @@ private:
 
     // instructions that waiting for only one operands
     // and the wakeup pointer has already arrived
+public:
     std::vector<WKPointer> pendingWakeupPointers;
+
+    std::vector<WKPointer> localWKPointers;
+
+private:
     bool anyPending;
 
     // input forward pointers
@@ -175,6 +180,8 @@ public:
     void countUpPendingInst();
 
     XReadyInstsQueue *readyInstsQueue;
+
+    void mergeLocalWKPoineters();
 };
 
 
@@ -555,11 +562,15 @@ private:
 
     void genFUValidMask();
 
+public:
     const bool MINWakeup;
     const bool XBarWakeup;
     const bool NarrowXBarWakeup;
     const bool DediXBarWakeup;
 
+    const bool NarrowLocalForward;
+
+private:
     void checkUpdateSeq(InstSeqNum &seq, Addr &addr, InstSeqNum seq_new, Addr addr_new);
 
     void pushToWakeQueue(unsigned q_index, WKPointer ptr);
@@ -602,6 +613,7 @@ public:
 
     bool matchInGroup(OpClass op, OpGroups op_group);
 
+    void mergeLocalWKPoineters();
 };
 
 }

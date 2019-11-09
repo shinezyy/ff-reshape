@@ -23,6 +23,8 @@ DQPointer::DQPointer(const WKPointer &wk)
 
     hasVal = wk.hasVal;
     val = wk.val;
+
+    isLocal = wk.isLocal;
 }
 
 DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o)
@@ -85,4 +87,6 @@ WKPointer::WKPointer(const DQPointer &dqPointer)
 
     hasVal = dqPointer.hasVal;
     val = dqPointer.val;
+
+    isLocal = dqPointer.isLocal;
 }

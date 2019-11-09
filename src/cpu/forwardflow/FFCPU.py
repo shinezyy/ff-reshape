@@ -239,3 +239,5 @@ class DerivFFCPU(BaseCPU):
     AgedWakeQueuePktSel = Param.Bool(False, "AgedWakeQueuePktSel")
 
     MaxReadyQueueSize = Param.Unsigned(4, "MaxReadyQueueSize")
+
+    NarrowLocalForward = Param.Bool(False, 'NarrowLocalForward')

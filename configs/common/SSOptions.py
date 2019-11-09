@@ -146,3 +146,18 @@ def addO3Options(parser):
             default=49,
             help='commit/exec trace interval')
 
+    parser.add_option("--local-fw",
+            action='store_true',
+            default=False,
+            help='use local forward for narrow xbar')
+
+    parser.add_option("--dq-depth",
+            action='store',
+            type='int',
+            help='DQ depth per bank')
+
+    parser.add_option("--max-wkq-depth",
+            action='store',
+            type='int',
+            help='max wakeup queue depth before squash')
+

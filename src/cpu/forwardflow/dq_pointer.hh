@@ -39,12 +39,15 @@ struct DQPointer{
 
     int term{-1};
 
+    bool isLocal{false};
+
     bool operator==(const DQPointer& that) const {
         return group == that.group &&
             bank == that.bank &&
             index == that.index &&
             op == that.op;
     }
+
 };
 
 struct WKPointer{
@@ -80,6 +83,8 @@ struct WKPointer{
     // explicit WKPointer(DQPointer &&dqPointer);
 
     bool isFwExtra{false};
+
+    bool isLocal{false};
 };
 
 
