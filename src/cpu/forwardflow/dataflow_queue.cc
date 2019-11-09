@@ -2068,6 +2068,10 @@ void DataflowQueues<Impl>::violation(DynInstPtr store, DynInstPtr violator)
 template<class Impl>
 void DataflowQueues<Impl>::scheduleNonSpec()
 {
+    if (!getTail()) {
+        DPRINTF(FFSquash, "Ignore scheduling attempt to squashing inst\n");
+        return;
+    }
     WKPointer wk = WKPointer(getTail()->dqPosition);
     auto p = uint2Pointer(tail);
     DPRINTF(DQ, "Scheduling non spec inst @ (%i %i)\n", p.bank, p.index);

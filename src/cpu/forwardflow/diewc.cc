@@ -113,8 +113,12 @@ void FFDIEWC<Impl>::tick() {
             tbuf.strictlyOrderedLoad->setAtCommit();
         } else {
             DPRINTF(DIEWC, "Recv other non spec\n");
-            assert(tbuf.nonSpecSeqNum == dq.getTail()->seqNum);
-            dq.scheduleNonSpec();
+            if (!dq.getTail()) {
+                DPRINTF(FFSquash, "Ignore scheduling attempt to squashing inst\n");
+            } else {
+                assert(tbuf.nonSpecSeqNum == dq.getTail()->seqNum);
+                dq.scheduleNonSpec();
+            }
         }
     }
 #undef tbuf
