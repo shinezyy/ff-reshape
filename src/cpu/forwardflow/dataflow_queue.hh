@@ -517,6 +517,7 @@ public:
 
     Stats::Scalar SrcOpPackets;
     Stats::Scalar DestOpPackets;
+    Stats::Scalar KeySrcPacket;
     Stats::Scalar MemPackets;
     Stats::Scalar OrderPackets;
     Stats::Scalar MiscPackets;

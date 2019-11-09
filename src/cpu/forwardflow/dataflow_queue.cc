@@ -974,9 +974,9 @@ void DataflowQueues<Impl>::tick()
                 WKPointer &ptr = pkt->payload;
                 if (ptr.wkType == WKPointer::WKOp) {
                     if (ptr.op == 0) {
-                        SrcOpPackets++;
-                    } else {
                         DestOpPackets++;
+                    } else {
+                        SrcOpPackets++;
                     }
 
                 } else if (ptr.wkType == WKPointer::WKMem) {
@@ -1946,6 +1946,10 @@ void DataflowQueues<Impl>::regStats()
     TotalPackets
         .name(name() + ".TotalPackets")
         .desc("TotalPackets");
+    KeySrcPacket
+        .name(name() + ".KeySrcPacket")
+        .desc("KeySrcPacket");
+
     TotalPackets = SrcOpPackets + DestOpPackets + MemPackets + \
                    OrderPackets + MiscPackets;
 
@@ -2895,6 +2899,7 @@ DataflowQueues<Impl>::countCycles(typename Impl::DynInstPtr &inst, WKPointer *wk
     inst->ssrDelay = wk->ssrDelay;
     inst->queueingDelay = wk->queueTime;
     inst->pendingDelay = wk->pendingTime;
+    KeySrcPacket++;
 }
 
 template<class Impl>
