@@ -66,7 +66,7 @@ namespace RiscvISA {
 
 using RiscvISAInst::MaxInstSrcRegs;
 using RiscvISAInst::MaxInstDestRegs;
-const int MaxMiscDestRegs = 1;
+const int MaxMiscDestRegs = 2;
 
 typedef uint8_t CCReg; // Not applicable to Riscv
 
