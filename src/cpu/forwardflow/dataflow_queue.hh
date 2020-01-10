@@ -181,7 +181,7 @@ public:
 
     XReadyInstsQueue *readyInstsQueue;
 
-    void mergeLocalWKPoineters();
+    void mergeLocalWKPointers();
 };
 
 
@@ -613,7 +613,7 @@ public:
 
     bool matchInGroup(OpClass op, OpGroups op_group);
 
-    void mergeLocalWKPoineters();
+    void mergeLocalWKPointers();
 };
 
 }

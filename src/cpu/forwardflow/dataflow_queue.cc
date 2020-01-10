@@ -858,7 +858,7 @@ void DataflowQueueBank<Impl>::countUpPendingInst()
 }
 
 template<class Impl>
-void DataflowQueueBank<Impl>::mergeLocalWKPoineters()
+void DataflowQueueBank<Impl>::mergeLocalWKPointers()
 {
     for (unsigned op = 0; op < nOps; op++) {
         auto &p_ptr = pendingWakeupPointers[op];
@@ -1067,7 +1067,7 @@ void DataflowQueues<Impl>::tick()
     tryResetRef();
 
     if (NarrowXBarWakeup && NarrowLocalForward) {
-        mergeLocalWKPoineters();
+        mergeLocalWKPointers();
     }
 
     // todo: write forward pointers from bank to time buffer!
@@ -3109,10 +3109,10 @@ DataflowQueues<Impl>::shuffleNeighbors()
 
 template<class Impl>
 void
-DataflowQueues<Impl>::mergeLocalWKPoineters()
+DataflowQueues<Impl>::mergeLocalWKPointers()
 {
     for (auto bank: dqs) {
-        bank->mergeLocalWKPoineters();
+        bank->mergeLocalWKPointers();
     }
 }
 
