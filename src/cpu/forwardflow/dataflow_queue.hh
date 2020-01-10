@@ -23,6 +23,26 @@ struct DerivFFCPUParams;
 
 namespace FF{
 
+// common
+struct DQCommon {
+    const int FPAddOps[3]{OpClass::FloatAdd,
+                    OpClass::FloatCmp,
+                    OpClass::FloatCvt};
+
+    const int MultDivOps[7]{OpClass::IntMult,
+                      OpClass::IntDiv,
+
+                      OpClass::FloatMult,
+                      OpClass::FloatMultAcc,
+
+                      OpClass::FloatMisc,
+
+                      OpClass::FloatDiv,
+                      OpClass::FloatSqrt};
+};
+
+extern DQCommon dqCommon;
+
 template <class Impl>
 class ReadyInstsQueue{
 
@@ -596,20 +616,6 @@ private:
 public:
     void countCycles(DynInstPtr &inst, WKPointer *wk);
 
-    int FPAddOps[3]{OpClass::FloatAdd,
-        OpClass::FloatCmp,
-        OpClass::FloatCvt};
-
-    int MultDivOps[7]{OpClass::IntMult,
-        OpClass::IntDiv,
-
-        OpClass::FloatMult,
-        OpClass::FloatMultAcc,
-
-        OpClass::FloatMisc,
-
-        OpClass::FloatDiv,
-        OpClass::FloatSqrt};
 
     bool matchInGroup(OpClass op, OpGroups op_group);
 

@@ -29,6 +29,8 @@ using namespace std;
 
 using boost::dynamic_bitset;
 
+DQCommon dqCommon;
+
 template<class Impl>
 ReadyInstsQueue<Impl>::ReadyInstsQueue(DerivFFCPUParams *params)
 :   maxReadyQueueSize(params->MaxReadyQueueSize),
@@ -3071,7 +3073,7 @@ bool
 DataflowQueues<Impl>::matchInGroup(OpClass op, OpGroups op_group)
 {
     if (op_group == OpGroups::MultDiv) {
-        for (int i: MultDivOps) {
+        for (int i: dqCommon.MultDivOps) {
             if (i == op) {
                 return true;
             }
@@ -3079,7 +3081,7 @@ DataflowQueues<Impl>::matchInGroup(OpClass op, OpGroups op_group)
         return false;
     }
     if (op_group == OpGroups::FPAdd) {
-        for (int i: FPAddOps) {
+        for (int i: dqCommon.FPAddOps) {
             if (i == op) {
                 return true;
             }
