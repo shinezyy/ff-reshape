@@ -84,7 +84,7 @@ class MemDepUnit
 
   public:
     typedef typename Impl::DynInstPtr DynInstPtr;
-    typedef typename Impl::CPUPol::DataflowQueues InstructionQueue;
+    typedef typename Impl::CPUPol::DQTop InstructionQueue;
 
     /** Empty constructor. Must call init() prior to using in this case. */
     MemDepUnit();

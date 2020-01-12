@@ -36,8 +36,7 @@ public:
 //    using XFFCPU = FFCPU<Impl>;
     typedef typename CPUPol::LSQ XLSQ;
 //    using XLSQ = LSQ<Impl>;
-    typedef typename CPUPol::DataflowQueues XDataflowQueues;
-//    using XDataflowQueues = DataflowQueues<Impl>;
+    typedef typename CPUPol::DQTop DQTop;
 
 //    typedef typename CPUPol::DIEWC2DIEWC DIEWC2DIEWC;
     typedef typename CPUPol::TimeStruct TimeStruct;
@@ -93,7 +92,7 @@ private:
      */
     bool serializeOnNextInst;
 
-    XDataflowQueues dq;
+    DQTop dq;
 
     ArchState archState;
 
@@ -445,7 +444,7 @@ public:
 
     ArchState *getArchState() {return &archState;}
 
-    XDataflowQueues *getDQ() {return &dq;}
+    DQTop *getDQ() {return &dq;}
 
     void executeInst(DynInstPtr &inst);
 

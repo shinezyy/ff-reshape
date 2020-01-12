@@ -252,7 +252,7 @@ void FFDIEWC<Impl>::dispatch() {
 
         // postponed allocation;
         dq.advanceHead();
-        inst->dqPosition = dq.uint2Pointer(dq.getHeadPtr());
+        inst->dqPosition = dq.c.uint2Pointer(dq.getHeadPtr());
         inst->dqPosition.term = dq.getHeadTerm();
 
         bool jumped = false;
@@ -624,7 +624,7 @@ FFDIEWC<Impl>::
         return false;
     }
 
-    if (!dq.logicallyLT(dq.pointer2uint(head_inst->dqPosition), oldestForwarded) &&
+    if (!dq.logicallyLT(dq.c.pointer2uint(head_inst->dqPosition), oldestForwarded) &&
             !(head_inst->isStoreConditional() || head_inst->isSerializeAfter())) {
         DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is forwarded recently,"
                           " and cannot be committed right now\n",
@@ -632,7 +632,7 @@ FFDIEWC<Impl>::
                           head_inst->dqPosition.index);
         return false;
     }
-    // if (!dq.logicallyLT(dq.pointer2uint(head_inst->dqPosition), dq.getOldestUsed()) &&
+    // if (!dq.logicallyLT(dq.c.pointer2uint(head_inst->dqPosition), dq.getOldestUsed()) &&
     //         !(head_inst->isStoreConditional() || head_inst->isSerializeAfter())) {
     //     DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is referenced recently,"
     //                       " and cannot be committed right now\n",
@@ -2199,7 +2199,7 @@ void FFDIEWC<Impl>::sendBackwardInfo()
 template<class Impl>
 void FFDIEWC<Impl>::setOldestFw(DQPointer _ptr)
 {
-    auto ptr = dq.pointer2uint(_ptr);
+    auto ptr = dq.c.pointer2uint(_ptr);
     assert(dq.validPosition(ptr));
     if (!dq.validPosition(oldestForwarded)) {
         oldestForwarded = dq.getTailPtr();

@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 #include "cpu/forwardflow/comm.hh"
+#include "cpu/forwardflow/dataflow_queue_common.hh"
 #include "cpu/forwardflow/dq_pointer.hh"
 #include "cpu/reg_class.hh"
 
@@ -30,7 +31,7 @@ private:
 //    using DynInstPtr = BaseO3DynInst<Impl>*;
     typedef typename Impl::O3CPU O3CPU;
     typedef typename CPUPol::DIEWC DIEWC;
-    typedef typename CPUPol::DataflowQueues DataflowQueues;
+    typedef typename CPUPol::DQTop DQTop;
 
 //    const unsigned WritePorts, ReadPorts;
 //
@@ -69,7 +70,7 @@ private:
 
     DIEWC *diewc;
 
-    DataflowQueues *dq;
+    DQTop *dq;
 
     void commitInstInSB(DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest);
 
@@ -116,7 +117,7 @@ public:
 
     void setDIEWC(DIEWC *_diewc);
 
-    void setDQ(DataflowQueues *_dq);
+    void setDQ(DQTop *_dq);
 
     InstSeqNum getYoungestCPTBefore(InstSeqNum violator);
 

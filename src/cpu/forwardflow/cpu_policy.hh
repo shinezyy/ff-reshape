@@ -36,6 +36,9 @@
 #include "cpu/forwardflow/arch_state.hh"
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/dataflow_queue.hh"
+#include "cpu/forwardflow/dataflow_queue_bank.hh"
+#include "cpu/forwardflow/dataflow_queue_common.hh"
+#include "cpu/forwardflow/dataflow_queue_top.hh"
 #include "cpu/forwardflow/decode.hh"
 #include "cpu/forwardflow/diewc.hh"
 #include "cpu/forwardflow/fetch.hh"
@@ -44,6 +47,7 @@
 #include "cpu/forwardflow/lsq_unit.hh"
 #include "cpu/forwardflow/mem_dep_unit.hh"
 #include "cpu/forwardflow/store_set.hh"
+#include "ready_inst_queue.hh"
 
 /**
  * Struct that defines the key classes to be used by the CPU.  All
@@ -93,6 +97,8 @@ struct FFSimpleCPUPolicy
     typedef FF::DQOut<Impl> DQStruct;
 
     typedef FF::DataflowQueueBank<Impl> DataflowQueueBank;
+
+    typedef FF::DQTop<Impl> DQTop;
 
     typedef FF::ReadyInstsQueue<Impl> ReadyInstsQueue;
 

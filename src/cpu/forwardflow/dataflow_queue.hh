@@ -15,214 +15,43 @@
 #include "cpu/forwardflow/crossbar.hh"
 #include "cpu/forwardflow/crossbar_dedi_dest.hh"
 #include "cpu/forwardflow/crossbar_narrow.hh"
+#include "cpu/forwardflow/dataflow_queue_common.hh"
 #include "cpu/forwardflow/network.hh"
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
+
+//#define zcoding
+
+#ifdef zcoding
+//#include "cpu/forwardflow/dataflow_queue_top.hh"
+#include "cpu/forwardflow/dyn_inst.hh"
+
+#endif
 
 struct DerivFFCPUParams;
 
 namespace FF{
 
-// common
-struct DQCommon {
-    const int FPAddOps[3]{OpClass::FloatAdd,
-                    OpClass::FloatCmp,
-                    OpClass::FloatCvt};
-
-    const int MultDivOps[7]{OpClass::IntMult,
-                      OpClass::IntDiv,
-
-                      OpClass::FloatMult,
-                      OpClass::FloatMultAcc,
-
-                      OpClass::FloatMisc,
-
-                      OpClass::FloatDiv,
-                      OpClass::FloatSqrt};
-};
-
-extern DQCommon dqCommon;
-
-template <class Impl>
-class ReadyInstsQueue{
-
-public:
-    typedef typename Impl::DynInstPtr DynInstPtr;
-
-    ReadyInstsQueue(DerivFFCPUParams *params);
-
-    void squash(InstSeqNum inst_seq);
-
-    DynInstPtr getInst(OpGroups group);
-
-    void insertInst(OpGroups group, DynInstPtr &inst);
-
-    void insertEmpirically(DynInstPtr &inst);
-
-    const size_t maxReadyQueueSize;
-
-    bool isFull();
-
-    bool isFull(OpGroups group);
-
-    unsigned targetGroup;
-
-    std::vector<std::list<DynInstPtr> > preScheduledQueues;
-
-};
-
-template <class Impl>
-class DataflowQueueBank{
-
-public:
-    typedef typename Impl::DynInstPtr DynInstPtr;
-//    using DynInstPtr = BaseO3DynInst<Impl>*;
-
-    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
-
-    typedef typename Impl::CPUPol CPUPolicy;
-
-    typedef typename Impl::CPUPol::ReadyInstsQueue XReadyInstsQueue;
-private:
-    typedef typename CPUPolicy::DataflowQueues DQ;
-
-    DQ *dq;
-
-    const unsigned nOps{4};
-
-    const unsigned depth;
-
-    const DQPointer nullDQPointer;
-
-    std::vector<DynInstPtr> instArray;
-
-    // instructions that waiting for only one operands
-    boost::dynamic_bitset<> nearlyWakeup;
-
-    // instructions that waiting for only one operands
-    // and the wakeup pointer has already arrived
-public:
-    std::vector<WKPointer> pendingWakeupPointers;
-
-    std::vector<WKPointer> localWKPointers;
-
-private:
-    bool anyPending;
-
-    // input forward pointers
-    std::vector<WKPointer> inputPointers;
-
-    // output forward pointers
-    // init according to nops
-
-    std::vector<DQPointer> outputPointers;
-
-    unsigned tail;
-
-    unsigned readyQueueSize;
-
-    std::deque<DQPointer> readyQueue;
-
-public:
-    void advanceTail();
-
-    void setTail(unsigned t);
-
-    explicit DataflowQueueBank(DerivFFCPUParams *params, unsigned bankID, DQ *dq);
-
-    bool canServeNew();
-
-    bool wakeup(WKPointer pointer);
-
-    DynInstPtr wakeupInstsFromBank();
-
-    std::vector<DQPointer> readPointersFromBank();
-
-    DynInstPtr readInstsFromBank(DQPointer pointer) const;
-
-    void writeInstsToBank(DQPointer pointer, DynInstPtr& inst);
-
-    void checkReadiness(DQPointer pointer);
-
-    DynInstPtr findInst(InstSeqNum) const;
-
-    void checkPending();
-
-    std::vector<std::array<DQPointer, 4>> prematureFwPointers;
-
-    void resetState();
-
-    DynInstPtr tryWakeTail();
-
-    DynInstPtr tryWakeDirect();
-
-    std::string _name;
-
-    std::string name() const {return _name;}
-
-    void clear(bool markSquashed);
-
-    void erase(DQPointer p, bool markSquashed);
-
-    void cycleStart();
-
-    void clearPending(DynInstPtr &inst);
-
-    DQPointer extraWakeupPointer;
-
-    void printTail();
-
-    void setNearlyWakeup(DQPointer ptr);
-
-    //stats:
-    Stats::Scalar wakenUpByPointer;
-    Stats::Scalar wakenUpAtTail;
-    Stats::Scalar directReady;
-    Stats::Scalar directWakenUp;
-
-
-    void regStats();
-
-    bool hasTooManyPendingInsts();
-
-    void squash(const DQPointer &squash_from);
-
-    bool servedForwarder;
-
-    bool servedNonForwarder;
-
-    void dumpOutPointers() const;
-
-    void dumpInputPointers() const;
-
-    void countUpPendingPointers();
-
-    void countUpPendingInst();
-
-    XReadyInstsQueue *readyInstsQueue;
-
-    void mergeLocalWKPointers();
-};
-
-
 template <class Impl>
 class DataflowQueues
 {
-private:
-    const DQPointer nullDQPointer;
-    const WKPointer nullWKPointer;
+//private:
+//    const DQPointer nullDQPointer;
+//    const WKPointer nullWKPointer;
 
 public:
     typedef typename Impl::O3CPU O3CPU;
 
+#ifdef zcoding
+    using DynInstPtr = BaseO3DynInst<Impl>*;
+#else
     typedef typename Impl::DynInstPtr DynInstPtr;
-//    using DynInstPtr = BaseO3DynInst<Impl>*;
+#endif
 
+    typedef typename Impl::CPUPol::DQTop DQTop;
     typedef typename Impl::CPUPol::DIEWC DIEWC;
-    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
     typedef typename Impl::CPUPol::DQStruct DQStruct;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
-
     typedef typename Impl::CPUPol::LSQ LSQ;
 
     typedef typename Impl::CPUPol::DataflowQueueBank XDataflowQueueBank;
@@ -230,17 +59,13 @@ public:
 //
     typedef typename Impl::CPUPol::ReadyInstsQueue XReadyInstsQueue;
 
-    const unsigned WritePorts, ReadPorts;
-
     unsigned writes, reads;
 
-    bool insert(DynInstPtr &inst, bool nonSpec);
+    DataflowQueues(DerivFFCPUParams *);
 
-    void tick();
+    XDataflowQueueBank * operator [](unsigned bank);
 
-    void cycleStart();
-
-    explicit DataflowQueues(DerivFFCPUParams *);
+    std::vector<XDataflowQueueBank *> dqs;
 
 private:
     // init from params
@@ -256,7 +81,7 @@ private:
 
     std::vector<std::deque<DQPacket<PointerPair>>> forwardPointerQueue;
 
-    std::vector<XDataflowQueueBank *> dqs;
+    DQCommon *c;
 
     TimeBuffer<DQStruct> *DQTS;
 
@@ -308,8 +133,6 @@ private:
     bool llBlocked;
     bool llBlockedNext;
 
-    boost::dynamic_bitset<> uint2Bits(unsigned);
-
     unsigned head, tail;
 
     const unsigned int bankWidth;
@@ -318,43 +141,18 @@ private:
     const unsigned int indexMask;
 
 public:
-    DQPointer uint2Pointer(unsigned) const;
-
-    unsigned pointer2uint(const DQPointer &) const;
-
-    unsigned pointer2uint(const WKPointer &) const;
-
-    unsigned getHeadPtr() const {return head;}
-    unsigned getTailPtr() const {return tail;}
-
-    unsigned getHeadTerm() const {return headTerm;}
-
-    void retireHead(bool isSquashed, FFRegValue v);
 
     std::unordered_map<DQPointer, FFRegValue> committedValues;
-
-    DynInstPtr getHead() const;
 
     std::list<DynInstPtr> getBankHeads();
 
     std::list<DynInstPtr> getBankTails();
 
-    DynInstPtr getTail();
+    void squashFU(InstSeqNum seq);
 
-    void squash(DQPointer p, bool all, bool including);
+    void squashReady(InstSeqNum seq);
 
-    bool isFull() const;
-
-    unsigned numInDQ() const;
-
-    unsigned numFree() const;
-
-    bool isEmpty() const;
-
-    bool insertBarrier(DynInstPtr &inst);
-
-    bool insertNonSpec(DynInstPtr &inst);
-
+    void squashAll();
 //    void recordProducer(DynInstPtr &inst);
 
     void insertForwardPointer(PointerPair pair);
@@ -370,29 +168,11 @@ public:
 
     void setReg(DQPointer pointer, FFRegValue val);
 
-    void addReadyMemInst(DynInstPtr inst, bool isOrderDep = true);
-
-    void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive = false);
-
-    /** Re-executes all rescheduled memory instructions. */
-    void replayMemInst(DynInstPtr &inst);
-
-    /** Moves memory instruction onto the list of cache blocked instructions */
-    void blockMemInst(DynInstPtr &inst);
-
-    void cacheUnblocked();
-
-    void drainSanityCheck() const;
-
-    void takeOverFrom();
-
     void resetState();
 
     void resetEntries();
 
     void regStats();
-
-    void scheduleNonSpec();
 
 private:
 
@@ -420,16 +200,11 @@ private:
     bool wakeupQueueClogging() const;
     bool fwPointerQueueClogging() const;
 
-    std::vector<FFRegValue> regFile;
-
-    MemDepUnit memDepUnit;
+//    std::vector<FFRegValue> regFile;
 
     void markFwPointers(std::array<DQPointer, 4> &pointers,
             PointerPair &pair, DynInstPtr &inst);
 
-    std::list<DynInstPtr> blockedMemInsts;
-
-    std::list<DynInstPtr> retryMemInsts;
 
     void readQueueHeads();
 
@@ -437,34 +212,14 @@ private:
 
     void dumpPairPackets(std::vector<DQPacket<PointerPair>*>&);
 
-    std::list<DynInstPtr> deferredMemInsts;
-
     DIEWC *diewc;
 
     void extraWakeup(const WKPointer &wk);
 
-    void alignTails();
-
-    void replayMemInsts();
-
-    DynInstPtr getBlockedMemInst();
-
     void dumpQueues();
 
 public:
-    bool logicallyLT(unsigned left, unsigned right) const;
-
-    bool validPosition(unsigned u) const;
-
-    bool logicallyLET(unsigned left, unsigned right) const;
-
-    unsigned dec(unsigned u) const;
-
-    unsigned inc(unsigned u) const;
-
-    void deferMemInst(DynInstPtr &inst);
-
-    DynInstPtr getDeferredMemInstToExecute();
+    void alignTails();
 
     void setTimeBuf(TimeBuffer<DQStruct>* dqtb);
 
@@ -475,8 +230,6 @@ public:
     void setCPU(O3CPU *_cpu) {cpu = _cpu;};
 
     std::string name() const {return "dataflow_queue";}
-
-    void violation(DynInstPtr store, DynInstPtr violator);
 
     void tryFastCleanup();
 
@@ -495,15 +248,7 @@ public:
     void endCycle();
 
 private:
-    unsigned oldestUsed;
 
-    std::pair<InstSeqNum, Addr> clearHalfWKQueue();
-
-    std::pair<InstSeqNum, Addr> clearHalfFWQueue();
-
-    void processWKQueueFull();
-
-    void processFWQueueFull();
 
     std::list<unsigned> opPrioList;
 
@@ -511,36 +256,17 @@ private:
 
     void countUpPointers();
 public:
-    void maintainOldestUsed();
-
-    unsigned getOldestUsed() {return oldestUsed;};
-
     void dumpFwQSize();
 
-    bool halfSquash;
-
-    InstSeqNum halfSquashSeq;
-
-    Addr halfSquashPC;
-
     DynInstPtr readInst(const DQPointer &p) const;
-
-    bool hasTooManyPendingInsts();
-
-    void advanceHead();
-
-    DynInstPtr checkAndGetParent(const DQPointer &parent, const DQPointer &child) const;
 
     Stats::Vector readyWaitTime;
 
     Stats::Scalar oldWaitYoung;
 
-
     Stats::Vector WKFlowUsage;
 
     Stats::Vector WKQueueLen;
-
-    Stats::Scalar HalfSquashes;
 
     Stats::Scalar SrcOpPackets;
     Stats::Scalar DestOpPackets;
@@ -572,10 +298,12 @@ private:
 
     void readPointersToWkQ();
 
+public:
     void clearInflightPackets();
 
     void clearPending2SquashedRange(unsigned start, unsigned end);
 
+private:
     int headTerm;
 
     const unsigned termMax;
@@ -620,8 +348,62 @@ public:
     bool matchInGroup(OpClass op, OpGroups op_group);
 
     void mergeLocalWKPointers();
+
+    void cycleStart();
+
+    void tick();
+
+    bool hasTooManyPendingInsts();
+
+    //// inter group transferring
+public:
+    void setGroupID(unsigned id) {groupID = id;}
+
+    unsigned getGroupID() {return groupID;}
+
+    void setTop(DQTop *_top) {top = _top;}
+
+private:
+    DQTop *top;
+
+    unsigned groupID;
+
+    std::deque<WKPointer> outQueue;
+
+    void sendToNextGroup(const WKPointer &wk_pointer);
+
+    unsigned interGroupSent;
+
+    const unsigned interGroupBW; // TODO: init
+
+    void sendOld();
+
+public:
+    void clearSent(); // TODO: clear cyclely
+
+    void receiveFromPrevGroup(const WKPointer &wk_pointer);
+
+
+    // half squash related:
+public:
+    bool halfSquash;
+
+    InstSeqNum halfSquashSeq;
+
+    Addr halfSquashPC;
+
+    std::pair<InstSeqNum, Addr> clearHalfWKQueue();
+
+    std::pair<InstSeqNum, Addr> clearHalfFWQueue();
+
+    void processWKQueueFull();
+
+    void processFWQueueFull();
+
 };
 
 }
+
+#undef zcoding
 
 #endif //__FF_DATAFLOW_QUEUE_HH__
