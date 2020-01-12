@@ -39,6 +39,15 @@ struct DQCommon {
 
                       OpClass::FloatDiv,
                       OpClass::FloatSqrt};
+
+    boost::dynamic_bitset<> uint2Bits(unsigned);
+
+    DQPointer uint2Pointer(unsigned) const;
+
+    unsigned pointer2uint(const DQPointer &) const;
+
+    unsigned pointer2uint(const WKPointer &) const;
+
 };
 
 extern DQCommon dqCommon;
@@ -222,7 +231,6 @@ public:
     typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
     typedef typename Impl::CPUPol::DQStruct DQStruct;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
-
     typedef typename Impl::CPUPol::LSQ LSQ;
 
     typedef typename Impl::CPUPol::DataflowQueueBank XDataflowQueueBank;
@@ -233,12 +241,6 @@ public:
     const unsigned WritePorts, ReadPorts;
 
     unsigned writes, reads;
-
-    bool insert(DynInstPtr &inst, bool nonSpec);
-
-    void tick();
-
-    void cycleStart();
 
     explicit DataflowQueues(DerivFFCPUParams *);
 
@@ -308,8 +310,6 @@ private:
     bool llBlocked;
     bool llBlockedNext;
 
-    boost::dynamic_bitset<> uint2Bits(unsigned);
-
     unsigned head, tail;
 
     const unsigned int bankWidth;
@@ -318,18 +318,6 @@ private:
     const unsigned int indexMask;
 
 public:
-    DQPointer uint2Pointer(unsigned) const;
-
-    unsigned pointer2uint(const DQPointer &) const;
-
-    unsigned pointer2uint(const WKPointer &) const;
-
-    unsigned getHeadPtr() const {return head;}
-    unsigned getTailPtr() const {return tail;}
-
-    unsigned getHeadTerm() const {return headTerm;}
-
-    void retireHead(bool isSquashed, FFRegValue v);
 
     std::unordered_map<DQPointer, FFRegValue> committedValues;
 
@@ -339,21 +327,7 @@ public:
 
     std::list<DynInstPtr> getBankTails();
 
-    DynInstPtr getTail();
-
     void squash(DQPointer p, bool all, bool including);
-
-    bool isFull() const;
-
-    unsigned numInDQ() const;
-
-    unsigned numFree() const;
-
-    bool isEmpty() const;
-
-    bool insertBarrier(DynInstPtr &inst);
-
-    bool insertNonSpec(DynInstPtr &inst);
 
 //    void recordProducer(DynInstPtr &inst);
 
@@ -372,27 +346,11 @@ public:
 
     void addReadyMemInst(DynInstPtr inst, bool isOrderDep = true);
 
-    void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive = false);
-
-    /** Re-executes all rescheduled memory instructions. */
-    void replayMemInst(DynInstPtr &inst);
-
-    /** Moves memory instruction onto the list of cache blocked instructions */
-    void blockMemInst(DynInstPtr &inst);
-
-    void cacheUnblocked();
-
-    void drainSanityCheck() const;
-
-    void takeOverFrom();
-
     void resetState();
 
     void resetEntries();
 
     void regStats();
-
-    void scheduleNonSpec();
 
 private:
 
@@ -445,26 +403,11 @@ private:
 
     void alignTails();
 
-    void replayMemInsts();
-
     DynInstPtr getBlockedMemInst();
 
     void dumpQueues();
 
 public:
-    bool logicallyLT(unsigned left, unsigned right) const;
-
-    bool validPosition(unsigned u) const;
-
-    bool logicallyLET(unsigned left, unsigned right) const;
-
-    unsigned dec(unsigned u) const;
-
-    unsigned inc(unsigned u) const;
-
-    void deferMemInst(DynInstPtr &inst);
-
-    DynInstPtr getDeferredMemInstToExecute();
 
     void setTimeBuf(TimeBuffer<DQStruct>* dqtb);
 
@@ -475,8 +418,6 @@ public:
     void setCPU(O3CPU *_cpu) {cpu = _cpu;};
 
     std::string name() const {return "dataflow_queue";}
-
-    void violation(DynInstPtr store, DynInstPtr violator);
 
     void tryFastCleanup();
 
@@ -511,23 +452,9 @@ private:
 
     void countUpPointers();
 public:
-    void maintainOldestUsed();
-
-    unsigned getOldestUsed() {return oldestUsed;};
-
     void dumpFwQSize();
 
-    bool halfSquash;
-
-    InstSeqNum halfSquashSeq;
-
-    Addr halfSquashPC;
-
     DynInstPtr readInst(const DQPointer &p) const;
-
-    bool hasTooManyPendingInsts();
-
-    void advanceHead();
 
     DynInstPtr checkAndGetParent(const DQPointer &parent, const DQPointer &child) const;
 
@@ -620,6 +547,155 @@ public:
     bool matchInGroup(OpClass op, OpGroups op_group);
 
     void mergeLocalWKPointers();
+};
+
+template <class Impl>
+class DQTop
+{
+    typedef typename Impl::DynInstPtr DynInstPtr;
+
+    void cycleStart();
+
+    void tick();
+
+    /** Re-executes all rescheduled memory instructions. */
+    void replayMemInst(DynInstPtr &inst);
+
+    DynInstPtr getTail();
+
+    void scheduleNonSpec();
+
+    bool isFull() const;
+
+    bool hasTooManyPendingInsts();
+
+    void advanceHead();
+
+    DynInstPtr findBySeq(InstSeqNum seq);
+
+
+    unsigned getHeadPtr() const {return head;}
+
+    unsigned getTailPtr() const {return tail;}
+
+    unsigned getHeadTerm() const {return headTerm;}
+
+    unsigned int head;
+
+    unsigned int tail;
+
+    unsigned int headTerm;
+
+    bool logicallyLT(unsigned left, unsigned right) const;
+
+    bool logicallyLET(unsigned left, unsigned right) const;
+
+    unsigned dec(unsigned u) const;
+
+    unsigned inc(unsigned u) const;
+
+    void maintainOldestUsed();
+
+    unsigned getOldestUsed() {return oldestUsed;};
+
+    unsigned int oldestUsed;
+
+
+    bool validPosition(unsigned u) const;
+
+
+    // dispatch
+    bool insertBarrier(DynInstPtr &inst);
+
+    bool insertNonSpec(DynInstPtr &inst);
+
+    bool insert(DynInstPtr &inst, bool nonSpec);
+
+
+    void insertForwardPointer(PointerPair pair);
+
+    std::list<DynInstPtr> getBankHeads();
+
+    std::list<DynInstPtr> getBankTails();
+
+    bool stallToUnclog() const;
+
+
+    void retireHead(bool isSquashed, FFRegValue v);
+
+    bool isEmpty() const;
+
+    unsigned numInDQ() const;
+
+    unsigned numFree() const;
+
+    void tryFastCleanup();
+
+    void squash(DQPointer p, bool all, bool including);
+
+    bool queuesEmpty();
+
+
+    typedef typename Impl::CPUPol::DIEWC DIEWC;
+    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
+    typedef typename Impl::CPUPol::DQStruct DQStruct;
+    typedef typename Impl::CPUPol::FUWrapper FUWrapper;
+    typedef typename Impl::CPUPol::LSQ LSQ;
+    // wiring
+    void setTimeBuf(TimeBuffer<DQStruct>* dqtb);
+
+    void setLSQ(LSQ *lsq);
+
+    void setDIEWC(DIEWC *diewc);
+
+    typedef typename Impl::O3CPU O3CPU;
+    O3CPU *cpu;
+    void setCPU(O3CPU *_cpu) {cpu = _cpu;};
+
+
+    // Mem related
+    void deferMemInst(DynInstPtr &inst);
+
+    DynInstPtr getDeferredMemInstToExecute();
+
+    void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive = false);
+
+    void replayMemInsts();
+
+    void blockMemInst(DynInstPtr &inst);
+
+    void cacheUnblocked();
+
+    void writebackLoad(DynInstPtr &inst);
+
+    void wakeMemRelated(DynInstPtr &inst);
+
+    void completeMemInst(DynInstPtr &inst);
+
+    void violation(DynInstPtr store, DynInstPtr violator);
+
+
+
+    void takeOverFrom();
+
+    void drainSanityCheck() const;
+
+    void resetEntries();
+
+    void regStats();
+
+
+    // deadlock squashing
+    bool halfSquash;
+
+    InstSeqNum halfSquashSeq;
+
+    Addr halfSquashPC;
+
+    unsigned numInFlightFw();
+
+    void dumpFwQSize();
+
 };
 
 }
