@@ -36,6 +36,8 @@
 #include "cpu/forwardflow/arch_state.hh"
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/dataflow_queue.hh"
+#include "cpu/forwardflow/dataflow_queue_bank.hh"
+#include "cpu/forwardflow/dataflow_queue_common.hh"
 #include "cpu/forwardflow/decode.hh"
 #include "cpu/forwardflow/diewc.hh"
 #include "cpu/forwardflow/fetch.hh"

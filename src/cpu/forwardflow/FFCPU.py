@@ -206,6 +206,7 @@ class DerivFFCPU(BaseCPU):
     numOperands = Param.Unsigned(4,
             "number of dest and src operands for each instruction")
     numDQBanks = Param.Unsigned(4, "number of DQ banks per group")
+    numDQGroups = Param.Unsigned(8, "number of DQ groups")
 
     pendingQueueDepth = Param.Unsigned(8, "max depth of pending wakeup pointers")
 
