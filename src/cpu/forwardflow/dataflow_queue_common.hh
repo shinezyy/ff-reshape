@@ -19,7 +19,16 @@
 namespace FF {
 // common
 struct DQCommon {
-    void init(DerivFFCPUParams *params);
+public:
+    explicit DQCommon(DerivFFCPUParams *params);
+
+    boost::dynamic_bitset<> uint2Bits(unsigned from);
+
+    DQPointer uint2Pointer(unsigned u) const;
+
+    unsigned pointer2uint(const DQPointer &ptr) const;
+
+    unsigned pointer2uint(const WKPointer &ptr) const;
 
     const int FPAddOps[3]{OpClass::FloatAdd,
                           OpClass::FloatCmp,
@@ -36,54 +45,20 @@ struct DQCommon {
                             OpClass::FloatDiv,
                             OpClass::FloatSqrt};
 
-    boost::dynamic_bitset<> uint2Bits(unsigned from);
+    const DQPointer nullDQPointer;
+    const WKPointer nullWKPointer;
 
-    DQPointer uint2Pointer(unsigned u) const;
+    const unsigned bankSize;
 
-    unsigned pointer2uint(const DQPointer &ptr) const;
+    const unsigned nBanks;
+    const unsigned groupSize;
 
-    unsigned pointer2uint(const WKPointer &ptr) const;
+    const unsigned nGroups;
+    const unsigned dqSize;
 
-    unsigned bankSize;
+    const unsigned addrWidth;
 
-    unsigned nBanks;
-    unsigned groupSize;
-
-    unsigned nGroups;
-    unsigned dqSize;
-
-    unsigned addrWidth;
-
-};
-
-extern DQCommon dqCommon;
-
-template <class Impl>
-class ReadyInstsQueue{
-
-public:
-    typedef typename Impl::DynInstPtr DynInstPtr;
-
-    ReadyInstsQueue(DerivFFCPUParams *params);
-
-    void squash(InstSeqNum inst_seq);
-
-    DynInstPtr getInst(OpGroups group);
-
-    void insertInst(OpGroups group, DynInstPtr &inst);
-
-    void insertEmpirically(DynInstPtr &inst);
-
-    const size_t maxReadyQueueSize;
-
-    bool isFull();
-
-    bool isFull(OpGroups group);
-
-    unsigned targetGroup;
-
-    std::vector<std::list<DynInstPtr> > preScheduledQueues;
-
+    const unsigned termMax;
 };
 
 }

@@ -15,6 +15,7 @@
 #include "cpu/forwardflow/crossbar.hh"
 #include "cpu/forwardflow/crossbar_dedi_dest.hh"
 #include "cpu/forwardflow/crossbar_narrow.hh"
+#include "cpu/forwardflow/dataflow_queue_common.hh"
 #include "cpu/forwardflow/network.hh"
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
@@ -22,8 +23,6 @@
 struct DerivFFCPUParams;
 
 namespace FF{
-
-
 
 template <class Impl>
 class DataflowQueues
@@ -39,7 +38,6 @@ public:
 //    using DynInstPtr = BaseO3DynInst<Impl>*;
 
     typedef typename Impl::CPUPol::DIEWC DIEWC;
-    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
     typedef typename Impl::CPUPol::DQStruct DQStruct;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
     typedef typename Impl::CPUPol::LSQ LSQ;
@@ -48,8 +46,6 @@ public:
 //    using XDataflowQueueBank = DataflowQueueBank<Impl>;
 //
     typedef typename Impl::CPUPol::ReadyInstsQueue XReadyInstsQueue;
-
-    const unsigned WritePorts, ReadPorts;
 
     unsigned writes, reads;
 
@@ -70,6 +66,8 @@ private:
     std::vector<std::deque<DQPacket<PointerPair>>> forwardPointerQueue;
 
     std::vector<XDataflowQueueBank *> dqs;
+
+    DQCommon *c;
 
     TimeBuffer<DQStruct> *DQTS;
 
@@ -191,8 +189,6 @@ private:
 
     std::vector<FFRegValue> regFile;
 
-    MemDepUnit memDepUnit;
-
     void markFwPointers(std::array<DQPointer, 4> &pointers,
             PointerPair &pair, DynInstPtr &inst);
 
@@ -205,8 +201,6 @@ private:
     void dumpInstPackets(std::vector<DQPacket<DynInstPtr>*>&);
 
     void dumpPairPackets(std::vector<DQPacket<PointerPair>*>&);
-
-    std::list<DynInstPtr> deferredMemInsts;
 
     DIEWC *diewc;
 
@@ -358,6 +352,12 @@ public:
     bool matchInGroup(OpClass op, OpGroups op_group);
 
     void mergeLocalWKPointers();
+
+    void cycleStart();
+
+    void tick();
+
+    bool hasTooManyPendingInsts();
 };
 
 }

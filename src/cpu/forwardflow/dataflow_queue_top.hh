@@ -5,6 +5,7 @@
 #ifndef GEM5_DATAFLOW_QUEUE_TOP_HH
 #define GEM5_DATAFLOW_QUEUE_TOP_HH
 
+#define zcoding
 
 #include <cstdint>
 #include <deque>
@@ -16,18 +17,58 @@
 #include "cpu/forwardflow/crossbar.hh"
 #include "cpu/forwardflow/crossbar_dedi_dest.hh"
 #include "cpu/forwardflow/crossbar_narrow.hh"
+#include "cpu/forwardflow/dataflow_queue_common.hh"
 #include "cpu/forwardflow/network.hh"
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
+
+#ifdef zcoding
+#include "cpu/forwardflow/dataflow_queue.hh"
+#include "cpu/forwardflow/dataflow_queue_bank.hh"
+
+#endif
+
+struct DerivFFCPUParams;
 
 namespace FF{
 
 template <class Impl>
 class DQTop
 {
-    DQTop();
-
+public:
+    // typedec:
     typedef typename Impl::DynInstPtr DynInstPtr;
+
+    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
+
+    typedef typename Impl::CPUPol::DIEWC DIEWC;
+    typedef typename Impl::CPUPol::DQStruct DQStruct;
+    typedef typename Impl::CPUPol::FUWrapper FUWrapper;
+    typedef typename Impl::CPUPol::LSQ LSQ;
+
+#ifdef zcoding
+    typedef DataflowQueues<Impl> DataflowQueues;
+    typedef DataflowQueueBank<Impl> DataflowQueueBank;
+#else
+    typedef typename Impl::CPUPol::DataflowQueues DataflowQueues;
+    typedef typename Impl::CPUPol::DataflowQueueBank DataflowQueueBank;
+#endif
+
+public:
+    DQCommon c; // todo: construct
+
+    DIEWC diewc; // todo: construct
+
+    // DQ groups:
+    std::vector<DataflowQueues> dqGroups; // todo: construct
+
+    MemDepUnit memDepUnit; // todo: construct
+
+    std::list<DynInstPtr> deferredMemInsts; // todo: construct
+
+    std::unordered_map<DQPointer, FFRegValue> committedValues; // todo: construct
+
+    explicit DQTop(DerivFFCPUParams *params);
 
     void cycleStart();
 
@@ -36,11 +77,9 @@ class DQTop
     /** Re-executes all rescheduled memory instructions. */
     void replayMemInst(DynInstPtr &inst);
 
-    DynInstPtr getTail();
-
     void scheduleNonSpec();
 
-    bool isFull() const;
+    void centralizedExtraWakeup(const WKPointer &wk);
 
     bool hasTooManyPendingInsts();
 
@@ -48,6 +87,9 @@ class DQTop
 
     DynInstPtr findBySeq(InstSeqNum seq);
 
+    DynInstPtr getTail();
+
+    bool isFull() const;
 
     unsigned getHeadPtr() const {return head;}
 
@@ -75,9 +117,7 @@ class DQTop
 
     unsigned int oldestUsed;
 
-
     bool validPosition(unsigned u) const;
-
 
     // dispatch
     bool insertBarrier(DynInstPtr &inst);
@@ -95,7 +135,6 @@ class DQTop
 
     bool stallToUnclog() const;
 
-
     void retireHead(bool isSquashed, FFRegValue v);
 
     bool isEmpty() const;
@@ -111,11 +150,6 @@ class DQTop
     bool queuesEmpty();
 
 
-    typedef typename Impl::CPUPol::DIEWC DIEWC;
-    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
-    typedef typename Impl::CPUPol::DQStruct DQStruct;
-    typedef typename Impl::CPUPol::FUWrapper FUWrapper;
-    typedef typename Impl::CPUPol::LSQ LSQ;
     // wiring
     void setTimeBuf(TimeBuffer<DQStruct>* dqtb);
 
@@ -171,6 +205,7 @@ class DQTop
 
     void dumpFwQSize();
 
+    void clearInflightPackets();
 };
 
 }
