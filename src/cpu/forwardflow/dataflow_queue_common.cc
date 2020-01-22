@@ -25,6 +25,7 @@ DQPointer DQCommon::uint2Pointer(unsigned u) const
     unsigned bank_id = u / bankSize;
     unsigned bank_offset = group_offset % bankSize; //index
     return DQPointer{true, group_id, bank_id, bank_offset, 0};
+
 }
 
 unsigned DQCommon::pointer2uint(const DQPointer &ptr) const

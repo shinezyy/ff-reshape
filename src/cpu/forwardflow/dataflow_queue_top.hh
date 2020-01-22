@@ -66,6 +66,10 @@ public:
 
     std::list<DynInstPtr> deferredMemInsts; // todo: construct
 
+    std::list<DynInstPtr> blockedMemInsts; // todo: construct
+
+    std::list<DynInstPtr> retryMemInsts; // todo: construct
+
     std::unordered_map<DQPointer, FFRegValue> committedValues; // todo: construct
 
     explicit DQTop(DerivFFCPUParams *params);
@@ -167,6 +171,8 @@ public:
 
     DynInstPtr getDeferredMemInstToExecute();
 
+    DynInstPtr getBlockedMemInst();
+
     void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive = false);
 
     void replayMemInsts();
@@ -183,16 +189,16 @@ public:
 
     void violation(DynInstPtr store, DynInstPtr violator);
 
-
-
+    // Drain, Switch, Initiation
     void takeOverFrom();
 
     void drainSanityCheck() const;
 
+    void resetState();
+
     void resetEntries();
 
     void regStats();
-
 
     // deadlock squashing
     bool halfSquash;
@@ -206,6 +212,11 @@ public:
     void dumpFwQSize();
 
     void clearInflightPackets();
+
+    void notImplemented();
+
+    // Routing related:
+
 };
 
 }

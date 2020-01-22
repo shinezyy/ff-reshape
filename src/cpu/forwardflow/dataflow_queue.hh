@@ -192,9 +192,6 @@ private:
     void markFwPointers(std::array<DQPointer, 4> &pointers,
             PointerPair &pair, DynInstPtr &inst);
 
-    std::list<DynInstPtr> blockedMemInsts;
-
-    std::list<DynInstPtr> retryMemInsts;
 
     void readQueueHeads();
 
@@ -207,8 +204,6 @@ private:
     void extraWakeup(const WKPointer &wk);
 
     void alignTails();
-
-    DynInstPtr getBlockedMemInst();
 
     void dumpQueues();
 

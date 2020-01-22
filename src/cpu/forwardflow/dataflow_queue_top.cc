@@ -280,7 +280,6 @@ template<class Impl>
 list<typename Impl::DynInstPtr>
 DQTop<Impl>::getBankHeads()
 {
-    panic("Not implemented!\n");
 }
 
 template<class Impl>
@@ -387,13 +386,258 @@ void DQTop<Impl>::tryFastCleanup()
 template<class Impl>
 void DQTop<Impl>::squash(DQPointer p, bool all, bool including)
 {
-
+    // TODO: implemented it;
+    // The major problem is co-ordinate multiple groups
+    notImplemented();
 }
 
 template<class Impl>
 bool DQTop<Impl>::queuesEmpty()
 {
-    return false;
+    for (DataflowQueues &group: dqGroups) {
+        if (!group.queuesEmpty()) return false;
+    }
+    return true;
+}
+
+template<class Impl>
+void DQTop<Impl>::setTimeBuf(TimeBuffer<DQStruct> *dqtb)
+{
+    notImplemented();
+}
+
+template<class Impl>
+void DQTop<Impl>::setLSQ(LSQ *lsq)
+{
+    for (DataflowQueues &group: dqGroups) {
+        group.setLSQ(lsq);
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::setDIEWC(DIEWC *_diewc)
+{
+    for (DataflowQueues &group: dqGroups) {
+        group.setDIEWC(_diewc);
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::deferMemInst(DynInstPtr &inst)
+{
+    deferredMemInsts.push_back(inst);
+}
+
+template<class Impl>
+typename Impl::DynInstPtr
+DQTop<Impl>::getDeferredMemInstToExecute()
+{
+    auto it = deferredMemInsts.begin();
+    while (it != deferredMemInsts.end()) {
+        if ((*it)->translationCompleted() || (*it)->isSquashed()) {
+            DynInstPtr inst = *it;
+            deferredMemInsts.erase(it);
+            return inst;
+        }
+    }
+    return nullptr;
+}
+
+template<class Impl>
+typename Impl::DynInstPtr DQTop<Impl>::getBlockedMemInst()
+{
+    if (retryMemInsts.empty()) {
+        return nullptr;
+    } else {
+        auto inst = retryMemInsts.front();
+        retryMemInsts.pop_front();
+        DPRINTF(DQ, "retry mem insts size: %llu after pop\n",
+                retryMemInsts.size());
+        return inst;
+    }
+}
+
+
+template<class Impl>
+void DQTop<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive)
+{
+    DPRINTF(DQ, "Marking inst[%llu] as need rescheduling\n", inst->seqNum);
+    inst->translationStarted(false);
+    inst->translationCompleted(false);
+    if (!isFalsePositive) {
+        inst->clearCanIssue();
+    }
+    inst->fuGranted = false;
+    inst->inReadyQueue = false;
+
+    if (isStrictOrdered) {
+        inst->hasMiscDep = true;  // this is rare, do not send a packet here
+    } else {
+        inst->hasOrderDep = true;  // this is rare, do not send a packet here
+        inst->orderDepReady = false;
+    }
+
+    memDepUnit.reschedule(inst);
+}
+
+template<class Impl>
+void DQTop<Impl>::replayMemInsts()
+{
+    DynInstPtr inst;
+    if ((inst = getDeferredMemInstToExecute())) {
+        DPRINTF(DQWake, "Replaying from deferred\n");
+        addReadyMemInst(inst, false);
+    } else if ((inst = getBlockedMemInst())) {
+        DPRINTF(DQWake, "Replaying from blocked\n");
+        addReadyMemInst(inst, false);
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::blockMemInst(DynInstPtr &inst)
+{
+    inst->translationStarted(false);
+    inst->translationCompleted(false);
+    inst->clearCanIssue();
+    inst->clearIssued();
+
+    // Omegaflow specific:
+    inst->fuGranted = false;
+    inst->inReadyQueue = false;
+    inst->hasMemDep = true;
+    inst->memDepReady = false;
+
+    blockedMemInsts.push_back(inst);
+
+    DPRINTF(DQWake, "Insert block mem inst[%llu] into blocked mem inst list, "
+                    "size after insert: %llu\n",
+            inst->seqNum, blockedMemInsts.size());
+}
+
+template<class Impl>
+void DQTop<Impl>::cacheUnblocked()
+{
+    retryMemInsts.splice(retryMemInsts.end(), blockedMemInsts);
+    DPRINTF(DQ, "blocked mem insts size: %llu, retry mem inst size: %llu\n",
+            blockedMemInsts.size(), retryMemInsts.size());
+    cpu->wakeCPU();
+}
+
+template<class Impl>
+void DQTop<Impl>::writebackLoad(DynInstPtr &inst)
+{
+    //    DPRINTF(DQWake, "Original ptr: (%i) (%i %i) (%i)\n",
+    //            inst->pointers[0].valid, inst->pointers[0].bank,
+    //            inst->pointers[0].index, inst->pointers[0].op);
+    if (inst->pointers[0].valid) {
+        WKPointer wk(inst->pointers[0]);
+        DPRINTF(DQWake, "Sending pointer to (%i) (%i %i) (%i) that depends on"
+                        " load[%llu] (%i %i) loaded value: %llu\n",
+                wk.valid, wk.bank, wk.index, wk.op,
+                inst->seqNum,
+                inst->dqPosition.bank, inst->dqPosition.index,
+                inst->getDestValue().i
+        );
+        wk.hasVal = true;
+        wk.val = inst->getDestValue();
+        centralizedExtraWakeup(wk);
+
+        completeMemInst(inst);
+    } else {
+        auto &p = inst->dqPosition;
+        DPRINTF(DQWake, "Mark itself[%llu] (%i) (%i %i) (%i) ready\n",
+                inst->seqNum, p.valid, p.bank, p.index, p.op);
+        inst->opReady[0] = true;
+        completeMemInst(inst);
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::wakeMemRelated(DynInstPtr &inst)
+{
+    if (inst->isMemRef()) {
+        memDepUnit.wakeDependents(inst);
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::completeMemInst(DynInstPtr &inst)
+{
+    inst->receivedDest = true;
+    if (inst->isMemRef()) {
+        // complateMemInst
+        inst->memOpDone(true);
+        memDepUnit.completed(inst);
+
+    } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
+        memDepUnit.completeBarrier(inst);
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::violation(DynInstPtr store, DynInstPtr violator)
+{
+    memDepUnit.violation(store, violator);
+}
+
+template<class Impl>
+void DQTop<Impl>::notImplemented()
+{
+    panic("Not implemented!\n");
+}
+
+template<class Impl>
+void DQTop<Impl>::takeOverFrom()
+{
+    resetState();
+}
+
+template<class Impl>
+void DQTop<Impl>::drainSanityCheck() const
+{
+
+}
+
+template<class Impl>
+void DQTop<Impl>::resetState()
+{
+    for (DataflowQueues &group: dqGroups) {
+        group.resetState();
+    }
+    blockedMemInsts.clear();
+    retryMemInsts.clear();
+}
+
+template<class Impl>
+void DQTop<Impl>::resetEntries()
+{
+    for (DataflowQueues &group: dqGroups) {
+        group.resetEntries();
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::regStats()
+{
+    memDepUnit.regStats();
+}
+
+template<class Impl>
+unsigned DQTop<Impl>::numInFlightFw()
+{
+    unsigned sum = 0;
+    for (DataflowQueues &group: dqGroups) {
+        sum += group.numInFlightFw();
+    }
+    return sum;
+}
+
+template<class Impl>
+void DQTop<Impl>::dumpFwQSize()
+{
+    for (DataflowQueues &group: dqGroups) {
+        group.dumpFwQSize();
+    }
 }
 
 }
