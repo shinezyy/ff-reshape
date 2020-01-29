@@ -52,5 +52,10 @@ DQCommon::DQCommon(DerivFFCPUParams *params)
 {
 }
 
+void DQCommon::notImplemented()
+{
+    panic("Not implemented!\n");
+}
+
 
 }

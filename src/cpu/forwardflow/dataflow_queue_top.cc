@@ -26,6 +26,7 @@ void DQTop<Impl>::cycleStart()
     for (auto &group: dqGroups) {
         group.cycleStart();
     }
+
 }
 
 template<class Impl>
@@ -38,6 +39,7 @@ void DQTop<Impl>::tick()
     }
 
     // TODO: write data generated in this tick to inter-group connections
+    dispatchInstsToGroup();
 }
 
 template<class Impl>
@@ -235,6 +237,7 @@ bool DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
 template<class Impl>
 bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 {
+    c.notImplemented();
     // TODO: this is centralized now; Decentralize it with buffers
     // todo: send to allocated DQ position
     assert(inst);
@@ -242,6 +245,8 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
     bool jumped = false;
 
     DQPointer allocated = inst->dqPosition;
+
+    // this is for checking; we do not need to decentralize it
     DPRINTF(DQ, "allocated @(%d %d)\n", allocated.bank, allocated.index);
     DataflowQueues &group = dqGroups[allocated.group];
     auto dead_inst = group[allocated.bank]->readInstsFromBank(allocated);
@@ -249,7 +254,10 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
         DPRINTF(FFCommit, "Dead inst[%llu] found unexpectedly\n", dead_inst->seqNum);
         assert(!dead_inst);
     }
-    group[allocated.bank]->writeInstsToBank(allocated, inst);
+
+    // insert must be decentralized
+    centerInstBuffer[insertIndex++] = inst;
+
     if (isEmpty()) {
         tail = c.pointer2uint(allocated); //keep them together
         DPRINTF(DQ, "tail becomes %u to keep with head\n", tail);
@@ -264,7 +272,6 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
     if (inst->isMemRef() && !nonSpec) {
         memDepUnit.insert(inst);
     }
-    group[allocated.bank]->checkReadiness(allocated);
 
     return jumped;
 }
@@ -272,8 +279,7 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 template<class Impl>
 void DQTop<Impl>::insertForwardPointer(PointerPair pair)
 {
-    DataflowQueues &group = dqGroups[pair.dest.group];
-    group.insertForwardPointer(pair);
+    centerPointerBuffer[pointerIndex++] = pair;
 }
 
 template<class Impl>
@@ -388,7 +394,7 @@ void DQTop<Impl>::squash(DQPointer p, bool all, bool including)
 {
     // TODO: implemented it;
     // The major problem is co-ordinate multiple groups
-    notImplemented();
+    c.notImplemented();
 }
 
 template<class Impl>
@@ -403,7 +409,7 @@ bool DQTop<Impl>::queuesEmpty()
 template<class Impl>
 void DQTop<Impl>::setTimeBuf(TimeBuffer<DQStruct> *dqtb)
 {
-    notImplemented();
+    c.notImplemented();
 }
 
 template<class Impl>
@@ -581,12 +587,6 @@ void DQTop<Impl>::violation(DynInstPtr store, DynInstPtr violator)
 }
 
 template<class Impl>
-void DQTop<Impl>::notImplemented()
-{
-    panic("Not implemented!\n");
-}
-
-template<class Impl>
 void DQTop<Impl>::takeOverFrom()
 {
     resetState();
@@ -638,6 +638,80 @@ void DQTop<Impl>::dumpFwQSize()
     for (DataflowQueues &group: dqGroups) {
         group.dumpFwQSize();
     }
+}
+
+template<class Impl>
+void DQTop<Impl>::clearInstBuffer()
+{
+    for (unsigned i = 0; i < dispatchWidth; i++) {
+        centerInstBuffer[i] = nullptr;
+    }
+    insertIndex = 0;
+}
+
+template<class Impl>
+void DQTop<Impl>::dispatchInstsToGroup()
+{
+    for (unsigned i = 0; i < dispatchWidth; i++) {
+        DynInstPtr &inst = centerInstBuffer[i];
+        if (!inst) {
+            continue;
+        }
+        if (inst->dqPosition.group != dispatchingGroup->groupID) {
+            switchDispatchingGroup(inst);
+            // TODO: whether break here?
+        }
+        dispatchingGroup->writeInstsToBank(inst->dqPosition, inst);
+        dispatchingGroup->checkReadiness(inst->dqPosition);
+    }
+
+}
+
+template<class Impl>
+void DQTop<Impl>::switchDispatchingGroup(DQTop::DynInstPtr &inst)
+{
+    if (dispatchingGroup->groupID + 1 == inst->dqPosition.group) {
+        dispatchingGroup = dqGroups[dispatchingGroup->groupID + 1];
+    } else {
+        // wrapped around
+        dispatchingGroup = dqGroups[0];
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::dispatchPointersToGroup()
+{
+
+    for (unsigned i = 0; i < dispatchWidth; i++) {
+        PointerPair &p = centerPointerBuffer[i];
+        DataflowQueues &group = dqGroups[p.dest.group];
+        group.insertForwardPointer(p);
+    }
+}
+
+template<class Impl>
+unsigned DQTop<Impl>::getNextGroup(unsigned group_id) const
+{
+    return (group_id + 1) % c.nGroups;
+}
+
+template<class Impl>
+unsigned DQTop<Impl>::getPrevGroup(unsigned group_id) const
+{
+    auto x = group_id - 1;
+    if (x >= 0) {
+        return x;
+    } else {
+        return c.nGroups - 1;
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::sendToNextGroup(unsigned sending_group, const WKPointer &wk_pointer)
+{
+    unsigned recv_group = getNextGroup(sending_group);
+    DataflowQueues &receiver = dqGroups[recv_group];
+    receiver.receiveFromPrevGroup(wk_pointer);
 }
 
 }

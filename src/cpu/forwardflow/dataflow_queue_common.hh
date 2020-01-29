@@ -59,6 +59,9 @@ public:
     const unsigned addrWidth;
 
     const unsigned termMax;
+
+    void notImplemented();
+
 };
 
 }

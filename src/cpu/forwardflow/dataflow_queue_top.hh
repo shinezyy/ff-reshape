@@ -25,6 +25,7 @@
 #ifdef zcoding
 #include "cpu/forwardflow/dataflow_queue.hh"
 #include "cpu/forwardflow/dataflow_queue_bank.hh"
+#include "cpu/forwardflow/dyn_inst.hh"
 
 #endif
 
@@ -37,7 +38,6 @@ class DQTop
 {
 public:
     // typedec:
-    typedef typename Impl::DynInstPtr DynInstPtr;
 
     typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
 
@@ -49,9 +49,11 @@ public:
 #ifdef zcoding
     typedef DataflowQueues<Impl> DataflowQueues;
     typedef DataflowQueueBank<Impl> DataflowQueueBank;
+    typedef BaseO3DynInst<Impl>* DynInstPtr;
 #else
     typedef typename Impl::CPUPol::DataflowQueues DataflowQueues;
     typedef typename Impl::CPUPol::DataflowQueueBank DataflowQueueBank;
+    typedef typename Impl::DynInstPtr DynInstPtr;
 #endif
 
 public:
@@ -129,7 +131,6 @@ public:
     bool insertNonSpec(DynInstPtr &inst);
 
     bool insert(DynInstPtr &inst, bool nonSpec);
-
 
     void insertForwardPointer(PointerPair pair);
 
@@ -213,12 +214,53 @@ public:
 
     void clearInflightPackets();
 
-    void notImplemented();
-
     // Routing related:
 
+    // MemDep to DQ groups: star link: 1 - to - all routing; sparse
+
+    // dispatching.instructions: only one working group; WxW xbar - to - N groups
+private:
+    ////////////// Dispatching
+    unsigned dispatchWidth;
+
+    // insts
+    std::array<DynInstPtr, Impl::MaxWidth> centerInstBuffer;
+
+    unsigned insertIndex;
+
+    void clearInstBuffer(); // TODO: cyclely clearing
+
+    DataflowQueues *dispatchingGroup;
+
+    void dispatchInstsToGroup();
+
+    void switchDispatchingGroup(DynInstPtr &inst);
+
+    // FW pointers
+    // dispatching.forward_pointers planA: W - to - W*G asymmetric topology
+    // dispatching.forward_pointers planB: 1 - to - 2: working + last working + backward ring routing
+    std::array<PointerPair, Impl::MaxWidth> centerPointerBuffer;
+
+    unsigned pointerIndex;
+
+    void dispatchPointersToGroup();
+
+    //Committing
+//    DataflowQueues *committingGroup;
+//
+//    void switchCommittingGroup();
+public:
+
+    unsigned getNextGroup(unsigned group_id) const;
+
+    unsigned getPrevGroup(unsigned group_id) const;
+
+    // wakeup.pointers: Ring, to next group
+    void sendToNextGroup(unsigned sending_group, const WKPointer &wk_pointer);
 };
 
 }
+
+#undef zcoding
 
 #endif //GEM5_DATAFLOW_QUEUE_TOP_HH

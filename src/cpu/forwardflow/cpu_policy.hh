@@ -98,6 +98,8 @@ struct FFSimpleCPUPolicy
 
     typedef FF::DataflowQueueBank<Impl> DataflowQueueBank;
 
+    typedef FF::DQTop<Impl> DQTop;
+
     typedef FF::ReadyInstsQueue<Impl> ReadyInstsQueue;
 
     typedef FF::DataflowQueues<Impl> DataflowQueues;

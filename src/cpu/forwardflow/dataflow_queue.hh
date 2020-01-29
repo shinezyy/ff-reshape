@@ -20,6 +20,14 @@
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
 
+#define zcoding
+
+#ifdef zcoding
+//#include "cpu/forwardflow/dataflow_queue_top.hh"
+#include "cpu/forwardflow/dyn_inst.hh"
+
+#endif
+
 struct DerivFFCPUParams;
 
 namespace FF{
@@ -34,9 +42,13 @@ private:
 public:
     typedef typename Impl::O3CPU O3CPU;
 
+#ifdef zcoding
+    using DynInstPtr = BaseO3DynInst<Impl>*;
+#else
     typedef typename Impl::DynInstPtr DynInstPtr;
-//    using DynInstPtr = BaseO3DynInst<Impl>*;
+#endif
 
+    typedef typename Impl::DQTop DQTop;
     typedef typename Impl::CPUPol::DIEWC DIEWC;
     typedef typename Impl::CPUPol::DQStruct DQStruct;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
@@ -353,8 +365,30 @@ public:
     void tick();
 
     bool hasTooManyPendingInsts();
+
+public:
+    const unsigned groupID;
+
+private:
+    DQTop *top;
+
+    void sendToNextGroup(const WKPointer &wk_pointer);
+
+    void receiveFromPrevGroup(const WKPointer &wk_pointer);
+
+    std::deque<WKPointer> outQueue;
+
+    void clearSent(); // TODO: clear cyclely
+
+    unsigned interGroupSent;
+
+    const unsigned interGroupBW; // TODO: init
+
+    void sendOld();
 };
 
 }
+
+#undef zcoding
 
 #endif //__FF_DATAFLOW_QUEUE_HH__

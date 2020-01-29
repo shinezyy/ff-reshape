@@ -813,23 +813,6 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
 }
 
 template<class Impl>
-bool DataflowQueues<Impl>::insert(DynInstPtr &inst, bool nonSpec)
-{
-
-}
-
-template<class Impl>
-bool DataflowQueues<Impl>::insertBarrier(DynInstPtr &inst)
-{
-}
-
-template<class Impl>
-bool DataflowQueues<Impl>::insertNonSpec(DynInstPtr &inst)
-{
-
-}
-
-template<class Impl>
 void
 DataflowQueues<Impl>::markFwPointers(
         std::array<DQPointer, 4> &pointers, PointerPair &pair, DynInstPtr &inst)
@@ -1973,6 +1956,38 @@ DataflowQueues<Impl>::mergeLocalWKPointers()
 {
     for (auto bank: dqs) {
         bank->mergeLocalWKPointers();
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::sendToNextGroup(const WKPointer &wk_pointer)
+{
+    if (interGroupSent <= interGroupBW) {
+        top->sendToNextGroup(groupID, wk_pointer);
+    } else {
+        outQueue.push_back(wk_pointer);
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::receiveFromPrevGroup(const WKPointer &wk_pointer)
+{
+    extraWakeup(wk_pointer);
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::clearSent()
+{
+    interGroupSent = 0;
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::sendOld()
+{
+    while (!outQueue.empty() && interGroupSent < interGroupBW) {
+        const WKPointer &wk_pointer = outQueue.front();
+        top->sendToNextGroup(groupID, wk_pointer);
+        interGroupSent++;
     }
 }
 
