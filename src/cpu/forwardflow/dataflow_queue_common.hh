@@ -16,6 +16,8 @@
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
 
+struct DerivFFCPUParams;
+
 namespace FF {
 // common
 struct DQCommon {

@@ -48,7 +48,8 @@ DQCommon::DQCommon(DerivFFCPUParams *params)
         groupSize(nBanks * bankSize),
         nGroups(params->numDQGroups),
         dqSize(nGroups * groupSize),
-        addrWidth(ceilLog2(dqSize))
+        addrWidth(ceilLog2(dqSize)),
+        termMax(params->TermMax)
 {
 }
 

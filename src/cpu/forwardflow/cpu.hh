@@ -420,11 +420,11 @@ class FFCPU : public BaseO3CPU
 
     uint64_t readFloatRegBits(DQPointer);
 
-    void setIntReg(DQPointer, uint64_t);
+    // void setIntReg(DQPointer, uint64_t);
 
-    void setFloatReg(DQPointer, double);
+    // void setFloatReg(DQPointer, double);
 
-    void setFloatRegBits(DQPointer, uint64_t);
+    // void setFloatRegBits(DQPointer, uint64_t);
 
     const VecRegContainer& readArchVecReg(int reg_idx, ThreadID tid) const;
     /** Read architectural vector register for modification. */
@@ -561,7 +561,7 @@ class FFCPU : public BaseO3CPU
 
     typename CPUPolicy::ArchState *archState;
 
-    typename CPUPolicy::DataflowQueues *dq;
+    typename CPUPolicy::DQTop *dq;
 
     /** The rename mode of the vector registers */
     Enums::VecRegRenameMode vecMode;

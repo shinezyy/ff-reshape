@@ -53,7 +53,10 @@ if 'FFCPU' in env['CPU_MODELS']:
 
     Source('arch_state.cc')
     Source('allocation.cc')
+    Source('dataflow_queue_common.cc')
+    Source('dataflow_queue_bank.cc')
     Source('dataflow_queue.cc')
+    Source('dataflow_queue_top.cc')
     Source('diewc.cc')
     Source('fu_wrapper.cc')
     Source('network.cc')

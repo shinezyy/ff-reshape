@@ -56,7 +56,7 @@ void DQTop<Impl>::scheduleNonSpec()
         return;
     }
     WKPointer wk = WKPointer(getTail()->dqPosition);
-    auto p = uint2Pointer(tail);
+    auto p = c.uint2Pointer(tail);
     DPRINTF(DQ, "Scheduling non spec inst @ (%i %i)\n", p.bank, p.index);
     wk.wkType = WKPointer::WKMisc;
     centralizedExtraWakeup(wk);
@@ -96,7 +96,7 @@ void DQTop<Impl>::advanceHead()
         headTerm = (headTerm + 1) % c.termMax;
     }
 
-    auto allocated = uint2Pointer(head);
+    auto allocated = c.uint2Pointer(head);
     auto dead_inst = dqGroups[allocated.group][allocated.bank]->readInstsFromBank(allocated);
     if (dead_inst) {
         DPRINTF(FFCommit, "Dead inst[%llu] found unexpectedly\n", dead_inst->seqNum);
@@ -130,7 +130,7 @@ template<class Impl>
 typename Impl::DynInstPtr
 DQTop<Impl>::getTail()
 {
-    auto head_ptr = uint2Pointer(tail);
+    auto head_ptr = c.uint2Pointer(tail);
     DataflowQueues &group = dqGroups[head_ptr.group];
     DataflowQueueBank *bank = group[head_ptr.bank];
     const auto &inst = bank->readInstsFromBank(head_ptr);
@@ -312,7 +312,7 @@ template<class Impl>
 void DQTop<Impl>::retireHead(bool result_valid, FFRegValue v)
 {
     assert(!isEmpty());
-    DQPointer head_ptr = uint2Pointer(tail);
+    DQPointer head_ptr = c.uint2Pointer(tail);
     alignTails();
     DPRINTF(FFCommit, "Position of inst to commit:(%d %d)\n",
             head_ptr.bank, head_ptr.index);
@@ -373,7 +373,7 @@ void DQTop<Impl>::tryFastCleanup()
         auto tail_ptr = uint2Pointer(tail);
         auto &group = dqGroups[tail_ptr.group];
         auto &bank = group.banks[tail_ptr.bank];
-        bank->setTail(uint2Pointer(tail).index);
+        bank->setTail(c.uint2Pointer(tail).index);
         bank->advanceTail();
 
         tail = inc(tail);
@@ -714,4 +714,41 @@ void DQTop<Impl>::sendToNextGroup(unsigned sending_group, const WKPointer &wk_po
     receiver.receiveFromPrevGroup(wk_pointer);
 }
 
+template<class Impl>
+typename Impl::DynInstPtr
+DQTop<Impl>::getHead() const
+{
+    return readInst(c.uint2Pointer(head));
 }
+
+template<class Impl>
+typename Impl::DynInstPtr
+DQTop<Impl>::readInst(const DQPointer &p) const
+{
+    const DataflowQueues &group = dqGroups[p.group];
+    const auto &inst = group.readInst(p);
+    return inst;
+}
+
+template<class Impl>
+bool DQTop<Impl>::notifyHalfSquash(InstSeqNum new_seq, Addr new_pc)
+{
+    if (halfSquashPC) { // old valid
+        if (new_seq <= halfSquashSeq) {
+            halfSquashSeq = new_seq;
+            halfSquashPC = new_pc;
+        }
+    } else {
+        halfSquashSeq = new_seq;
+        halfSquashPC = new_pc;
+        halfSquash = true;
+        HalfSquashes++;
+    }
+}
+
+
+}
+
+#include "cpu/forwardflow/isa_specific.hh"
+
+template class FF::DQTop<FFCPUImpl>;

@@ -5,7 +5,7 @@
 #ifndef GEM5_DATAFLOW_QUEUE_TOP_HH
 #define GEM5_DATAFLOW_QUEUE_TOP_HH
 
-#define zcoding
+//#define zcoding
 
 #include <cstdint>
 #include <deque>
@@ -26,7 +26,6 @@
 #include "cpu/forwardflow/dataflow_queue.hh"
 #include "cpu/forwardflow/dataflow_queue_bank.hh"
 #include "cpu/forwardflow/dyn_inst.hh"
-
 #endif
 
 struct DerivFFCPUParams;
@@ -59,7 +58,7 @@ public:
 public:
     DQCommon c; // todo: construct
 
-    DIEWC diewc; // todo: construct
+    DIEWC *diewc; // todo: construct
 
     // DQ groups:
     std::vector<DataflowQueues> dqGroups; // todo: construct
@@ -102,6 +101,10 @@ public:
     unsigned getTailPtr() const {return tail;}
 
     unsigned getHeadTerm() const {return headTerm;}
+
+    DynInstPtr getHead() const;
+
+    DynInstPtr readInst(const DQPointer &p) const;
 
     unsigned int head;
 
@@ -201,12 +204,6 @@ public:
 
     void regStats();
 
-    // deadlock squashing
-    bool halfSquash;
-
-    InstSeqNum halfSquashSeq;
-
-    Addr halfSquashPC;
 
     unsigned numInFlightFw();
 
@@ -257,6 +254,17 @@ public:
 
     // wakeup.pointers: Ring, to next group
     void sendToNextGroup(unsigned sending_group, const WKPointer &wk_pointer);
+
+    // deadlock squashing
+public:
+    bool halfSquash;
+
+    InstSeqNum halfSquashSeq;
+
+    Addr halfSquashPC;
+
+    bool notifyHalfSquash(InstSeqNum new_seq, Addr new_pc);
+
 };
 
 }

@@ -29,7 +29,6 @@ using namespace std;
 
 using boost::dynamic_bitset;
 
-
 template<class Impl>
 DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         :
@@ -529,16 +528,16 @@ DataflowQueues<Impl>::coordinateFU(
     const int group_ipr = 3;
     if (inst->opClass() == OpClass::IprAccess) {
         DPRINTF(FUW, "Routing inst[%lu] to %i\n", inst->seqNum, group_ipr);
-        return std::make_pair(group_ipr, uint2Bits(group_ipr));
+        return std::make_pair(group_ipr, c->uint2Bits(group_ipr));
     } else if (type == md){ //OpGroups::MultDiv
         DPRINTF(FUW, "Routing inst[%lu] to %i\n", inst->seqNum, fuPointer[md][bank]);
         return std::make_pair(fuPointer[md][bank],
-                uint2Bits(fuPointer[md][bank]));
+                              c->uint2Bits(fuPointer[md][bank]));
     }
     //else (type == fa){ //OpGroups::FPadd
     DPRINTF(FUW, "Routing inst[%lu] to %i\n", inst->seqNum, fuPointer[fa][bank]);
     return std::make_pair(fuPointer[fa][bank],
-            uint2Bits(fuPointer[fa][bank]));
+                          c->uint2Bits(fuPointer[fa][bank]));
 }
 
 template<class Impl>
@@ -553,7 +552,7 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
         pkt.payload = pair;
         unsigned d = pair.dest.bank * nOps + pair.dest.op;
         pkt.dest = d;
-        pkt.destBits = c.uint2Bits(d);
+        pkt.destBits = c->uint2Bits(d);
 
         DPRINTF(DQWake, "Insert Fw Pointer (%i %i) (%i)-> (%i %i) (%i)\n",
                 pair.dest.bank, pair.dest.index, pair.dest.op,
@@ -597,10 +596,6 @@ template<class Impl>
 typename DataflowQueues<Impl>::DynInstPtr
 DataflowQueues<Impl>::getHead() const
 {
-    auto head_ptr = uint2Pointer(head);
-    const XDataflowQueueBank *bank = dqs[head_ptr.bank];
-    const auto &inst = bank->readInstsFromBank(head_ptr);
-    return inst;
 }
 
 template<class Impl>
@@ -670,11 +665,11 @@ FFRegValue DataflowQueues<Impl>::readReg(const DQPointer &src, const DQPointer &
 
     bool readFromCommitted;
 
-    if (!validPosition(pointer2uint(src))) {
+    if (!top->validPosition(c->pointer2uint(src))) {
         // src is committed
         readFromCommitted = true;
 
-    } else if (logicallyLT(pointer2uint(src), pointer2uint(dest))) {
+    } else if (logicallyLT(c->pointer2uint(src), c->pointer2uint(dest))) {
         // src is not committed yet
         readFromCommitted = false;
 
@@ -707,7 +702,7 @@ FFRegValue DataflowQueues<Impl>::readReg(const DQPointer &src, const DQPointer &
 template<class Impl>
 void DataflowQueues<Impl>::setReg(DQPointer ptr, FFRegValue val)
 {
-    regFile[c->pointer2uint(ptr)] = val;
+//    regFile[c->pointer2uint(ptr)] = val;
 }
 
 template<class Impl>
@@ -758,20 +753,20 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
         return;
     }
 
-    unsigned u = pointer2uint(p);
+    unsigned u = c->pointer2uint(p);
     unsigned head_next;
     if (including) {
         if (u != tail) {
-            head_next = dec(u);  // move head backward
+            head_next = top->dec(u);  // move head backward
         } else {
             head_next = tail;
         }
     } else { // mispredicted branch should not be squashed
         head_next = u;
-        u = inc(u);  // squash first mis-fetched instruction
+        u = top->inc(u);  // squash first mis-fetched instruction
     }
 
-    auto head_next_p = uint2Pointer(head_next);
+    auto head_next_p = c->uint2Pointer(head_next);
 
     auto head_inst_next = dqs[head_next_p.bank]->readInstsFromBank(head_next_p);
     if (!(head_inst_next || head_next == tail)) {
@@ -788,8 +783,8 @@ void DataflowQueues<Impl>::squash(DQPointer p, bool all, bool including)
     cpu->removeInstsUntil(head_inst_next->seqNum, DummyTid);
 
     if (head != head_next) {
-        while (validPosition(u) && logicallyLET(u, head)) {
-            auto ptr = uint2Pointer(u);
+        while (top->validPosition(u) && logicallyLET(u, head)) {
+            auto ptr = c->uint2Pointer(u);
             auto &bank = dqs.at(ptr.bank);
             bank->erase(ptr, true);
             if (u == head) {
@@ -1159,41 +1154,9 @@ DataflowQueues<Impl>::getBankTails()
             DPRINTF(DQRead, "inst@[%d] is null\n", ptr_i);
         }
         tails.push_back(inst);
-        ptr_i = c->inc(ptr_i);
+        ptr_i = top->inc(ptr_i);
     }
     return tails;
-}
-
-template<class Impl>
-bool
-DataflowQueues<Impl>::logicallyLET(unsigned x, unsigned y) const
-{
-}
-
-template<class Impl>
-bool
-DataflowQueues<Impl>::logicallyLT(unsigned x, unsigned y) const
-{
-
-}
-
-template<class Impl>
-bool
-DataflowQueues<Impl>::validPosition(unsigned u) const
-{
-
-}
-
-template<class Impl>
-unsigned
-DataflowQueues<Impl>::inc(unsigned u) const
-{
-}
-
-template<class Impl>
-unsigned
-DataflowQueues<Impl>::dec(unsigned u) const
-{
 }
 
 template<class Impl>
@@ -1403,7 +1366,7 @@ void DataflowQueues<Impl>::dumpFwQSize()
 template<class Impl>
 std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfWKQueue()
 {
-    unsigned oldest_to_squash = getHeadPtr();
+    unsigned oldest_to_squash = top->getHeadPtr();
     for (auto &q: wakeQueues) {
         if (q.empty()) {
             continue;
@@ -1411,12 +1374,12 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfWKQueue()
         for (size_t i = 0, e = q.size(); i < e/2; i++) {
             const auto &ele = q[e - 1 - i];
             if (ele.valid) {
-                unsigned p = pointer2uint(DQPointer(ele));
-                if (validPosition(p)) {
-                    auto p_ptr = uint2Pointer(p);
+                unsigned p = c->pointer2uint(DQPointer(ele));
+                if (top->validPosition(p)) {
+                    auto p_ptr = c->uint2Pointer(p);
                     auto p_inst = dqs[p_ptr.bank]->readInstsFromBank(p_ptr);
 
-                    if (logicallyLT(p, oldest_to_squash) && p_inst) {
+                    if (top->logicallyLT(p, oldest_to_squash) && p_inst) {
                         oldest_to_squash = p;
                     }
                 }
@@ -1425,13 +1388,13 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfWKQueue()
             numPendingWakeups--;
         }
     }
-    if (oldest_to_squash == getHeadPtr()) {
+    if (oldest_to_squash == top->getHeadPtr()) {
         warn("oldest_to_squash == getHeadPtr, this case is infrequent\n");
     }
-    auto ptr = uint2Pointer(oldest_to_squash);
+    auto ptr = c->uint2Pointer(oldest_to_squash);
     auto inst = dqs[ptr.bank]->readInstsFromBank(ptr);
 
-    auto sec_ptr = uint2Pointer(dec(oldest_to_squash));
+    auto sec_ptr = c->uint2Pointer(top->dec(oldest_to_squash));
     auto second_oldest_inst = dqs[sec_ptr.bank]->readInstsFromBank(sec_ptr);
     Addr hint_pc = 0;
     if (second_oldest_inst) {
@@ -1448,7 +1411,7 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfWKQueue()
 template<class Impl>
 std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfFWQueue()
 {
-    unsigned oldest_to_squash = getHeadPtr();
+    unsigned oldest_to_squash = top->getHeadPtr();
     for (auto &q: forwardPointerQueue) {
         if (q.empty()) {
             continue;
@@ -1456,11 +1419,11 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfFWQueue()
         for (size_t i = 0, e = q.size(); i < e/2; i++) {
             const auto &ele = q[e - 1 - i];
             if (ele.valid) {
-                unsigned p = pointer2uint(ele.payload.payload);
-                if (validPosition(p)) {
-                    auto p_ptr = uint2Pointer(p);
+                unsigned p = c->pointer2uint(ele.payload.payload);
+                if (top->validPosition(p)) {
+                    auto p_ptr = c->uint2Pointer(p);
                     auto p_inst = dqs[p_ptr.bank]->readInstsFromBank(p_ptr);
-                    if (logicallyLT(p, oldest_to_squash) && p_inst) {
+                    if (top->logicallyLT(p, oldest_to_squash) && p_inst) {
                         oldest_to_squash = p;
                     }
                 }
@@ -1469,13 +1432,13 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfFWQueue()
             numPendingFwPointers--;
         }
     }
-    if (oldest_to_squash == getHeadPtr()) {
+    if (oldest_to_squash == top->getHeadPtr()) {
         warn("oldest_to_squash == getHeadPtr, this case is infrequent\n");
     }
-    auto ptr = uint2Pointer(oldest_to_squash);
+    auto ptr = c->uint2Pointer(oldest_to_squash);
     auto inst = dqs[ptr.bank]->readInstsFromBank(ptr);
 
-    auto sec_ptr = uint2Pointer(dec(oldest_to_squash));
+    auto sec_ptr = c->uint2Pointer(top->dec(oldest_to_squash));
     auto second_oldest_inst = dqs[ptr.bank]->readInstsFromBank(sec_ptr);
     Addr hint_pc = 0;
     if (second_oldest_inst) {
@@ -1492,73 +1455,16 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfFWQueue()
 template<class Impl>
 void DataflowQueues<Impl>::processWKQueueFull()
 {
-    bool old_seq_valid = false;
-    if (halfSquash) {
-        old_seq_valid = true;
-    } else {
-        HalfSquashes++;
-        halfSquash = true;
-    }
-
-    DPRINTF(DQ, "Dump before clear:\n");
-    if (Debug::DQ || Debug::RSProbe1) {
-        dumpQueues();
-    }
-
-    if (old_seq_valid) {
-        InstSeqNum another_seq;
-        Addr another_pc;
-        std::tie(another_seq, another_pc) = clearHalfWKQueue();
-        checkUpdateSeq(halfSquashSeq, halfSquashPC, another_seq, another_pc);
-    } else {
-        std::tie(halfSquashSeq, halfSquashPC) = clearHalfWKQueue();
-    }
-
-
-    bool clear_another_queue = false;
-    for (auto q: forwardPointerQueue) {
-        if (q.size() > maxQueueDepth/2) {
-            clear_another_queue = true;
-        }
-    }
-
-    if (clear_another_queue) {
-        InstSeqNum another_seq;
-        Addr another_pc;
-        std::tie(another_seq, another_pc) = clearHalfFWQueue();
-        checkUpdateSeq(halfSquashSeq, halfSquashPC, another_seq, another_pc);
-    }
-
-    DPRINTF(DQ, "Dump after clear:\n");
-    if (Debug::DQ || Debug::RSProbe1) {
-        dumpQueues();
-    }
-}
-
-template<class Impl>
-void DataflowQueues<Impl>::processFWQueueFull()
-{
-    bool old_seq_valid = false;
-    if (halfSquash) {
-        old_seq_valid = true;
-    } else {
-        HalfSquashes++;
-        halfSquash = true;
-    }
-
     DPRINTF(DQ || Debug::RSProbe1, "Dump before clear:\n");
     if (Debug::DQ || Debug::RSProbe1) {
         dumpQueues();
     }
 
-    if (old_seq_valid) {
-        InstSeqNum another_seq;
-        Addr another_pc;
-        std::tie(another_seq, another_pc) = clearHalfFWQueue();
-        checkUpdateSeq(halfSquashSeq, halfSquashPC, another_seq, another_pc);
-    } else {
-        std::tie(halfSquashSeq, halfSquashPC) = clearHalfFWQueue();
-    }
+    InstSeqNum seq;
+    Addr pc;
+
+    std::tie(seq, pc) = clearHalfWKQueue();
+    top->notifyHalfSquash(seq, pc);
 
     bool clear_another_queue = false;
     for (auto q: wakeQueues) {
@@ -1568,10 +1474,40 @@ void DataflowQueues<Impl>::processFWQueueFull()
     }
 
     if (clear_another_queue) {
-        InstSeqNum another_seq;
-        Addr another_pc;
-        std::tie(another_seq, another_pc) = clearHalfWKQueue();
-        checkUpdateSeq(halfSquashSeq, halfSquashPC, another_seq, another_pc);
+        std::tie(seq, pc) = clearHalfFWQueue();
+        top->notifyHalfSquash(seq, pc);
+    }
+
+    DPRINTF(DQ || Debug::RSProbe1, "Dump after clear:\n");
+    if (Debug::DQ || Debug::RSProbe1) {
+        dumpQueues();
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::processFWQueueFull()
+{
+    DPRINTF(DQ || Debug::RSProbe1, "Dump before clear:\n");
+    if (Debug::DQ || Debug::RSProbe1) {
+        dumpQueues();
+    }
+
+    InstSeqNum seq;
+    Addr pc;
+
+    std::tie(seq, pc) = clearHalfFWQueue();
+    top->notifyHalfSquash(seq, pc);
+
+    bool clear_another_queue = false;
+    for (auto q: wakeQueues) {
+        if (q.size() > maxQueueDepth/2) {
+            clear_another_queue = true;
+        }
+    }
+
+    if (clear_another_queue) {
+        std::tie(seq, pc) = clearHalfWKQueue();
+        top->notifyHalfSquash(seq, pc);
     }
 
     DPRINTF(DQ || Debug::RSProbe1, "Dump after clear:\n");
@@ -1994,7 +1930,5 @@ void DataflowQueues<Impl>::sendOld()
 } // namespace
 
 #include "cpu/forwardflow/isa_specific.hh"
-#include "dataflow_queue_bank.hh"
-#include "dataflow_queue_common.hh"
 
 template class FF::DataflowQueues<FFCPUImpl>;

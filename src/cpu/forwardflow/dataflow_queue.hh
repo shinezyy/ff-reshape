@@ -20,7 +20,7 @@
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
 
-#define zcoding
+//#define zcoding
 
 #ifdef zcoding
 //#include "cpu/forwardflow/dataflow_queue_top.hh"
@@ -48,7 +48,7 @@ public:
     typedef typename Impl::DynInstPtr DynInstPtr;
 #endif
 
-    typedef typename Impl::DQTop DQTop;
+    typedef typename Impl::CPUPol::DQTop DQTop;
     typedef typename Impl::CPUPol::DIEWC DIEWC;
     typedef typename Impl::CPUPol::DQStruct DQStruct;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
@@ -142,8 +142,6 @@ public:
 
     std::unordered_map<DQPointer, FFRegValue> committedValues;
 
-    DynInstPtr getHead() const;
-
     std::list<DynInstPtr> getBankHeads();
 
     std::list<DynInstPtr> getBankTails();
@@ -199,7 +197,7 @@ private:
     bool wakeupQueueClogging() const;
     bool fwPointerQueueClogging() const;
 
-    std::vector<FFRegValue> regFile;
+//    std::vector<FFRegValue> regFile;
 
     void markFwPointers(std::array<DQPointer, 4> &pointers,
             PointerPair &pair, DynInstPtr &inst);
@@ -248,15 +246,7 @@ public:
     void endCycle();
 
 private:
-    unsigned oldestUsed;
 
-    std::pair<InstSeqNum, Addr> clearHalfWKQueue();
-
-    std::pair<InstSeqNum, Addr> clearHalfFWQueue();
-
-    void processWKQueueFull();
-
-    void processFWQueueFull();
 
     std::list<unsigned> opPrioList;
 
@@ -273,7 +263,6 @@ public:
     Stats::Vector readyWaitTime;
 
     Stats::Scalar oldWaitYoung;
-
 
     Stats::Vector WKFlowUsage;
 
@@ -369,22 +358,42 @@ public:
 public:
     const unsigned groupID;
 
+    // inter group transferring
 private:
     DQTop *top;
 
-    void sendToNextGroup(const WKPointer &wk_pointer);
-
-    void receiveFromPrevGroup(const WKPointer &wk_pointer);
-
     std::deque<WKPointer> outQueue;
 
-    void clearSent(); // TODO: clear cyclely
+    void sendToNextGroup(const WKPointer &wk_pointer);
 
     unsigned interGroupSent;
 
     const unsigned interGroupBW; // TODO: init
 
     void sendOld();
+
+public:
+    void clearSent(); // TODO: clear cyclely
+
+    void receiveFromPrevGroup(const WKPointer &wk_pointer);
+
+
+    // half squash related:
+public:
+    bool halfSquash;
+
+    InstSeqNum halfSquashSeq;
+
+    Addr halfSquashPC;
+
+    std::pair<InstSeqNum, Addr> clearHalfWKQueue();
+
+    std::pair<InstSeqNum, Addr> clearHalfFWQueue();
+
+    void processWKQueueFull();
+
+    void processFWQueueFull();
+
 };
 
 }

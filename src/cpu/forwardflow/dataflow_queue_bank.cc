@@ -3,8 +3,17 @@
 //
 
 #include "dataflow_queue_bank.hh"
+#include "debug/DQ.hh"
+#include "debug/DQWake.hh"
+#include "debug/DQWrite.hh"
+#include "debug/FFExec.hh"
+#include "debug/FFSquash.hh"
+#include "debug/RSProbe1.hh"
+#include "debug/Reshape.hh"
 
-using namespace FF {
+namespace FF {
+
+using boost::dynamic_bitset;
 
 template<class Impl>
 void

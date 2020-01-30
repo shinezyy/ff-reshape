@@ -1583,26 +1583,26 @@ uint64_t FFCPU<Impl>::readFloatRegBits(DQPointer ptr) {
     panic("Should not be used!\n");
 }
 
-template<class Impl>
-void FFCPU<Impl>::setIntReg(DQPointer ptr, uint64_t val_) {
-    FFRegValue val;
-    val.i = val_;
-    dq->setReg(ptr, val);
-}
-
-template<class Impl>
-void FFCPU<Impl>::setFloatReg(DQPointer ptr, double val_) {
-    FFRegValue val;
-    val.f = val_;
-    dq->setReg(ptr, val);
-}
-
-template<class Impl>
-void FFCPU<Impl>::setFloatRegBits(DQPointer ptr, uint64_t val_) {
-    FFRegValue val;
-    val.i = val_;
-    dq->setReg(ptr, val);
-}
+// template<class Impl>
+// void FFCPU<Impl>::setIntReg(DQPointer ptr, uint64_t val_) {
+//     FFRegValue val;
+//     val.i = val_;
+//     dq->setReg(ptr, val);
+// }
+//
+// template<class Impl>
+// void FFCPU<Impl>::setFloatReg(DQPointer ptr, double val_) {
+//     FFRegValue val;
+//     val.f = val_;
+//     dq->setReg(ptr, val);
+// }
+//
+// template<class Impl>
+// void FFCPU<Impl>::setFloatRegBits(DQPointer ptr, uint64_t val_) {
+//     FFRegValue val;
+//     val.i = val_;
+//     dq->setReg(ptr, val);
+// }
 
 template<class Impl>
 void FFCPU<Impl>::setPointers()

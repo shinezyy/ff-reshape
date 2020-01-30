@@ -422,7 +422,7 @@ void ArchState<Impl>::setDIEWC(DIEWC *_diewc)
 }
 
 template<class Impl>
-void ArchState<Impl>::setDQ(DataflowQueues *_dq)
+void ArchState<Impl>::setDQ(DQTop *_dq)
 {
     dq = _dq;
 }
@@ -628,9 +628,9 @@ ArchState<Impl>::countChild(DQPointer parent_ptr, DynInstPtr &inst)
             DPRINTF(Reshape, "Parent is forwarder, trying to add to ancestor"
                     "(%i) (%i %i)\n", ancestorPtr.valid,
                     ancestorPtr.bank, ancestorPtr.index);
-            if (dq->validPosition(dq->pointer2uint(ancestorPtr))) {
-                if (dq->logicallyLT(dq->pointer2uint(ancestorPtr),
-                            dq->pointer2uint(inst->dqPosition))) {
+            if (dq->validPosition(dq->c.pointer2uint(ancestorPtr))) {
+                if (dq->logicallyLT(dq->c.pointer2uint(ancestorPtr),
+                            dq->c.pointer2uint(inst->dqPosition))) {
                     DPRINTF(Reshape, "Ancestor found!\n");
                 } else {
                     DPRINTF(Reshape, "Ancestor has been committed!\n");
@@ -640,9 +640,9 @@ ArchState<Impl>::countChild(DQPointer parent_ptr, DynInstPtr &inst)
             }
         }
         if (parent->isForwarder() && ancestorPtr.valid &&
-                dq->validPosition(dq->pointer2uint(ancestorPtr)) &&
-                dq->logicallyLT(dq->pointer2uint(ancestorPtr),
-                    dq->pointer2uint(inst->dqPosition))) {
+                dq->validPosition(dq->c.pointer2uint(ancestorPtr)) &&
+                dq->logicallyLT(dq->c.pointer2uint(ancestorPtr),
+                    dq->c.pointer2uint(inst->dqPosition))) {
             DynInstPtr ancestor = dq->readInst(ancestorPtr);
             if (ancestor) {
                 inst->ancestorPointer = ancestorPtr;
