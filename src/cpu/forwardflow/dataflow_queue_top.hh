@@ -280,6 +280,8 @@ public:
     void addReadyMemInst(DynInstPtr inst, bool isOrderDep = true);
 
     void endCycle();
+
+    void moveWakeupPointers();
 };
 
 }

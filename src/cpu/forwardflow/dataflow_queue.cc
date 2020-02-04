@@ -1687,11 +1687,12 @@ DataflowQueues<Impl>::mergeLocalWKPointers()
 template<class Impl>
 void DataflowQueues<Impl>::sendToNextGroup(const WKPointer &wk_pointer)
 {
-    if (interGroupSent <= interGroupBW) {
-        top->sendToNextGroup(groupID, wk_pointer);
-    } else {
-        outQueue.push_back(wk_pointer);
-    }
+//    if (interGroupSent <= interGroupBW) {
+//        top->sendToNextGroup(groupID, wk_pointer);
+//    } else {
+//        outQueue.push_back(wk_pointer);
+//    }
+    outQueue.push_back(wk_pointer);
 }
 
 template<class Impl>

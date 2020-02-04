@@ -368,6 +368,7 @@ private:
 
     unsigned groupID;
 
+    // physically located between DQ groups
     std::deque<WKPointer> outQueue;
 
     void sendToNextGroup(const WKPointer &wk_pointer);
@@ -376,9 +377,9 @@ private:
 
     const unsigned interGroupBW; // TODO: init
 
+public:
     void sendOld();
 
-public:
     void clearSent(); // TODO: clear cyclely
 
     void receiveFromPrevGroup(const WKPointer &wk_pointer);
@@ -399,6 +400,7 @@ public:
     void processWKQueueFull();
 
     void processFWQueueFull();
+
 
 };
 

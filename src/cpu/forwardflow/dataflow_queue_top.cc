@@ -48,14 +48,17 @@ void DQTop<Impl>::cycleStart()
 template<class Impl>
 void DQTop<Impl>::tick()
 {
+    // TODO: write data generated in last tick to inter-group connections
+    dispatchInstsToGroup();
+    dispatchPointersToGroup();
+    moveWakeupPointers();
+
     // per group tick, because there is not combinational signals across groups
-    // their "ticks" should be executed in parallel
+    // their "ticks" can be executed in parallel
     for (auto group: dqGroups) {
         group->tick();
     }
 
-    // TODO: write data generated in this tick to inter-group connections
-    dispatchInstsToGroup();
 }
 
 template<class Impl>
@@ -253,7 +256,6 @@ bool DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
 template<class Impl>
 bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 {
-    c.notImplemented();
     // TODO: this is centralized now; Decentralize it with buffers
     // todo: send to allocated DQ position
     assert(inst);
@@ -495,7 +497,7 @@ bool DQTop<Impl>::queuesEmpty()
 template<class Impl>
 void DQTop<Impl>::setTimeBuf(TimeBuffer<DQStruct> *dqtb)
 {
-    c.notImplemented();
+
 }
 
 template<class Impl>
@@ -895,6 +897,14 @@ void DQTop<Impl>::endCycle()
 {
     for (auto group: dqGroups) {
         group->endCycle();
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::moveWakeupPointers()
+{
+    for (auto group: dqGroups) {
+        group->sendOld();
     }
 }
 
