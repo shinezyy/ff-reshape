@@ -61,7 +61,7 @@ public:
 
     unsigned writes, reads;
 
-    DataflowQueues(DerivFFCPUParams *);
+    DataflowQueues(DerivFFCPUParams *, unsigned groupID);
 
     XDataflowQueueBank * operator [](unsigned bank);
 
@@ -229,8 +229,6 @@ public:
 
     void setCPU(O3CPU *_cpu) {cpu = _cpu;};
 
-    std::string name() const {return "dataflow_queue";}
-
     void tryFastCleanup();
 
     unsigned numInFlightFw();
@@ -357,7 +355,7 @@ public:
 
     //// inter group transferring
 public:
-    void setGroupID(unsigned id) {groupID = id;}
+    void setGroupID(unsigned id);
 
     unsigned getGroupID() {return groupID;}
 
@@ -400,6 +398,11 @@ public:
 
     void processFWQueueFull();
 
+private:
+    std::string _name;
+
+public:
+    std::string name() const { return _name; }
 
 };
 

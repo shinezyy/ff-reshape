@@ -24,12 +24,10 @@ DQTop<Impl>::DQTop(DerivFFCPUParams *params)
     memDepUnit.setIQ(this);
 
     for (unsigned g = 0; g < params->numDQGroups; g++) {
-        dqGroups.emplace_back(new DataflowQueues(params));
+        dqGroups.emplace_back(new DataflowQueues(params, g));
     }
-    unsigned gid = 0;
     for (auto group: dqGroups) {
         group->setTop(this);
-        group->setGroupID(gid++);
     }
 }
 

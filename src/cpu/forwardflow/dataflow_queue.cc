@@ -30,7 +30,7 @@ using namespace std;
 using boost::dynamic_bitset;
 
 template<class Impl>
-DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
+DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params, unsigned gid)
         :
         writes(0),
         reads(0),
@@ -71,7 +71,6 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         fuPool(params->fuPool),
         fuGroupCaps(Num_OpClasses, vector<bool>(nBanks)),
 
-
         bankWidth((unsigned) ceilLog2(params->numDQBanks)),
         bankMask((unsigned) (1 << bankWidth) - 1),
         indexWidth((unsigned) ceilLog2(params->DQDepth)),
@@ -105,6 +104,8 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         pushFF(nBanks * nOps, false),
         interGroupBW(params->interGroupBW)
 {
+    setGroupID(gid);
+
     assert(MINWakeup + XBarWakeup + NarrowXBarWakeup + DediXBarWakeup == 1);
     // init inputs to omega networks
     for (unsigned b = 0; b < nBanks; b++) {
@@ -125,6 +126,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params)
         fuWrappers[b].fillMyBitMap(fuGroupCaps, b);
         fuWrappers[b].fillLatTable(opLat);
         fuWrappers[b].setDQ(this);
+
 
         dqs.emplace_back(new XDataflowQueueBank(params, b, this));
         readyInstsQueues.emplace_back(new XReadyInstsQueue(params));
@@ -1716,6 +1718,15 @@ DataflowQueues<Impl>::operator[](unsigned bank)
     return dqs[bank];
 }
 
+template<class Impl>
+void DataflowQueues<Impl>::setGroupID(unsigned id)
+{
+    groupID = id;
+
+    std::ostringstream s;
+    s << "DQGroup" << groupID;
+    _name = s.str();
+}
 
 
 } // namespace

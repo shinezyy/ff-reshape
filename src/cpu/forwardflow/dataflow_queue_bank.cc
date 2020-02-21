@@ -570,7 +570,7 @@ DataflowQueueBank<Impl>::DataflowQueueBank(
     }
     std::ostringstream s;
     s << "DQBank" << bankID;
-    _name = s.str();
+    _name = dq->name() + '.' + s.str();
 }
 
 template<class Impl>
