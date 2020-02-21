@@ -42,22 +42,35 @@ void DQTop<Impl>::cycleStart()
     for (auto &group: dqGroups) {
         group->cycleStart();
     }
-
+    clearInstBuffer();
 }
 
 template<class Impl>
 void DQTop<Impl>::tick()
 {
-    // TODO: write data generated in last tick to inter-group connections
-    dispatchInstsToGroup();
-    dispatchPointersToGroup();
-    moveWakeupPointers();
-
-    // per group tick, because there is not combinational signals across groups
+    // per group tick, because there is no combinational signals across groups
     // their "ticks" can be executed in parallel
     for (auto group: dqGroups) {
         group->tick();
     }
+
+    // for each group dispatch
+    dispatchInstsToGroup();
+    dispatchPairsToGroup();
+
+    // for each group receive from prev group
+    groupsRxFromPrevGroup();
+    // for each group send
+    // this execute order is  to guarantee 2 cycle latency
+    groupsTxPointers();
+
+    // for each group receive from center buffer
+    // this will be executed before lsq/mdu send to guarantee 2 cycle latency
+    groupsRxFromCenterBuffer();
+
+    replayMemInsts();
+    DPRINTF(DQ, "Size of blockedMemInsts: %llu, size of retryMemInsts: %llu\n",
+            blockedMemInsts.size(), retryMemInsts.size());
 
 }
 
@@ -85,6 +98,7 @@ template<class Impl>
 void DQTop<Impl>::centralizedExtraWakeup(const WKPointer &wk)
 {
     // store in a buffer? or insert directly?
+    pseudoCenterWKPointerBuffer[wk.group].push_back(wk);
 }
 
 template<class Impl>
@@ -249,7 +263,6 @@ bool DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
     assert(inst);
     inst->miscDepReady = false;
     inst->hasMiscDep = true;
-    // TODO: this is centralized now; Decentralize it with buffers
     return insert(inst, non_spec);
 }
 
@@ -297,7 +310,7 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 template<class Impl>
 void DQTop<Impl>::insertForwardPointer(PointerPair pair)
 {
-    centerPointerBuffer[pointerIndex++] = pair;
+    centerPairBuffer[pointerIndex++] = pair;
 }
 
 template<class Impl>
@@ -414,10 +427,6 @@ void DQTop<Impl>::tryFastCleanup()
 template<class Impl>
 void DQTop<Impl>::squash(DQPointer p, bool all, bool including)
 {
-    // TODO: implemented it;
-    // The major problem is co-ordinate multiple groups
-
-
     if (all) {
         DPRINTF(FFSquash, "DQ: squash ALL instructions\n");
         for (auto group: dqGroups) {
@@ -755,7 +764,7 @@ void DQTop<Impl>::dispatchInstsToGroup()
         }
         if (inst->dqPosition.group != dispatchingGroup->getGroupID()) {
             switchDispatchingGroup(inst);
-            // TODO: whether break here?
+            // TODO: whether break here? currently Not
         }
         auto bank = inst->dqPosition.bank;
         dispatchingGroup->dqs[bank]->writeInstsToBank(inst->dqPosition, inst);
@@ -776,11 +785,11 @@ void DQTop<Impl>::switchDispatchingGroup(DQTop::DynInstPtr &inst)
 }
 
 template<class Impl>
-void DQTop<Impl>::dispatchPointersToGroup()
+void DQTop<Impl>::dispatchPairsToGroup()
 {
 
     for (unsigned i = 0; i < dispatchWidth; i++) {
-        PointerPair &p = centerPointerBuffer[i];
+        PointerPair &p = centerPairBuffer[i];
         DataflowQueues *group = dqGroups[p.dest.group];
         group->insertForwardPointer(p);
     }
@@ -806,9 +815,10 @@ unsigned DQTop<Impl>::getPrevGroup(unsigned group_id) const
 template<class Impl>
 void DQTop<Impl>::sendToNextGroup(unsigned sending_group, const WKPointer &wk_pointer)
 {
-    unsigned recv_group = getNextGroup(sending_group);
-    DataflowQueues *receiver = dqGroups[recv_group];
-    receiver->receiveFromPrevGroup(wk_pointer);
+    interGroupBuffer[getNextGroup(sending_group)].push_back(wk_pointer);
+//    unsigned recv_group = getNextGroup(sending_group);
+//    DataflowQueues *receiver = dqGroups[recv_group];
+//    receiver->receivePointers(wk_pointer);
 }
 
 template<class Impl>
@@ -901,13 +911,36 @@ void DQTop<Impl>::endCycle()
 }
 
 template<class Impl>
-void DQTop<Impl>::moveWakeupPointers()
+void DQTop<Impl>::groupsTxPointers()
 {
     for (auto group: dqGroups) {
-        group->sendOld();
+        group->transmitPointers();
     }
 }
 
+template<class Impl>
+void DQTop<Impl>::groupsRxFromCenterBuffer()
+{
+    groupsRxFromBuffers(pseudoCenterWKPointerBuffer);
+}
+
+template<class Impl>
+void DQTop<Impl>::groupsRxFromPrevGroup()
+{
+    groupsRxFromBuffers(interGroupBuffer);
+}
+
+template<class Impl>
+void DQTop<Impl>::groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues)
+{
+    for (unsigned g = 0 ; g < c.nGroups; g++) {
+        auto &queue = queues[g];
+        while (!queue.empty()) {
+            dqGroups[g]->receivePointers(queue.front());
+            queue.pop_front();
+        }
+    }
+}
 
 }
 

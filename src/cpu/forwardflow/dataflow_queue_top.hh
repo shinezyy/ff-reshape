@@ -233,7 +233,7 @@ private:
 
     unsigned insertIndex;
 
-    void clearInstBuffer(); // TODO: cyclely clearing
+    void clearInstBuffer();
 
     DataflowQueues *dispatchingGroup;
 
@@ -244,11 +244,11 @@ private:
     // FW pointers
     // dispatching.forward_pointers planA: W - to - W*G asymmetric topology
     // dispatching.forward_pointers planB: 1 - to - 2: working + last working + backward ring routing
-    std::array<PointerPair, Impl::MaxWidth> centerPointerBuffer;
+    std::array<PointerPair, Impl::MaxWidth> centerPairBuffer;
 
     unsigned pointerIndex;
 
-    void dispatchPointersToGroup();
+    void dispatchPairsToGroup();
 
     //Committing
 //    DataflowQueues *committingGroup;
@@ -281,7 +281,17 @@ public:
 
     void endCycle();
 
-    void moveWakeupPointers();
+    std::vector<std::deque<WKPointer>> pseudoCenterWKPointerBuffer; // TODO: init
+
+    std::vector<std::deque<WKPointer>> interGroupBuffer; // TODO: init
+
+    void groupsTxPointers();
+
+    void groupsRxFromCenterBuffer();
+
+    void groupsRxFromPrevGroup();
+
+    void groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues);
 };
 
 }

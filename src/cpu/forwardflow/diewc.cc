@@ -62,6 +62,7 @@ void FFDIEWC<Impl>::tick() {
     dq.tick();
 //    DPRINTF(DIEWC, "tick reach 6\n");
 //
+    // TODO: it writes center buffer
     ldstQueue.writebackStores();
 
     // todo: commit from DQ
@@ -97,6 +98,7 @@ void FFDIEWC<Impl>::tick() {
     if (anySuccessfulCommit) {
         DPRINTF(FFCommit, "Mark load/store insts oldder than [%lu] as can wb\n",
                 lastCommitedSeqNum);
+        // TODO: it writes center buffer
         ldstQueue.commitStores(lastCommitedSeqNum, DummyTid);
         ldstQueue.commitLoads(lastCommitedSeqNum, DummyTid);
 
@@ -109,6 +111,7 @@ void FFDIEWC<Impl>::tick() {
     if (tbuf.nonSpecSeqNum != 0) {
         if (tbuf.strictlyOrdered) {
             DPRINTF(DIEWC, "Recv strictlyOrdered non spec\n");
+            // TODO: it writes center buffer
             dq.replayMemInst(tbuf.strictlyOrderedLoad);
             tbuf.strictlyOrderedLoad->setAtCommit();
         } else {
@@ -117,6 +120,7 @@ void FFDIEWC<Impl>::tick() {
                 DPRINTF(FFSquash, "Ignore scheduling attempt to squashing inst\n");
             } else {
                 assert(tbuf.nonSpecSeqNum == dq.getTail()->seqNum);
+                // TODO: it writes center buffer
                 dq.scheduleNonSpec();
             }
         }

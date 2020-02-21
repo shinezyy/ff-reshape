@@ -375,15 +375,14 @@ private:
 
     unsigned interGroupSent;
 
-    const unsigned interGroupBW; // TODO: init
+    const unsigned interGroupBW; // TODO: enforece it
 
 public:
-    void sendOld();
+    void transmitPointers();
 
     void clearSent(); // TODO: clear cyclely
 
-    void receiveFromPrevGroup(const WKPointer &wk_pointer);
-
+    void receivePointers(const WKPointer &wk_pointer);
 
     // half squash related:
 public:

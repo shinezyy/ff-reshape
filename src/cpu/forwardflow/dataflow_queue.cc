@@ -246,9 +246,6 @@ void DataflowQueues<Impl>::tick()
         bank->checkPending();
     }
 
-    //// TODO: move to corresponding place in DQ Top
-    // replayMemInsts();
-
     DPRINTF(DQ, "Selecting wakeup pointers from requests\n");
     // For each bank: check status: whether I can consume from queue this cycle?
     // record the state
@@ -1156,12 +1153,7 @@ void DataflowQueues<Impl>::endCycle()
     for (auto &wrapper: fuWrappers) {
         wrapper.endCycle();
     }
-
     mergeExtraWKPointers();
-
-    //// TODO: move to top
-    // DPRINTF(DQ, "Size of blockedMemInsts: %llu, size of retryMemInsts: %llu\n",
-    //         blockedMemInsts.size(), retryMemInsts.size());
 }
 
 template<class Impl>
@@ -1696,7 +1688,7 @@ void DataflowQueues<Impl>::sendToNextGroup(const WKPointer &wk_pointer)
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::receiveFromPrevGroup(const WKPointer &wk_pointer)
+void DataflowQueues<Impl>::receivePointers(const WKPointer &wk_pointer)
 {
     extraWakeup(wk_pointer);
 }
@@ -1708,7 +1700,7 @@ void DataflowQueues<Impl>::clearSent()
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::sendOld()
+void DataflowQueues<Impl>::transmitPointers()
 {
     while (!outQueue.empty() && interGroupSent < interGroupBW) {
         const WKPointer &wk_pointer = outQueue.front();
