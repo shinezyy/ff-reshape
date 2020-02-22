@@ -64,6 +64,7 @@ public:
 
     void notImplemented();
 
+    std::string name() const { return "DQCommon"; }
 };
 
 }

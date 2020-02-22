@@ -50,7 +50,8 @@ public:
 
     typedef typename Impl::CPUPol::DQTop DQTop;
     typedef typename Impl::CPUPol::DIEWC DIEWC;
-    typedef typename Impl::CPUPol::DQStruct DQStruct;
+    typedef typename Impl::CPUPol::DQTopTS DQTopTs;
+    typedef typename Impl::CPUPol::DQGroupTS DQGroupTs;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
     typedef typename Impl::CPUPol::LSQ LSQ;
 
@@ -61,7 +62,7 @@ public:
 
     unsigned writes, reads;
 
-    DataflowQueues(DerivFFCPUParams *, unsigned groupID);
+    DataflowQueues(DerivFFCPUParams *, unsigned groupID, DQCommon *_c);
 
     XDataflowQueueBank * operator [](unsigned bank);
 
@@ -83,10 +84,10 @@ private:
 
     DQCommon *c;
 
-    TimeBuffer<DQStruct> *DQTS;
+    TimeBuffer<DQTopTs> *DQTS;
 
-    typename TimeBuffer<DQStruct>::wire toNextCycle;
-    typename TimeBuffer<DQStruct>::wire fromLastCycle;
+    DQGroupTs* toNextCycle;
+    DQGroupTs* fromLastCycle;
 
 //    std::vector<bool> wakenValids;
 //    std::vector<DynInstPtr> wakenInsts;
@@ -221,7 +222,7 @@ private:
 public:
     void alignTails();
 
-    void setTimeBuf(TimeBuffer<DQStruct>* dqtb);
+    void setTimeBuf(TimeBuffer<DQTopTs>* dqtb);
 
     void setLSQ(LSQ *lsq);
 

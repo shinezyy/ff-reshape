@@ -479,15 +479,19 @@ enum OpGroups {
 
 /** Struct that defines the information read from DQ banks. */
 template<class Impl>
-struct DQOut {
+struct DQGroupTS {
     typedef typename Impl::DynInstPtr DynInstPtr;
 
     bool instValids[Impl::MaxBanks * nOpGroups];
     DynInstPtr insts[Impl::MaxBanks * nOpGroups];
 
     DQPointer pointers[Impl::MaxBanks * Impl::MaxOps];
-
 };
+template<class Impl>
+struct DQTopTS {
+    DQGroupTS<Impl> groupTs[Impl::MaxGroups];
+};
+
 
 }
 #endif //__CPU_FF_COMM_HH__

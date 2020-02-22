@@ -17,15 +17,28 @@ namespace FF
 template<class Impl>
 DQTop<Impl>::DQTop(DerivFFCPUParams *params)
         :
-        c(params)
+        c(params),
+        head(0),
+        tail(0),
+        headTerm(0),
+        dispatchWidth(params->dispatchWidth),
+        insertIndex(0),
+        pairIndex(0),
+        halfSquash(false),
+        halfSquashSeq(0),
+        halfSquashPC(0),
+        pseudoCenterWKPointerBuffer(params->numDQGroups),
+        interGroupBuffer(params->numDQGroups)
 {
 
     memDepUnit.init(params, DummyTid);
     memDepUnit.setIQ(this);
 
     for (unsigned g = 0; g < params->numDQGroups; g++) {
-        dqGroups.emplace_back(new DataflowQueues(params, g));
+        dqGroups.push_back(new DataflowQueues(params, g, &c));
     }
+    committingGroup = dqGroups[0];
+    dispatchingGroup = dqGroups[0];
     for (auto group: dqGroups) {
         group->setTop(this);
     }
@@ -308,7 +321,7 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 template<class Impl>
 void DQTop<Impl>::insertForwardPointer(PointerPair pair)
 {
-    centerPairBuffer[pointerIndex++] = pair;
+    centerPairBuffer[pairIndex++] = pair;
 }
 
 template<class Impl>
@@ -502,9 +515,11 @@ bool DQTop<Impl>::queuesEmpty()
 }
 
 template<class Impl>
-void DQTop<Impl>::setTimeBuf(TimeBuffer<DQStruct> *dqtb)
+void DQTop<Impl>::setTimeBuf(TimeBuffer<DQTopTS> *dqtb)
 {
-
+    for (unsigned g = 0; g < c.nGroups; g++){
+        dqGroups[g]->setTimeBuf(dqtb);
+    }
 }
 
 template<class Impl>
@@ -518,6 +533,7 @@ void DQTop<Impl>::setLSQ(LSQ *lsq)
 template<class Impl>
 void DQTop<Impl>::setDIEWC(DIEWC *_diewc)
 {
+    diewc = _diewc;
     for (DataflowQueues *group: dqGroups) {
         group->setDIEWC(_diewc);
     }
@@ -937,6 +953,14 @@ void DQTop<Impl>::groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues
             dqGroups[g]->receivePointers(queue.front());
             queue.pop_front();
         }
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::clearPairBuffer()
+{
+    for (unsigned i = 0; i < dispatchWidth; i++) {
+        centerPairBuffer[i].dest.valid = false;
     }
 }
 

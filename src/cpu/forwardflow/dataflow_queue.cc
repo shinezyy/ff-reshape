@@ -30,7 +30,7 @@ using namespace std;
 using boost::dynamic_bitset;
 
 template<class Impl>
-DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params, unsigned gid)
+DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params, unsigned gid, DQCommon *_c)
         :
         writes(0),
         reads(0),
@@ -39,8 +39,12 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params, unsigned gid)
         nFUGroups(params->numDQBanks),
         depth(params->DQDepth),
         queueSize(nBanks * depth),
+
         wakeQueues(nBanks * nOps),
         forwardPointerQueue(nBanks * nOps),
+
+        c(_c),
+
         bankFUMIN(nBanks, true),
         wakeupQueueBankMIN(nBanks * nOps, true),
         pointerQueueBankMIN(nBanks * nOps, true),
@@ -896,11 +900,11 @@ void DataflowQueues<Impl>::readQueueHeads()
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::setTimeBuf(TimeBuffer<DQStruct> *dqtb)
+void DataflowQueues<Impl>::setTimeBuf(TimeBuffer<DQTopTs> *dqtb)
 {
     DQTS = dqtb;
-    fromLastCycle = dqtb->getWire(-1);
-    toNextCycle = dqtb->getWire(0);
+    fromLastCycle = &dqtb->getWire(-1)->groupTs[groupID];
+    toNextCycle = &dqtb->getWire(0)->groupTs[groupID];
 }
 
 template<class Impl>

@@ -94,7 +94,11 @@ struct FFSimpleCPUPolicy
     typedef FF::TimeBufStruct<Impl> TimeStruct;
 
     /** The struct for dq timing communication. */
-    typedef FF::DQOut<Impl> DQStruct;
+    typedef FF::DQTopTS<Impl> DQStruct;
+
+    typedef FF::DQTopTS<Impl> DQTopTS;
+
+    typedef FF::DQGroupTS<Impl> DQGroupTS;
 
     typedef FF::DataflowQueueBank<Impl> DataflowQueueBank;
 

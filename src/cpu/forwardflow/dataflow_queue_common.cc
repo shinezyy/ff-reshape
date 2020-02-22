@@ -4,6 +4,7 @@
 
 #include "cpu/forwardflow/isa_specific.hh"
 #include "dataflow_queue_common.hh"
+#include "debug/DQGOF.hh"
 #include "ready_inst_queue.hh"
 
 namespace FF
@@ -11,7 +12,8 @@ namespace FF
 
 boost::dynamic_bitset<> DQCommon::uint2Bits(unsigned from)
 {
-    auto res = boost::dynamic_bitset<>(dqSize);
+    DPRINTF(DQGOF, "addrWidth: %u, dqSize: %u\n", addrWidth, dqSize);
+    auto res = boost::dynamic_bitset<>(addrWidth);
     for (unsigned i = 0; i < addrWidth; i++, from >>= 1) {
         res[i] = from & 1;
     }

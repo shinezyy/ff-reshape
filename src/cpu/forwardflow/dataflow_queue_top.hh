@@ -41,7 +41,7 @@ public:
     typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
 
     typedef typename Impl::CPUPol::DIEWC DIEWC;
-    typedef typename Impl::CPUPol::DQStruct DQStruct;
+    typedef typename Impl::CPUPol::DQStruct DQTopTS;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
     typedef typename Impl::CPUPol::LSQ LSQ;
 
@@ -56,22 +56,22 @@ public:
 #endif
 
 public:
-    DQCommon c; // todo: construct
+    DQCommon c;
 
-    DIEWC *diewc; // todo: construct
+    DIEWC *diewc;
 
     // DQ groups:
-    std::vector<DataflowQueues *> dqGroups; // todo: construct
+    std::vector<DataflowQueues *> dqGroups;
 
-    MemDepUnit memDepUnit; // todo: construct
+    MemDepUnit memDepUnit;
 
-    std::list<DynInstPtr> deferredMemInsts; // todo: construct
+    std::list<DynInstPtr> deferredMemInsts;
 
-    std::list<DynInstPtr> blockedMemInsts; // todo: construct
+    std::list<DynInstPtr> blockedMemInsts;
 
-    std::list<DynInstPtr> retryMemInsts; // todo: construct
+    std::list<DynInstPtr> retryMemInsts;
 
-    std::unordered_map<DQPointer, FFRegValue> committedValues; // todo: construct
+    std::unordered_map<DQPointer, FFRegValue> committedValues;
 
     explicit DQTop(DerivFFCPUParams *params);
 
@@ -167,7 +167,7 @@ public:
 
 
     // wiring
-    void setTimeBuf(TimeBuffer<DQStruct>* dqtb);
+    void setTimeBuf(TimeBuffer<DQTopTS>* dqtb);
 
     void setLSQ(LSQ *lsq);
 
@@ -226,7 +226,7 @@ public:
     // dispatching.instructions: only one working group; WxW xbar - to - N groups
 private:
     ////////////// Dispatching
-    unsigned dispatchWidth;
+    const unsigned dispatchWidth;
 
     // insts
     std::array<DynInstPtr, Impl::MaxWidth> centerInstBuffer;
@@ -246,7 +246,9 @@ private:
     // dispatching.forward_pointers planB: 1 - to - 2: working + last working + backward ring routing
     std::array<PointerPair, Impl::MaxWidth> centerPairBuffer;
 
-    unsigned pointerIndex;
+    unsigned pairIndex;
+
+    void clearPairBuffer();
 
     void dispatchPairsToGroup();
 
@@ -281,9 +283,9 @@ public:
 
     void endCycle();
 
-    std::vector<std::deque<WKPointer>> pseudoCenterWKPointerBuffer; // TODO: init
+    std::vector<std::deque<WKPointer>> pseudoCenterWKPointerBuffer;
 
-    std::vector<std::deque<WKPointer>> interGroupBuffer; // TODO: init
+    std::vector<std::deque<WKPointer>> interGroupBuffer;
 
     void groupsTxPointers();
 
