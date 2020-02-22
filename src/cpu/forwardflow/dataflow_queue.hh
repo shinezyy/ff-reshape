@@ -365,8 +365,10 @@ public:
 private:
     DQTop *top;
 
+public:
     unsigned groupID;
 
+private:
     // physically located between DQ groups
     std::deque<WKPointer> outQueue;
 

@@ -9,6 +9,7 @@
 #include "debug/Commit.hh"
 #include "debug/CommitRate.hh"
 #include "debug/DIEWC.hh"
+#include "debug/DQGOF.hh"
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
 #include "debug/FFCommit.hh"
@@ -257,6 +258,10 @@ void FFDIEWC<Impl>::dispatch() {
         // postponed allocation;
         dq.advanceHead();
         inst->dqPosition = dq.c.uint2Pointer(dq.getHeadPtr());
+
+        DPRINTF(DQGOF, "Current head: 0x%u," ptrfmt "\n",
+                dq.getHeadPtr(), extptr(inst->dqPosition));
+
         inst->dqPosition.term = dq.getHeadTerm();
 
         bool jumped = false;

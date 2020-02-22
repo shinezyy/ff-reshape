@@ -4,6 +4,7 @@
 
 #include "dataflow_queue_top.hh"
 #include "debug/DQ.hh"
+#include "debug/DQGOF.hh"
 #include "debug/DQWake.hh"
 #include "debug/FFCommit.hh"
 #include "debug/FFSquash.hh"
@@ -801,11 +802,10 @@ void DQTop<Impl>::switchDispatchingGroup(DQTop::DynInstPtr &inst)
 template<class Impl>
 void DQTop<Impl>::dispatchPairsToGroup()
 {
-
     for (unsigned i = 0; i < dispatchWidth; i++) {
         PointerPair &p = centerPairBuffer[i];
-        DataflowQueues *group = dqGroups[p.dest.group];
-        group->insertForwardPointer(p);
+        DPRINTF(DQGOF, "group: %u\n", dispatchingGroup->groupID);
+        dispatchingGroup->insertForwardPointer(p);
     }
 }
 

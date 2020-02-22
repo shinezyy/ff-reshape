@@ -569,7 +569,7 @@ Allocation<Impl>::Allocation(O3CPU* cpu, DerivFFCPUParams *params)
           bankMask((unsigned) (1 << bankWidth) - 1),
           indexWidth((unsigned) ceilLog2(params->DQDepth)),
           indexMask((unsigned) ((1 << indexWidth) - 1) << bankWidth),
-          dqSize( params->DQDepth * params->numDQBanks),
+          dqSize( params->DQDepth * params->numDQBanks * params->numDQGroups),
           diewcStall(false)
 {
 

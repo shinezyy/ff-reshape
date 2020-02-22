@@ -108,4 +108,9 @@ struct hash<DQPointer>
 };
 }
 
+#define extptrp(x) (x)->valid, (x)->group, (x)->bank, (x)->index, (x)->op
+#define extptr(x) (x).valid, (x).group, (x).bank, (x).index, (x).op
+
+#define ptrfmt " (%i) (%i %i %i %i) "
+
 #endif //__FF_DQ_POINTER_HH__
