@@ -7,6 +7,7 @@
 #include "cpu/forwardflow/dataflow_queue.hh"
 #include "debug/DQ.hh"
 #include "debug/DQB.hh"  // DQ bank
+#include "debug/DQGOF.hh"
 #include "debug/DQOmega.hh"
 #include "debug/DQRead.hh"  // DQ read
 #include "debug/DQWake.hh"
@@ -558,9 +559,8 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
         pkt.dest = d;
         pkt.destBits = c->uint2Bits(d);
 
-        DPRINTF(DQWake, "Insert Fw Pointer (%i %i) (%i)-> (%i %i) (%i)\n",
-                pair.dest.bank, pair.dest.index, pair.dest.op,
-                pair.payload.bank, pair.payload.index, pair.payload.op);
+        DPRINTF(DQGOF, "Insert Fw Pointer" ptrfmt "->" ptrfmt "\n",
+                extptr(pair.dest), extptr(pair.payload));
 
         forwardPointerQueue[forwardPtrIndex].push_back(pkt);
 
@@ -876,6 +876,7 @@ void DataflowQueues<Impl>::readQueueHeads()
                 fw_pkt.valid = false;
             } else {
                 fw_pkt = forwardPointerQueue[i].front();
+                DPRINTF(DQGOF, "Read valid pair:" ptrfmt "\n", extptr(fw_pkt.payload.dest));
             }
 
             // read wakeup pointers

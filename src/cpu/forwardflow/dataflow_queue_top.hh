@@ -231,16 +231,29 @@ private:
     // insts
     std::array<DynInstPtr, Impl::MaxWidth> centerInstBuffer;
 
+    bool centerInstBufEmpty;
+
     unsigned insertIndex;
 
     void clearInstBuffer();
+
+    void clearInstIndex();
 
     DataflowQueues *dispatchingGroup;
 
     void dispatchInstsToGroup();
 
-    void switchDispatchingGroup(DynInstPtr &inst);
+    bool switchDispGroup{};
 
+    DynInstPtr switchOn{};
+
+    void schedSwitchDispatchingGroup(DynInstPtr &inst);
+
+    void switchDispatchingGroup();
+public:
+    bool isSwitching() { return switchDispGroup; };
+
+private:
     // FW pointers
     // dispatching.forward_pointers planA: W - to - W*G asymmetric topology
     // dispatching.forward_pointers planB: 1 - to - 2: working + last working + backward ring routing
@@ -294,6 +307,17 @@ public:
     void groupsRxFromPrevGroup();
 
     void groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues);
+
+    // update at the end of a cycle
+private:
+    void checkFlagsAndUpdate();
+
+    unsigned incIndex(unsigned u);
+
+    unsigned decIndex(unsigned u);
+
+public:
+    std::string name() const {return "DQTop";}
 };
 
 }

@@ -233,8 +233,8 @@ void FFDIEWC<Impl>::dispatch() {
         }
 
 //        DPRINTF(DIEWC, "dispatch reach 3\n");
-        if (dq.isFull() || dq.hasTooManyPendingInsts()) {
-            DPRINTF(DIEWC, "block because DQ is full\n");
+        if (dq.isFull() || dq.hasTooManyPendingInsts() || dq.isSwitching()) {
+            DPRINTF(DIEWC, "block because DQ is full or is switching\n");
             block();
             toAllocation->diewcUnblock = false;
             ++dqFullEvents;
