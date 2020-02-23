@@ -261,6 +261,8 @@ private:
 
     unsigned pairIndex;
 
+    void clearPairIndex();
+
     void clearPairBuffer();
 
     void dispatchPairsToGroup();
@@ -296,10 +298,12 @@ public:
 
     void endCycle();
 
-    std::vector<std::deque<WKPointer>> pseudoCenterWKPointerBuffer;
+private:
+    std::vector<std::deque<WKPointer> > pseudoCenterWKPointerBuffer;
 
-    std::vector<std::deque<WKPointer>> interGroupBuffer;
+    std::vector<std::deque<WKPointer> > interGroupBuffer;
 
+public:
     void groupsTxPointers();
 
     void groupsRxFromCenterBuffer();

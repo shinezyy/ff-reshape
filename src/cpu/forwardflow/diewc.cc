@@ -1225,7 +1225,7 @@ template<class Impl>
 FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         :
         cpu(cpu),
-        freeEntries{params->numDQBanks * params->DQDepth,
+        freeEntries{params->numDQBanks * params->DQDepth * params->numDQGroups,
                     params->LQEntries, params->SQEntries},
         serializeOnNextInst(false),
         dq(params),

@@ -15,6 +15,8 @@
 namespace FF
 {
 
+using namespace std;
+
 template<class Impl>
 DQTop<Impl>::DQTop(DerivFFCPUParams *params)
         :
@@ -46,6 +48,7 @@ DQTop<Impl>::DQTop(DerivFFCPUParams *params)
     }
     clearPairBuffer();
     clearInstBuffer();
+    printf("inter buffer size: %zu", interGroupBuffer.size());
 }
 
 template<class Impl>
@@ -58,6 +61,7 @@ void DQTop<Impl>::cycleStart()
         group->cycleStart();
     }
     clearInstIndex();
+    clearPairIndex();
 }
 
 template<class Impl>
@@ -959,24 +963,38 @@ void DQTop<Impl>::groupsTxPointers()
 template<class Impl>
 void DQTop<Impl>::groupsRxFromCenterBuffer()
 {
+    DPRINTF(DQGOF, "Rx from center buffer\n");
     groupsRxFromBuffers(pseudoCenterWKPointerBuffer);
 }
 
 template<class Impl>
 void DQTop<Impl>::groupsRxFromPrevGroup()
 {
+    DPRINTF(DQGOF, "Rx from inter-buffer, size: %llu\n", interGroupBuffer.size());
     groupsRxFromBuffers(interGroupBuffer);
 }
 
 template<class Impl>
 void DQTop<Impl>::groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues)
 {
+    unsigned x = 0;
+    DPRINTF(DQGOF, "reach -1 queues.size: %llu\n", queues.size());
+    for (auto &queue: queues) {
+        DPRINTF(DQGOF, "reach 0\n");
+        DPRINTF(DQGOF, "It has group %u\n", x++);
+        queue.empty();
+    }
     for (unsigned g = 0 ; g < c.nGroups; g++) {
+        DPRINTF(DQGOF, "Group %u\n", g);
         auto &queue = queues[g];
+        DPRINTF(DQGOF, "reach 1\n");
         while (!queue.empty()) {
+            DPRINTF(DQGOF, "reach 2\n");
             dqGroups[g]->receivePointers(queue.front());
+            DPRINTF(DQGOF, "reach 3\n");
             queue.pop_front();
         }
+        DPRINTF(DQGOF, "reach 4\n");
     }
 }
 
@@ -1026,6 +1044,12 @@ template<class Impl>
 void DQTop<Impl>::clearInstIndex()
 {
     insertIndex = 0;
+}
+
+template<class Impl>
+void DQTop<Impl>::clearPairIndex()
+{
+    pairIndex = 0;
 }
 
 }
