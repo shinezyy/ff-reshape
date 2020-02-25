@@ -112,6 +112,7 @@ if 'FFCPU' in env['CPU_MODELS']:
     DebugFlag('CrossBar')
     DebugFlag('CrossBarNarrow')
 
+    DebugFlag('DQGDL')
     DebugFlag('DQGOF')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',

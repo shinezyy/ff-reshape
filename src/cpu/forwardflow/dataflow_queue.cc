@@ -7,6 +7,7 @@
 #include "cpu/forwardflow/dataflow_queue.hh"
 #include "debug/DQ.hh"
 #include "debug/DQB.hh"  // DQ bank
+#include "debug/DQGDL.hh"
 #include "debug/DQGOF.hh"
 #include "debug/DQOmega.hh"
 #include "debug/DQRead.hh"  // DQ read
@@ -984,14 +985,14 @@ list<typename Impl::DynInstPtr>
 DataflowQueues<Impl>::getBankTails()
 {
     list<DynInstPtr> tails;
-    unsigned ptr_i = tail;
+    unsigned ptr_i = top->getTailPtr();
     for (unsigned count = 0; count < nBanks; count++) {
         auto ptr = c->uint2Pointer(ptr_i);
         DynInstPtr inst = dqs[ptr.bank]->readInstsFromBank(ptr);
         if (inst) {
-            DPRINTF(DQRead, "read inst[%llu] from DQ\n", inst->seqNum);
+            DPRINTF(DQRead || Debug::DQGDL, "read inst[%llu] from DQ\n", inst->seqNum);
         } else {
-            DPRINTF(DQRead, "inst@[%d] is null\n", ptr_i);
+            DPRINTF(DQRead || Debug::DQGDL, "inst@[%d] is null\n", ptr_i);
         }
         tails.push_back(inst);
         ptr_i = top->inc(ptr_i);
@@ -1098,7 +1099,7 @@ template<class Impl>
 void DataflowQueues<Impl>::alignTails()
 {
     for (unsigned count = 0; count < nBanks; count++) {
-        auto u = (count + tail) % queueSize;
+        auto u = (count + top->getTailPtr()) % queueSize;
         auto ptr = c->uint2Pointer(u);
         dqs[ptr.bank]->setTail(ptr.index);
     }

@@ -4,6 +4,7 @@
 
 #include "dataflow_queue_top.hh"
 #include "debug/DQ.hh"
+#include "debug/DQGDL.hh"
 #include "debug/DQGOF.hh"
 #include "debug/DQWake.hh"
 #include "debug/FFCommit.hh"
@@ -349,6 +350,7 @@ list<typename Impl::DynInstPtr>
 DQTop<Impl>::getBankTails()
 {
     unsigned tail_group_id = c.uint2Pointer(tail).group;
+    DPRINTF(DQGDL, "Reading tails from group %u\n", tail_group_id);
     DataflowQueues *tail_group = dqGroups[tail_group_id];
     // TODO: this will cause fragment, but is simple
     return tail_group->getBankTails();
