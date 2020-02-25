@@ -150,6 +150,7 @@ void DQTop<Impl>::advanceHead()
     }
 
     auto allocated = c.uint2Pointer(head);
+    DPRINTF(DQGOF, "Head = %u, newly allocated at" ptrfmt "\n", head, extptr(allocated));
     auto dead_inst = (*dqGroups[allocated.group])[allocated.bank]->readInstsFromBank(allocated);
     if (dead_inst) {
         DPRINTF(FFCommit, "Dead inst[%llu] found unexpectedly\n", dead_inst->seqNum);
@@ -874,7 +875,16 @@ DQTop<Impl>::readInst(const DQPointer &p) const
 {
     auto group = dqGroups[p.group];
     const auto &inst = group->readInst(p);
-    return inst;
+    if (!inst) {
+        for (unsigned d = 0; d < dispatchWidth; d++) {
+            if (centerInstBuffer[d] && centerInstBuffer[d]->dqPosition == p) {
+                return centerInstBuffer[d];
+            }
+        }
+        return nullptr;
+    } else {
+        return inst;
+    }
 }
 
 template<class Impl>
@@ -978,23 +988,17 @@ template<class Impl>
 void DQTop<Impl>::groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues)
 {
     unsigned x = 0;
-    DPRINTF(DQGOF, "reach -1 queues.size: %llu\n", queues.size());
     for (auto &queue: queues) {
-        DPRINTF(DQGOF, "reach 0\n");
         DPRINTF(DQGOF, "It has group %u\n", x++);
         queue.empty();
     }
     for (unsigned g = 0 ; g < c.nGroups; g++) {
         DPRINTF(DQGOF, "Group %u\n", g);
         auto &queue = queues[g];
-        DPRINTF(DQGOF, "reach 1\n");
         while (!queue.empty()) {
-            DPRINTF(DQGOF, "reach 2\n");
             dqGroups[g]->receivePointers(queue.front());
-            DPRINTF(DQGOF, "reach 3\n");
             queue.pop_front();
         }
-        DPRINTF(DQGOF, "reach 4\n");
     }
 }
 
