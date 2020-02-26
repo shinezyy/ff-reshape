@@ -166,6 +166,8 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params, unsigned gid, DQC
 template<class Impl>
 void DataflowQueues<Impl>::tick()
 {
+    tieWire();
+
     // fu preparation
     for (auto &wrapper: fuWrappers) {
         wrapper.startCycle();
@@ -905,8 +907,8 @@ template<class Impl>
 void DataflowQueues<Impl>::setTimeBuf(TimeBuffer<DQTopTs> *dqtb)
 {
     DQTS = dqtb;
-    fromLastCycle = &dqtb->getWire(-1)->groupTs[groupID];
-    toNextCycle = &dqtb->getWire(0)->groupTs[groupID];
+    topFromLast = dqtb->getWire(-1);
+    topToNext = dqtb->getWire(0);
 }
 
 template<class Impl>
@@ -1732,6 +1734,13 @@ void DataflowQueues<Impl>::setGroupID(unsigned id)
     std::ostringstream s;
     s << "DQGroup" << groupID;
     _name = s.str();
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::tieWire()
+{
+    fromLastCycle = &(topFromLast->groupTs[groupID]);
+    toNextCycle = &(topToNext->groupTs[groupID]);
 }
 
 

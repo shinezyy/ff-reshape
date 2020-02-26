@@ -90,7 +90,7 @@ struct FFCPUImpl
         MaxOps = 4
     };
     enum {
-        MaxGroups = 4,
+        MaxGroups = 8,
     };
     enum {
         MaxOpLatency = 20

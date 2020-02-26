@@ -86,8 +86,14 @@ private:
 
     TimeBuffer<DQTopTs> *DQTS;
 
+    typename TimeBuffer<DQTopTs>::wire topToNext;
+    typename TimeBuffer<DQTopTs>::wire topFromLast;
+
     DQGroupTs* toNextCycle;
     DQGroupTs* fromLastCycle;
+
+public:
+    void tieWire(); // executed every cycle for convenience
 
 //    std::vector<bool> wakenValids;
 //    std::vector<DynInstPtr> wakenInsts;
