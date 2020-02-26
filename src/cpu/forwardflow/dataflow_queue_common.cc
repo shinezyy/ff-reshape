@@ -24,20 +24,20 @@ DQPointer DQCommon::uint2Pointer(unsigned u) const
 {
     unsigned group_id = u / groupSize;
     unsigned group_offset = u % groupSize;
-    unsigned bank_id = group_offset / bankSize;
-    unsigned bank_offset = group_offset % bankSize; //index
-    return DQPointer{true, group_id, bank_id, bank_offset, 0};
+    unsigned index = group_offset / nBanks;
+    unsigned bank_id = group_offset % nBanks; //index
+    return DQPointer{true, group_id, bank_id, index, 0};
 
 }
 
 unsigned DQCommon::pointer2uint(const DQPointer &ptr) const
 {
-    return ptr.group * groupSize + ptr.bank * bankSize + ptr.index;
+    return ptr.group * groupSize + ptr.bank + ptr.index * nBanks;
 }
 
 unsigned DQCommon::pointer2uint(const WKPointer &ptr) const
 {
-    return ptr.group * groupSize + ptr.bank * bankSize + ptr.index;
+    return ptr.group * groupSize + ptr.bank + ptr.index * nBanks;
 }
 
 DQCommon::DQCommon(DerivFFCPUParams *params)
