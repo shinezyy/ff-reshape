@@ -5,6 +5,7 @@
 #include "dataflow_queue_bank.hh"
 #include "debug/DQ.hh"
 #include "debug/DQGDL.hh"
+#include "debug/DQV2.hh"
 #include "debug/DQWake.hh"
 #include "debug/DQWrite.hh"
 #include "debug/FFExec.hh"
@@ -184,14 +185,13 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         DPRINTF(DQWake, "Select inputPointers\n");
     }
 
-    std::array<bool, 4> need_pending_ptr;
-    std::fill(need_pending_ptr.begin(), need_pending_ptr.end(), false);
+    std::array<bool, 4> need_pending_ptr{};
 
     for (unsigned op = 0; op < nOps; op++) {
         auto &ptr = pointers[op];
 
         if (!ptr.valid) {
-            DPRINTF(DQ, "skip pointer: (%i) (%i %i) (%i)\n",
+            DPRINTF(DQV2, "skip pointer: (%i) (%i %i) (%i)\n",
                     ptr.valid, ptr.bank, ptr.index, ptr.op);
             continue;
         }

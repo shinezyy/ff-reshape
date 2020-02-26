@@ -10,7 +10,9 @@
 #include "debug/DQGDL.hh"
 #include "debug/DQGOF.hh"
 #include "debug/DQOmega.hh"
+#include "debug/DQPair.hh"  // DQ read
 #include "debug/DQRead.hh"  // DQ read
+#include "debug/DQV2.hh"
 #include "debug/DQWake.hh"
 #include "debug/DQWakeV1.hh"
 #include "debug/DQWrite.hh"  // DQ write
@@ -193,7 +195,7 @@ void DataflowQueues<Impl>::tick()
             std::tie(fu_requests[i].dest, fu_requests[i].destBits) =
                 coordinateFU(fromLastCycle->insts[i], i);
         } else {
-            DPRINTF(DQ || Debug::DQWake, "From last cycle[%d] invalid\n", i);
+            DPRINTF(DQV2, "From last cycle[%d] invalid\n", i);
         }
     }
     shuffleNeighbors();
@@ -205,7 +207,7 @@ void DataflowQueues<Impl>::tick()
     //      to wake up the child one cycle before its value arrived
 
     DPRINTF(DQ, "FU selecting ready insts from banks\n");
-    DPRINTF(DQWake, "FU req packets:\n");
+    DPRINTF(DQV2, "FU req packets:\n");
     dumpInstPackets(fu_req_ptrs);
     fu_granted_ptrs = bankFUXBar.select(fu_req_ptrs, &nullInstPkt, nFUGroups);
     for (unsigned b = 0; b < nBanks; b++) {
@@ -243,7 +245,7 @@ void DataflowQueues<Impl>::tick()
         }
     }
 
-    DPRINTF(DQ, "Tell dq banks who was granted\n");
+    // DPRINTF(DQ, "Tell dq banks who was granted\n");
     // mark it for banks
     for (unsigned b = 0; b < nBanks; b++) {
         dqs[b]->countUpPendingInst();
@@ -253,12 +255,12 @@ void DataflowQueues<Impl>::tick()
     //  whether there's an inst to be waken up
     //  whether there are multiple instruction to wake up, if so
     //      buffer it and reject further requests in following cycles
-    DPRINTF(DQ, "Bank check pending\n");
+    // DPRINTF(DQ, "Bank check pending\n");
     for (auto bank: dqs) {
         bank->checkPending();
     }
 
-    DPRINTF(DQ, "Selecting wakeup pointers from requests\n");
+    // DPRINTF(DQ, "Selecting wakeup pointers from requests\n");
     // For each bank: check status: whether I can consume from queue this cycle?
     // record the state
     genFUValidMask();
@@ -389,7 +391,7 @@ void DataflowQueues<Impl>::tick()
         for (unsigned op = 0; op < nOps; op++) {
             const auto &ptr = forward_ptrs[op];
             // dqs[b]->dumpOutPointers();
-            DPRINTF(DQ, "Putting wk ptr (%i) (%i %i) (%i) to time buffer\n",
+            DPRINTF(DQV2, "Putting wk ptr (%i) (%i %i) (%i) to time buffer\n",
                     ptr.valid, ptr.bank, ptr.index, ptr.op);
             toNextCycle->pointers[b * nOps + op] = forward_ptrs[op];
         }
@@ -918,10 +920,10 @@ void DataflowQueues<Impl>::dumpInstPackets(vector<DQPacket<DynInstPtr> *> &v)
 {
     for (auto& pkt: v) {
         assert(pkt);
-        DPRINTF(DQWake, "&pkt: %p, ", pkt);
-        DPRINTFR(DQWake, "v: %d, dest: %lu, src: %d,",
+        DPRINTF(DQV2, "&pkt: %p, ", pkt);
+        DPRINTFR(DQV2, "v: %d, dest: %lu, src: %d,",
                 pkt->valid, pkt->destBits.to_ulong(), pkt->source);
-        DPRINTFR(DQWake, " inst: %p\n", pkt->payload);
+        DPRINTFR(DQV2, " inst: %p\n", pkt->payload);
     }
 }
 
@@ -930,10 +932,10 @@ void DataflowQueues<Impl>::dumpPairPackets(vector<DQPacket<PointerPair> *> &v)
 {
     for (auto& pkt: v) {
         assert(pkt);
-        DPRINTF(DQOmega, "&pkt: %p, ", pkt);
-        DPRINTFR(DQOmega, "v: %d, dest: %lu, src: %d,",
+        DPRINTF(DQV2, "&pkt: %p, ", pkt);
+        DPRINTFR(DQV2, "v: %d, dest: %lu, src: %d,",
                  pkt->valid, pkt->destBits.to_ulong(), pkt->source);
-        DPRINTFR(DQOmega, " pair dest:(%d) (%d %d) (%d) \n",
+        DPRINTFR(DQV2, " pair dest:(%d) (%d %d) (%d) \n",
                 pkt->payload.dest.valid, pkt->payload.dest.bank,
                 pkt->payload.dest.index, pkt->payload.dest.op);
     }
@@ -1019,21 +1021,21 @@ unsigned DataflowQueues<Impl>::numInFlightFw()
 template<class Impl>
 void DataflowQueues<Impl>::digestForwardPointer()
 {
-    DPRINTF(DQ, "Pair packets before selection\n");
+    DPRINTF(DQV2, "Pair packets before selection\n");
     dumpPairPackets(insert_req_ptrs);
+
     insert_granted_ptrs = pointerQueueBankXBar.select(insert_req_ptrs, &nullFWPkt);
 
-    DPRINTF(DQ, "Selected pairs:\n");
+    DPRINTF(DQV2, "Selected pairs:\n");
     dumpPairPackets(insert_granted_ptrs);
 
-    DPRINTF(DQ, "Pair packets after selection\n");
+    DPRINTF(DQV2, "Pair packets after selection\n");
     dumpPairPackets(insert_req_ptrs);
 
     for (auto &ptr : insert_granted_ptrs) {
         if (ptr->valid) {
-            DPRINTF(DQ, "pair[%d] (pointer(%d) (%d %d) (%d)) granted\n",
-                    ptr->source, ptr->payload.dest.valid,
-                    ptr->payload.dest.bank, ptr->payload.dest.index, ptr->payload.dest.op);
+            DPRINTF(DQPair, "pair[%d] pointer" ptrfmt " granted\n",
+                    ptr->source, extptr(ptr->payload.dest));
         }
     }
     for (unsigned b = 0; b < nBanks; b++) {
@@ -1049,8 +1051,8 @@ void DataflowQueues<Impl>::digestForwardPointer()
             DynInstPtr inst = dqs[pair.dest.bank]->readInstsFromBank(pair.dest);
 
             if (inst) {
-                DPRINTF(DQ, "Insert fw pointer (%d %d) (%d) after inst reached\n",
-                        pair.dest.bank, pair.dest.index, pair.dest.op);
+                DPRINTF(DQPair, "Insert fw pointer" ptrfmt "after inst reached\n",
+                        extptr(pair.dest));
                 markFwPointers(inst->pointers, pair, inst);
 
                 if (op == 0 && inst->destReforward && inst->isExecuted()) {
@@ -1063,8 +1065,8 @@ void DataflowQueues<Impl>::digestForwardPointer()
                 }
 
             } else {
-                DPRINTF(DQ, "Insert fw pointer (%d %d) (%d) before inst reached\n",
-                        pair.dest.bank, pair.dest.index, pair.dest.op);
+                DPRINTF(DQPair, "Insert fw pointer" ptrfmt "before inst reached\n",
+                        extptr(pair.dest));
                 auto &pointers =
                         dqs[pair.dest.bank]->prematureFwPointers[pair.dest.index];
                 markFwPointers(pointers, pair, inst);
@@ -1076,7 +1078,6 @@ void DataflowQueues<Impl>::digestForwardPointer()
             }
             forwardPointerQueue[pkt->source].pop_front();
             numPendingFwPointers--;
-
             // handle the special case that inst executed before pointer reached
         }
     }
@@ -1093,8 +1094,8 @@ void DataflowQueues<Impl>::extraWakeup(const WKPointer &wk)
 {
     auto q = allocateWakeQ();
     DPRINTF(DQWake||Debug::RSProbe2,
-            "Push Wake (extra) Ptr (%i %i) (%i) to temp wakequeue[%u]\n",
-            wk.bank, wk.index, wk.op, q);
+            "Push (extra) wakeup pointer" ptrfmt "to temp wakequeue[%u]\n",
+            extptr(wk), q);
     tempWakeQueues[q].push_back(wk);
     DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 }
@@ -1139,8 +1140,7 @@ void DataflowQueues<Impl>::dumpQueues()
             printf("Q[%i]: ", b*nOps+op);
             auto &q = wakeQueues[b*nOps + op];
             for (const auto &p: q) {
-                printf("(%i) (%i %i) (%i), ",
-                        p.valid, p.bank, p.index, p.op);
+                printf(ptrfmt, extptr(p));
             }
             printf("\n");
         }
@@ -1151,9 +1151,7 @@ void DataflowQueues<Impl>::dumpQueues()
             printf("Q[%i]: ", b*nOps+op);
             auto &q = forwardPointerQueue[b*nOps + op];
             for (const auto &p: q) {
-                printf("(%i) (%i %i) (%i), ",
-                        p.payload.dest.valid, p.payload.dest.bank,
-                        p.payload.dest.index, p.payload.dest.op);
+                printf(ptrfmt, extptr(p.payload.dest));
             }
             printf("\n");
         }
@@ -1425,7 +1423,7 @@ DataflowQueues<Impl>::mergeExtraWKPointers()
     DPRINTF(DQWake || RSProbe1,
             "After cycle-end push, numPendingWakeups = %u\n", numPendingWakeups);
     dumpWkQSize();
-    if (Debug::RSProbe2) {
+    if (Debug::DQV2 || Debug::RSProbe2) {
         dumpWkQ();
     }
 }
@@ -1436,7 +1434,7 @@ DataflowQueues<Impl>::dumpWkQSize()
 {
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
-            DPRINTFR(DQ || RSProbe1, "wake queue %i.%i size: %llu\n",
+            DPRINTFR(DQV2 || RSProbe1, "wake queue %i.%i size: %llu\n",
                     b, op, wakeQueues[b*nOps + op].size());
         }
     }
