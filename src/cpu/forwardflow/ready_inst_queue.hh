@@ -27,7 +27,7 @@ class ReadyInstsQueue{
 public:
     typedef typename Impl::DynInstPtr DynInstPtr;
 
-    ReadyInstsQueue(DerivFFCPUParams *params);
+    explicit ReadyInstsQueue(DerivFFCPUParams *params, const std::string& parent_name);
 
     void squash(InstSeqNum inst_seq);
 
@@ -43,10 +43,11 @@ public:
 
     bool isFull(FF::OpGroups group);
 
-    unsigned targetGroup;
-
     std::vector<std::__cxx11::list<DynInstPtr> > preScheduledQueues;
 
+    std::string name() const { return _name; }
+private:
+    std::string _name;
 };
 
 }

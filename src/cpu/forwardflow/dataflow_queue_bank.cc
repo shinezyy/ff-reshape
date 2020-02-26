@@ -4,6 +4,7 @@
 
 #include "dataflow_queue_bank.hh"
 #include "debug/DQ.hh"
+#include "debug/DQGDL.hh"
 #include "debug/DQWake.hh"
 #include "debug/DQWrite.hh"
 #include "debug/FFExec.hh"
@@ -14,6 +15,38 @@
 namespace FF {
 
 using boost::dynamic_bitset;
+
+template<class Impl>
+DataflowQueueBank<Impl>::DataflowQueueBank(
+        DerivFFCPUParams *params, unsigned bank_id, DQ *dq)
+        : dq(dq),
+          nOps(params->numOperands),
+          depth(params->DQDepth),
+          nullDQPointer(DQPointer{false, 0, 0, 0, 0}),
+          instArray(depth, nullptr),
+          nearlyWakeup(dynamic_bitset<>(depth)),
+          pendingWakeupPointers(nOps),
+          localWKPointers(nOps),
+          anyPending(false),
+          inputPointers(nOps),
+          outputPointers(nOps, nullDQPointer),
+          tail(0),
+          readyQueueSize(params->readyQueueSize),
+          prematureFwPointers(depth)
+{
+    for (auto &line: prematureFwPointers) {
+        for (auto &ptr: line) {
+            ptr.valid = false;
+        }
+    }
+    for (auto &ptr: localWKPointers) {
+        ptr.valid = false;
+    }
+    bankID = bank_id;
+    std::ostringstream s;
+    s << "DQBank" << bankID;
+    _name = dq->name() + '.' + s.str();
+}
 
 template<class Impl>
 void
@@ -542,36 +575,7 @@ void DataflowQueueBank<Impl>::checkPending()
 {
 }
 
-template<class Impl>
-DataflowQueueBank<Impl>::DataflowQueueBank(
-        DerivFFCPUParams *params, unsigned bankID, DQ *dq)
-        : dq(dq),
-          nOps(params->numOperands),
-          depth(params->DQDepth),
-          nullDQPointer(DQPointer{false, 0, 0, 0, 0}),
-          instArray(depth, nullptr),
-          nearlyWakeup(dynamic_bitset<>(depth)),
-          pendingWakeupPointers(nOps),
-          localWKPointers(nOps),
-          anyPending(false),
-          inputPointers(nOps),
-          outputPointers(nOps, nullDQPointer),
-          tail(0),
-          readyQueueSize(params->readyQueueSize),
-          prematureFwPointers(depth)
-{
-    for (auto &line: prematureFwPointers) {
-        for (auto &ptr: line) {
-            ptr.valid = false;
-        }
-    }
-    for (auto &ptr: localWKPointers) {
-        ptr.valid = false;
-    }
-    std::ostringstream s;
-    s << "DQBank" << bankID;
-    _name = dq->name() + '.' + s.str();
-}
+
 
 template<class Impl>
 typename DataflowQueueBank<Impl>::DynInstPtr
@@ -627,9 +631,7 @@ void DataflowQueueBank<Impl>::checkReadiness(DQPointer pointer)
         directReady++;
         nearlyWakeup.set(index);
         readyQueue.push_back(pointer);
-        DPRINTF(DQWake,
-                "Push (%i) (%i %i) (%i) into ready queue\n",
-                pointer.valid, pointer.bank, pointer.index, pointer.op);
+        DPRINTF(DQWake, "Push" ptrfmt "into ready queue\n", extptr(pointer));
     }
     if (busy_count == 1) {
         DPRINTF(DQWake, "inst [%llu] becomes nearly waken up\n", inst->seqNum);
@@ -651,7 +653,7 @@ template<class Impl>
 void DataflowQueueBank<Impl>::setTail(unsigned t)
 {
     tail = t;
-    DPRINTF(DQWrite, "Tail set to %u\n", tail);
+    DPRINTF(DQWrite||Debug::DQGDL, "Tail set to %u\n", tail);
 }
 
 template<class Impl>
@@ -678,7 +680,8 @@ void DataflowQueueBank<Impl>::clearPending(DynInstPtr &inst)
         }
     }
     if (!inst->isSquashed()) {
-        panic("Clearing non-exsting inst[%lu]", inst->seqNum);
+        panic("Clearing non-existing inst[%lu] in DQG%i.Bank%i",
+                inst->seqNum, dq->groupID, bankID);
     }
 }
 

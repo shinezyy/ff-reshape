@@ -5,6 +5,7 @@
 #include "dataflow_queue_top.hh"
 #include "debug/DQ.hh"
 #include "debug/DQGDL.hh"
+#include "debug/DQGDisp.hh"
 #include "debug/DQGOF.hh"
 #include "debug/DQWake.hh"
 #include "debug/FFCommit.hh"
@@ -787,13 +788,18 @@ void DQTop<Impl>::dispatchInstsToGroup()
     for (unsigned i = 0; i < dispatchWidth; i++) {
         DynInstPtr &inst = centerInstBuffer[i];
         if (!inst) {
+            DPRINTF(DQGDisp,
+                    "Null inst found in centerInstBuffer[%u]\n", i);
             continue;
         }
         if (inst->dqPosition.group != dispatchingGroup->getGroupID()) {
             schedSwitchDispatchingGroup(inst);
+            DPRINTF(DQGDisp, "Switch dispatching group, break this cycle\n");
             break;
         }
         auto bank = inst->dqPosition.bank;
+        DPRINTF(DQGDisp,
+                "Writing Inst[%llu] to" ptrfmt "\n", inst->seqNum, extptr(inst->dqPosition));
         dispatchingGroup->dqs[bank]->writeInstsToBank(inst->dqPosition, inst);
         dispatchingGroup->dqs[bank]->checkReadiness(inst->dqPosition);
 

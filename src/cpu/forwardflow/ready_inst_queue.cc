@@ -9,9 +9,10 @@ namespace FF
 {
 
 template<class Impl>
-ReadyInstsQueue<Impl>::ReadyInstsQueue(DerivFFCPUParams *params)
+ReadyInstsQueue<Impl>::ReadyInstsQueue(DerivFFCPUParams *params, const std::string& parent_name)
         :   maxReadyQueueSize(params->MaxReadyQueueSize),
-            preScheduledQueues(nOpGroups)
+            preScheduledQueues(nOpGroups),
+            _name(parent_name + ".ReadyInstQueue")
 {
 }
 

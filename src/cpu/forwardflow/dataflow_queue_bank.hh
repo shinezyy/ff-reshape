@@ -79,7 +79,7 @@ public:
 
     void setTail(unsigned t);
 
-    explicit DataflowQueueBank(DerivFFCPUParams *params, unsigned bankID, DQ *dq);
+    explicit DataflowQueueBank(DerivFFCPUParams *params, unsigned bank_id, DQ *dq);
 
     bool canServeNew();
 
@@ -106,6 +106,8 @@ public:
     DynInstPtr tryWakeTail();
 
     DynInstPtr tryWakeDirect();
+
+    unsigned bankID;
 
     std::string _name;
 

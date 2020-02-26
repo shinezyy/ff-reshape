@@ -13,6 +13,7 @@
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
 #include "debug/FFCommit.hh"
+#include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FanoutLog.hh"
 #include "debug/IEW.hh"
@@ -1917,7 +1918,7 @@ template<class Impl>
 void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
 {
     assert(inst);
-    DPRINTF(DIEWC||Debug::RSProbe1, "Executing inst[%lu] %s\n", inst->seqNum,
+    DPRINTF(DIEWC||Debug::RSProbe1 || Debug::FFExec, "Executing inst[%lu] %s\n", inst->seqNum,
             inst->staticInst->disassemble(inst->instAddr()));
     DPRINTF(ValueExec, "Executing inst[%lu] ", inst->seqNum);
     if (Debug::ValueExec) {

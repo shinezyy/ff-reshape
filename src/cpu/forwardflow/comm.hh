@@ -492,8 +492,5 @@ struct DQTopTS {
     DQGroupTS<Impl> groupTs[Impl::MaxGroups];
 };
 
-#define extptrp(x) (x)->valid, (x)->group, (x)->bank, (x)->index, (x)->op
-#define extptr(x) (x).valid, (x).group, (x).bank, (x).index, (x).op
-
 }
 #endif //__CPU_FF_COMM_HH__

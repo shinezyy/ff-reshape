@@ -135,7 +135,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params, unsigned gid, DQC
 
 
         dqs.emplace_back(new XDataflowQueueBank(params, b, this));
-        readyInstsQueues.emplace_back(new XReadyInstsQueue(params));
+        readyInstsQueues.push_back(new XReadyInstsQueue(params, name()));
         dqs[b]->readyInstsQueue = readyInstsQueues[b];
         dqs[b]->setTop(top);
     }
@@ -184,16 +184,16 @@ void DataflowQueues<Impl>::tick()
     // For each bank
     //  get ready instructions produced by last tick from time struct
     for (unsigned i = 0; i < nBanks*OpGroups::nOpGroups; i++) {
-
         fu_requests[i].valid = fromLastCycle->instValids[i];
         if (fromLastCycle->instValids[i]) {
-
-            DPRINTF(DQ, "inst[%d] valid, &inst: %lu\n",
+            DPRINTF(DQ || Debug::DQWake, "inst[%d] valid, &inst: %lu\n",
                     i, fromLastCycle->insts[i]->seqNum);
 
             fu_requests[i].payload = fromLastCycle->insts[i];
             std::tie(fu_requests[i].dest, fu_requests[i].destBits) =
                 coordinateFU(fromLastCycle->insts[i], i);
+        } else {
+            DPRINTF(DQ || Debug::DQWake, "From last cycle[%d] invalid\n", i);
         }
     }
     shuffleNeighbors();
@@ -220,7 +220,8 @@ void DataflowQueues<Impl>::tick()
         unsigned source_bank = fu_granted_ptrs[b]->source/2;
 
         if (inst->isSquashed()) {
-            DPRINTF(FFSquash, "Skip squashed inst[%llu]\n", inst->seqNum);
+            DPRINTF(FFSquash, "Skip squashed inst[%llu] from bank[%u] \n",
+                    inst->seqNum, source_bank);
             dqs[source_bank]->clearPending(inst);
 
         } else {
@@ -230,7 +231,8 @@ void DataflowQueues<Impl>::tick()
                 oldWaitYoung++;
             }
             if (can_accept) {
-                DPRINTF(DQWake, "Inst[%d] accepted\n", inst->seqNum);
+                DPRINTF(DQWake, "Inst[%lli] from bank[%u] accepted\n",
+                        inst->seqNum, source_bank);
                 fuWrappers[b].consume(inst);
                 dqs[source_bank]->clearPending(inst);
 
@@ -1103,6 +1105,7 @@ void DataflowQueues<Impl>::alignTails()
     for (unsigned count = 0; count < nBanks; count++) {
         auto u = (count + top->getTailPtr()) % queueSize;
         auto ptr = c->uint2Pointer(u);
+        DPRINTF(DQGDL, "Aligning ptr:" ptrfmt "\n", extptr(ptr));
         dqs[ptr.bank]->setTail(ptr.index);
     }
 }
