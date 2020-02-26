@@ -308,16 +308,15 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
         assert(!dead_inst);
     }
 
-    // insert must be decentralized
-    centerInstBuffer[insertIndex++] = inst;
-
+    // update tail before insertion to avoid ``readInst'' read newly inserted inst
     if (isEmpty() && centerInstBufEmpty) {
         DPRINTF(DQGOF, "centerInstBufEmpty: %i\n", centerInstBufEmpty);
         tail = c.pointer2uint(allocated); //keep them together
-        DPRINTF(DQ, "tail becomes %u to keep with head\n", tail);
+        DPRINTF(DQ || Debug::DQGDL, "tail becomes %u to keep with head\n", tail);
         jumped = true;
-        alignTails();
+        dispatchingGroup->alignTails();
     }
+    centerInstBuffer[insertIndex++] = inst;
     centerInstBufEmpty = false;
 
     inst->setInDQ();
