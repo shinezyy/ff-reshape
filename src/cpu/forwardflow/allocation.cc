@@ -8,6 +8,7 @@
 #include "cpu/forwardflow/comm.hh"
 #include "debug/Activity.hh"
 #include "debug/DAllocation.hh"
+#include "debug/FFDisp.hh"
 #include "debug/FFSquash.hh"
 #include "params/DerivFFCPU.hh"
 
@@ -199,20 +200,22 @@ bool Allocation<Impl>::checkStall() {
 template<class Impl>
 void Allocation<Impl>::allocate(bool &status_change) {
     if (allocationStatus == Blocked) {
+        DPRINTF(DAllocation || Debug::FFDisp, "Allocation Blocked\n");
         ++allocationBlockCycles;
     } else if (allocationStatus == Squashing) {
+        DPRINTF(DAllocation || Debug::FFDisp, "Allocation Squashing\n");
         ++allocationSquashCycles;
     } else if (allocationStatus == SerializeStall) {
         ++allocationSerializeStallCycles;
 
         if (resumeSerialize) {
             resumeSerialize = false;
-            DPRINTF(DAllocation, "Allocation block due to resumeSerialize\n");
+            DPRINTF(DAllocation || Debug::FFDisp, "Allocation block due to resumeSerialize\n");
             block();
             toDecode->renameUnblock[DummyTid] = false;
         } else if (allocationStatus == Unblocking) {
             if (resumeUnblocking) {
-                DPRINTF(DAllocation, "Allocation block due to resumeUb\n");
+                DPRINTF(DAllocation || Debug::FFDisp, "Allocation block due to resumeUb\n");
                 block();
                 resumeUnblocking = false;
                 toDecode->renameUnblock[DummyTid] = false;
@@ -221,11 +224,11 @@ void Allocation<Impl>::allocate(bool &status_change) {
     }
 
     if (allocationStatus == Running || allocationStatus == Idle) {
-        DPRINTF(DAllocation, "Allocate on Running\n");
+        DPRINTF(DAllocation || Debug::FFDisp, "Allocate on Running\n");
         allocateInsts();
 
     } else if (allocationStatus == Unblocking) {
-        DPRINTF(DAllocation, "Allocate on Unblocking\n");
+        DPRINTF(DAllocation || Debug::FFDisp, "Allocate on Unblocking\n");
         allocateInsts();
 
         if (validInsts()) {
@@ -304,8 +307,8 @@ void Allocation<Impl>::allocateInsts() {
         }
 
         allocateDQEntry();
-        DPRINTF(DAllocation, "Inst[%d] allocated @ (%d %d)\n",
-                inst->seqNum, inst->dqPosition.bank, inst->dqPosition.index);
+//        DPRINTF(DAllocation, "Inst[%d] allocated @ (%d %d)\n",
+//                inst->seqNum, inst->dqPosition.bank, inst->dqPosition.index);
 
         if (inst->isLoad()) {
             loadsInProgress++;
@@ -333,7 +336,7 @@ void Allocation<Impl>::allocateInsts() {
     if (toDIEWCIndex) {
         wroteToTimeBuffer = true;
     }
-    DPRINTF(DAllocation, "to DIEWC index: %d\n", toDIEWCIndex);
+    DPRINTF(DAllocation || Debug::FFDisp, "to DIEWC index: %d\n", toDIEWCIndex);
 
     if (inst_available) {
         blockThisCycle = true;

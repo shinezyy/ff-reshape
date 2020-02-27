@@ -117,6 +117,7 @@ if 'FFCPU' in env['CPU_MODELS']:
     DebugFlag('DQGOF')
     DebugFlag('DQV2')
     DebugFlag('DQPair')
+    DebugFlag('FFDisp')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',

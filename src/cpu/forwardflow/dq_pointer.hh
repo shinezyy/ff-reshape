@@ -111,6 +111,6 @@ struct hash<DQPointer>
 #define extptrp(x) (x)->valid, (x)->group, (x)->index, (x)->bank, (x)->op
 #define extptr(x) (x).valid, (x).group, (x).index, (x).bank, (x).op
 
-#define ptrfmt " (%i) (%i %i B%i O%i) "
+#define ptrfmt " (%i) (%i %i B%i X%i) "
 
 #endif //__FF_DQ_POINTER_HH__

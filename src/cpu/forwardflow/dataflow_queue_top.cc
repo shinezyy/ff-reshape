@@ -301,7 +301,7 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
     DQPointer allocated = inst->dqPosition;
 
     // this is for checking; we do not need to decentralize it
-    DPRINTF(DQ, "allocated @" ptrfmt "\n", extptr(allocated));
+    DPRINTF(DQWake || Debug::DQGDisp, "Inst[%lli] allocated @" ptrfmt "\n", inst->seqNum, extptr(allocated));
     auto group = dqGroups[allocated.group];
     auto dead_inst = (*group)[allocated.bank]->readInstsFromBank(allocated);
     if (dead_inst) {

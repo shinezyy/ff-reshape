@@ -13,6 +13,7 @@
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
 #include "debug/FFCommit.hh"
+#include "debug/FFDisp.hh"
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FanoutLog.hh"
@@ -149,6 +150,7 @@ void FFDIEWC<Impl>::checkSignalsAndUpdate() {
         squashInFlight();
         if (dispatchStatus == Blocked ||
             dispatchStatus == Unblocking) {
+            DPRINTF(DIEWC || Debug::FFDisp, "Switch to Squashing\n");
             toAllocation->diewcUnblock = true;
             wroteToTimeBuffer = true;
         }
@@ -163,22 +165,24 @@ void FFDIEWC<Impl>::checkSignalsAndUpdate() {
     }
 
     if (dqSquashing) {
+        DPRINTF(DIEWC || Debug::FFDisp, "Switch to Squashing\n");
         dispatchStatus = Squashing;
         clearAllocatedInsts();
         wroteToTimeBuffer = true;
     }
     if (checkStall()){
-        DPRINTF(DIEWC, "block after checkStall\n");
+        DPRINTF(DIEWC || Debug::FFDisp, "DIEWC blocked after checkStall\n");
         block();
         return;
     }
     if (dispatchStatus == Blocked) {
-        DPRINTF(DIEWC, "Switch to unblocking after blocked\n");
+        DPRINTF(DIEWC || Debug::FFDisp, "Switch to unblocking after blocked\n");
         dispatchStatus = Unblocking;
         unblock();
         return;
     }
     if (dispatchStatus == Squashing) {
+        DPRINTF(DIEWC || Debug::FFDisp, "Switch to Running\n");
         dispatchStatus = Running;
         return;
     }
@@ -250,7 +254,7 @@ void FFDIEWC<Impl>::dispatch() {
             } else {
                 ++sqFullEvents;
             }
-            DPRINTF(DIEWC, "block because LSQ is full\n");
+            DPRINTF(DIEWC || Debug::FFDisp, "DIEWC blocked because LSQ is full\n");
             block();
             toAllocation->diewcUnblock = false;
             break;
@@ -405,7 +409,7 @@ void FFDIEWC<Impl>::dispatch() {
 
 //    DPRINTF(DIEWC, "dispatch reach 8\n");
     if (!to_dispatch.empty()) {
-        DPRINTF(DIEWC, "block because instructions are not used up\n");
+        DPRINTF(DIEWC || Debug::FFDisp, "DIEWC blocked because instructions are not used up\n");
         block();
         toAllocation->diewcUnblock = false;
     }
@@ -418,6 +422,7 @@ void FFDIEWC<Impl>::dispatch() {
 
 template<class Impl>
 void FFDIEWC<Impl>::forward() {
+    DPRINTF(FFDisp, "Inserting pointers to center buffer\n");
     while (!pointerPackets.empty()) {
         // DQ is responsible for the rest stuffs
         dq.insertForwardPointer(pointerPackets.front());
@@ -489,9 +494,9 @@ void FFDIEWC<Impl>::block() {
         wroteToTimeBuffer = true;
     }
 
-    DPRINTF(DIEWC, "skidInsert in func block\n");
+    DPRINTF(DIEWC || Debug::FFDisp, "skidInsert in func block\n");
     skidInsert();
-    DPRINTF(DIEWC, "Switch to Blocked in block()\n");
+    DPRINTF(DIEWC || Debug::FFDisp, "Switch to Blocked in block()\n");
     dispatchStatus = Blocked;
 }
 
@@ -588,12 +593,12 @@ FFDIEWC<Impl>::
                || head_inst->isMemBarrier() || head_inst->isWriteBarrier() ||
                (head_inst->isLoad() && head_inst->strictlyOrdered())) {
 
-            DPRINTF(Commit, "Encountered a barrier or non-speculative "
+            DPRINTF(Commit || Debug::FFCommit, "Encountered a barrier or non-speculative "
                     "instruction [sn:%lli] at the head of the ROB, PC %s.\n",
                     head_inst->seqNum, head_inst->pcState());
 
             if (inst_num > 0 || ldstQueue.hasStoresToWB()) {
-                DPRINTF(Commit, "Waiting for all stores to writeback. inst_num: %i, "
+                DPRINTF(Commit || Debug::FFCommit, "Waiting for all stores to writeback. inst_num: %i, "
                         "has store to wb: %i\n", inst_num, ldstQueue.hasStoresToWB());
                 return false;
             }
@@ -605,7 +610,7 @@ FFDIEWC<Impl>::
             head_inst->clearCanCommit();
 
             if (head_inst->isLoad() && head_inst->strictlyOrdered()) {
-                DPRINTF(Commit, "[sn:%lli]: Strictly ordered load, PC %s.\n",
+                DPRINTF(Commit || Debug::FFCommit, "[sn:%lli]: Strictly ordered load, PC %s.\n",
                         head_inst->seqNum, head_inst->pcState());
                 toNextCycle->diewc2diewc.strictlyOrdered = true;
                 toNextCycle->diewc2diewc.strictlyOrderedLoad = head_inst;
@@ -613,7 +618,7 @@ FFDIEWC<Impl>::
                 ++commitNonSpecStalls;
             }
         } else {
-            DPRINTF(Commit, "Normal inst[%d] has not been executed yet\n",
+            DPRINTF(Commit || Debug::FFCommit, "Normal inst[%d] has not been executed yet\n",
                     head_inst->seqNum);
         }
         return false;
@@ -680,11 +685,11 @@ FFDIEWC<Impl>::
     }
 
     if (inst_fault != NoFault) {
-        DPRINTF(Commit, "Inst [sn:%lli] PC %s has a fault\n",
+        DPRINTF(Commit || Debug::FFCommit, "Inst [sn:%lli] PC %s has a fault\n",
                 head_inst->seqNum, head_inst->pcState());
 
         if (ldstQueue.hasStoresToWB() || inst_num > 0) {
-            DPRINTF(Commit, "Stores outstanding, fault must wait.\n");
+            DPRINTF(Commit || Debug::FFCommit, "Stores outstanding, fault must wait.\n");
             return false;
         }
 
@@ -741,7 +746,7 @@ FFDIEWC<Impl>::
     if (FullSystem) {
         panic("FF does not consider FullSystem yet\n");
     }
-    DPRINTF(Commit, "Committing instruction with [sn:%lli] PC %s @DQ(%d %d)\n",
+    DPRINTF(Commit || Debug::FFCommit, "Committing instruction with [sn:%lli] PC %s @DQ(%d %d)\n",
             head_inst->seqNum, head_inst->pcState(),
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
 
@@ -845,7 +850,7 @@ FFDIEWC<Impl>::commitInsts()
 {
     // Can't commit and squash things at the same time...
 
-    DPRINTF(Commit, "Trying to commit instructions in the DQ.\n");
+    DPRINTF(Commit || Debug::FFCommit, "Trying to commit instructions in the DQ.\n");
 
     unsigned num_committed = 0, commit_limit = width;
 
@@ -862,7 +867,7 @@ FFDIEWC<Impl>::commitInsts()
         head_inst = getTailInst(); // head_inst: olddest inst/ tail in DQ
 
         if (!head_inst) {
-            DPRINTF(Commit, "Oldest inst is null\n");
+            DPRINTF(Commit || Debug::FFCommit, "Break commit because oldest inst is null\n");
             num_committed++;
             if (!dq.isEmpty()) {
                 dq.tryFastCleanup();
@@ -875,11 +880,11 @@ FFDIEWC<Impl>::commitInsts()
             break;
         }
         if (!head_inst->readyToCommit()) {
-            DPRINTF(Commit, "Oldest inst is not ready to commit\n");
+            DPRINTF(Commit || Debug::FFCommit, "Break commit because oldest inst is not ready to commit\n");
             break;
         }
 
-        DPRINTF(Commit, "Trying to commit head instruction, [sn:%i]\n",
+        DPRINTF(Commit || Debug::FFCommit, "Trying to commit head instruction, [sn:%i]\n",
                 head_inst->seqNum);
 
         // If the head instruction is squashed, it is ready to retire
@@ -1429,10 +1434,12 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::insertPointerPairs(std::list<PointerPair> pairs) {
+void FFDIEWC<Impl>::insertPointerPairs(const std::list<PointerPair>& pairs) {
     for (const auto &pair: pairs) {
         pointerPackets.push(pair);
     }
+    DPRINTF(FFDisp, "Size of pair buffer after merge %lu pairs: %lu\n",
+            pairs.size(), pointerPackets.size());
 }
 
 template<class Impl>

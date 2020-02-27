@@ -88,7 +88,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
     for (unsigned phy_op = 1; phy_op < Impl::MaxOps; phy_op++) {
         auto &indirect_indices = inst->indirectRegIndices.at(phy_op);
 
-        if (indirect_indices.size() == 0) {
+        if (indirect_indices.empty()) {
             continue;
         }
         DPRINTF(Rename, "Play with op [%i] -> src reg [%i]\n",
@@ -170,18 +170,15 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
             DQPointer parent_ptr = parentMap[src_reg];
 
-            DPRINTF(Rename, "Looking up %s arch reg %i"
-                    ", got pointer (%i %i)\n",
-                    src_reg.className(), src_reg.index(),
-                    parent_ptr.bank, parent_ptr.index);
+            DPRINTF(Rename, "Looking up %s arch reg %i, got pointer" ptrfmt "\n",
+                    src_reg.className(), src_reg.index(), extptr(parent_ptr));
 
             countChild(parent_ptr, inst);
 
             for (const auto i: indirect_indices) {
                 inst->renameSrcReg(i, parent_ptr);
-                DPRINTF(Reshape||Debug::RSProbe1,
-                        "Rename src reg(%i) to (%i %i) (%i)\n",
-                         i, parent_ptr.bank, parent_ptr.index, parent_ptr.op);
+                DPRINTF(Reshape||Debug::RSProbe1 || Debug::Rename,
+                        "Rename src reg(%i) to" ptrfmt "\n", i, extptr(parent_ptr));
             }
 
             auto renamed_ptr = renameMap[src_reg];
@@ -201,11 +198,9 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             if (!predecessor_is_forwarder || old.op == 3) {
                 assert(old.op <= 3);
                 DPRINTF(Rename||Debug::RSProbe1,
-                        "Inst[%lu] forward reg[%s %d]from (%d %d) (%d) "
-                        "to (%d %d) (%d)\n",
+                        "Inst[%lu] forward reg[%s %d]from" ptrfmt "to" ptrfmt "\n",
                         inst->seqNum, src_reg.className(), src_reg.index(),
-                        old.bank, old.index, old.op,
-                        dest.bank, dest.index, dest.op);
+                        extptr(old), extptr(dest));
                 renameMap[src_reg] = dest;
 
             } else {
@@ -241,9 +236,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             renameMap[dest_reg] = inst->dqPosition;
             auto &m = renameMap[dest_reg];
             DPRINTF(Rename||Debug::RSProbe1,
-                    "Inst[%lu] defines reg[%s %d] (%d %d) (%d)\n",
-                    inst->seqNum, dest_reg.className(), dest_reg.index(),
-                    m.bank, m.index, m.op);
+                    "Inst[%lu] defines reg[%s %d]" ptrfmt "\n",
+                    inst->seqNum, dest_reg.className(), dest_reg.index(), extptr(m));
         }
     } else {
         inst->hasOp[0] = false;
@@ -257,6 +251,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 //        diewc->cptHint = false;
     }
 
+    DPRINTF(Rename, "Rename produces %lu pairs\n", pairs.size());
     return pairs;
 }
 

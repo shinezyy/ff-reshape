@@ -370,7 +370,7 @@ public:
 private:
     void updateComInstStats(DynInstPtr &ffdiewc);
 
-    void insertPointerPairs(std::list<PointerPair>);
+    void insertPointerPairs(const std::list<PointerPair>&);
 
     void squashDueToBranch(DynInstPtr &ffdiewc);
 

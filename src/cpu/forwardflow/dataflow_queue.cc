@@ -391,8 +391,11 @@ void DataflowQueues<Impl>::tick()
         for (unsigned op = 0; op < nOps; op++) {
             const auto &ptr = forward_ptrs[op];
             // dqs[b]->dumpOutPointers();
-            DPRINTF(DQV2, "Putting wk ptr (%i) (%i %i) (%i) to time buffer\n",
-                    ptr.valid, ptr.bank, ptr.index, ptr.op);
+            if (ptr.valid) {
+                DPRINTF(DQWake, "Putting wk ptr" ptrfmt "to time buffer\n", extptr(ptr));
+            } else {
+                DPRINTF(DQV2, "Putting wk ptr" ptrfmt "to time buffer\n", extptr(ptr));
+            }
             toNextCycle->pointers[b * nOps + op] = forward_ptrs[op];
         }
     }
@@ -566,7 +569,7 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
         pkt.dest = d;
         pkt.destBits = c->uint2Bits(d);
 
-        DPRINTF(DQGOF, "Insert Fw Pointer" ptrfmt "->" ptrfmt "\n",
+        DPRINTF(DQGOF || DQWake, "Insert Fw Pointer" ptrfmt "->" ptrfmt "\n",
                 extptr(pair.dest), extptr(pair.payload));
 
         forwardPointerQueue[forwardPtrIndex].push_back(pkt);
@@ -582,6 +585,9 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
                     forwardPointerQueue[forwardPtrIndex].size());
         }
         forwardPtrIndex = (forwardPtrIndex + 1) % (nBanks * nOps);
+    } else {
+        DPRINTF(DQV2, "Skip invalid pair dest:" ptrfmt "\n",
+                extptr(pkt.payload.dest));
     }
 }
 
