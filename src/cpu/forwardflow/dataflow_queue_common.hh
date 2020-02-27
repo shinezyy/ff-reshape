@@ -64,6 +64,8 @@ public:
 
     void notImplemented();
 
+    const unsigned nOps;
+
     std::string name() const { return "DQCommon"; }
 };
 

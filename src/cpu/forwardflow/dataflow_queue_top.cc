@@ -828,7 +828,7 @@ void DQTop<Impl>::switchDispatchingGroup()
 template<class Impl>
 void DQTop<Impl>::dispatchPairsToGroup()
 {
-    for (unsigned i = 0; i < dispatchWidth; i++) {
+    for (unsigned i = 0; i < c.nBanks * c.nOps; i++) {
         PointerPair &p = centerPairBuffer[i];
         if (!p.dest.valid) {
             continue;
