@@ -62,7 +62,7 @@ public:
 
     unsigned writes, reads;
 
-    DataflowQueues(DerivFFCPUParams *, unsigned groupID, DQCommon *_c);
+    DataflowQueues(DerivFFCPUParams *, unsigned groupID, DQCommon *_c, DQTop *_top);
 
     XDataflowQueueBank * operator [](unsigned bank);
 

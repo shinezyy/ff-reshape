@@ -241,7 +241,7 @@ private:
 
     DataflowQueues *dispatchingGroup;
 
-    void dispatchInstsToGroup();
+    void distributeInstsToGroup();
 
     bool switchDispGroup{};
 
@@ -265,7 +265,7 @@ private:
 
     void clearPairBuffer();
 
-    void dispatchPairsToGroup();
+    void distributePairsToGroup();
 
     //Committing
 //    DataflowQueues *committingGroup;

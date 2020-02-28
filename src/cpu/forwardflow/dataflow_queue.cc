@@ -35,7 +35,8 @@ using namespace std;
 using boost::dynamic_bitset;
 
 template<class Impl>
-DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params, unsigned gid, DQCommon *_c)
+DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params,
+        unsigned gid, DQCommon *_c, DQTop *_top)
         :
         writes(0),
         reads(0),
@@ -114,6 +115,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params, unsigned gid, DQC
         interGroupBW(params->interGroupBW)
 {
     setGroupID(gid);
+    setTop(_top);
 
     assert(MINWakeup + XBarWakeup + NarrowXBarWakeup + DediXBarWakeup == 1);
     // init inputs to omega networks
@@ -136,11 +138,10 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params, unsigned gid, DQC
         fuWrappers[b].fillLatTable(opLat);
         fuWrappers[b].setDQ(this);
 
-
-        dqs.emplace_back(new XDataflowQueueBank(params, b, this));
+        dqs.push_back(new XDataflowQueueBank(params, b, this, top));
         readyInstsQueues.push_back(new XReadyInstsQueue(params, name()));
         dqs[b]->readyInstsQueue = readyInstsQueues[b];
-        dqs[b]->setTop(top);
+//        dqs[b]->setTop(top);
     }
 
     for (unsigned i = 0; i < nBanks * OpGroups::nOpGroups; i++) {

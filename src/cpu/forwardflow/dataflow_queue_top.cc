@@ -42,16 +42,13 @@ DQTop<Impl>::DQTop(DerivFFCPUParams *params)
     memDepUnit.setIQ(this);
 
     for (unsigned g = 0; g < params->numDQGroups; g++) {
-        dqGroups.push_back(new DataflowQueues(params, g, &c));
+        dqGroups.push_back(new DataflowQueues(params, g, &c, this));
     }
     committingGroup = dqGroups[0];
     dispatchingGroup = dqGroups[0];
-    for (auto group: dqGroups) {
-        group->setTop(this);
-    }
     clearPairBuffer();
     clearInstBuffer();
-    printf("inter buffer size: %zu", interGroupBuffer.size());
+    printf("inter buffer size: %zu\n", interGroupBuffer.size());
 }
 
 template<class Impl>
@@ -70,15 +67,17 @@ void DQTop<Impl>::cycleStart()
 template<class Impl>
 void DQTop<Impl>::tick()
 {
+    // for each group dispatch
+    distributeInstsToGroup();
+
     // per group tick, because there is no combinational signals across groups
     // their "ticks" can be executed in parallel
     for (auto group: dqGroups) {
         group->tick();
     }
 
-    // for each group dispatch
-    dispatchInstsToGroup();
-    dispatchPairsToGroup();
+    // for each group dispatch pairs
+    distributePairsToGroup();
 
     // for each group receive from prev group
     groupsRxFromPrevGroup();
@@ -784,7 +783,7 @@ void DQTop<Impl>::clearInstBuffer()
 }
 
 template<class Impl>
-void DQTop<Impl>::dispatchInstsToGroup()
+void DQTop<Impl>::distributeInstsToGroup()
 {
     for (unsigned i = 0; i < dispatchWidth; i++) {
         DynInstPtr &inst = centerInstBuffer[i];
@@ -827,7 +826,7 @@ void DQTop<Impl>::switchDispatchingGroup()
 }
 
 template<class Impl>
-void DQTop<Impl>::dispatchPairsToGroup()
+void DQTop<Impl>::distributePairsToGroup()
 {
     for (unsigned i = 0; i < c.nBanks * c.nOps; i++) {
         PointerPair &p = centerPairBuffer[i];

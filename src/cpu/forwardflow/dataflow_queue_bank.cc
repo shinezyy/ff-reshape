@@ -5,6 +5,7 @@
 #include "dataflow_queue_bank.hh"
 #include "debug/DQ.hh"
 #include "debug/DQGDL.hh"
+#include "debug/DQGOF.hh"
 #include "debug/DQV2.hh"
 #include "debug/DQWake.hh"
 #include "debug/DQWrite.hh"
@@ -20,7 +21,8 @@ using boost::dynamic_bitset;
 
 template<class Impl>
 DataflowQueueBank<Impl>::DataflowQueueBank(
-        DerivFFCPUParams *params, unsigned bank_id, DQ *dq)
+        DerivFFCPUParams *params, unsigned bank_id,
+        DQ *dq, DQTop *_top)
         : dq(dq),
           nOps(params->numOperands),
           depth(params->DQDepth),
@@ -36,6 +38,7 @@ DataflowQueueBank<Impl>::DataflowQueueBank(
           readyQueueSize(params->readyQueueSize),
           prematureFwPointers(depth)
 {
+    setTop(_top);
     for (auto &line: prematureFwPointers) {
         for (auto &ptr: line) {
             ptr.valid = false;
@@ -48,6 +51,7 @@ DataflowQueueBank<Impl>::DataflowQueueBank(
     std::ostringstream s;
     s << "DQBank" << bankID;
     _name = dq->name() + '.' + s.str();
+//    printf("Top@Init: %p\n", top);
 }
 
 template<class Impl>
@@ -604,16 +608,16 @@ void
 DataflowQueueBank<Impl>::writeInstsToBank(
         DQPointer pointer, DataflowQueueBank::DynInstPtr &inst)
 {
-    DPRINTF(DQWrite, "insert inst[%llu] to (%d %d)\n",
-            inst->seqNum, pointer.bank, pointer.index);
+    DPRINTF(DQWrite || Debug::FFDisp, "insert inst[%llu] to" ptrfmt "\n",
+            inst->seqNum, extptr(pointer));
     auto index = pointer.index;
     assert(!instArray[index]);
     instArray[index] = inst;
 
-    DPRINTF(DQWrite, "Tail before writing: %u\n", tail);
+    DPRINTF(DQWrite || Debug::FFDisp, "Tail before writing: %u\n", tail);
     if (!instArray[tail]) {
         tail = index;
-        DPRINTF(DQWrite, "Tail becomes %u\n", tail);
+        DPRINTF(DQWrite || Debug::FFDisp, "Tail becomes %u\n", tail);
     }
 }
 
@@ -708,6 +712,7 @@ void DataflowQueueBank<Impl>::regStats()
             .name(name() + ".directReady")
             .desc("directReady");
 
+//    printf("Top@regStats: %p\n", top);
 }
 
 template<class Impl>
@@ -719,6 +724,8 @@ bool DataflowQueueBank<Impl>::hasTooManyPendingInsts()
 template<class Impl>
 void DataflowQueueBank<Impl>::squashReady(const DQPointer &squash_ptr)
 {
+//    DPRINTF(DQGOF, "Top: %p\n", top);
+    DPRINTF(FFSquash, "Squashing ready\n");
     for (auto &ptr: readyQueue) {
         if (!top->validPosition(top->c.pointer2uint(ptr))) {
             ptr.valid = false;

@@ -34,6 +34,9 @@ public:
     typedef typename Impl::CPUPol CPUPolicy;
 
     typedef typename Impl::CPUPol::ReadyInstsQueue XReadyInstsQueue;
+
+    typedef typename CPUPolicy::DQTop DQTop;
+
 private:
     typedef typename CPUPolicy::DataflowQueues DQ;
 
@@ -79,7 +82,8 @@ public:
 
     void setTail(unsigned t);
 
-    explicit DataflowQueueBank(DerivFFCPUParams *params, unsigned bank_id, DQ *dq);
+    explicit DataflowQueueBank(DerivFFCPUParams *params,
+            unsigned bank_id, DQ *dq, DQTop *_top);
 
     bool canServeNew();
 
@@ -157,14 +161,10 @@ public:
     void mergeLocalWKPointers();
 
 public:
-    typedef typename CPUPolicy::DQTop DQTop;
-
     void setTop(DQTop *_top) {top = _top;}
 
 private:
     DQTop *top;
-
-
 };
 
 }
