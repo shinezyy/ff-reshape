@@ -257,7 +257,7 @@ private:
     // FW pointers
     // dispatching.forward_pointers planA: W - to - W*G asymmetric topology
     // dispatching.forward_pointers planB: 1 - to - 2: working + last working + backward ring routing
-    std::array<PointerPair, Impl::MaxWidth> centerPairBuffer;
+    std::array<PointerPair, Impl::MaxBanks * Impl::MaxOps> centerPairBuffer;
 
     unsigned pairIndex;
 

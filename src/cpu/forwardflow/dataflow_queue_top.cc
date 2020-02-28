@@ -9,6 +9,7 @@
 #include "debug/DQGOF.hh"
 #include "debug/DQWake.hh"
 #include "debug/FFCommit.hh"
+#include "debug/FFDisp.hh"
 #include "debug/FFSquash.hh"
 #include "debug/RSProbe1.hh"
 #include "params/DerivFFCPU.hh"
@@ -152,7 +153,7 @@ void DQTop<Impl>::advanceHead()
     }
 
     auto allocated = c.uint2Pointer(head);
-    DPRINTF(DQGOF, "Head = %u, newly allocated at" ptrfmt "\n", head, extptr(allocated));
+    DPRINTF(DQGOF || Debug::FFDisp, "Head = %u, newly allocated at" ptrfmt "\n", head, extptr(allocated));
     auto dead_inst = (*dqGroups[allocated.group])[allocated.bank]->readInstsFromBank(allocated);
     if (dead_inst) {
         DPRINTF(FFCommit, "Dead inst[%llu] found unexpectedly\n", dead_inst->seqNum);
@@ -833,13 +834,12 @@ void DQTop<Impl>::dispatchPairsToGroup()
         if (!p.dest.valid) {
             continue;
         }
-        if (p.dest.group == dispatchingGroup->groupID) {
-            DPRINTF(DQGOF, "group: %u\n", dispatchingGroup->groupID);
-            dispatchingGroup->insertForwardPointer(p);
-            p.dest.valid = false;
-        } else {
-            break;
+        if (p.dest.group >= c.nGroups) {
+            panic("Got target group ID: %u", p.dest.group);
         }
+        auto group = dqGroups[p.dest.group];
+        group->insertForwardPointer(p);
+        p.dest.valid = false;
     }
 }
 
@@ -994,11 +994,6 @@ void DQTop<Impl>::groupsRxFromPrevGroup()
 template<class Impl>
 void DQTop<Impl>::groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues)
 {
-    unsigned x = 0;
-    for (auto &queue: queues) {
-        DPRINTF(DQGOF, "It has group %u\n", x++);
-        queue.empty();
-    }
     for (unsigned g = 0 ; g < c.nGroups; g++) {
         DPRINTF(DQGOF, "Group %u\n", g);
         auto &queue = queues[g];
@@ -1012,7 +1007,7 @@ void DQTop<Impl>::groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues
 template<class Impl>
 void DQTop<Impl>::clearPairBuffer()
 {
-    for (unsigned i = 0; i < dispatchWidth; i++) {
+    for (unsigned i = 0; i < c.nBanks * c.nOps; i++) {
         centerPairBuffer[i].dest.valid = false;
     }
 }

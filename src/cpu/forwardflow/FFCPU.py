@@ -208,7 +208,7 @@ class DerivFFCPU(BaseCPU):
     numDQBanks = Param.Unsigned(4, "number of DQ banks per group")
     numDQGroups = Param.Unsigned(8, "number of DQ groups")
 
-    interGroupBW = Param.Unsigned(2, "interGroupBW")
+    interGroupBW = Param.Unsigned(16, "interGroupBW")
 
     pendingQueueDepth = Param.Unsigned(8, "max depth of pending wakeup pointers")
 

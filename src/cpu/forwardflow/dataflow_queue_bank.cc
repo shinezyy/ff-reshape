@@ -8,6 +8,7 @@
 #include "debug/DQV2.hh"
 #include "debug/DQWake.hh"
 #include "debug/DQWrite.hh"
+#include "debug/FFDisp.hh"
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
 #include "debug/RSProbe1.hh"
@@ -437,13 +438,13 @@ DataflowQueueBank<Impl>::readPointersFromBank()
             optr.valid = false;
 
         } else {
-            DPRINTF(DQ, "op = %i\n", op);
-            DPRINTF(DQWake, "Reading forward pointer according to (%i %i) (%i)\n",
-                    ptr.bank, ptr.index, ptr.op);
+            DPRINTF(DQ || Debug::DQWake, "op = %i\n", op);
+            DPRINTF(DQWake, "Reading forward pointer according to" ptrfmt "\n",
+                    extptr(ptr));
             const auto &inst = instArray.at(ptr.index);
             if (!inst) {
-                DPRINTF(FFSquash, "Ignore forwarded pointer to (%i %i) (%i) (squashed)\n",
-                        ptr.bank, ptr.index, ptr.op);
+                DPRINTF(FFSquash, "Ignore forwarded pointer to" ptrfmt "(squashed)\n",
+                        extptr(ptr));
                 optr.valid = false;
 
             } else if (inst->dqPosition.term != ptr.term) {
@@ -480,7 +481,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
 
                         optr.hasVal = true;
                         if (op == 0 && inst->destReforward) {
-                            DPRINTF(DQ, "Although its wakeup ptr to dest,"
+                            DPRINTF(DQWake, "Although its wakeup ptr to dest,"
                                         " it is still forwarded because of destReforward flag\n");
                             optr.val = inst->getDestValue();
                         } else {
@@ -496,17 +497,17 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                             DPRINTF(DQWake, "Pointer (%i) (%i %i) (%i) isLocal <- false\n",
                                     optr.valid, optr.bank, optr.index, optr.op);
                         }
-                        DPRINTF(FFSquash, "Put forwarding wakeup Pointer(%i) (%i %i) (%i)"
+                        DPRINTF(FFSquash || Debug::DQWake, "Put forwarding wakeup Pointer" ptrfmt
                                           " to outputPointers with val: (%i) (%llu)\n",
-                                optr.valid, optr.bank, optr.index, optr.op, optr.hasVal, optr.val.i);
+                                extptr(optr), optr.hasVal, optr.val.i);
                     }
                 } else {
-                    DPRINTF(DQ, "Skip invalid pointer on op[%i]\n", op);
+                    DPRINTF(DQWake, "Skip invalid pointer" ptrfmt "on op[%i] of inst[%llu]\n",
+                            extptr(inst->pointers[op]), op, inst->seqNum);
                     optr.valid = false;
                     if (grab_from_local_fw && ptr.isLocal) {
                         ptr.isLocal = false;
-                        DPRINTF(DQWake, "Pointer (%i) (%i %i) (%i) isLocal <- false\n",
-                                optr.valid, optr.bank, optr.index, optr.op);
+                        DPRINTF(DQWake, "Pointer" ptrfmt "isLocal <- false\n", extptr(optr));
                     }
                 }
             }

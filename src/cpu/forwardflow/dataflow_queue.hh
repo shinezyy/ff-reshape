@@ -378,7 +378,7 @@ private:
     // physically located between DQ groups
     std::deque<WKPointer> outQueue;
 
-    void sendToNextGroup(const WKPointer &wk_pointer);
+    void put2OutBuffer(const WKPointer &wk_pointer);
 
     unsigned interGroupSent;
 
@@ -413,6 +413,8 @@ private:
 public:
     std::string name() const { return _name; }
 
+private:
+    void pickInterGroupPointers();
 };
 
 }

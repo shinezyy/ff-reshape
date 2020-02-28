@@ -17,6 +17,7 @@
 #include "debug/DQWakeV1.hh"
 #include "debug/DQWrite.hh"  // DQ write
 #include "debug/FFCommit.hh"
+#include "debug/FFDisp.hh"
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FUW.hh"
@@ -417,20 +418,24 @@ void DataflowQueues<Impl>::tick()
         if (dest.valid) {
             q1 = allocateWakeQ();
             DPRINTF(DQWake || Debug::RSProbe2,
-                    "Got wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
-                    dest.bank, dest.index, dest.op, q1);
-            pushToWakeQueue(q1, WKPointer(dest));
-            numPendingWakeups++;
-            DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
+                    "Got wakeup pointer to" ptrfmt ", pushed to wakeQueue[%i]\n",
+                    extptr(dest), q1);
+            if (dest.group == groupID) {
+                pushToWakeQueue(q1, WKPointer(dest));
+                numPendingWakeups++;
+                DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
+            } else {
+                put2OutBuffer(WKPointer(dest));
+                DPRINTF(DQWake, "Move to inter-group buffer\n");
+            }
 
         }
 
         if (src.valid) {
             q2 = allocateWakeQ();
             DPRINTF(DQWake || Debug::RSProbe2,
-                    "Got inverse wakeup pointer to (%d %d) (%d),"
-                    " pushed to wakeQueue[%i]\n",
-                    src.bank, src.index, src.op, q2);
+                    "Got inverse wakeup pointer to" ptrfmt ", pushed to wakeQueue[%i]\n",
+                    extptr(src), q2);
             pushToWakeQueue(q2, WKPointer(src));
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
@@ -494,6 +499,9 @@ void DataflowQueues<Impl>::tick()
             DPRINTF(DQWake, "toNext cycle inst[%lu]\n", toNextCycle->insts[2*i + 1]->seqNum);
         }
     }
+
+    pickInterGroupPointers();
+
     for (unsigned i = 0; i < nBanks; i++) {
         dqs[i]->countUpPendingPointers();
     }
@@ -569,7 +577,7 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
         pkt.dest = d;
         pkt.destBits = c->uint2Bits(d);
 
-        DPRINTF(DQGOF || DQWake, "Insert Fw Pointer" ptrfmt "->" ptrfmt "\n",
+        DPRINTF(DQGOF || Debug::DQWake || Debug::FFDisp, "Insert Fw Pointer" ptrfmt "->" ptrfmt "\n",
                 extptr(pair.dest), extptr(pair.payload));
 
         forwardPointerQueue[forwardPtrIndex].push_back(pkt);
@@ -791,9 +799,9 @@ DataflowQueues<Impl>::markFwPointers(
         inst->destReforward = true;
     }
     pointers[op] = pair.payload;
-    DPRINTF(DQ, "And let it forward its value to (%d) (%d %d) (%d)\n",
-            pair.payload.valid,
-            pair.payload.bank, pair.payload.index, pair.payload.op);
+    DPRINTF(FFDisp || Debug::DQWake,
+            "And let it forward its value to" ptrfmt "\n",
+            extptr(pair.payload));
 }
 
 
@@ -938,12 +946,10 @@ void DataflowQueues<Impl>::dumpPairPackets(vector<DQPacket<PointerPair> *> &v)
 {
     for (auto& pkt: v) {
         assert(pkt);
-        DPRINTF(DQV2, "&pkt: %p, ", pkt);
-        DPRINTFR(DQV2, "v: %d, dest: %lu, src: %d,",
+//        DPRINTF(DQV2, "&pkt: %p, ", pkt);
+        DPRINTF(DQV2, "v: %d, dest: %lu, src: %d,",
                  pkt->valid, pkt->destBits.to_ulong(), pkt->source);
-        DPRINTFR(DQV2, " pair dest:(%d) (%d %d) (%d) \n",
-                pkt->payload.dest.valid, pkt->payload.dest.bank,
-                pkt->payload.dest.index, pkt->payload.dest.op);
+        DPRINTFR(DQV2, " pair dest:" ptrfmt "\n", extptr(pkt->payload.dest));
     }
 }
 
@@ -1057,8 +1063,8 @@ void DataflowQueues<Impl>::digestForwardPointer()
             DynInstPtr inst = dqs[pair.dest.bank]->readInstsFromBank(pair.dest);
 
             if (inst) {
-                DPRINTF(DQPair, "Insert fw pointer" ptrfmt "after inst reached\n",
-                        extptr(pair.dest));
+                DPRINTF(DQPair, "Insert fw pointer" ptrfmt "after inst[%llu] reached\n",
+                        extptr(pair.dest), inst->seqNum);
                 markFwPointers(inst->pointers, pair, inst);
 
                 if (op == 0 && inst->destReforward && inst->isExecuted()) {
@@ -1694,13 +1700,8 @@ DataflowQueues<Impl>::mergeLocalWKPointers()
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::sendToNextGroup(const WKPointer &wk_pointer)
+void DataflowQueues<Impl>::put2OutBuffer(const WKPointer &wk_pointer)
 {
-//    if (interGroupSent <= interGroupBW) {
-//        top->sendToNextGroup(groupID, wk_pointer);
-//    } else {
-//        outQueue.push_back(wk_pointer);
-//    }
     outQueue.push_back(wk_pointer);
 }
 
@@ -1723,6 +1724,7 @@ void DataflowQueues<Impl>::transmitPointers()
         const WKPointer &wk_pointer = outQueue.front();
         top->sendToNextGroup(groupID, wk_pointer);
         interGroupSent++;
+        outQueue.pop_front();
     }
 }
 
@@ -1748,6 +1750,39 @@ void DataflowQueues<Impl>::tieWire()
 {
     fromLastCycle = &(topFromLast->groupTs[groupID]);
     toNextCycle = &(topToNext->groupTs[groupID]);
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::pickInterGroupPointers()
+{
+    DPRINTF(DQWake, "Checking inter-group pointers in time buffer\n");
+    // from normal queue
+    for (unsigned i = 0; i < c->nBanks * c->nOps; i++) {
+        DQPointer &p = toNextCycle->pointers[i];
+        if (p.valid && p.group != groupID) {
+            put2OutBuffer(WKPointer(p));
+            p.valid = false;
+            DPRINTF(DQWake,
+                    "Move" ptrfmt "to next group buffer and invalidate it\n", extptr(p));
+        }
+    }
+
+    // from extra queue
+    DPRINTF(DQWake, "Checking inter-group pointers in temp wake queue\n");
+    for (unsigned i = 0; i < nOps*nBanks; i++) {
+        auto it = tempWakeQueues[i].begin();
+        while (it != tempWakeQueues[i].end()) {
+            const auto &p = *it;
+            if (p.valid && p.group != groupID) {
+                put2OutBuffer(p);
+                DPRINTF(DQWake,
+                        "Move" ptrfmt "to next group buffer and invalidate it\n", extptr(p));
+                it = tempWakeQueues[i].erase(it);
+            } else {
+                it++;
+            }
+        }
+    }
 }
 
 

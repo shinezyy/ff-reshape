@@ -264,7 +264,7 @@ void FFDIEWC<Impl>::dispatch() {
         dq.advanceHead();
         inst->dqPosition = dq.c.uint2Pointer(dq.getHeadPtr());
 
-        DPRINTF(DQGOF, "Current head: 0x%u," ptrfmt "\n",
+        DPRINTF(DQGOF, "Current head: %u," ptrfmt "\n",
                 dq.getHeadPtr(), extptr(inst->dqPosition));
 
         inst->dqPosition.term = dq.getHeadTerm();
