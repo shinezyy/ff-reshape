@@ -120,7 +120,7 @@ void FFDIEWC<Impl>::tick() {
         } else {
             DPRINTF(DIEWC, "Recv other non spec\n");
             if (!dq.getTail()) {
-                DPRINTF(FFSquash, "Ignore scheduling attempt to squashing inst\n");
+                DPRINTF(FFSquash, "Ignore scheduling attempt to squashed inst\n");
             } else {
                 assert(tbuf.nonSpecSeqNum == dq.getTail()->seqNum);
                 // TODO: it writes center buffer
@@ -751,7 +751,7 @@ FFDIEWC<Impl>::
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
 
     if (commitCounter >= commitTraceInterval && !head_inst->isForwarder()) {
-        DPRINTFR(ValueCommit, "@%lu Committing %lu instruction with sn:%lu PC:",
+        DPRINTFR(ValueCommit, "%lu VCommitting %lu instruction with sn:%lu PC:",
                 curTick(), commitAll, head_inst->seqNum);
         if (Debug::ValueCommit) {
             std::cout << head_inst->pcState();

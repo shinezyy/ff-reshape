@@ -28,8 +28,6 @@ DQTop<Impl>::DQTop(DerivFFCPUParams *params)
         tail(0),
         headTerm(0),
         dispatchWidth(params->dispatchWidth),
-        centerInstBufEmpty(true),
-        insertIndex(0),
         halfSquash(false),
         halfSquashSeq(0),
         halfSquashPC(0),
@@ -59,7 +57,6 @@ void DQTop<Impl>::cycleStart()
     for (auto &group: dqGroups) {
         group->cycleStart();
     }
-    clearInstIndex();
 }
 
 template<class Impl>
@@ -135,7 +132,7 @@ bool DQTop<Impl>::hasTooManyPendingInsts()
 template<class Impl>
 void DQTop<Impl>::advanceHead()
 {
-    if (isEmpty() && centerInstBufEmpty) {
+    if (isEmpty() && centerInstBuffer.empty()) {
         clearInflightPackets();
         head = inc(head);
         tail = inc(tail);
@@ -184,12 +181,24 @@ template<class Impl>
 typename Impl::DynInstPtr
 DQTop<Impl>::getTail()
 {
+    DynInstPtr inst = getTailInDQ();
+    if (!inst && !centerInstBuffer.empty()) {
+        return centerInstBuffer.front();
+    }
+    return inst;
+}
+
+template<class Impl>
+typename Impl::DynInstPtr
+DQTop<Impl>::getTailInDQ()
+{
     auto head_ptr = c.uint2Pointer(tail);
     DataflowQueues *group = dqGroups[head_ptr.group];
     DataflowQueueBank *bank = (*group)[head_ptr.bank];
     const auto &inst = bank->readInstsFromBank(head_ptr);
     return inst;
 }
+
 
 template<class Impl>
 bool DQTop<Impl>::isFull() const
@@ -308,15 +317,13 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
     }
 
     // update tail before insertion to avoid ``readInst'' read newly inserted inst
-    if (isEmpty() && centerInstBufEmpty) {
-        DPRINTF(DQGOF, "centerInstBufEmpty: %i\n", centerInstBufEmpty);
+    if (isEmpty()) {
         tail = c.pointer2uint(allocated); //keep them together
         DPRINTF(DQ || Debug::DQGDL, "tail becomes %u to keep with head\n", tail);
         jumped = true;
         dispatchingGroup->alignTails();
     }
-    centerInstBuffer[insertIndex++] = inst;
-    centerInstBufEmpty = false;
+    centerInstBuffer.push_back(inst);
 
     inst->setInDQ();
     // we don't need to add to dependents or producers here,
@@ -776,40 +783,32 @@ void DQTop<Impl>::dumpFwQSize()
 template<class Impl>
 void DQTop<Impl>::clearInstBuffer()
 {
-    for (unsigned i = 0; i < dispatchWidth; i++) {
-        centerInstBuffer[i] = nullptr;
-    }
-    centerInstBufEmpty = true;
+    centerInstBuffer.clear();
 }
 
 template<class Impl>
 void DQTop<Impl>::distributeInstsToGroup()
 {
-    for (unsigned i = 0; i < dispatchWidth; i++) {
-        DynInstPtr &inst = centerInstBuffer[i];
+    auto it = centerInstBuffer.begin();
+    while (it != centerInstBuffer.end()) {
+        DynInstPtr &inst = *it;
         if (!inst) {
             DPRINTF(DQGDisp,
-                    "Null inst found in centerInstBuffer[%u]\n", i);
-            continue;
+                    "Null inst found in centerInstBuffer\n");
+        } else {
+            if (inst->dqPosition.group != dispatchingGroup->getGroupID()) {
+                schedSwitchDispatchingGroup(inst);
+                DPRINTF(DQGDisp, "Switch dispatching group, break this cycle\n");
+                break;
+            }
+            auto bank = inst->dqPosition.bank;
+            DPRINTF(DQGDisp,
+                    "Writing Inst[%llu] to" ptrfmt "\n", inst->seqNum, extptr(inst->dqPosition));
+            dispatchingGroup->dqs[bank]->writeInstsToBank(inst->dqPosition, inst);
+            dispatchingGroup->dqs[bank]->checkReadiness(inst->dqPosition);
         }
-        if (inst->dqPosition.group != dispatchingGroup->getGroupID()) {
-            schedSwitchDispatchingGroup(inst);
-            DPRINTF(DQGDisp, "Switch dispatching group, break this cycle\n");
-            break;
-        }
-        auto bank = inst->dqPosition.bank;
-        DPRINTF(DQGDisp,
-                "Writing Inst[%llu] to" ptrfmt "\n", inst->seqNum, extptr(inst->dqPosition));
-        dispatchingGroup->dqs[bank]->writeInstsToBank(inst->dqPosition, inst);
-        dispatchingGroup->dqs[bank]->checkReadiness(inst->dqPosition);
-
-        centerInstBuffer[i] = nullptr;
-
-        if (i == dispatchWidth) {
-            centerInstBufEmpty = true;
-        }
+        it = centerInstBuffer.erase(it);
     }
-
 }
 
 template<class Impl>
@@ -872,7 +871,11 @@ template<class Impl>
 typename Impl::DynInstPtr
 DQTop<Impl>::getHead() const
 {
-    return readInst(c.uint2Pointer(head));
+    if (!centerInstBuffer.empty()) {
+        return centerInstBuffer.back();
+    } else {
+        return readInst(c.uint2Pointer(head));
+    }
 }
 
 template<class Impl>
@@ -882,9 +885,9 @@ DQTop<Impl>::readInst(const DQPointer &p) const
     auto group = dqGroups[p.group];
     const auto &inst = group->readInst(p);
     if (!inst) {
-        for (unsigned d = 0; d < dispatchWidth; d++) {
-            if (centerInstBuffer[d] && centerInstBuffer[d]->dqPosition == p) {
-                return centerInstBuffer[d];
+        for (const auto &buf_inst: centerInstBuffer) {
+            if (buf_inst && buf_inst->dqPosition == p) {
+                return buf_inst;
             }
         }
         return nullptr;
@@ -1041,12 +1044,6 @@ template<class Impl>
 unsigned DQTop<Impl>::incIndex(unsigned u)
 {
     return (u+1) % dispatchWidth;
-}
-
-template<class Impl>
-void DQTop<Impl>::clearInstIndex()
-{
-    insertIndex = 0;
 }
 
 }

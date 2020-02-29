@@ -94,6 +94,8 @@ public:
 
     DynInstPtr getTail();
 
+    DynInstPtr getTailInDQ();
+
     bool isFull() const;
 
     unsigned getHeadPtr() const {return head;}
@@ -229,15 +231,9 @@ private:
     const unsigned dispatchWidth;
 
     // insts
-    std::array<DynInstPtr, Impl::MaxWidth> centerInstBuffer;
-
-    bool centerInstBufEmpty;
-
-    unsigned insertIndex;
+    std::list<DynInstPtr> centerInstBuffer;
 
     void clearInstBuffer();
-
-    void clearInstIndex();
 
     DataflowQueues *dispatchingGroup;
 
