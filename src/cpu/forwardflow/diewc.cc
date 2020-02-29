@@ -1951,7 +1951,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
                 fault == NoFault) {
                 // A hw page table walk is currently going on; the
                 // instruction must be deferred.
-                DPRINTF(IEW, "Execute: Delayed translation, deferring "
+                DPRINTF(IEW || Debug::FFExec, "Execute: Delayed translation, deferring "
                              "load.\n");
                 dq.deferMemInst(inst); // todo ???
                 return;;

@@ -286,9 +286,8 @@ void DataflowQueues<Impl>::tick()
     for (auto &ptr : wakeup_granted_ptrs) {
         if (ptr->valid) {
             DPRINTF(DQWake||Debug::RSProbe2,
-                    "WakePtr[%d] (pointer(%d) (%d %d) (%d)) granted\n",
-                    ptr->source, ptr->payload.valid,
-                    ptr->payload.bank, ptr->payload.index, ptr->payload.op);
+                    "WakePtr[%d] pointer" ptrfmt "granted\n",
+                    ptr->source, extptr(ptr->payload));
         }
     }
 
@@ -302,13 +301,11 @@ void DataflowQueues<Impl>::tick()
                 if (!pkt->valid) {
                     continue;
                 }
-                DPRINTF(DQWake, "granted[%i.%i]: dest:(%i) (%i %i) (%i)\n",
-                        b, op, pkt->valid,
-                        pkt->payload.bank, pkt->payload.index, pkt->payload.op);
-                DPRINTF(DQWake, "granted[%i.%i]: dest:(%llu) (%i) (%i %i) (%i)\n",
+                // DPRINTF(DQWake, "granted[%i.%i]: dest:%i" ptrfmt "\n",
+                //         b, op, pkt->valid, extptr(pkt->payload));
+                DPRINTF(DQWake, "granted[%i.%i]: dest:[%llu] (%i) " ptrfmt "\n",
                         b, op, pkt->destBits.to_ulong(),
-                        pkt->valid,
-                        pkt->payload.bank, pkt->payload.index, pkt->payload.op);
+                        pkt->valid, extptr(pkt->payload));
 
                 WKPointer &ptr = pkt->payload;
                 if (ptr.wkType == WKPointer::WKOp) {
@@ -1465,8 +1462,8 @@ DataflowQueues<Impl>::readPointersToWkQ()
             auto &ptr = fromLastCycle->pointers[b * nOps + op];
             if (ptr.valid) {
                 DPRINTF(DQWake||Debug::RSProbe2,
-                        "Push WakePtr (%i %i) (%i) to wakequeue[%u]\n",
-                        ptr.bank, ptr.index, ptr.op, b);
+                        "Push WakePtr" ptrfmt "to wakequeue[%u]\n",
+                        extptr(ptr), b);
                 pushToWakeQueue(b * nOps + op, WKPointer(ptr));
                 numPendingWakeups++;
                 DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
@@ -1474,8 +1471,7 @@ DataflowQueues<Impl>::readPointersToWkQ()
                     processWKQueueFull();
                 }
             } else {
-                DPRINTF(DQWakeV1, "Ignore Invalid WakePtr (%i) (%i %i) (%i)\n",
-                        ptr.valid, ptr.bank, ptr.index, ptr.op);
+                DPRINTF(DQWakeV1, "Ignore Invalid WakePtr" ptrfmt "\n", extptr(ptr));
             }
         }
     }
@@ -1710,7 +1706,11 @@ void DataflowQueues<Impl>::put2OutBuffer(const WKPointer &wk_pointer)
 template<class Impl>
 void DataflowQueues<Impl>::receivePointers(const WKPointer &wk_pointer)
 {
-    extraWakeup(wk_pointer);
+    if (wk_pointer.group == groupID) {
+        extraWakeup(wk_pointer);
+    } else {
+        put2OutBuffer(wk_pointer);
+    }
 }
 
 template<class Impl>

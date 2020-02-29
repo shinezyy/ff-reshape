@@ -867,7 +867,7 @@ template<class Impl>
 void DQTop<Impl>::sendToNextGroup(unsigned sending_group, const WKPointer &wk_pointer)
 {
     unsigned recv_group = getNextGroup(sending_group);
-    DPRINTF(DQGDL || Debug::DQWake, ptrfmt "lands in group %u",
+    DPRINTF(DQGDL || Debug::DQWake, ptrfmt "lands in group %u\n",
             extptr(wk_pointer), recv_group);
     interGroupBuffer[recv_group].push_back(wk_pointer);
 //    unsigned recv_group = getNextGroup(sending_group);
