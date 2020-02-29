@@ -523,6 +523,7 @@ void DataflowQueues<Impl>::cycleStart()
     }
     halfSquash = false;
     halfSquashSeq = 0;
+    clearSent();
 }
 
 
@@ -1761,10 +1762,10 @@ void DataflowQueues<Impl>::pickInterGroupPointers()
     for (unsigned i = 0; i < c->nBanks * c->nOps; i++) {
         DQPointer &p = toNextCycle->pointers[i];
         if (p.valid && p.group != groupID) {
-            put2OutBuffer(WKPointer(p));
-            p.valid = false;
             DPRINTF(DQWake,
                     "Move" ptrfmt "to next group buffer and invalidate it\n", extptr(p));
+            put2OutBuffer(WKPointer(p));
+            p.valid = false;
         }
     }
 

@@ -7,6 +7,7 @@
 #include "debug/DQGDL.hh"
 #include "debug/DQGDisp.hh"
 #include "debug/DQGOF.hh"
+#include "debug/DQV2.hh"
 #include "debug/DQWake.hh"
 #include "debug/FFCommit.hh"
 #include "debug/FFDisp.hh"
@@ -267,7 +268,7 @@ void DQTop<Impl>::maintainOldestUsed()
 template<class Impl>
 bool DQTop<Impl>::validPosition(unsigned u) const
 {
-    DPRINTF(DQ || Debug::DQGOF, "head: %i tail: %i u: %u\n", head, tail, u);
+    DPRINTF(DQV2, "head: %i tail: %i u: %u\n", head, tail, u);
     if (head >= tail) {
         return (u <= head && u >= tail);
     } else {
@@ -403,7 +404,7 @@ void DQTop<Impl>::retireHead(bool result_valid, FFRegValue v)
         DPRINTF(DQ, "tail becomes %u in retiring\n", tail);
     }
 
-    DPRINTF(FFCommit, "Advance youngest ptr to %d, olddest ptr to %d\n", head, tail);
+    DPRINTF(FFCommit, "Advance youngest ptr to %d, oldest ptr to %d\n", head, tail);
 }
 
 template<class Impl>
@@ -442,7 +443,7 @@ void DQTop<Impl>::tryFastCleanup()
         bank->advanceTail();
 
         tail = inc(tail);
-        DPRINTF(DQ, "tail becomes %u in fast clean up\n", tail);
+        DPRINTF(FFSquash, "tail becomes %u in fast clean up\n", tail);
         inst = getTail();
         diewc->DQPointerJumped = true;
     }
@@ -450,7 +451,9 @@ void DQTop<Impl>::tryFastCleanup()
         tail = inc(tail);
         head = inc(head);
     }
-    DPRINTF(FFCommit, "Fastly advance youngest ptr to %d, olddest ptr to %d\n", head, tail);
+    DPRINTF(FFCommit || Debug::FFSquash,
+            "Fastly advance youngest ptr to %d, oldest ptr to %d" ptrfmt "\n",
+            head, tail, extptr(c.uint2Pointer(tail)));
     for (auto group: dqGroups) {
         group->clearPending2SquashedRange(old_tail, tail);
     }
@@ -459,6 +462,8 @@ void DQTop<Impl>::tryFastCleanup()
 template<class Impl>
 void DQTop<Impl>::squash(DQPointer p, bool all, bool including)
 {
+    centerInstBuffer.clear();
+
     if (all) {
         DPRINTF(FFSquash, "DQ: squash ALL instructions\n");
         for (auto group: dqGroups) {
@@ -667,14 +672,14 @@ void DQTop<Impl>::writebackLoad(DynInstPtr &inst)
     //    DPRINTF(DQWake, "Original ptr: (%i) (%i %i) (%i)\n",
     //            inst->pointers[0].valid, inst->pointers[0].bank,
     //            inst->pointers[0].index, inst->pointers[0].op);
+    DPRINTF(DQWake, "Writeback Load[%lu]\n", inst->seqNum);
     if (inst->pointers[0].valid) {
         WKPointer wk(inst->pointers[0]);
-        DPRINTF(DQWake, "Sending pointer to (%i) (%i %i) (%i) that depends on"
-                        " load[%llu] (%i %i) loaded value: %llu\n",
-                wk.valid, wk.bank, wk.index, wk.op,
-                inst->seqNum,
-                inst->dqPosition.bank, inst->dqPosition.index,
-                inst->getDestValue().i
+        DPRINTF(DQWake,
+                "Sending pointer to consumer" ptrfmt
+                "that depends on load[%llu]" ptrfmt "loaded value: %llu\n",
+                extptr(wk),
+                inst->seqNum, extptr(inst->dqPosition), inst->getDestValue().i
         );
         wk.hasVal = true;
         wk.val = inst->getDestValue();
@@ -683,8 +688,8 @@ void DQTop<Impl>::writebackLoad(DynInstPtr &inst)
         completeMemInst(inst);
     } else {
         auto &p = inst->dqPosition;
-        DPRINTF(DQWake, "Mark itself[%llu] (%i) (%i %i) (%i) ready\n",
-                inst->seqNum, p.valid, p.bank, p.index, p.op);
+        DPRINTF(DQWake, "Mark itself[%llu]" ptrfmt "ready\n",
+                inst->seqNum, extptr(p));
         inst->opReady[0] = true;
         completeMemInst(inst);
     }
@@ -861,7 +866,10 @@ unsigned DQTop<Impl>::getPrevGroup(unsigned group_id) const
 template<class Impl>
 void DQTop<Impl>::sendToNextGroup(unsigned sending_group, const WKPointer &wk_pointer)
 {
-    interGroupBuffer[getNextGroup(sending_group)].push_back(wk_pointer);
+    unsigned recv_group = getNextGroup(sending_group);
+    DPRINTF(DQGDL || Debug::DQWake, ptrfmt "lands in group %u",
+            extptr(wk_pointer), recv_group);
+    interGroupBuffer[recv_group].push_back(wk_pointer);
 //    unsigned recv_group = getNextGroup(sending_group);
 //    DataflowQueues *receiver = dqGroups[recv_group];
 //    receiver->receivePointers(wk_pointer);

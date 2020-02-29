@@ -73,6 +73,8 @@ void
 DataflowQueueBank<Impl>::erase(DQPointer p, bool markSquashed)
 {
     if (markSquashed && instArray[p.index]) {
+        DPRINTF(FFSquash, "Squash and erase inst[%lu] @" ptrfmt "\n",
+                instArray[p.index]->seqNum, extptr(p));
         instArray[p.index]->setSquashed();
     }
     instArray[p.index] = nullptr;
