@@ -196,11 +196,10 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         auto &ptr = pointers[op];
 
         if (!ptr.valid) {
-            DPRINTF(DQV2, "skip pointer: (%i) (%i %i) (%i)\n",
-                    ptr.valid, ptr.bank, ptr.index, ptr.op);
+            DPRINTF(DQV2, "skip pointer:" ptrfmt "\n", extptr(ptr));
             continue;
         }
-        DPRINTF(DQ, "pointer: (%i %i) (%i)\n", ptr.bank, ptr.index, ptr.op);
+        DPRINTF(DQV2, "pointer:" ptrfmt "\n", extptr(ptr));
 
         if (!instArray.at(ptr.index) || instArray.at(ptr.index)->isSquashed()) {
             DPRINTF(DQWake, "Wakeup ignores null inst @%d\n", ptr.index);
@@ -212,8 +211,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         auto &inst = instArray[ptr.index];
 
-        DPRINTF(DQWake||Debug::RSProbe1, "Pointer (%i %i) (%i) working on inst[%llu]\n",
-                ptr.bank, ptr.index, ptr.op, inst->seqNum);
+        DPRINTF(DQWake||Debug::RSProbe1, "Pointer" ptrfmt "working on inst[%llu]\n",
+                extptr(ptr), inst->seqNum);
 
         if (inst->dqPosition.term != ptr.term) {
             DPRINTF(DQWake, "Term not match on WK: ptr: %d, inst: %d\n",

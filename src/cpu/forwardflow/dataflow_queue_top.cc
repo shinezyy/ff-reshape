@@ -30,7 +30,6 @@ DQTop<Impl>::DQTop(DerivFFCPUParams *params)
         dispatchWidth(params->dispatchWidth),
         centerInstBufEmpty(true),
         insertIndex(0),
-        pairIndex(0),
         halfSquash(false),
         halfSquashSeq(0),
         halfSquashPC(0),
@@ -61,7 +60,6 @@ void DQTop<Impl>::cycleStart()
         group->cycleStart();
     }
     clearInstIndex();
-    clearPairIndex();
 }
 
 template<class Impl>
@@ -334,7 +332,9 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 template<class Impl>
 void DQTop<Impl>::insertForwardPointer(PointerPair pair)
 {
-    centerPairBuffer[pairIndex++] = pair;
+    if (pair.dest.valid) {
+        centerPairBuffer.push_back(pair);
+    }
 }
 
 template<class Impl>
@@ -758,7 +758,7 @@ void DQTop<Impl>::regStats()
 template<class Impl>
 unsigned DQTop<Impl>::numInFlightFw()
 {
-    unsigned sum = 0;
+    unsigned sum = centerPairBuffer.size();
     for (DataflowQueues *group: dqGroups) {
         sum += group->numInFlightFw();
     }
@@ -828,17 +828,17 @@ void DQTop<Impl>::switchDispatchingGroup()
 template<class Impl>
 void DQTop<Impl>::distributePairsToGroup()
 {
-    for (unsigned i = 0; i < c.nBanks * c.nOps; i++) {
-        PointerPair &p = centerPairBuffer[i];
-        if (!p.dest.valid) {
-            continue;
+    auto it = centerPairBuffer.begin();
+    while (!centerPairBuffer.empty()) {
+        PointerPair &p = *it;
+        if (p.dest.valid) {
+            if (p.dest.group >= c.nGroups) {
+                panic("Got target group ID: %u", p.dest.group);
+            }
+            auto group = dqGroups[p.dest.group];
+            group->insertForwardPointer(p);
         }
-        if (p.dest.group >= c.nGroups) {
-            panic("Got target group ID: %u", p.dest.group);
-        }
-        auto group = dqGroups[p.dest.group];
-        group->insertForwardPointer(p);
-        p.dest.valid = false;
+        it = centerPairBuffer.erase(it);
     }
 }
 
@@ -1006,9 +1006,7 @@ void DQTop<Impl>::groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues
 template<class Impl>
 void DQTop<Impl>::clearPairBuffer()
 {
-    for (unsigned i = 0; i < c.nBanks * c.nOps; i++) {
-        centerPairBuffer[i].dest.valid = false;
-    }
+    centerPairBuffer.clear();
 }
 
 template<class Impl>
@@ -1049,12 +1047,6 @@ template<class Impl>
 void DQTop<Impl>::clearInstIndex()
 {
     insertIndex = 0;
-}
-
-template<class Impl>
-void DQTop<Impl>::clearPairIndex()
-{
-    pairIndex = 0;
 }
 
 }
