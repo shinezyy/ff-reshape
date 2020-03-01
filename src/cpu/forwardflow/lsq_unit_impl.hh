@@ -394,8 +394,8 @@ LSQUnit<Impl>::insertStore(DynInstPtr &store_inst)
     assert((storeTail + 1) % SQEntries != storeHead);
     assert(stores < SQEntries);
 
-    DPRINTF(LSQUnit, "Inserting store PC %s, idx:%i [sn:%lli]\n",
-            store_inst->pcState(), storeTail, store_inst->seqNum);
+    DPRINTF(LSQUnit, "Inserting store PC %s, store idx:%i, load idx:%i, [sn:%lli]\n",
+            store_inst->pcState(), storeTail, loadTail, store_inst->seqNum);
 
     store_inst->sqIdx = storeTail;
     store_inst->lqIdx = loadTail;
@@ -534,6 +534,7 @@ template <class Impl>
 Fault
 LSQUnit<Impl>::checkViolations(int load_idx, DynInstPtr &inst)
 {
+    assert(inst);
     Addr inst_eff_addr1 = inst->effAddr >> depCheckShift;
     Addr inst_eff_addr2 = (inst->effAddr + inst->effSize - 1) >> depCheckShift;
 
@@ -542,8 +543,14 @@ LSQUnit<Impl>::checkViolations(int load_idx, DynInstPtr &inst)
      * all instructions that will execute before the store writes back. Thus,
      * like the implementation that came before it, we're overly conservative.
      */
+    DPRINTF(FFSquash, " loadTail: %i\n", loadTail);
     while (load_idx != loadTail) {
         DynInstPtr ld_inst = loadQueue[load_idx];
+        DPRINTF(FFSquash, "On load_idx %i\n", load_idx);
+        if (!ld_inst) {
+            dumpInsts();
+            assert(ld_inst);
+        }
         if (!ld_inst->effAddrValid() || ld_inst->strictlyOrdered()) {
             incrLdIdx(load_idx);
             continue;
@@ -1317,11 +1324,10 @@ LSQUnit<Impl>::dumpInsts() const
 
     while (load_idx != loadTail && loadQueue[load_idx]) {
         const DynInstPtr &inst(loadQueue[load_idx]);
-        cprintf("%s.[sn:%i] ", inst->pcState(), inst->seqNum);
+        cprintf("%i %s.[sn:%i] \n", load_idx, inst->pcState(), inst->seqNum);
 
         incrLdIdx(load_idx);
     }
-    cprintf("\n");
 
     cprintf("Store queue size: %i\n", stores);
     cprintf("Store queue: ");

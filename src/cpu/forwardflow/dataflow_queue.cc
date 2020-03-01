@@ -1283,8 +1283,9 @@ std::pair<InstSeqNum, Addr> DataflowQueues<Impl>::clearHalfFWQueue()
 template<class Impl>
 void DataflowQueues<Impl>::processWKQueueFull()
 {
-    DPRINTF(DQ || Debug::RSProbe1, "Dump before clear:\n");
-    if (Debug::DQ || Debug::RSProbe1) {
+    DPRINTF(DQWake, "Processing wakeup queue full\n");
+    DPRINTF(DQWake|| Debug::RSProbe1, "Dump before clear:\n");
+    if (Debug::DQWake|| Debug::RSProbe1) {
         dumpQueues();
     }
 
@@ -1315,8 +1316,9 @@ void DataflowQueues<Impl>::processWKQueueFull()
 template<class Impl>
 void DataflowQueues<Impl>::processFWQueueFull()
 {
-    DPRINTF(DQ || Debug::RSProbe1, "Dump before clear:\n");
-    if (Debug::DQ || Debug::RSProbe1) {
+    DPRINTF(FFDisp, "Processing pair queue full\n");
+    DPRINTF(FFDisp|| Debug::RSProbe1, "Dump before clear:\n");
+    if (Debug::FFDisp|| Debug::RSProbe1) {
         dumpQueues();
     }
 

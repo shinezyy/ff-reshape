@@ -435,9 +435,9 @@ ArchState<Impl>::commitInstInSB(
     } else {
         if (!sb[idx] && (rt.count(idx) &&
                     rt[idx] == inst->dqPosition)) {
-            DPRINTF(FFCommit,"Set reg (%s %i) by inst[%llu] (%i %i)\n",
+            DPRINTF(FFCommit,"Set reg (%s %i) by inst[%llu]" ptrfmt "\n",
                     dest.className(), dest.index(), inst->seqNum,
-                    inst->dqPosition.bank, inst->dqPosition.index);
+                    extptr(inst->dqPosition));
             sb[idx] = true;
         } else {
             if (!rt.count(idx)) {
@@ -446,11 +446,12 @@ ArchState<Impl>::commitInstInSB(
                         dest.className(), dest.index());
             } else {
                 DPRINTF(FFCommit,"Reg (%s %i) remains to busy"
-                        " becase its was cleared by (%i %i),"
-                        " but committing inst[%llu] is @(%i %i)\n",
+                                 " becase its was cleared by" ptrfmt
+                                 ", but committing inst[%llu] is @" ptrfmt "\n",
                         dest.className(), dest.index(),
-                        rt[idx].bank,rt[idx].index,
-                        inst->seqNum, inst->dqPosition.bank, inst->dqPosition.index);
+                        extptr(rt[idx]),
+                        inst->seqNum,
+                        extptr(inst->dqPosition));
 
             }
 

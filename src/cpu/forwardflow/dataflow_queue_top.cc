@@ -919,6 +919,7 @@ bool DQTop<Impl>::notifyHalfSquash(InstSeqNum new_seq, Addr new_pc)
         halfSquashPC = new_pc;
         halfSquash = true;
         HalfSquashes++;
+        DPRINTF(FFSquash, "Scheduled half squash @ inst[%lu]\n", halfSquashSeq);
     }
     return true;
 }
@@ -1008,6 +1009,7 @@ void DQTop<Impl>::groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues
         DPRINTF(DQGOF, "Group %u\n", g);
         auto &queue = queues[g];
         while (!queue.empty()) {
+            DPRINTF(DQGOF, "Receiving pointer" ptrfmt "\n", extptr(queue.front()));
             dqGroups[g]->receivePointers(queue.front());
             queue.pop_front();
         }
