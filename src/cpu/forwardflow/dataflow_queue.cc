@@ -1003,13 +1003,18 @@ DataflowQueues<Impl>::getBankTails()
     unsigned ptr_i = top->getTailPtr();
     for (unsigned count = 0; count < nBanks; count++) {
         auto ptr = c->uint2Pointer(ptr_i);
-        DynInstPtr inst = dqs[ptr.bank]->readInstsFromBank(ptr);
-        if (inst) {
-            DPRINTF(DQRead || Debug::DQGDL, "read inst[%llu] from DQ\n", inst->seqNum);
+        if (ptr.group == groupID) {
+            DynInstPtr inst = dqs[ptr.bank]->readInstsFromBank(ptr);
+            if (inst) {
+                DPRINTF(DQRead || Debug::DQGDL, "read inst[%llu] from DQ\n", inst->seqNum);
+            } else {
+                DPRINTF(DQRead || Debug::DQGDL, "inst@[%d] is null\n", ptr_i);
+            }
+            tails.push_back(inst);
         } else {
-            DPRINTF(DQRead || Debug::DQGDL, "inst@[%d] is null\n", ptr_i);
+            DPRINTF(DQRead || Debug::DQGDL, "set boundary inst to null\n");
+            tails.emplace_back(nullptr);
         }
-        tails.push_back(inst);
         ptr_i = top->inc(ptr_i);
     }
     return tails;
