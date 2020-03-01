@@ -11,17 +11,10 @@ from os.path import expanduser as uexp
 from multiprocessing import Pool
 import common as c
 
-tag = str(sh.git("describe")).strip()
-# tag = 'naive_pc'
-# outdir =  f'/work/gem5-results/debug-pred-{tag}/'
-outdir =  f'/work/gem5-results/tick-debug/'
-arch = 'RISCV'
-log_file = f'300-t-before-last-commit.txt'
-
 lmd = 0.55
-num_thread = 10
+num_thread = 30
 
-full = True
+full = False
 
 if full:
     d = '-full'
@@ -30,57 +23,51 @@ else:
     d = ''
     insts = 19*10**6
 
+outdir =  f'{c.stats_base_dir}/dedi-xbar4{d}'
+
 exp_options = [
         #'--enable-reshape',
-        '--rand-op-position',
+        # '--rand-op-position',
         #'--profit-discount=1.0',
-        '--ready-hint',
-        '--xbar-wk', 1,
+        # '--ready-hint',
+        '--dedi-xbar-wk', 1,
+        '--narrow-xbar-wk', 0,
+        '--xbar-wk', 0,
         '--min-wk', 0,
         ]
 
-large_enough = 2**62
+arch = 'RISCV'
 
-def debug_1(benchmark, some_extra_args, outdir_b):
-    benchmark, panic_tick = benchmark
-    panic_tick = int(panic_tick)
+def op_rand(benchmark, some_extra_args, outdir_b, cpt_id):
+
     interval = 200*10**6
     warmup = 20*10**6
 
-    os.chdir(c.gem5_exec())
+    os.chdir(c.gem5_exec('2017'))
 
+    panic_tick = 254980806320500
     options = [
             '--outdir=' + outdir_b,
-            '--stats-file=debug_stats.txt',
-            # '--debug-flags=Fetch,DAllocation,DIEWC,IEW,Rename,Commit,DQRead,' + \
-            #         'DQWrite,DQWake,FFCommit,FFSquash,DQ,FUW,ValueCommit,'+ \
-            #         'Cache,DRAMSim2,MemoryAccess,DRAM,'+ \
-            #         'FFInit,FFExec,FUSched,FanoutPred1,Reshape,ReadyHint',
-            '--debug-flags=Fetch,DAllocation,DIEWC,IEW,Rename,Commit,DQRead,' + \
-                    'DQWrite,DQWake,FFCommit,FFSquash,DQ,FUW,' + \
-                    'FFInit,FFExec,FUSched,FanoutPred1,' + \
-                    'CrossBar,CrossBarNarrow,ReadyHint',
-            # '--debug-flags=ValueCommit',
-            '--debug-flags=RSProbe1',
-            #'--debug-start={}'.format (102498195336000),
-            '--debug-start={}'.format (panic_tick - 5000000),
-            '--debug-end={}'.format   (panic_tick + 3000000),
-            # '--debug-start={}'.format (large_enough-100),
-            # '--debug-end={}'.format   (large_enough),
-            pjoin(c.gem5_home(), 'configs/spec2006/se_spec06.py'),
-            '--spec-2006-bench',
+            '--stats-file=stats.txt',
+            #'--debug-flags=ValueCommit',
+            #'--debug-start={}'.format (panic_tick - 2000000),
+            #'--debug-end={}'.format   (panic_tick + 200000),
+            pjoin(c.gem5_home(), 'configs/spec2017/se_spec17.py'),
+            '--spec-2017-bench',
             '-b', '{}'.format(benchmark),
             '--benchmark-stdout={}/out'.format(outdir_b),
             '--benchmark-stderr={}/err'.format(outdir_b),
-            '-I {}'.format(220*10**6),
-            #'-I {}'.format(190*10**5),
+            '-I {}'.format(insts),
+            # '-I {}'.format(300),
+            # '-m', '254890101819500',
             # '--rel-max-tick=100',
-            '--mem-size=4GB',
-            '-r 1',
+            '--mem-size=16GB',
+            '-r {}'.format(cpt_id + 1),  # start from 1
             '--restore-simpoint-checkpoint',
-            '--checkpoint-dir={}'.format(pjoin(c.gem5_cpt_dir(arch),
+            '--checkpoint-dir={}'.format(pjoin(c.gem5_cpt_dir(arch, 2017),
                 benchmark)),
             '--arch={}'.format(arch),
+            '--spec-size=ref',
             ]
     cpu_model = 'OoO'
     if cpu_model == 'TimingSimple':
@@ -119,38 +106,43 @@ def debug_1(benchmark, some_extra_args, outdir_b):
     gem5 = sh.Command(pjoin(c.gem5_build(arch), 'gem5.opt'))
     # sys.exit(0)
     gem5(
-            _out=pjoin(outdir_b, log_file),
-            _err=pjoin(outdir_b, 'debug_err.txt'),
+            _out=pjoin(outdir_b, 'op_rand_out.txt'),
+            _err=pjoin(outdir_b, 'op_rand_err.txt'),
             *options
             )
 
 
-def run(benchmark):
-    outdir_b = pjoin(outdir, benchmark[0])
+def run(benchmark_cpt_id):
+    benchmark, cpt_id = benchmark_cpt_id
+    dir_name = "{}_{}".format(benchmark, cpt_id)
+    outdir_b = pjoin(outdir, dir_name)
     if not os.path.isdir(outdir_b):
         os.makedirs(outdir_b)
 
-    cpt_flag_file = pjoin(c.gem5_cpt_dir(arch), benchmark[0],
+    cpt_flag_file = pjoin(c.gem5_cpt_dir(arch, 2017), benchmark,
             'ts-take_cpt_for_benchmark')
     prerequisite = os.path.isfile(cpt_flag_file)
     some_extra_args = None
 
     if prerequisite:
-        print('cpt flag found, is going to run gem5 on', benchmark[0])
-        c.avoid_repeated(debug_1, outdir_b,
+        print('cpt flag found, is going to run gem5 on', dir_name)
+        c.avoid_repeated(op_rand, outdir_b,
                 pjoin(c.gem5_build(arch), 'gem5.opt'),
-                benchmark, some_extra_args, outdir_b)
+                benchmark, some_extra_args, outdir_b, cpt_id)
     else:
-        print('prerequisite not satisified, abort on', benchmark[0])
+        print('prerequisite not satisified, abort on', dir_name)
+
+
 
 
 def main():
     benchmarks = []
 
-    with open('./tick_around_debug.txt') as f:
+    with open('../all_function_spec2017.txt') as f:
         for line in f:
             if not line.startswith('#'):
-                benchmarks.append(line.strip().split())
+                for i in range(0, 3):
+                    benchmarks.append((line.strip(), i))
 
     if num_thread > 1:
         p = Pool(num_thread)

@@ -12,7 +12,7 @@ from multiprocessing import Pool
 import common as c
 
 lmd = 0.55
-num_thread = 10
+num_thread = 13
 
 full = False
 
@@ -23,16 +23,16 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir =  f'{c.stats_base_dir}/omega-rand-hint{d}'
+outdir =  f'{c.stats_base_dir}/xbar{d}'
 
 exp_options = [
         # '--enable-reshape',
-        '--rand-op-position',
+        # '--rand-op-position',
         # '--profit-discount=1.0',
-        '--ready-hint',
+        # '--ready-hint',
         '--narrow-xbar-wk', 0,
-        '--xbar-wk', 0,
-        '--min-wk', 1,
+        '--xbar-wk', 1,
+        '--min-wk', 0,
         ]
 
 
@@ -138,7 +138,7 @@ def run(benchmark_cpt_id):
 def main():
     benchmarks = []
 
-    with open('./all_function_spec2017.txt') as f:
+    with open('../all_function_spec2017.txt') as f:
         for line in f:
             if not line.startswith('#'):
                 for i in range(0, 3):

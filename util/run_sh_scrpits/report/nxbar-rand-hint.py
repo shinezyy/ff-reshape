@@ -11,7 +11,8 @@ from os.path import expanduser as uexp
 from multiprocessing import Pool
 import common as c
 
-num_thread = 12
+lmd = 0.55
+num_thread = 10
 
 full = False
 
@@ -22,46 +23,46 @@ else:
     d = ''
     insts = 19*10**6
 
+outdir =  f'{c.stats_base_dir}/xbar4-rand-hint{d}'
+
 exp_options = [
         #'--enable-reshape',
-        #'--rand-op-position',
+        '--rand-op-position',
         #'--profit-discount=1.0',
-        #'--ready-hint',
-        '--narrow-xbar-wk', 0,
+        '--ready-hint',
+        '--dedi-xbar-wk', 0,
+        '--narrow-xbar-wk', 1,
         '--xbar-wk', 0,
         '--min-wk', 0,
         ]
 
-outdir = f'{c.stats_base_dir}/ruu-4-issue{d}/'
-
 arch = 'RISCV'
 
-def o3_origin(benchmark, some_extra_args, outdir_b, cpt_id):
+def op_rand(benchmark, some_extra_args, outdir_b, cpt_id):
 
     interval = 200*10**6
     warmup = 20*10**6
 
     os.chdir(c.gem5_exec('2017'))
 
-    panic_tick = 84334713043000
+    panic_tick = 254980806320500
     options = [
-            '--stats-file=stats.txt',
             '--outdir=' + outdir_b,
-            #'--debug-flags=Fetch,Decode,IEW,Commit,O3CPU,LSQ,LSQUnit',
-            #'--debug-flags=Commit',
+            '--stats-file=stats.txt',
             #'--debug-flags=ValueCommit',
-            #'--debug-start={}'.format  (panic_tick - 2000000),
-            #'--debug-end={}'.format    (panic_tick + 2000000),
+            #'--debug-start={}'.format (panic_tick - 2000000),
+            #'--debug-end={}'.format   (panic_tick + 200000),
             pjoin(c.gem5_home(), 'configs/spec2017/se_spec17.py'),
             '--spec-2017-bench',
             '-b', '{}'.format(benchmark),
             '--benchmark-stdout={}/out'.format(outdir_b),
             '--benchmark-stderr={}/err'.format(outdir_b),
             '-I {}'.format(insts),
+            # '-I {}'.format(300),
             # '-m', '254890101819500',
             # '--rel-max-tick=100',
             '--mem-size=16GB',
-            '-r {}'.format(cpt_id + 1),
+            '-r {}'.format(cpt_id + 1),  # start from 1
             '--restore-simpoint-checkpoint',
             '--checkpoint-dir={}'.format(pjoin(c.gem5_cpt_dir(arch, 2017),
                 benchmark)),
@@ -76,7 +77,7 @@ def o3_origin(benchmark, some_extra_args, outdir_b, cpt_id):
                 ]
     elif cpu_model == 'OoO':
         options += [
-            '--cpu-type=DerivO3CPU',
+            '--cpu-type=DerivFFCPU',
             '--mem-type=DDR3_1600_8x8',
 
             '--caches',
@@ -91,11 +92,12 @@ def o3_origin(benchmark, some_extra_args, outdir_b, cpt_id):
             '--l2_size=4MB',
             '--l2_assoc=8',
             '--num-ROB=192',
-            '--num-IQ=192',
+            '--num-IQ=60',
             '--num-LQ=72',
             '--num-SQ=42',
             '--num-PhysReg=168',
             '--use-zperceptron',
+            f'--fanout-lambda={lmd}',
             *exp_options,
             ]
     else:
@@ -104,8 +106,8 @@ def o3_origin(benchmark, some_extra_args, outdir_b, cpt_id):
     gem5 = sh.Command(pjoin(c.gem5_build(arch), 'gem5.opt'))
     # sys.exit(0)
     gem5(
-            _out=pjoin(outdir_b, 'short_gem5_out.txt'),
-            _err=pjoin(outdir_b, 'short_gem5_err.txt'),
+            _out=pjoin(outdir_b, 'op_rand_out.txt'),
+            _err=pjoin(outdir_b, 'op_rand_err.txt'),
             *options
             )
 
@@ -114,7 +116,6 @@ def run(benchmark_cpt_id):
     benchmark, cpt_id = benchmark_cpt_id
     dir_name = "{}_{}".format(benchmark, cpt_id)
     outdir_b = pjoin(outdir, dir_name)
-
     if not os.path.isdir(outdir_b):
         os.makedirs(outdir_b)
 
@@ -125,17 +126,19 @@ def run(benchmark_cpt_id):
 
     if prerequisite:
         print('cpt flag found, is going to run gem5 on', dir_name)
-        c.avoid_repeated(o3_origin, outdir_b,
+        c.avoid_repeated(op_rand, outdir_b,
                 pjoin(c.gem5_build(arch), 'gem5.opt'),
                 benchmark, some_extra_args, outdir_b, cpt_id)
     else:
         print('prerequisite not satisified, abort on', dir_name)
 
 
+
+
 def main():
     benchmarks = []
 
-    with open('./all_function_spec2017.txt') as f:
+    with open('../all_function_spec2017.txt') as f:
         for line in f:
             if not line.startswith('#'):
                 for i in range(0, 3):

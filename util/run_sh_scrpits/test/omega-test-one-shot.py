@@ -12,7 +12,7 @@ from multiprocessing import Pool
 import common as c
 
 lmd = 0.55
-num_thread = 10
+num_thread = 2
 
 full = False
 
@@ -23,18 +23,18 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir =  f'{c.stats_base_dir}/dedi-xbar4-rand-hint{d}'
+outdir =  f'{c.stats_base_dir}/omega-md-test{d}'
 
 exp_options = [
-        #'--enable-reshape',
-        '--rand-op-position',
-        #'--profit-discount=1.0',
-        '--ready-hint',
-        '--dedi-xbar-wk', 1,
+        # '--enable-reshape',
+        # '--rand-op-position',
+        # '--profit-discount=1.0',
+        # '--ready-hint',
         '--narrow-xbar-wk', 0,
         '--xbar-wk', 0,
-        '--min-wk', 0,
+        '--min-wk', 1,
         ]
+
 
 arch = 'RISCV'
 
@@ -45,13 +45,18 @@ def op_rand(benchmark, some_extra_args, outdir_b, cpt_id):
 
     os.chdir(c.gem5_exec('2017'))
 
-    panic_tick = 254980806320500
+    panic_tick = 300190039762000
     options = [
             '--outdir=' + outdir_b,
             '--stats-file=stats.txt',
-            #'--debug-flags=ValueCommit',
-            #'--debug-start={}'.format (panic_tick - 2000000),
-            #'--debug-end={}'.format   (panic_tick + 200000),
+            #'--debug-flags=FFExec,FFCommit,FFDisp,DQV2',
+            #'--debug-flags=DQV2',
+            '--debug-flags=ValueCommit',
+            #'--debug-flags=FFExec,FFCommit,FFDisp,DAllocation,DQGOF',
+            #'--debug-flags=DQWake,DQGDL,Rename,DQPair,FFSquash,FFExec,IEW',
+            #'--debug-flags=LSQUnit,Cache', # memory
+            #'--debug-start={}'.format (panic_tick - 500*400),
+            #'--debug-end={}'.format   (panic_tick + 500*4000),
             pjoin(c.gem5_home(), 'configs/spec2017/se_spec17.py'),
             '--spec-2017-bench',
             '-b', '{}'.format(benchmark),
@@ -133,12 +138,10 @@ def run(benchmark_cpt_id):
         print('prerequisite not satisified, abort on', dir_name)
 
 
-
-
 def main():
     benchmarks = []
 
-    with open('./all_function_spec2017.txt') as f:
+    with open('./gcc.txt') as f:
         for line in f:
             if not line.startswith('#'):
                 for i in range(0, 3):

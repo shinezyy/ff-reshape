@@ -1,0 +1,7 @@
+imagick 0
+# exchange2 2
+# bwaves 0
+# cam4 2
+# gcc 0
+# cam4 0
+# deepsjeng 0

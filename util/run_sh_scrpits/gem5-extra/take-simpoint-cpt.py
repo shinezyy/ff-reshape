@@ -85,7 +85,7 @@ def main():
 
     benchmarks = []
 
-    with open('./all_function_spec2017.txt') as f:
+    with open('../all_function_spec2017.txt') as f:
         for line in f:
             benchmarks.append(line.strip())
 
