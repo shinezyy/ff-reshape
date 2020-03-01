@@ -64,7 +64,8 @@ private:
         Scoreboard scoreboard;
         ReverseTable reverseTable;
     };
-    std::unordered_map<InstSeqNum, Checkpoint> cpts;
+    std::map<InstSeqNum, Checkpoint> cpts;
+    // std::unordered_map<InstSeqNum, Checkpoint> cpts;
 
     const unsigned MaxCheckpoints;
 
