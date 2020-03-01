@@ -393,12 +393,6 @@ public:
 
     // half squash related:
 public:
-    bool halfSquash;
-
-    InstSeqNum halfSquashSeq;
-
-    Addr halfSquashPC;
-
     std::pair<InstSeqNum, Addr> clearHalfWKQueue();
 
     std::pair<InstSeqNum, Addr> clearHalfFWQueue();

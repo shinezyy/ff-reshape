@@ -518,8 +518,6 @@ void DataflowQueues<Impl>::cycleStart()
     if (llBlocked) {
         DPRINTF(FUW, "ll blocked last cycle\n");
     }
-    halfSquash = false;
-    halfSquashSeq = 0;
     clearSent();
 }
 

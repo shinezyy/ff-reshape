@@ -58,6 +58,8 @@ void DQTop<Impl>::cycleStart()
     for (auto &group: dqGroups) {
         group->cycleStart();
     }
+    halfSquash = false;
+    halfSquashSeq = 0;
 }
 
 template<class Impl>
@@ -907,10 +909,11 @@ DQTop<Impl>::readInst(const DQPointer &p) const
 template<class Impl>
 bool DQTop<Impl>::notifyHalfSquash(InstSeqNum new_seq, Addr new_pc)
 {
-    if (halfSquashPC) { // old valid
+    if (halfSquash) { // old valid
         if (new_seq <= halfSquashSeq) {
             halfSquashSeq = new_seq;
             halfSquashPC = new_pc;
+            DPRINTF(FFSquash, "Scheduled half squash @ inst[%lu]\n", halfSquashSeq);
         } else {
             return false;
         }
