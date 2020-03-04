@@ -23,11 +23,11 @@ struct SingleFUWrapper {
     bool isPipelined;
     bool isSingleCycle;
     bool isLongLatency;
-    bool isLSU;
 
     bool active;
     bool writtenThisCycle;
     bool hasPendingInst;
+    bool isLSU;
     unsigned pipeInstCount;
 
     unsigned op;

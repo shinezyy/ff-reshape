@@ -180,45 +180,47 @@ void FUWrapper<Impl>::setWakeup() {
 //        DPRINTF(FUW2, "waking in wrapper (%d, %d)\n", wrapperID, pair.first);
 
         // todo: has pending inst should be cleared every cycle
-        if (wrapper.isSingleCycle && wrapper.hasPendingInst) {
-//            DPRINTF(FUW, "w(%i, %i) Waking up children of one cycle inst[%d]\n",
-//                    wrapperID, pair.first, wrapper.seq);
-            toWakeup = wrapper.oneCyclePointer;
-            seqToExec = wrapper.seq;
-            count += 1;
-        }
-        if (wrapper.isLongLatency && !wrapper.isPipelined && wrapper.hasPendingInst) {
-            if (wrapper.cycleLeft == 1) {
-//                DPRINTF(FUW, "w(%i, %i) Waking up children of LL inst[%d]\n",
-//                        wrapperID, pair.first, wrapper.seq);
-                wrapper.toNextCycle->hasPendingInst = false;
-                toWakeup = wrapper.longLatencyPointer;
+        if (wrapper.isSingleCycle) {
+            if (wrapper.hasPendingInst) {
+                DPRINTF(FUW, "w(%i, %i) Waking up children of one cycle inst[%d]\n",
+                        wrapperID, wrapper.op, wrapper.seq);
+                toWakeup = wrapper.oneCyclePointer;
                 seqToExec = wrapper.seq;
                 count += 1;
-            } else {
+            }
+        } else if (wrapper.isLongLatency && !wrapper.isPipelined) {
+            if (wrapper.hasPendingInst) {
+                if (wrapper.cycleLeft == 1) {
+                    DPRINTF(FUW, "w(%i, %i) Waking up children of LL inst[%d]\n",
+                            wrapperID, wrapper.op, wrapper.seq);
+                    wrapper.toNextCycle->hasPendingInst = false;
+                    toWakeup = wrapper.longLatencyPointer;
+                    seqToExec = wrapper.seq;
+                    count += 1;
+                } else {
 //                DPRINTF(FUW, "w(%i, %i) LL inst[%llu] has %i cycles left\n",
 //                        wrapperID, pair.first, wrapper.seq, wrapper.cycleLeft);
-                assert(wrapper.cycleLeft > 1);
-                // keep
-                wrapper.toNextCycle->longLatencyPointer[0] = wrapper.longLatencyPointer[0];
-                wrapper.toNextCycle->longLatencyPointer[1] = wrapper.longLatencyPointer[1];
-                wrapper.toNextCycle->seq = wrapper.seq;
-                wrapper.toNextCycle->hasPendingInst = true;
-                // decrement
-                wrapper.toNextCycle->cycleLeft = wrapper.cycleLeft - 1;
+                    assert(wrapper.cycleLeft > 1);
+                    // keep
+                    wrapper.toNextCycle->longLatencyPointer[0] = wrapper.longLatencyPointer[0];
+                    wrapper.toNextCycle->longLatencyPointer[1] = wrapper.longLatencyPointer[1];
+                    wrapper.toNextCycle->seq = wrapper.seq;
+                    wrapper.toNextCycle->hasPendingInst = true;
+                    // decrement
+                    wrapper.toNextCycle->cycleLeft = wrapper.cycleLeft - 1;
+                }
             }
-        }
-
-
-        if (wrapper.isPipelined && wrapper.pipelineQueue.front().valid) {
-            DPRINTF(FUW, "w(%i, %i) Waking up children of pipelined inst[%d]\n",
-                    wrapperID, wrapper.op, wrapper.pipelineQueue.front().seq);
-            if (Debug::FUSched) {
-                cout << wbScheduled << endl;
+        } else if (wrapper.isPipelined && wrapper.active) {
+            if (wrapper.pipelineQueue.front().valid) {
+                DPRINTF(FUW, "w(%i, %i) Waking up children of pipelined inst[%d]\n",
+                        wrapperID, wrapper.op, wrapper.pipelineQueue.front().seq);
+                if (Debug::FUSched) {
+                    cout << wbScheduled << endl;
+                }
+                toWakeup = wrapper.pipelineQueue.front().pointer;
+                seqToExec = wrapper.pipelineQueue.front().seq;
+                count += 1;
             }
-            toWakeup = wrapper.pipelineQueue.front().pointer;
-            seqToExec = wrapper.pipelineQueue.front().seq;
-            count += 1;
         }
 
         assert(count <= 1);
@@ -236,9 +238,10 @@ void FUWrapper<Impl>::setWakeup() {
         DPRINTF(FUW, "one instruction should be executed and its children"
                 " should be waken up\n");
 
+
+        if (Debug::FUW) {
         const DQPointer &src = toWakeup[SrcPtr];
         const DQPointer &dest = toWakeup[DestPtr];
-
         if (src.valid) {
             DPRINTF(FUW, "To wakeup source: (%i %i) (%i)\n",
                     src.bank, src.index, src.op);
@@ -254,6 +257,7 @@ void FUWrapper<Impl>::setWakeup() {
         } else {
             DPRINTF(FUW, "Don't wakeup dest: (%i) (%i %i) (%i)\n",
                     dest.valid, dest.bank, dest.index, dest.op);
+        }
         }
 
         assert(count_overall > 0);

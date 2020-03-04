@@ -348,7 +348,6 @@ void DataflowQueues<Impl>::tick()
 
                 if (dqs[b]->wakeup(ptr)) {
 
-                    wake_req_granted[pkt->source] = true;
                     // pop accepted pointers.
                     assert(!wakeQueues[pkt->source].empty());
                     if (wakeQueues[pkt->source].size() == numPendingWakeupMax) {
@@ -536,7 +535,6 @@ void DataflowQueues<Impl>::tick()
 template<class Impl>
 void DataflowQueues<Impl>::cycleStart()
 {
-    fill(wake_req_granted.begin(), wake_req_granted.end(), false);
     for (auto bank: dqs) {
         bank->cycleStart();
     }
@@ -1227,10 +1225,10 @@ void DataflowQueues<Impl>::endCycle()
 template<class Impl>
 void DataflowQueues<Impl>::dumpFwQSize()
 {
-    DPRINTF(DQ || Debug::RSProbe1, "fw queue in flight = %i, cannot reset oldestRef\n", numPendingFwPointers);
+    DPRINTF(DQV2 || Debug::RSProbe1, "fw queue in flight = %i, cannot reset oldestRef\n", numPendingFwPointers);
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
-            DPRINTFR(DQ || Debug::RSProbe1, "fw queue %i.%i size: %llu\n",
+            DPRINTFR(DQV2 || Debug::RSProbe1, "fw queue %i.%i size: %llu\n",
                     b, op, forwardPointerQueue[b*nOps + op].size());
         }
     }

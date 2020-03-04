@@ -238,7 +238,7 @@ class DerivFFCPU(BaseCPU):
     NarrowXBarWakeup = Param.Bool(False, "NarrowXBarWakeup")
     DediXBarWakeup = Param.Bool(False, "DediXBarWakeup")
 
-    AgedWakeQueuePush = Param.Bool(True, "AgedWakeQueuePush")
+    AgedWakeQueuePush = Param.Bool(False, "AgedWakeQueuePush")
     AgedWakeQueuePktSel = Param.Bool(False, "AgedWakeQueuePktSel")
 
     MaxReadyQueueSize = Param.Unsigned(4, "MaxReadyQueueSize")

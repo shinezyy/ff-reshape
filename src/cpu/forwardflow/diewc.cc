@@ -10,6 +10,7 @@
 #include "debug/CommitRate.hh"
 #include "debug/DIEWC.hh"
 #include "debug/DQGOF.hh"
+#include "debug/DQV2.hh"
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
 #include "debug/FFCommit.hh"
@@ -2385,7 +2386,7 @@ FFDIEWC<Impl>::tryResetRef()
 {
     if (dq.numInFlightFw() == 0) {
         resetOldestFw();
-    } else {
+    } else if (Debug::DQV2) {
         dq.dumpFwQSize();
     }
 }
