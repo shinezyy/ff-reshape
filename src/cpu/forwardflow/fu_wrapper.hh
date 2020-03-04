@@ -19,18 +19,20 @@
 namespace FF{
 
 struct SingleFUWrapper {
+
     bool isPipelined;
     bool isSingleCycle;
     bool isLongLatency;
     bool isLSU;
-    bool writtenThisCycle;
-
 
     unsigned latency;
     unsigned MaxPipeLatency;
 
     bool hasPendingInst;
     InstSeqNum seq;
+    std::array<DQPointer, 2> oneCyclePointer;
+    std::array<DQPointer, 2> longLatencyPointer;
+    unsigned cycleLeft;  // for long latency
 
     struct PipelineStruct {
         bool valid;
@@ -39,11 +41,7 @@ struct SingleFUWrapper {
     };
 
     std::deque<PipelineStruct> pipelineQueue;
-
-    std::array<DQPointer, 2> longLatencyPointer;
-    unsigned cycleLeft;  // for long latency
-
-    std::array<DQPointer, 2> oneCyclePointer;
+    unsigned pipeInstCount;
 
     void init(bool pipe, bool single_cycle, bool long_lat,
                     unsigned latency, unsigned max_pipe_lat);
@@ -51,20 +49,23 @@ struct SingleFUWrapper {
     struct SFUTimeReg {
         bool hasPendingInst;
         InstSeqNum seq;
-        std::array<DQPointer, 2> oneCyclePointer;
-        std::array<DQPointer, 2> longLatencyPointer;
+        DQPointer oneCyclePointer[2];
+        DQPointer longLatencyPointer[2];
         unsigned cycleLeft;
     };
 
-    TimeBuffer<SFUTimeReg> *timeStruct;
-    typename TimeBuffer<SFUTimeReg>::wire toNextCycle;
-    typename TimeBuffer<SFUTimeReg>::wire fromLastCycle;
+    SFUTimeReg timeReg;
+    SFUTimeReg *toNextCycle;
+    SFUTimeReg *fromLastCycle;
 
     void markWb() {
         assert(isLongLatency);
         assert(isLSU);
         cycleLeft = 1;
     }
+    bool writtenThisCycle;
+    bool active;
+    void checkActive();
 };
 
 
@@ -82,7 +83,6 @@ public:
     typedef typename Impl::CPUPol::DIEWC Exec;
 
 private:
-    FuncUnit fu;
 
     LSQ *ldstQueue;
 
@@ -136,7 +136,7 @@ public:
 
     void fillLatTable(std::unordered_map<OpClass, unsigned> &v);
 
-    const std::string name() const { return _name;}
+    std::string name() const { return _name;}
 
     std::string _name;
 private:
@@ -156,8 +156,6 @@ private:
     unsigned wrapperID;
 
 public:
-    void advance();
-
     void endCycle();
 
     void executeInsts();
@@ -172,6 +170,8 @@ private:
 
     DQPointer inv;
     unsigned numFU;
+
+    bool active;
 };
 
 }

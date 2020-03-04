@@ -57,7 +57,6 @@ bool FUWrapper<Impl>::canServe(DynInstPtr &inst, InstSeqNum &waitee) {
 template<class Impl>
 bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
 {
-
     auto lat = opLat[inst->opClass()];
     SingleFUWrapper &wrapper = wrappers[inst->opClass()];
     assert(lat == wrapper.latency);
@@ -114,7 +113,8 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
         // schedule wb port
         assert(!wbScheduled[0]);
         wbScheduled[0] = true;
-        wrapper.oneCyclePointer = to_wake;
+        wrapper.oneCyclePointer[SrcPtr] = to_wake[SrcPtr];
+        wrapper.oneCyclePointer[DestPtr] = to_wake[DestPtr];
 
         DPRINTF(FUW, "Add inst[%i] into 1-cycle wrapper (%i, %i)\n",
                 inst->seqNum, wrapperID, inst->opClass());
@@ -128,7 +128,14 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
 
         DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will push\n",
                 wrapperID, inst->opClass(), wrapper.pipelineQueue.size());
+        if (!wrapper.active &&
+                (wrapper.pipelineQueue.size() == wrapper.latency)) {
+            DPRINTF(FUPipe, "wrapper(%i, %i) pop front to maintain size\n",
+                    wrapperID, inst->opClass());
+            wrapper.pipelineQueue.pop_front();
+        }
         wrapper.pipelineQueue.push_back({true, to_wake, inst->seqNum});
+        wrapper.pipeInstCount += 1;
 
         assert(!wrapper.writtenThisCycle);
         wrapper.writtenThisCycle = true;
@@ -148,11 +155,6 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
         if (lat <= Impl::MaxOpLatency) {
             wbScheduled[lat-1] = true;
         }
-
-//        wrapper.toNextCycle->hasPendingInst = true;
-//        wrapper.toNextCycle->seq = inst->seqNum;
-//        wrapper.toNextCycle->longLatencyPointer = to_wake;
-//        wrapper.toNextCycle->cycleLeft = lat - 1;
 
         wrapper.hasPendingInst = true;
         wrapper.seq = inst->seqNum;
@@ -191,6 +193,7 @@ void FUWrapper<Impl>::setWakeup() {
             if (wrapper.cycleLeft == 1) {
                 DPRINTF(FUW, "w(%i, %i) Waking up children of LL inst[%d]\n",
                         wrapperID, pair.first, wrapper.seq);
+                wrapper.toNextCycle->hasPendingInst = false;
                 toWakeup = wrapper.longLatencyPointer;
                 seqToExec = wrapper.seq;
                 count += 1;
@@ -199,7 +202,8 @@ void FUWrapper<Impl>::setWakeup() {
                         wrapperID, pair.first, wrapper.seq, wrapper.cycleLeft);
                 assert(wrapper.cycleLeft > 1);
                 // keep
-                wrapper.toNextCycle->longLatencyPointer = wrapper.longLatencyPointer;
+                wrapper.toNextCycle->longLatencyPointer[0] = wrapper.longLatencyPointer[0];
+                wrapper.toNextCycle->longLatencyPointer[1] = wrapper.longLatencyPointer[1];
                 wrapper.toNextCycle->seq = wrapper.seq;
                 wrapper.toNextCycle->hasPendingInst = true;
                 // decrement
@@ -274,51 +278,50 @@ void FUWrapper<Impl>::startCycle() {
     }
 
     // read signals
-
-
     DPRINTF(FUSched, "wbScheduledNext at start: ");
     if (Debug::FUSched) {
         cout << wbScheduledNext << endl;
     }
     for (auto &pair: wrappers) {
         SingleFUWrapper &wrapper = pair.second;
+
         wrapper.writtenThisCycle = false;
 
+        if (wrapper.isSingleCycle) {
+            wrapper.hasPendingInst = false;
+
+        } else if (wrapper.active && wrapper.isLongLatency && !wrapper.isPipelined) {
 #define wrapperReadFromLast(field) \
         do { wrapper.field = wrapper.fromLastCycle->field;} while (0)
 
-        wrapperReadFromLast(hasPendingInst);
-        wrapperReadFromLast(seq);
-        wrapperReadFromLast(oneCyclePointer);
-        wrapperReadFromLast(longLatencyPointer);
-        wrapperReadFromLast(cycleLeft);
+            wrapperReadFromLast(hasPendingInst);
+            wrapperReadFromLast(seq);
+            // wrapperReadFromLast(oneCyclePointer[SrcPtr]);
+            // wrapperReadFromLast(oneCyclePointer[DestPtr]);
+            wrapperReadFromLast(longLatencyPointer[SrcPtr]);
+            wrapperReadFromLast(longLatencyPointer[DestPtr]);
+            wrapperReadFromLast(cycleLeft);
 #undef wrapperReadFromLast
+        }
     }
 
     for (auto &pair: wrappers) {
         SingleFUWrapper &wrapper = pair.second;
-
-        if (wrapper.isLongLatency && wrapper.hasPendingInst && !wrapper.isLSU) {
+        if (wrapper.active && wrapper.isLongLatency &&
+                wrapper.hasPendingInst && !wrapper.isLSU) {
             if (wrapper.cycleLeft <= 20 && !wbScheduled[wrapper.cycleLeft - 1]) {
                 wbScheduledNext[wrapper.cycleLeft - 2] = true;
             }
-        }
-
-        if (wrapper.isPipelined) {
+        } else if (wrapper.isPipelined && wrapper.active) {
             DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will pop\n",
                     wrapperID, pair.first, wrapper.pipelineQueue.size());
             assert(wrapper.pipelineQueue.size() == wrapper.latency);
             // pop to prepare for incoming pointers
+            if (wrapper.pipelineQueue.front().valid) {
+                wrapper.pipeInstCount -= 1;
+            }
             wrapper.pipelineQueue.pop_front();
         }
-    }
-}
-
-template<class Impl>
-void FUWrapper<Impl>::advance() {
-    for (auto &pair: wrappers) {
-        SingleFUWrapper &wrapper = pair.second;
-        wrapper.timeStruct->advance();
     }
 }
 
@@ -327,6 +330,10 @@ void FUWrapper<Impl>::endCycle() {
     for (auto &pair: wrappers) {
         SingleFUWrapper &wrapper = pair.second;
         // maintain pipelined bitset
+        wrapper.checkActive();
+        if (!wrapper.active) {
+            continue;
+        }
         if (wrapper.isPipelined) {
             if (!wrapper.writtenThisCycle) {
                 DPRINTF(FUPipe, "wrapper(%i, %i) is pipelined, size:%u, will push\n",
@@ -338,13 +345,13 @@ void FUWrapper<Impl>::endCycle() {
             }
         }
     }
-    advance();
 }
 
 template<class Impl>
 void FUWrapper<Impl>::init(const Params *p, unsigned bank)
 {
     numFU = 0;
+    active = false;
 
     wrapperID = bank;
 
@@ -564,9 +571,30 @@ SingleFUWrapper::init(
     for (unsigned i = 0; i < latency; i++) {
         pipelineQueue.push_back({false, {inv, inv}, 0});
     }
-    timeStruct = new TimeBuffer<SFUTimeReg>(2, 2);
-    toNextCycle = timeStruct->getWire(0);
-    fromLastCycle = timeStruct->getWire(-1);
+    toNextCycle = &timeReg;
+    fromLastCycle = &timeReg;
+    active = isSingleCycle;
+    pipeInstCount = 0;
+}
+
+void SingleFUWrapper::checkActive()
+{
+//    if (!isSingleCycle) {
+//        if (isLongLatency) {
+//            active = hasPendingInst;
+//        }
+//        if (isPipelined) {
+//            active = pipeInstCount > 0;
+//        }
+//    }
+
+    // active = !isSingleCycle &&
+    //          ((isLongLatency && hasPendingInst) || (isPipelined && pipeInstCount > 0));
+
+    unsigned sub_cond_1 = ((unsigned) isLongLatency) & ~((unsigned) isPipelined);
+    sub_cond_1 &= (unsigned) hasPendingInst;
+    unsigned sub_cond_2 = ((unsigned) isPipelined) & (unsigned) (pipeInstCount > 0);
+    active = (bool) ((sub_cond_1 | sub_cond_2) & 0x1);
 }
 
 }

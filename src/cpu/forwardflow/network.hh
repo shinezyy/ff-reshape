@@ -53,7 +53,7 @@ public:
 
     void dumpPackets(std::vector<DQPacket<T>*> &v);
 
-    const std::string name() {return "OmegaNet";}
+    std::string name() const {return "OmegaNet";}
 };
 
 }
@@ -156,14 +156,14 @@ std::vector<DQPacket<T> *>
 
     for (uint32_t x = 0; x < ceilLog2(size); x++) {
         DPRINTF(Omega, "connected:\n");
-        dumpPackets(*inputs);
+//        dumpPackets(*inputs);
         connect(inputs, outputs);
-        dumpPackets(*outputs);
+//        dumpPackets(*outputs);
 
         DPRINTF(Omega, "swapped:\n");
         swap(inputs, outputs);
-        dumpPackets(*inputs);
-        dumpPackets(*outputs);
+//        dumpPackets(*inputs);
+//        dumpPackets(*outputs);
 
         DPRINTF(Omega, "crossing layer = %d:\n", x);
         for (uint32_t y = 0; y < size; y += 2) {
@@ -177,12 +177,12 @@ std::vector<DQPacket<T> *>
             DPRINTF(Omega, "crossed y = %d/%d:\n", y, size);
             tie((*outputs)[y], (*outputs)[y+1]) =
                     switches[y/2][x].cross((*inputs)[y], (*inputs)[y+1]);
-            dumpPackets(*inputs);
-            dumpPackets(*outputs);
+//            dumpPackets(*inputs);
+//            dumpPackets(*outputs);
         }
         DPRINTF(Omega, "crossed layer = %d:\n", x);
-        dumpPackets(*inputs);
-        dumpPackets(*outputs);
+//        dumpPackets(*inputs);
+//        dumpPackets(*outputs);
         swap(inputs, outputs);
     }
 
