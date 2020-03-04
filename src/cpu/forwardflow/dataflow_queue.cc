@@ -209,8 +209,18 @@ void DataflowQueues<Impl>::tick()
     //      to wake up the child one cycle before its value arrived
 
     DPRINTF(DQ, "FU selecting ready insts from banks\n");
-    DPRINTF(DQV2, "FU req packets:\n");
-    dumpInstPackets(fu_req_ptrs);
+    if (Debug::DQV2) {
+        DPRINTF(DQV2, "FU req packets:\n");
+        dumpInstPackets(fu_req_ptrs);
+    }
+
+    auto inst_pkt_valid_or = []
+            (bool x, DQPacket<DynInstPtr>* y)
+    {return x || y->valid;};
+    bool any_valid = std::accumulate(fu_req_ptrs.begin(), fu_req_ptrs.end(),
+                                     false, inst_pkt_valid_or);
+    if (any_valid) {
+
     fu_granted_ptrs = bankFUXBar.select(fu_req_ptrs, &nullInstPkt, nFUGroups);
     for (unsigned b = 0; b < nBanks; b++) {
 
@@ -246,6 +256,7 @@ void DataflowQueues<Impl>::tick()
             }
         }
     }
+    }
 
     // DPRINTF(DQ, "Tell dq banks who was granted\n");
     // mark it for banks
@@ -266,6 +277,15 @@ void DataflowQueues<Impl>::tick()
     // For each bank: check status: whether I can consume from queue this cycle?
     // record the state
     genFUValidMask();
+
+
+    auto wk_ptr_valid_or = []
+            (bool x, DQPacket<WKPointer>* y)
+    {return x || y->valid;};
+    any_valid = std::accumulate(wakeup_req_ptrs.begin(),wakeup_req_ptrs.end(),
+                                false, wk_ptr_valid_or);
+
+    if (any_valid) {
 
     if (MINWakeup) {
         wakeup_granted_ptrs = wakeupQueueBankMIN.select(wakeup_req_ptrs);
@@ -347,9 +367,16 @@ void DataflowQueues<Impl>::tick()
             }
         }
     }
+
     if (wk_pkt_passed != 0) {
         assert(wk_pkt_passed <= nOps * nBanks);
         WKFlowUsage[wk_pkt_passed]++;
+    }
+
+    } else {
+        for (unsigned b = 0; b < nBanks; b++) {
+            dqs[b]->canServeNew();
+        }
     }
 
     if (Debug::QClog) {
@@ -1035,16 +1062,30 @@ unsigned DataflowQueues<Impl>::numInFlightFw()
 template<class Impl>
 void DataflowQueues<Impl>::digestForwardPointer()
 {
-    DPRINTF(DQV2, "Pair packets before selection\n");
-    dumpPairPackets(insert_req_ptrs);
+    if (Debug::DQV2) {
+        DPRINTF(DQV2, "Pair packets before selection\n");
+        dumpPairPackets(insert_req_ptrs);
+    }
+
+    auto pair_valid_or = []
+            (bool x, DQPacket<PointerPair>* y)
+    {return x || y->valid;};
+    bool any_valid = std::accumulate(insert_req_ptrs.begin(),insert_req_ptrs.end(),
+                                     false, pair_valid_or);
+
+    if (any_valid) {
 
     insert_granted_ptrs = pointerQueueBankXBar.select(insert_req_ptrs, &nullFWPkt);
 
-    DPRINTF(DQV2, "Selected pairs:\n");
-    dumpPairPackets(insert_granted_ptrs);
+    if (Debug::DQV2) {
+        DPRINTF(DQV2, "Selected pairs:\n");
+        dumpPairPackets(insert_granted_ptrs);
+    }
 
-    DPRINTF(DQV2, "Pair packets after selection\n");
-    dumpPairPackets(insert_req_ptrs);
+    if (Debug::DQV2) {
+        DPRINTF(DQV2, "Pair packets after selection\n");
+        dumpPairPackets(insert_req_ptrs);
+    }
 
     for (auto &ptr : insert_granted_ptrs) {
         if (ptr->valid) {
@@ -1094,6 +1135,8 @@ void DataflowQueues<Impl>::digestForwardPointer()
             numPendingFwPointers--;
             // handle the special case that inst executed before pointer reached
         }
+    }
+
     }
 }
 
