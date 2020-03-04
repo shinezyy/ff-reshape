@@ -43,7 +43,7 @@ public:
 
     bool isFull(FF::OpGroups group);
 
-    std::vector<std::__cxx11::list<DynInstPtr> > preScheduledQueues;
+    std::vector<std::list<DynInstPtr> > preScheduledQueues;
 
     std::string name() const { return _name; }
 private:
