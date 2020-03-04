@@ -477,6 +477,8 @@ void FUWrapper<Impl>::executeInsts()
     if (Debug::FUSched) {
         cout << wbScheduledNext << endl;
     }
+
+    endCycle();
 }
 
 template<class Impl>

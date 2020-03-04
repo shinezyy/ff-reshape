@@ -1175,9 +1175,9 @@ void DataflowQueues<Impl>::dumpQueues()
 template<class Impl>
 void DataflowQueues<Impl>::endCycle()
 {
-    for (auto &wrapper: fuWrappers) {
-        wrapper.endCycle();
-    }
+//    for (auto &wrapper: fuWrappers) {
+//        wrapper.endCycle();
+//    }
     mergeExtraWKPointers();
 }
 
