@@ -132,7 +132,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params,
             pair_pkt.source = index;
             insert_req_ptrs[index] = &insert_requests[index];
         }
-        fuWrappers[b].init(fuPool->fw, b);
+        fuWrappers[b].init(fuPool->fw, groupID, b);
         // initiate fu bit map here
         fuWrappers[b].fillMyBitMap(fuGroupCaps, b);
         fuWrappers[b].fillLatTable(opLat);

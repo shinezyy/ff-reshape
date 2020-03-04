@@ -25,10 +25,26 @@ struct SingleFUWrapper {
     bool isLongLatency;
     bool isLSU;
 
+    bool active;
+    bool writtenThisCycle;
+    bool hasPendingInst;
+    unsigned pipeInstCount;
+
+    unsigned op;
     unsigned latency;
     unsigned MaxPipeLatency;
 
-    bool hasPendingInst;
+    struct SFUTimeReg {
+        bool hasPendingInst;
+        InstSeqNum seq;
+        DQPointer oneCyclePointer[2];
+        DQPointer longLatencyPointer[2];
+        unsigned cycleLeft;
+    };
+    SFUTimeReg timeReg;
+    SFUTimeReg *toNextCycle;
+    SFUTimeReg *fromLastCycle;
+
     InstSeqNum seq;
     std::array<DQPointer, 2> oneCyclePointer;
     std::array<DQPointer, 2> longLatencyPointer;
@@ -41,31 +57,16 @@ struct SingleFUWrapper {
     };
 
     std::deque<PipelineStruct> pipelineQueue;
-    unsigned pipeInstCount;
 
     void init(bool pipe, bool single_cycle, bool long_lat,
-                    unsigned latency, unsigned max_pipe_lat);
-
-    struct SFUTimeReg {
-        bool hasPendingInst;
-        InstSeqNum seq;
-        DQPointer oneCyclePointer[2];
-        DQPointer longLatencyPointer[2];
-        unsigned cycleLeft;
-    };
-
-    SFUTimeReg timeReg;
-    SFUTimeReg *toNextCycle;
-    SFUTimeReg *fromLastCycle;
+                    unsigned latency, unsigned max_pipe_lat, unsigned op_);
 
     void markWb() {
         assert(isLongLatency);
         assert(isLSU);
         cycleLeft = 1;
     }
-    bool writtenThisCycle;
-    bool active;
-    void checkActive();
+    bool checkActive();
 };
 
 
@@ -130,7 +131,7 @@ public:
 
     FUWrapper();
 
-    void init(const Params *p, unsigned bank_id);
+    void init(const Params *p, unsigned gid, unsigned bank_id);
 
     void fillMyBitMap(std::vector<std::vector<bool>> &v, unsigned bank);
 
@@ -141,7 +142,8 @@ public:
     std::string _name;
 private:
 
-    std::unordered_map<OpClass, SingleFUWrapper> wrappers;
+    std::vector<SingleFUWrapper> wrappersVec;
+    std::unordered_map<OpClass, SingleFUWrapper*> wrappers;
     std::unordered_map<InstSeqNum, DynInstPtr> insts;
 
 //    std::vector<Value> buffer(num_fu);
@@ -172,6 +174,8 @@ private:
     unsigned numFU;
 
     bool active;
+
+    unsigned groupID;
 };
 
 }
