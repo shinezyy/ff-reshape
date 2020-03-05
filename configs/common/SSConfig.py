@@ -88,3 +88,6 @@ def modifyO3CPUConfig(options, cpu):
         cpu.DQDepth = options.dq_depth
     if options.max_wkq_depth:
         cpu.pendingQueueDepth = options.max_wkq_depth
+
+    assert options.dq_groups
+    cpu.numDQGroups = options.dq_groups

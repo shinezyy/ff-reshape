@@ -161,3 +161,8 @@ def addO3Options(parser):
             type='int',
             help='max wakeup queue depth before squash')
 
+    parser.add_option("--dq-groups",
+            action='store',
+            type='int',
+            help='number of DQ groups')
+

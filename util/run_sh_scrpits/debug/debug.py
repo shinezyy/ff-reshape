@@ -26,7 +26,7 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir = pjoin(c.stats_base_dir, f'debug{d}')
+outdir = pjoin(c.stats_base_dir, f'omega-md-debug{d}')
 
 exp_options = [
         #'--enable-reshape',
@@ -41,22 +41,23 @@ def debug(benchmark, some_extra_args, outdir_b):
     interval = 200*10**6
     warmup = 20*10**6
 
-    os.chdir(c.gem5_exec())
+    os.chdir(c.gem5_exec('2017'))
 
     panic_tick = 254980806320500
     options = [
             '--outdir=' + outdir_b,
             '--stats-file=debug_stats.txt',
-            # '--debug-flags=Fetch,DAllocation,DIEWC,IEW,Rename,Commit,DQRead,' + \
-            #         'DQWrite,DQWake,FFCommit,FFSquash,DQ,FUW,ValueCommit,'+ \
-            #         'Cache,DRAMSim2,MemoryAccess,DRAM,'+ \
-            #         'FFInit,FFExec,FUSched,FanoutPred1,Reshape,ReadyHint',
+            #'--debug-flags=DQV2',
             #'--debug-flags=ValueCommit',
-            '--debug-flags=RSProbe2',
+            #'--debug-flags=FFExec,FFCommit,FFDisp,DAllocation,DQGOF',
+            #'--debug-flags=DQWake,DQGDL,Rename,DQPair,FFSquash,FFExec,IEW',
+            #'--debug-flags=LSQUnit,Cache', # memory
+            '--debug-flags=FUW,FUPipe', # FU
+
             #'--debug-start={}'.format (panic_tick - 2000000),
             #'--debug-end={}'.format   (panic_tick + 200000),
-            pjoin(c.gem5_home(), 'configs/spec2006/se_spec06.py'),
-            '--spec-2006-bench',
+            pjoin(c.gem5_home(), 'configs/spec2017/se_spec17.py'),
+            '--spec-2017-bench',
             '-b', '{}'.format(benchmark),
             '--benchmark-stdout={}/out'.format(outdir_b),
             '--benchmark-stderr={}/err'.format(outdir_b),
@@ -66,7 +67,7 @@ def debug(benchmark, some_extra_args, outdir_b):
             '--mem-size=4GB',
             '-r 1',
             '--restore-simpoint-checkpoint',
-            '--checkpoint-dir={}'.format(pjoin(c.gem5_cpt_dir(arch),
+            '--checkpoint-dir={}'.format(pjoin(c.gem5_cpt_dir(arch,2017),
                 benchmark)),
             '--arch={}'.format(arch),
             ]
@@ -118,7 +119,7 @@ def run(benchmark):
     if not os.path.isdir(outdir_b):
         os.makedirs(outdir_b)
 
-    cpt_flag_file = pjoin(c.gem5_cpt_dir(arch), benchmark,
+    cpt_flag_file = pjoin(c.gem5_cpt_dir(arch, 2017), benchmark,
             'ts-take_cpt_for_benchmark')
     prerequisite = os.path.isfile(cpt_flag_file)
     some_extra_args = None
@@ -139,7 +140,9 @@ def main():
 
     with open('./tmp.txt') as f:
         for line in f:
-            benchmarks.append(line.strip())
+            if not line.startswith('#'):
+                b, n = line.strip().split()
+                benchmarks.append((b, int(n)))
 
     if num_thread > 1:
         p = Pool(num_thread)

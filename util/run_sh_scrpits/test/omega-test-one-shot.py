@@ -15,6 +15,7 @@ lmd = 0.55
 num_thread = 2
 
 full = False
+dry = False
 
 if full:
     d = '-full'
@@ -22,10 +23,18 @@ if full:
 else:
     d = ''
     insts = 19*10**6
+    # insts = 5*10**6
+    # insts = 100
 
-outdir =  f'{c.stats_base_dir}/omega-md-test{d}'
+outdir =  f'{c.stats_base_dir}/omega-md-perf{d}'
+
+dq_groups = 4
+group_size = 192
 
 exp_options = [
+        '--dq-groups', dq_groups,
+        '--num-LQ', round(0.32 * group_size * dq_groups),
+        '--num-SQ', round(0.25 * group_size * dq_groups),
         # '--enable-reshape',
         # '--rand-op-position',
         # '--profit-discount=1.0',
@@ -49,9 +58,10 @@ def op_rand(benchmark, some_extra_args, outdir_b, cpt_id):
     options = [
             '--outdir=' + outdir_b,
             '--stats-file=stats.txt',
+            #'--debug-flags=ValueCommit',
             #'--debug-flags=FFExec,FFCommit,FFDisp,DQV2',
             #'--debug-flags=DQV2',
-            '--debug-flags=ValueCommit',
+            #'--debug-flags=ValueCommit',
             #'--debug-flags=FFExec,FFCommit,FFDisp,DAllocation,DQGOF',
             #'--debug-flags=DQWake,DQGDL,Rename,DQPair,FFSquash,FFExec,IEW',
             #'--debug-flags=LSQUnit,Cache', # memory
@@ -98,8 +108,6 @@ def op_rand(benchmark, some_extra_args, outdir_b, cpt_id):
             '--l2_assoc=8',
             '--num-ROB=192',
             '--num-IQ=60',
-            '--num-LQ=72',
-            '--num-SQ=42',
             '--num-PhysReg=168',
             '--use-zperceptron',
             f'--fanout-lambda={lmd}',
@@ -107,7 +115,11 @@ def op_rand(benchmark, some_extra_args, outdir_b, cpt_id):
             ]
     else:
         assert False
-    print(options)
+    if dry:
+        print(pjoin(c.gem5_build(arch), 'gem5.opt'), *options)
+        assert False
+    else:
+        print(options)
     gem5 = sh.Command(pjoin(c.gem5_build(arch), 'gem5.opt'))
     # sys.exit(0)
     gem5(
@@ -141,11 +153,11 @@ def run(benchmark_cpt_id):
 def main():
     benchmarks = []
 
-    with open('./gcc.txt') as f:
+    with open('./one-shot.txt') as f:
         for line in f:
             if not line.startswith('#'):
-                for i in range(0, 3):
-                    benchmarks.append((line.strip(), i))
+                b, n = line.strip().split()
+                benchmarks.append((b, int(n)))
 
     if num_thread > 1:
         p = Pool(num_thread)

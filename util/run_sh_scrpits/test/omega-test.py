@@ -14,7 +14,7 @@ import common as c
 lmd = 0.55
 num_thread = 6
 
-full = False
+full = True
 
 if full:
     d = '-full'
@@ -25,7 +25,13 @@ else:
 
 outdir =  f'{c.stats_base_dir}/omega-md-test{d}'
 
+dq_groups = 4
+group_size = 192
+
 exp_options = [
+        '--dq-groups', dq_groups,
+        '--num-LQ', round(0.32 * group_size * dq_groups),
+        '--num-SQ', round(0.25 * group_size * dq_groups),
         # '--enable-reshape',
         # '--rand-op-position',
         # '--profit-discount=1.0',
@@ -51,7 +57,7 @@ def op_rand(benchmark, some_extra_args, outdir_b, cpt_id):
             '--stats-file=stats.txt',
             #'--debug-flags=FFExec,FFCommit,FFDisp,DQV2',
             #'--debug-flags=DQV2',
-            '--debug-flags=ValueCommit',
+            #'--debug-flags=ValueCommit',
             #'--debug-flags=FFExec,FFCommit,FFDisp,DAllocation,DQGOF',
             #'--debug-flags=DQWake,DQGDL,Rename,DQPair,FFSquash,FFExec,IEW',
             #'--debug-flags=LSQUnit,Cache', # memory
@@ -98,8 +104,6 @@ def op_rand(benchmark, some_extra_args, outdir_b, cpt_id):
             '--l2_assoc=8',
             '--num-ROB=192',
             '--num-IQ=60',
-            '--num-LQ=72',
-            '--num-SQ=42',
             '--num-PhysReg=168',
             '--use-zperceptron',
             f'--fanout-lambda={lmd}',

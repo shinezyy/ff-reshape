@@ -49,15 +49,18 @@ def op_rand(benchmark, some_extra_args, outdir_b, cpt_id, tick):
     options = [
             '--outdir=' + outdir_b,
             '--stats-file=stats.txt',
-            '--debug-flags=ValueCommit',
-            '--debug-flags=Fetch,Branch,DAllocation,DIEWC,IEW,Rename,Commit,DQRead,' + \
-                    'DQWrite,DQWake,FFCommit,FFSquash,DQ,FUW,ValueCommit,'+ \
-                    'Cache,DRAMSim2,MemoryAccess,DRAM,'+ \
-                    'FFInit,FFExec,FUSched,FanoutPred1,Reshape,ReadyHint',
 
-            # '--debug-start={}'.format (panic_tick - 2000000),
-            # '--debug-end={}'.format   (panic_tick + 200000),
-            # '--debug-end={}'.format   (panic_tick + 200000),
+            #'--debug-flags=DQV2',
+            #'--debug-flags=ValueCommit',
+            #'--debug-flags=FFExec,FFCommit,FFDisp,DAllocation,DQGOF',
+            #'--debug-flags=DQWake,DQGDL,Rename,DQPair,FFSquash,FFExec,IEW',
+            #'--debug-flags=FFSquash',
+            #'--debug-flags=LSQUnit,Cache', # memory
+            #'--debug-flags=FUW,FUPipe,FUSched', # FU
+
+            #'--debug-start={}'.format (panic_tick - 2000000),
+            #'--debug-end={}'.format   (panic_tick + 200000),
+
             pjoin(c.gem5_home(), 'configs/spec2017/se_spec17.py'),
             '--trace-interval=0',
             '--spec-2017-bench',
