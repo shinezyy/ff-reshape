@@ -292,9 +292,11 @@ public:
     void endCycle();
 
 private:
-    std::vector<std::deque<WKPointer> > pseudoCenterWKPointerBuffer;
+    std::vector<std::list<WKPointer> > pseudoCenterWKPointerBuffer;
+    unsigned center2GroupRate;
 
-    std::vector<std::deque<WKPointer> > interGroupBuffer;
+    std::vector<std::list<WKPointer> > interGroupBuffer;
+    unsigned group2GroupRate;
 
 public:
     void groupsTxPointers();
@@ -303,7 +305,8 @@ public:
 
     void groupsRxFromPrevGroup();
 
-    void groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues);
+    void groupsRxFromBuffers(std::vector<std::list<WKPointer>> &queues,
+            unsigned limit);
 
     // update at the end of a cycle
 private:

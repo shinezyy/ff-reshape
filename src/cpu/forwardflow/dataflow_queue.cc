@@ -1424,7 +1424,7 @@ DataflowQueues<Impl>::countUpPointers()
             }
         }
     }
-    assert(total_queue_len < nOps * nBanks * maxQueueDepth);
+    assert(total_queue_len <= nOps * nBanks * maxQueueDepth);
     if (total_queue_len != 0) {
         WKQueueLen[total_queue_len]++;
     }

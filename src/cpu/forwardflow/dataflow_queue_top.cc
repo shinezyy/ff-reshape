@@ -33,7 +33,9 @@ DQTop<Impl>::DQTop(DerivFFCPUParams *params)
         halfSquashSeq(0),
         halfSquashPC(0),
         pseudoCenterWKPointerBuffer(params->numDQGroups),
-        interGroupBuffer(params->numDQGroups)
+        center2GroupRate(16),
+        interGroupBuffer(params->numDQGroups),
+        group2GroupRate(4)
 {
 
     memDepUnit.init(params, DummyTid);
@@ -994,24 +996,25 @@ void DQTop<Impl>::groupsTxPointers()
 template<class Impl>
 void DQTop<Impl>::groupsRxFromCenterBuffer()
 {
-    DPRINTF(DQGOF, "Rx from center buffer\n");
-    groupsRxFromBuffers(pseudoCenterWKPointerBuffer);
+    DPRINTF(DQGOF, "Rx from center-buffer, size: %llu\n", pseudoCenterWKPointerBuffer.size());
+    groupsRxFromBuffers(pseudoCenterWKPointerBuffer, center2GroupRate);
 }
 
 template<class Impl>
 void DQTop<Impl>::groupsRxFromPrevGroup()
 {
     DPRINTF(DQGOF, "Rx from inter-buffer, size: %llu\n", interGroupBuffer.size());
-    groupsRxFromBuffers(interGroupBuffer);
+    groupsRxFromBuffers(interGroupBuffer, group2GroupRate);
 }
 
 template<class Impl>
-void DQTop<Impl>::groupsRxFromBuffers(std::vector<std::deque<WKPointer>> &queues)
+void DQTop<Impl>::groupsRxFromBuffers(std::vector<std::list<WKPointer>> &queues, unsigned limit)
 {
     for (unsigned g = 0 ; g < c.nGroups; g++) {
         DPRINTF(DQGOF, "Group %u\n", g);
         auto &queue = queues[g];
-        while (!queue.empty()) {
+        unsigned count = 0;
+        while (!queue.empty() && count++ < limit) {
             DPRINTF(DQGOF, "Receiving pointer" ptrfmt "\n", extptr(queue.front()));
             dqGroups[g]->receivePointers(queue.front());
             queue.pop_front();
