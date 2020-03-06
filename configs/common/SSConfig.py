@@ -59,35 +59,38 @@ def modifyO3CPUConfig(options, cpu):
     if options.bp_redundant_bit:
         cpu.branchPred.redundantBit = options.bp_redundant_bit
 
-    cpu.FanoutPredLambda = options.fanout_lambda
-    if options.enable_reshape:
-        cpu.EnableReshape = options.enable_reshape
-
-    if options.rand_op_position:
-        cpu.DecoupleOpPosition = options.rand_op_position
-    if options.profit_discount:
-        cpu.ProfitDiscount = options.profit_discount
-
-    if options.ready_hint:
-        cpu.ReadyHint = options.ready_hint
-
-    if options.xbar_wk == '1':
-        cpu.XBarWakeup = True
-    if options.narrow_xbar_wk == '1':
-        cpu.NarrowXBarWakeup = True
-    if options.dedi_xbar_wk == '1':
-        cpu.DediXBarWakeup = True
-    if options.min_wk == '1':
-        cpu.MINWakeup = True
     cpu.commitTraceInterval = options.trace_interval
 
-    if options.local_fw:
-        cpu.NarrowLocalForward = True
+    if options.cpu_type == 'DerivFFCPU':
 
-    if options.dq_depth:
-        cpu.DQDepth = options.dq_depth
-    if options.max_wkq_depth:
-        cpu.pendingQueueDepth = options.max_wkq_depth
+        cpu.FanoutPredLambda = options.fanout_lambda
+        if options.enable_reshape:
+            cpu.EnableReshape = options.enable_reshape
 
-    assert options.dq_groups
-    cpu.numDQGroups = options.dq_groups
+        if options.rand_op_position:
+            cpu.DecoupleOpPosition = options.rand_op_position
+        if options.profit_discount:
+            cpu.ProfitDiscount = options.profit_discount
+
+        if options.ready_hint:
+            cpu.ReadyHint = options.ready_hint
+
+        if options.xbar_wk == '1':
+            cpu.XBarWakeup = True
+        if options.narrow_xbar_wk == '1':
+            cpu.NarrowXBarWakeup = True
+        if options.dedi_xbar_wk == '1':
+            cpu.DediXBarWakeup = True
+        if options.min_wk == '1':
+            cpu.MINWakeup = True
+
+        if options.local_fw:
+            cpu.NarrowLocalForward = True
+
+        if options.dq_depth:
+            cpu.DQDepth = options.dq_depth
+        if options.max_wkq_depth:
+            cpu.pendingQueueDepth = options.max_wkq_depth
+
+        assert options.dq_groups
+        cpu.numDQGroups = options.dq_groups
