@@ -66,6 +66,10 @@ enum PointerIndex {
     DestPtr
 };
 
+enum {
+    numTotalReg = 64;
+};
+
 extern ThreadID DummyTid;
 
 /** Physical register ID.

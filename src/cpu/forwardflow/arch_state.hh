@@ -135,6 +135,33 @@ public:
     Stats::Vector numDispInsts;
     Stats::Formula meanBusyOp[Impl::MaxOps];
 
+    Stats::Scalar CombRename;
+    Stats::Scalar RegReadCommitSB;
+    Stats::Scalar RegWriteCommitSB;
+    Stats::Scalar RegReadSpecSB;
+    Stats::Scalar RegWriteSpecSB;
+    Stats::Scalar RegReadMap;
+    Stats::Scalar RegWriteMap;
+    Stats::Scalar RegReadRT;
+    Stats::Scalar RegWriteRT;
+    Stats::Scalar RegReadHintRT;
+    Stats::Scalar RegWriteSpecRT;
+    // checkpoint
+    Stats::Scalar SRAMWriteMap;
+    Stats::Scalar SRAMWriteSB;
+    Stats::Scalar SRAMWriteRT;
+    Stats::Scalar SRAMWriteHintRT;
+    // recover
+    Stats::Scalar SRAMReadMap;
+    Stats::Scalar SRAMReadSB;
+    Stats::Scalar SRAMReadRT;
+    Stats::Scalar SRAMReadSpecRT;
+
+    Stats::Scalar RegReadARF;
+    Stats::Scalar RegWriteARF;
+    Stats::Scalar RegReadSpecARF;
+    Stats::Scalar RegWriteSpecARF;
+
 private:
     std::mt19937 gen;
 

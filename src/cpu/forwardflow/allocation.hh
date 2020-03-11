@@ -187,6 +187,7 @@ public:
     Stats::Scalar allocationAllocatedInsts;
     Stats::Scalar allocationSkidInsts;
 
+
 public:
     void regStats();
 

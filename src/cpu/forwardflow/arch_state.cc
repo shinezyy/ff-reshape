@@ -113,11 +113,19 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
         auto sb_index = make_pair(src_reg.classValue(), src_reg.index());
 
         if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
+
+            if (!readyHint) {
+                RegWriteCommitSB++;
+            }
             for (const auto i: indirect_indices) {
                 if (src_reg.classValue() == FloatRegClass) {
+                    RegReadARF++;
                     inst->setSrcValue(i, floatArchRF[src_reg.index()]);
+
                 } else if (src_reg.classValue() == IntRegClass) {
+                    RegReadARF++;
                     inst->setSrcValue(i, intArchRF[src_reg.index()]);
+
                 } else {
                     panic("Unexpected reg type\n");
                 }
@@ -132,11 +140,17 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
         } else if (readyHint && hintSB.count(sb_index) && hintSB[sb_index]) {
 
+            RegReadSpecSB++;
+
             for (const auto i: indirect_indices) {
                 if (src_reg.classValue() == FloatRegClass) {
                     inst->setSrcValue(i, hintFloatRF[src_reg.index()]);
+                    RegReadSpecARF++;
+
                 } else if (src_reg.classValue() == IntRegClass) {
                     inst->setSrcValue(i, hintIntRF[src_reg.index()]);
+                    RegReadSpecARF++;
+
                 } else {
                     panic("Unexpected reg type\n");
                 }
@@ -195,6 +209,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             dest.op = phy_op;
             pairs.push_back({old, dest});
 
+            RegReadMap++;
             if (!predecessor_is_forwarder || old.op == 3) {
                 assert(old.op <= 3);
                 DPRINTF(Rename||Debug::RSProbe1,
@@ -202,6 +217,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                         inst->seqNum, src_reg.className(), src_reg.index(),
                         extptr(old), extptr(dest));
                 renameMap[src_reg] = dest;
+                RegWriteMap++;
 
             } else {
                 assert(old.op < 3);
@@ -226,14 +242,26 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
         } else {
             auto dest_idx = make_pair(dest_reg.classValue(), dest_reg.index());
-             if (!inst->isForwarder()) {
+            if (!inst->isForwarder()) {
                 scoreboard[dest_idx] = false;
                 hintSB[dest_idx] = false;
+                RegWriteCommitSB++;
+                if (readyHint) {
+                    RegWriteSpecSB++;
+                }
+
                 reverseTable[dest_idx] = inst->dqPosition;
                 hintRT[dest_idx] = inst->dqPosition;
+                RegWriteRT++;
+                if (readyHint) {
+                    RegWriteSpecRT++;
+                }
+
                 parentMap[dest_reg] = inst->dqPosition;
+                RegWriteMap++;
             }
             renameMap[dest_reg] = inst->dqPosition;
+
             auto &m = renameMap[dest_reg];
             DPRINTF(Rename||Debug::RSProbe1,
                     "Inst[%lu] defines reg[%s %d]" ptrfmt "\n",
@@ -308,6 +336,16 @@ bool ArchState<Impl>::takeCheckpoint(DynInstPtr &inst)
             inst->pcState());
     assert(!cpts.count(inst->seqNum));
     cpts[inst->seqNum] = {renameMap, parentMap, scoreboard, reverseTable};
+
+    RegReadMap += numTotalReg;
+    SRAMWriteMap += numTotalReg;
+
+    RegReadCommitSB += numTotalReg;
+    SRAMWriteSB += numTotalReg;
+
+    RegReadRT += numTotalReg;
+    SRAMWriteRT += numTotalReg;
+
     return true;
 }
 
@@ -323,13 +361,30 @@ void ArchState<Impl>::recoverCPT(InstSeqNum &num)
     DPRINTF(FFSquash, "Recover checkpoint from inst[%llu]\n", num);
     assert(cpts.count(num));
     Checkpoint &cpt = cpts[num];
-    renameMap = cpt.renameMap;
-    parentMap = cpt.parentMap;
-    scoreboard = cpt.scoreboard;
-    reverseTable = cpt.reverseTable;
 
-    hintSB = cpt.scoreboard;
-    hintRT = cpt.reverseTable;
+    renameMap = cpt.renameMap;
+    SRAMReadMap += numTotalReg;
+    RegWriteMap += numTotalReg;
+
+    parentMap = cpt.parentMap;
+
+    scoreboard = cpt.scoreboard;
+    SRAMReadSB += numTotalReg;
+    RegWriteCommitSB += numTotalReg;
+
+    reverseTable = cpt.reverseTable;
+    SRAMReadRT += numTotalReg;
+    RegWriteRT += numTotalReg;
+
+    if (readyHint) {
+        hintSB = cpt.scoreboard;
+        SRAMReadMap += numTotalReg;
+        RegWriteSpecSB += numTotalReg;
+
+        hintRT = cpt.reverseTable;
+        SRAMReadSpecRT += numTotalReg;
+        RegWriteSpecRT += numTotalReg;
+    }
 
     auto it = cpts.begin();
     while (it != cpts.end()) {
@@ -392,6 +447,10 @@ pair<bool, FFRegValue> ArchState<Impl>::commitInst(DynInstPtr &inst)
 
         DPRINTF(FFCommit, "CommitSB in current arch state\n");
         commitInstInSB(inst, scoreboard, reverseTable, dest);
+        RegWriteCommitSB++;
+        RegWriteARF++;
+        RegWriteRT++;
+
         for (auto &pair: cpts) {
             if (pair.first >= inst->seqNum) {
                 DPRINTF(FFCommit, "CommitSB in checkpoint[%llu]\n", pair.first);
@@ -585,6 +644,11 @@ ArchState<Impl>::postExecInst(DynInstPtr &inst) {
 
         SBIndex idx = make_pair(dest.classValue(), dest.index());
         if (hintRT.count(idx) && hintRT[idx] == inst->dqPosition) {
+
+            RegWriteSpecSB++;
+            RegWriteSpecARF++;
+            RegWriteSpecRT++;
+
             hintSB[idx] = true;
 
             val = inst->getDestValue();
@@ -673,6 +737,81 @@ ArchState<Impl>::regStats()
             .desc("meanBusyOp");
         meanBusyOp[n_busy_op] = numBusyOperands[n_busy_op] / numDispInsts[n_busy_op];
     }
+
+    CombRename
+            .name(name() + ".CombRename")
+            .desc("CombRename");
+    RegReadCommitSB
+            .name(name() + ".RegReadCommitSB")
+            .desc("RegReadCommitSB");
+    RegWriteCommitSB
+            .name(name() + ".RegWriteCommitSB")
+            .desc("RegWriteCommitSB");
+    RegReadSpecSB
+            .name(name() + ".RegReadSpecSB")
+            .desc("RegReadSpecSB");
+    RegWriteSpecSB
+            .name(name() + ".RegWriteSpecSB")
+            .desc("RegWriteSpecSB");
+    RegReadMap
+            .name(name() + ".RegReadMap")
+            .desc("RegReadMap");
+    RegWriteMap
+            .name(name() + ".RegWriteMap")
+            .desc("RegWriteMap");
+
+    SRAMWriteMap
+            .name(name() + ".SRAMWriteMap")
+            .desc("SRAMWriteMap");
+    SRAMWriteSB
+            .name(name() + ".SRAMWriteSB")
+            .desc("SRAMWriteSB");
+
+    SRAMReadMap
+            .name(name() + ".SRAMReadMap")
+            .desc("SRAMReadMap");
+    SRAMReadSB
+            .name(name() + ".SRAMReadSB")
+            .desc("SRAMReadSB");
+
+    RegReadRT
+            .name(name() + ".RegReadRT")
+            .desc("RegReadRT");
+    RegWriteRT
+            .name(name() + ".RegWriteRT")
+            .desc("RegWriteRT");
+    RegReadHintRT
+            .name(name() + ".RegReadHintRT")
+            .desc("RegReadHintRT");
+    RegWriteSpecRT
+            .name(name() + ".RegWriteSpecRT")
+            .desc("RegWriteSpecRT");
+
+    SRAMReadRT
+            .name(name() + ".SRAMReadRT")
+            .desc("SRAMReadRT");
+    SRAMReadSpecRT
+            .name(name() + ".SRAMReadSpecRT")
+            .desc("SRAMReadSpecRT");
+    SRAMWriteRT
+            .name(name() + ".SRAMWriteRT")
+            .desc("SRAMWriteRT");
+    SRAMWriteHintRT
+            .name(name() + ".SRAMWriteHintRT")
+            .desc("SRAMWriteHintRT");
+
+    RegReadARF
+            .name(name() + "RegReadARF")
+            .desc("RegReadARF");
+    RegWriteARF
+            .name(name() + "RegWriteARF")
+            .desc("RegWriteARF");
+    RegReadSpecARF
+            .name(name() + "RegReadSpecARF")
+            .desc("RegReadSpecARF");
+    RegWriteSpecARF
+            .name(name() + "RegWriteSpecARF")
+            .desc("RegWriteSpecARF");
 }
 
 }
