@@ -409,6 +409,17 @@ public:
 
 private:
     void pickInterGroupPointers();
+
+public:
+    Stats::Scalar QueueWriteTxBuf;
+    Stats::Scalar QueueReadTxBuf;
+    Stats::Scalar QueueReadPairBuf;
+    Stats::Scalar QueueWritePairBuf;
+    Stats::Scalar CombWKNet;
+    Stats::Scalar CombFWNet;
+    Stats::Scalar CombSelNet;
+
+    Stats::Scalar SRAMWritePointer;
 };
 
 }

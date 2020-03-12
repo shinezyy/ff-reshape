@@ -32,6 +32,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
     invalid_pair.payload.valid = false;
     invalid_pair.dest.valid = false;
 
+    CombRename++;
+
     for (unsigned src_idx = 0; src_idx < num_src_regs; src_idx++) {
         unsigned identical = 0;
         for (unsigned src_idx_x = 0; src_idx_x < src_idx; src_idx_x++) {

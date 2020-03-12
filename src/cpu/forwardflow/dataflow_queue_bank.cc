@@ -79,6 +79,7 @@ DataflowQueueBank<Impl>::erase(DQPointer p, bool markSquashed)
     }
     instArray[p.index] = nullptr;
     nearlyWakeup.reset(p.index);
+    RegWriteValid++;
 }
 
 template<class Impl>
@@ -90,6 +91,7 @@ DataflowQueueBank<Impl>::advanceTail()
     nearlyWakeup.reset(tail);
     tail = (tail + 1) % depth;
     DPRINTF(FFSquash, "Tail after adv = %u\n", tail);
+    RegWriteValid++;
 }
 
 template<class Impl>
@@ -97,6 +99,7 @@ typename Impl::DynInstPtr
 DataflowQueueBank<Impl>::tryWakeTail()
 {
     DynInstPtr tail_inst = instArray.at(tail);
+    RegReadValid++;
     if (!tail_inst) {
         DPRINTF(DQWake, "Tail[%d] is null, skip\n", tail);
         return nullptr;
@@ -107,6 +110,7 @@ DataflowQueueBank<Impl>::tryWakeTail()
         DPRINTF(DQWake, "Tail[%d] has been granted, skip\n", tail);
         return nullptr;
     }
+    RegReadNbusy++;
     for (unsigned op = 1; op < nOps; op++) {
         if (tail_inst->hasOp[op] && !tail_inst->opReady[op]) {
             DPRINTF(DQWake, "inst[%d] has op [%d] not ready and cannot execute\n",
@@ -171,6 +175,7 @@ DataflowQueueBank<Impl>::tryWakeDirect()
     DPRINTF(DQWake||Debug::RSProbe1, "inst[%d] is ready but not waken up!,"
                                      " and is waken up by direct wake-up checker\n", inst->seqNum);
     readyQueue.pop_front();
+    QueueReadReadyInstBuf++;
     directWakenUp++;
     return inst;
 }
@@ -193,6 +198,10 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
     }
 
     std::array<bool, 4> need_pending_ptr{};
+
+    RegReadRxBuf += nOps;
+    RegReadValid++;
+    RegReadNbusy++;
 
     for (unsigned op = 0; op < nOps; op++) {
         auto &ptr = pointers[op];
@@ -281,6 +290,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                             i, inst->seqNum, v.i);
                     inst->setSrcValue(i, v);
                 }
+                SRAMWriteValue++;
 
                 if (!inst->isForwarder() &&
                     ptr.reshapeOp >= 0 && ptr.reshapeOp <= 2 &&
@@ -358,6 +368,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 }
             } else {
                 unsigned busy_count = inst->numBusyOps();
+                RegReadNbusy++;
                 if (busy_count == 1) {
                     DPRINTF(DQWake, "inst [%llu] becomes nearly waken up\n", inst->seqNum);
                     nearlyWakeup.set(ptr.index);
@@ -377,6 +388,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 DPRINTF(DQWake, "Pointer (%i %i) (%i) becomes pending\n",
                         ptr.bank, ptr.index, ptr.op);
                 pendingWakeupPointers[op] = ptr;
+                RegWriteRxBuf++;
             }
         }
     }
@@ -412,6 +424,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         DPRINTF(DQWake, "No directReady!\n");
     }
     if (first) {
+        SRAMReadInst++;
+        SRAMReadValue += nOps;
         DPRINTF(DQWake, "Wakeup valid inst: %llu\n", first->seqNum);
         DPRINTF(DQWake, "Setting pending inst[%llu]\n", first->seqNum);
     }
@@ -429,12 +443,14 @@ DataflowQueueBank<Impl>::readPointersFromBank()
 
     bool grab_from_local_fw = dq->NarrowXBarWakeup && dq->NarrowLocalForward && anyPending;
 
+    SRAMReadPointer += nOps;
     for (unsigned op = 0; op < nOps; op++) {
         if (served_forwarder) {
             break;
         }
         auto &ptr = grab_from_local_fw ? pendingWakeupPointers[op] : inputPointers[op];
         auto &optr = outputPointers[op];
+        RegReadRxBuf++;
 
         if (!ptr.valid) {
             optr.valid = false;
@@ -566,6 +582,7 @@ bool DataflowQueueBank<Impl>::wakeup(WKPointer pointer)
     auto op = pointer.op;
     assert(!inputPointers[op].valid);
     inputPointers[op] = pointer;
+    RegWriteRxBuf++;
 
     if (inst && inst->isForwarder()) {
         servedForwarder = true;
@@ -614,6 +631,8 @@ DataflowQueueBank<Impl>::writeInstsToBank(
     auto index = pointer.index;
     assert(!instArray[index]);
     instArray[index] = inst;
+    SRAMWriteInst++;
+    SRAMWriteValue += nOps;
 
     DPRINTF(DQWrite || Debug::FFDisp, "Tail before writing: %u\n", tail);
     if (!instArray[tail]) {
@@ -637,11 +656,13 @@ void DataflowQueueBank<Impl>::checkReadiness(DQPointer pointer)
         directReady++;
         nearlyWakeup.set(index);
         readyQueue.push_back(pointer);
+        QueueWriteReadyInstBuf++;
         DPRINTF(DQWake, "Push" ptrfmt "into ready queue\n", extptr(pointer));
     }
     if (busy_count == 1) {
         DPRINTF(DQWake, "inst [%llu] becomes nearly waken up\n", inst->seqNum);
         nearlyWakeup.set(index);
+        RegWriteNbusy++;
     }
 }
 
@@ -793,6 +814,7 @@ void DataflowQueueBank<Impl>::mergeLocalWKPointers()
             l_ptr.valid = false;
         }
     }
+    RegWriteRxBuf += nOps;
 }
 
 }

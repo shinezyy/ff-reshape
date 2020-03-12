@@ -165,6 +165,21 @@ public:
 
 private:
     DQTop *top;
+
+public:
+    Stats::Scalar SRAMWriteInst;
+    Stats::Scalar SRAMReadInst;
+    Stats::Scalar SRAMReadPointer;
+    Stats::Scalar SRAMWriteValue;
+    Stats::Scalar SRAMReadValue;
+    Stats::Scalar RegWriteValid;
+    Stats::Scalar RegReadValid;
+    Stats::Scalar RegWriteNbusy;
+    Stats::Scalar RegReadNbusy;
+    Stats::Scalar RegWriteRxBuf;
+    Stats::Scalar RegReadRxBuf;
+    Stats::Scalar QueueReadReadyInstBuf;
+    Stats::Scalar QueueWriteReadyInstBuf;
 };
 
 }

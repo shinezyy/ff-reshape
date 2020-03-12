@@ -67,7 +67,15 @@ enum PointerIndex {
 };
 
 enum {
-    numTotalReg = 64;
+    numTotalReg = 64
+};
+
+enum {
+    centerInstBufferSize = 16
+};
+
+enum {
+    centerPairBufferSize = 16 * 4
 };
 
 extern ThreadID DummyTid;

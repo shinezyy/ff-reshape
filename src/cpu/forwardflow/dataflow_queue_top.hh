@@ -305,7 +305,7 @@ public:
 
     void groupsRxFromPrevGroup();
 
-    void groupsRxFromBuffers(std::vector<std::list<WKPointer>> &queues,
+    unsigned groupsRxFromBuffers(std::vector<std::list<WKPointer>> &queues,
             unsigned limit);
 
     // update at the end of a cycle
@@ -318,6 +318,16 @@ private:
 
 public:
     std::string name() const {return "DQTop";}
+
+    Stats::Scalar RegReadCenterInstBuf;
+    Stats::Scalar RegReadCenterPairBuf;
+    Stats::Scalar RegReadCenterWKBuf;
+    Stats::Scalar RegReadInterGroupWKBuf;
+
+    Stats::Scalar RegWriteCenterInstBuf;
+    Stats::Scalar RegWriteCenterPairBuf;
+    Stats::Scalar RegWriteCenterWKBuf;
+    Stats::Scalar RegWriteInterGroupWKBuf;
 };
 
 }

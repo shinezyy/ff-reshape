@@ -222,6 +222,7 @@ void DataflowQueues<Impl>::tick()
     if (any_valid) {
 
     fu_granted_ptrs = bankFUXBar.select(fu_req_ptrs, &nullInstPkt, nFUGroups);
+    CombSelNet++;
     for (unsigned b = 0; b < nBanks; b++) {
 
         assert(fu_granted_ptrs[b]);
@@ -286,7 +287,6 @@ void DataflowQueues<Impl>::tick()
                                 false, wk_ptr_valid_or);
 
     if (any_valid) {
-
     if (MINWakeup) {
         wakeup_granted_ptrs = wakeupQueueBankMIN.select(wakeup_req_ptrs);
 
@@ -302,6 +302,7 @@ void DataflowQueues<Impl>::tick()
     } else {
         panic("Unknown topology\n");
     }
+    CombWKNet++;
 
     for (auto &ptr : wakeup_granted_ptrs) {
         if (ptr->valid) {
@@ -603,6 +604,7 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
                 extptr(pair.dest), extptr(pair.payload));
 
         forwardPointerQueue[forwardPtrIndex].push_back(pkt);
+        QueueWritePairBuf++;
 
         if (forwardPointerQueue[forwardPtrIndex].size() > maxQueueDepth) {
             processFWQueueFull();
@@ -771,6 +773,7 @@ DataflowQueues<Impl>::markFwPointers(
                 inst->seqNum, inst->isForwarder(), inst->forwardOp);
     }
     if (pointers[op].valid) {
+        SRAMWritePointer++;
         DPRINTF(FFSquash, "Overriding previous (squashed) sibling:(%d %d) (%d)\n",
                 pointers[op].bank, pointers[op].index, pointers[op].op);
 
@@ -919,6 +922,7 @@ void DataflowQueues<Impl>::readQueueHeads()
                 fw_pkt.valid = false;
             } else {
                 fw_pkt = forwardPointerQueue[i].front();
+                QueueReadPairBuf++;
                 DPRINTF(DQGOF, "Read valid pair:" ptrfmt "\n", extptr(fw_pkt.payload.dest));
             }
 
@@ -928,6 +932,7 @@ void DataflowQueues<Impl>::readQueueHeads()
             if (q.empty()) {
                 wk_pkt.valid = false;
             } else {
+                QueueReadTxBuf++;
                 const WKPointer &ptr = q.front();
                 DPRINTF(DQWake||Debug::RSProbe1,
                         "WKQ[%i] Found valid wakePtr:(%i) (%i %i) (%i)\n",
@@ -1074,6 +1079,7 @@ void DataflowQueues<Impl>::digestForwardPointer()
     if (any_valid) {
 
     insert_granted_ptrs = pointerQueueBankXBar.select(insert_req_ptrs, &nullFWPkt);
+    CombFWNet++;
 
     if (Debug::DQV2) {
         DPRINTF(DQV2, "Selected pairs:\n");
@@ -1607,6 +1613,7 @@ template<class Impl>
 void
 DataflowQueues<Impl>::pushToWakeQueue(unsigned q_index, WKPointer ptr)
 {
+    QueueWriteTxBuf++;
     auto &q = wakeQueues[q_index];
     if (!AgedWakeQueuePush) {
         q.push_back(ptr);

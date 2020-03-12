@@ -121,6 +121,7 @@ void DQTop<Impl>::centralizedExtraWakeup(const WKPointer &wk)
 {
     // store in a buffer? or insert directly?
     pseudoCenterWKPointerBuffer[wk.group].push_back(wk);
+    RegWriteCenterWKBuf++;
 }
 
 template<class Impl>
@@ -329,6 +330,7 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
         dispatchingGroup->alignTails();
     }
     centerInstBuffer.push_back(inst);
+    RegWriteCenterInstBuf++;
 
     inst->setInDQ();
     // we don't need to add to dependents or producers here,
@@ -346,6 +348,7 @@ void DQTop<Impl>::insertForwardPointer(PointerPair pair)
 {
     if (pair.dest.valid) {
         centerPairBuffer.push_back(pair);
+        RegWriteCenterPairBuf++;
     }
 }
 
@@ -815,6 +818,8 @@ void DQTop<Impl>::distributeInstsToGroup()
                     "Writing Inst[%llu] to" ptrfmt "\n", inst->seqNum, extptr(inst->dqPosition));
             dispatchingGroup->dqs[bank]->writeInstsToBank(inst->dqPosition, inst);
             dispatchingGroup->dqs[bank]->checkReadiness(inst->dqPosition);
+
+            RegReadCenterInstBuf++;
         }
         it = centerInstBuffer.erase(it);
     }
@@ -845,6 +850,7 @@ void DQTop<Impl>::distributePairsToGroup()
             }
             auto group = dqGroups[p.dest.group];
             group->insertForwardPointer(p);
+            RegReadCenterPairBuf++;
         }
         it = centerPairBuffer.erase(it);
     }
@@ -874,6 +880,7 @@ void DQTop<Impl>::sendToNextGroup(unsigned sending_group, const WKPointer &wk_po
     DPRINTF(DQGDL || Debug::DQWake, ptrfmt "lands in group %u\n",
             extptr(wk_pointer), recv_group);
     interGroupBuffer[recv_group].push_back(wk_pointer);
+    RegWriteInterGroupWKBuf++;
 //    unsigned recv_group = getNextGroup(sending_group);
 //    DataflowQueues *receiver = dqGroups[recv_group];
 //    receiver->receivePointers(wk_pointer);
@@ -997,29 +1004,32 @@ template<class Impl>
 void DQTop<Impl>::groupsRxFromCenterBuffer()
 {
     DPRINTF(DQGOF, "Rx from center-buffer, size: %llu\n", pseudoCenterWKPointerBuffer.size());
-    groupsRxFromBuffers(pseudoCenterWKPointerBuffer, center2GroupRate);
+    RegReadCenterWKBuf += groupsRxFromBuffers(pseudoCenterWKPointerBuffer, center2GroupRate);
 }
 
 template<class Impl>
 void DQTop<Impl>::groupsRxFromPrevGroup()
 {
     DPRINTF(DQGOF, "Rx from inter-buffer, size: %llu\n", interGroupBuffer.size());
-    groupsRxFromBuffers(interGroupBuffer, group2GroupRate);
+    RegReadInterGroupWKBuf += groupsRxFromBuffers(interGroupBuffer, group2GroupRate);
 }
 
 template<class Impl>
-void DQTop<Impl>::groupsRxFromBuffers(std::vector<std::list<WKPointer>> &queues, unsigned limit)
+unsigned DQTop<Impl>::groupsRxFromBuffers(std::vector<std::list<WKPointer>> &queues, unsigned limit)
 {
+    unsigned count = 0;
     for (unsigned g = 0 ; g < c.nGroups; g++) {
         DPRINTF(DQGOF, "Group %u\n", g);
         auto &queue = queues[g];
         unsigned count = 0;
         while (!queue.empty() && count++ < limit) {
+            count++;
             DPRINTF(DQGOF, "Receiving pointer" ptrfmt "\n", extptr(queue.front()));
             dqGroups[g]->receivePointers(queue.front());
             queue.pop_front();
         }
     }
+    return count;
 }
 
 template<class Impl>
