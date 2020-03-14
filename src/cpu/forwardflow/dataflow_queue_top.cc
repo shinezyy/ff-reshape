@@ -772,6 +772,31 @@ void DQTop<Impl>::regStats()
     HalfSquashes
             .name(name() + ".HalfSquashes")
             .desc("HalfSquashes");
+
+    RegReadCenterInstBuf
+        .name(name() + ".RegReadCenterInstBuf")
+        .desc("RegReadCenterInstBuf");
+    RegReadCenterPairBuf
+        .name(name() + ".RegReadCenterPairBuf")
+        .desc("RegReadCenterPairBuf");
+    RegReadCenterWKBuf
+        .name(name() + ".RegReadCenterWKBuf")
+        .desc("RegReadCenterWKBuf");
+    RegReadInterGroupWKBuf
+        .name(name() + ".RegReadInterGroupWKBuf")
+        .desc("RegReadInterGroupWKBuf");
+    RegWriteCenterInstBuf
+        .name(name() + ".RegWriteCenterInstBuf")
+        .desc("RegWriteCenterInstBuf");
+    RegWriteCenterPairBuf
+        .name(name() + ".RegWriteCenterPairBuf")
+        .desc("RegWriteCenterPairBuf");
+    RegWriteCenterWKBuf
+        .name(name() + ".RegWriteCenterWKBuf")
+        .desc("RegWriteCenterWKBuf");
+    RegWriteInterGroupWKBuf
+        .name(name() + ".RegWriteInterGroupWKBuf")
+        .desc("RegWriteInterGroupWKBuf");
 }
 
 template<class Impl>
@@ -1017,7 +1042,7 @@ void DQTop<Impl>::groupsRxFromPrevGroup()
 template<class Impl>
 unsigned DQTop<Impl>::groupsRxFromBuffers(std::vector<std::list<WKPointer>> &queues, unsigned limit)
 {
-    unsigned count = 0;
+    unsigned total = 0;
     for (unsigned g = 0 ; g < c.nGroups; g++) {
         DPRINTF(DQGOF, "Group %u\n", g);
         auto &queue = queues[g];
@@ -1028,8 +1053,9 @@ unsigned DQTop<Impl>::groupsRxFromBuffers(std::vector<std::list<WKPointer>> &que
             dqGroups[g]->receivePointers(queue.front());
             queue.pop_front();
         }
+        total += count;
     }
-    return count;
+    return total;
 }
 
 template<class Impl>

@@ -378,14 +378,16 @@ void ArchState<Impl>::recoverCPT(InstSeqNum &num)
     SRAMReadRT += numTotalReg;
     RegWriteRT += numTotalReg;
 
+    RegWriteARF += numTotalReg;
+
     if (readyHint) {
         hintSB = cpt.scoreboard;
-        SRAMReadMap += numTotalReg;
         RegWriteSpecSB += numTotalReg;
 
         hintRT = cpt.reverseTable;
-        SRAMReadSpecRT += numTotalReg;
         RegWriteSpecRT += numTotalReg;
+
+        RegWriteSpecARF += numTotalReg;
     }
 
     auto it = cpts.begin();
@@ -649,7 +651,8 @@ ArchState<Impl>::postExecInst(DynInstPtr &inst) {
 
             RegWriteSpecSB++;
             RegWriteSpecARF++;
-            RegWriteSpecRT++;
+
+            RegReadSpecRT++;
 
             hintSB[idx] = true;
 
@@ -765,16 +768,16 @@ ArchState<Impl>::regStats()
     SRAMWriteMap
             .name(name() + ".SRAMWriteMap")
             .desc("SRAMWriteMap");
-    SRAMWriteSB
-            .name(name() + ".SRAMWriteSB")
-            .desc("SRAMWriteSB");
-
     SRAMReadMap
             .name(name() + ".SRAMReadMap")
             .desc("SRAMReadMap");
+
     SRAMReadSB
             .name(name() + ".SRAMReadSB")
             .desc("SRAMReadSB");
+    SRAMWriteSB
+            .name(name() + ".SRAMWriteSB")
+            .desc("SRAMWriteSB");
 
     RegReadRT
             .name(name() + ".RegReadRT")
@@ -782,37 +785,32 @@ ArchState<Impl>::regStats()
     RegWriteRT
             .name(name() + ".RegWriteRT")
             .desc("RegWriteRT");
-    RegReadHintRT
-            .name(name() + ".RegReadHintRT")
-            .desc("RegReadHintRT");
+
+    RegReadSpecRT
+            .name(name() + ".RegReadSpecRT")
+            .desc("RegReadSpecRT");
     RegWriteSpecRT
             .name(name() + ".RegWriteSpecRT")
             .desc("RegWriteSpecRT");
-
     SRAMReadRT
             .name(name() + ".SRAMReadRT")
             .desc("SRAMReadRT");
-    SRAMReadSpecRT
-            .name(name() + ".SRAMReadSpecRT")
-            .desc("SRAMReadSpecRT");
     SRAMWriteRT
             .name(name() + ".SRAMWriteRT")
             .desc("SRAMWriteRT");
-    SRAMWriteHintRT
-            .name(name() + ".SRAMWriteHintRT")
-            .desc("SRAMWriteHintRT");
 
     RegReadARF
-            .name(name() + "RegReadARF")
+            .name(name() + ".RegReadARF")
             .desc("RegReadARF");
     RegWriteARF
-            .name(name() + "RegWriteARF")
+            .name(name() + ".RegWriteARF")
             .desc("RegWriteARF");
+
     RegReadSpecARF
-            .name(name() + "RegReadSpecARF")
+            .name(name() + ".RegReadSpecARF")
             .desc("RegReadSpecARF");
     RegWriteSpecARF
-            .name(name() + "RegWriteSpecARF")
+            .name(name() + ".RegWriteSpecARF")
             .desc("RegWriteSpecARF");
 }
 

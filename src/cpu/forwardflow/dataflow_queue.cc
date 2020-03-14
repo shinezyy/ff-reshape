@@ -907,6 +907,32 @@ void DataflowQueues<Impl>::regStats()
     TotalPackets = SrcOpPackets + DestOpPackets + MemPackets + \
                    OrderPackets + MiscPackets;
 
+
+    QueueWriteTxBuf
+        .name(name() + ".QueueWriteTxBuf")
+        .desc("QueueWriteTxBuf");
+    QueueReadTxBuf
+        .name(name() + ".QueueReadTxBuf")
+        .desc("QueueReadTxBuf");
+    QueueReadPairBuf
+        .name(name() + ".QueueReadPairBuf")
+        .desc("QueueReadPairBuf");
+    QueueWritePairBuf
+        .name(name() + ".QueueWritePairBuf")
+        .desc("QueueWritePairBuf");
+    CombWKNet
+        .name(name() + ".CombWKNet")
+        .desc("CombWKNet");
+    CombFWNet
+        .name(name() + ".CombFWNet")
+        .desc("CombFWNet");
+    CombSelNet
+        .name(name() + ".CombSelNet")
+        .desc("CombSelNet");
+
+    SRAMWritePointer
+        .name(name() + ".SRAMWritePointer")
+        .desc("SRAMWritePointer");
 }
 
 template<class Impl>

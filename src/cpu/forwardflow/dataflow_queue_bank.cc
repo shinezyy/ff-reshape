@@ -735,6 +735,46 @@ void DataflowQueueBank<Impl>::regStats()
             .desc("directReady");
 
 //    printf("Top@regStats: %p\n", top);
+    SRAMWriteInst
+        .name(name() + ".SRAMWriteInst")
+        .desc("SRAMWriteInst");
+    SRAMReadInst
+        .name(name() + ".SRAMReadInst")
+        .desc("SRAMReadInst");
+    SRAMReadPointer
+        .name(name() + ".SRAMReadPointer")
+        .desc("SRAMReadPointer");
+    SRAMWriteValue
+        .name(name() + ".SRAMWriteValue")
+        .desc("SRAMWriteValue");
+    SRAMReadValue
+        .name(name() + ".SRAMReadValue")
+        .desc("SRAMReadValue");
+    RegWriteValid
+        .name(name() + ".RegWriteValid")
+        .desc("RegWriteValid");
+    RegReadValid
+        .name(name() + ".RegReadValid")
+        .desc("RegReadValid");
+    RegWriteNbusy
+        .name(name() + ".RegWriteNbusy")
+        .desc("RegWriteNbusy");
+    RegReadNbusy
+        .name(name() + ".RegReadNbusy")
+        .desc("RegReadNbusy");
+    RegWriteRxBuf
+        .name(name() + ".RegWriteRxBuf")
+        .desc("RegWriteRxBuf");
+    RegReadRxBuf
+        .name(name() + ".RegReadRxBuf")
+        .desc("RegReadRxBuf");
+    QueueReadReadyInstBuf
+        .name(name() + ".QueueReadReadyInstBuf")
+        .desc("QueueReadReadyInstBuf");
+    QueueWriteReadyInstBuf
+        .name(name() + ".QueueWriteReadyInstBuf")
+        .desc("QueueWriteReadyInstBuf");
+
 }
 
 template<class Impl>

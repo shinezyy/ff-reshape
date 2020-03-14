@@ -144,18 +144,16 @@ public:
     Stats::Scalar RegWriteMap;
     Stats::Scalar RegReadRT;
     Stats::Scalar RegWriteRT;
-    Stats::Scalar RegReadHintRT;
+    Stats::Scalar RegReadSpecRT;
     Stats::Scalar RegWriteSpecRT;
     // checkpoint
     Stats::Scalar SRAMWriteMap;
     Stats::Scalar SRAMWriteSB;
     Stats::Scalar SRAMWriteRT;
-    Stats::Scalar SRAMWriteHintRT;
     // recover
     Stats::Scalar SRAMReadMap;
     Stats::Scalar SRAMReadSB;
     Stats::Scalar SRAMReadRT;
-    Stats::Scalar SRAMReadSpecRT;
 
     Stats::Scalar RegReadARF;
     Stats::Scalar RegWriteARF;
