@@ -378,7 +378,7 @@ void ArchState<Impl>::recoverCPT(InstSeqNum &num)
     SRAMReadRT += numTotalReg;
     RegWriteRT += numTotalReg;
 
-    RegWriteARF += numTotalReg;
+//    RegWriteARF += numTotalReg;
 
     if (readyHint) {
         hintSB = cpt.scoreboard;
@@ -387,7 +387,7 @@ void ArchState<Impl>::recoverCPT(InstSeqNum &num)
         hintRT = cpt.reverseTable;
         RegWriteSpecRT += numTotalReg;
 
-        RegWriteSpecARF += numTotalReg;
+//        RegWriteSpecARF += numTotalReg;
     }
 
     auto it = cpts.begin();
@@ -450,10 +450,12 @@ pair<bool, FFRegValue> ArchState<Impl>::commitInst(DynInstPtr &inst)
         }
 
         DPRINTF(FFCommit, "CommitSB in current arch state\n");
-        commitInstInSB(inst, scoreboard, reverseTable, dest);
+        bool updated = commitInstInSB(inst, scoreboard, reverseTable, dest);
         RegWriteCommitSB++;
-        RegWriteARF++;
-        RegWriteRT++;
+        if (updated) {
+            RegWriteARF++;
+            RegWriteRT++;
+        }
 
         for (auto &pair: cpts) {
             if (pair.first >= inst->seqNum) {
@@ -486,15 +488,17 @@ void ArchState<Impl>::setDQ(DQTop *_dq)
 }
 
 template<class Impl>
-void
+bool
 ArchState<Impl>::commitInstInSB(
         DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest)
 {
+    bool ret = false;
     SBIndex idx = make_pair(dest.classValue(), dest.index());
     if (!sb.count(idx)) {
         DPRINTF(FFCommit,"Set reg (%s %i) for the first time\n",
                 dest.className(), dest.index());
         sb[idx] = true;
+        ret = true;
     } else {
         if (!sb[idx] && (rt.count(idx) &&
                     rt[idx] == inst->dqPosition)) {
@@ -502,6 +506,7 @@ ArchState<Impl>::commitInstInSB(
                     dest.className(), dest.index(), inst->seqNum,
                     extptr(inst->dqPosition));
             sb[idx] = true;
+            ret = true;
         } else {
             if (!rt.count(idx)) {
                 DPRINTF(FFCommit,"Reg (%s %i) remains to busy because it"
@@ -520,6 +525,7 @@ ArchState<Impl>::commitInstInSB(
 
         }
     }
+    return ret;
 }
 
 template<class Impl>

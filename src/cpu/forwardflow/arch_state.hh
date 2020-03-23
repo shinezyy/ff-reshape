@@ -73,7 +73,7 @@ private:
 
     DQTop *dq;
 
-    void commitInstInSB(DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest);
+    bool commitInstInSB(DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest);
 
 
     std::unordered_map<int, FFRegValue> hintIntRF;
