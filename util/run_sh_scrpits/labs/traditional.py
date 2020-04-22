@@ -11,7 +11,7 @@ from os.path import expanduser as uexp
 from multiprocessing import Pool
 import common as c
 
-num_thread = 60
+num_thread = 8
 
 full = True
 
@@ -33,7 +33,7 @@ exp_options = [
         # '--min-wk', 0,
         ]
 
-outdir = f'{c.stats_base_dir}/trad_4w{d}/'
+outdir = f'{c.stats_base_dir}/test_trad_4w{d}/'
 
 arch = 'RISCV'
 
@@ -43,6 +43,9 @@ def trad_4w(benchmark, some_extra_args, outdir_b, cpt_id):
     warmup = 20*10**6
 
     os.chdir(c.gem5_exec('2017'))
+    bench_cpt_dir = pjoin(c.gem5_cpt_dir(arch, 2017), benchmark)
+
+    mem_demand = c.get_mem_demand(bench_cpt_dir, cpt_id)
 
     panic_tick = 84334713043000
     options = [
@@ -61,14 +64,18 @@ def trad_4w(benchmark, some_extra_args, outdir_b, cpt_id):
             '-I {}'.format(insts),
             # '-m', '254890101819500',
             # '--rel-max-tick=100',
-            '--mem-size=16GB',
             '-r {}'.format(cpt_id + 1),
             '--restore-simpoint-checkpoint',
-            '--checkpoint-dir={}'.format(pjoin(c.gem5_cpt_dir(arch, 2017),
-                benchmark)),
+            '--checkpoint-dir={}'.format(bench_cpt_dir),
             '--arch={}'.format(arch),
             '--spec-size=ref',
             ]
+
+    if mem_demand is None:
+        options.append('--mem-size=512MB')
+    else:
+        options.append(f'--mem-size={mem_demand}')
+
     cpu_model = 'OoO'
     if cpu_model == 'TimingSimple':
         options += [
@@ -132,6 +139,7 @@ def main():
     benchmarks = []
 
     with open('../all_function_spec2017.txt') as f:
+    # with open('./tmp.txt') as f:
         for line in f:
             if not line.startswith('#'):
                 for i in range(0, 3):

@@ -79,4 +79,14 @@ def gem5_cpt_dir(arch, version=2006):
             }
     return cpt_dirs[version][arch]
 
+def get_mem_demand(cpt_dir, cpt_id):
+    mem_usage_file = f'mem_demand_cpt_0{cpt_id}'
+    mem_usage_file = osp.join(cpt_dir, mem_usage_file)
+
+    if osp.isfile(mem_usage_file):
+        return open(mem_usage_file).read().strip()
+    else:
+        return None
+
 stats_base_dir = osp.expanduser('~/gem5-results-2017')
+
