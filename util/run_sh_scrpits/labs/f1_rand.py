@@ -12,7 +12,7 @@ from multiprocessing import Pool
 import common as c
 
 lmd = 0.55
-num_thread = 20
+num_thread = 30
 
 full = True
 
@@ -23,28 +23,28 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir =  f'{c.stats_base_dir}/o4_rand{d}'
+outdir =  f'{c.stats_base_dir}/f1_rand{d}'
 
-dq_groups = 4
+dq_groups = 1
 group_size = 192
 
 exp_options = [
         '--dq-groups', dq_groups,
         '--num-LQ', round(0.32 * group_size * dq_groups),
         '--num-SQ', round(0.25 * group_size * dq_groups),
-        '--rand-op-position',
         # '--enable-reshape',
+        '--rand-op-position',
         # '--profit-discount=1.0',
         # '--ready-hint',
-        '--narrow-xbar-wk', 0,
+        '--narrow-xbar-wk', 1,
         '--xbar-wk', 0,
-        '--min-wk', 1,
+        '--min-wk', 0,
         ]
 
 
 arch = 'RISCV'
 
-def o4_rand(benchmark, some_extra_args, outdir_b, cpt_id):
+def f1_rand(benchmark, some_extra_args, outdir_b, cpt_id):
 
     interval = 200*10**6
     warmup = 20*10**6
@@ -135,7 +135,7 @@ def run(benchmark_cpt_id):
 
     if prerequisite:
         print('cpt flag found, is going to run gem5 on', dir_name)
-        c.avoid_repeated(o4_rand, outdir_b,
+        c.avoid_repeated(f1_rand, outdir_b,
                 pjoin(c.gem5_build(arch), 'gem5.opt'),
                 benchmark, some_extra_args, outdir_b, cpt_id)
     else:

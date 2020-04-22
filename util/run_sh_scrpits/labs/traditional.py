@@ -11,8 +11,7 @@ from os.path import expanduser as uexp
 from multiprocessing import Pool
 import common as c
 
-lmd = 0.55
-num_thread = 20
+num_thread = 60
 
 full = True
 
@@ -23,57 +22,47 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir =  f'{c.stats_base_dir}/o4_rand{d}'
-
-dq_groups = 4
-group_size = 192
+window_size = 192
 
 exp_options = [
-        '--dq-groups', dq_groups,
-        '--num-LQ', round(0.32 * group_size * dq_groups),
-        '--num-SQ', round(0.25 * group_size * dq_groups),
-        '--rand-op-position',
-        # '--enable-reshape',
-        # '--profit-discount=1.0',
-        # '--ready-hint',
-        '--narrow-xbar-wk', 0,
-        '--xbar-wk', 0,
-        '--min-wk', 1,
+        '--num-ROB', window_size,
+        '--num-PhysReg', window_size,
+        '--num-IQ', round(0.43 * window_size),
+        '--num-LQ', round(0.32 * window_size),
+        '--num-SQ', round(0.25 * window_size),
+        # '--min-wk', 0,
         ]
 
+outdir = f'{c.stats_base_dir}/trad_4w{d}/'
 
 arch = 'RISCV'
 
-def o4_rand(benchmark, some_extra_args, outdir_b, cpt_id):
+def trad_4w(benchmark, some_extra_args, outdir_b, cpt_id):
 
     interval = 200*10**6
     warmup = 20*10**6
 
     os.chdir(c.gem5_exec('2017'))
 
-    panic_tick = 300190039762000
+    panic_tick = 84334713043000
     options = [
-            '--outdir=' + outdir_b,
             '--stats-file=stats.txt',
-            #'--debug-flags=FFExec,FFCommit,FFDisp,DQV2',
-            #'--debug-flags=DQV2',
+            '--outdir=' + outdir_b,
+            #'--debug-flags=Fetch,Decode,IEW,Commit,O3CPU,LSQ,LSQUnit',
+            #'--debug-flags=Commit',
             #'--debug-flags=ValueCommit',
-            #'--debug-flags=FFExec,FFCommit,FFDisp,DAllocation,DQGOF',
-            #'--debug-flags=DQWake,DQGDL,Rename,DQPair,FFSquash,FFExec,IEW',
-            #'--debug-flags=LSQUnit,Cache', # memory
-            #'--debug-start={}'.format (panic_tick - 500*400),
-            #'--debug-end={}'.format   (panic_tick + 500*4000),
+            #'--debug-start={}'.format  (panic_tick - 2000000),
+            #'--debug-end={}'.format    (panic_tick + 2000000),
             pjoin(c.gem5_home(), 'configs/spec2017/se_spec17.py'),
             '--spec-2017-bench',
             '-b', '{}'.format(benchmark),
             '--benchmark-stdout={}/out'.format(outdir_b),
             '--benchmark-stderr={}/err'.format(outdir_b),
             '-I {}'.format(insts),
-            # '-I {}'.format(300),
             # '-m', '254890101819500',
             # '--rel-max-tick=100',
             '--mem-size=16GB',
-            '-r {}'.format(cpt_id + 1),  # start from 1
+            '-r {}'.format(cpt_id + 1),
             '--restore-simpoint-checkpoint',
             '--checkpoint-dir={}'.format(pjoin(c.gem5_cpt_dir(arch, 2017),
                 benchmark)),
@@ -88,7 +77,7 @@ def o4_rand(benchmark, some_extra_args, outdir_b, cpt_id):
                 ]
     elif cpu_model == 'OoO':
         options += [
-            '--cpu-type=DerivFFCPU',
+            '--cpu-type=DerivO3CPU',
             '--mem-type=DDR3_1600_8x8',
 
             '--caches',
@@ -102,11 +91,7 @@ def o4_rand(benchmark, some_extra_args, outdir_b, cpt_id):
             '--l2cache',
             '--l2_size=4MB',
             '--l2_assoc=8',
-            '--num-ROB=192',
-            '--num-IQ=60',
-            '--num-PhysReg=168',
             '--use-zperceptron',
-            f'--fanout-lambda={lmd}',
             *exp_options,
             ]
     else:
@@ -115,8 +100,8 @@ def o4_rand(benchmark, some_extra_args, outdir_b, cpt_id):
     gem5 = sh.Command(pjoin(c.gem5_build(arch), 'gem5.opt'))
     # sys.exit(0)
     gem5(
-            _out=pjoin(outdir_b, 'op_rand_out.txt'),
-            _err=pjoin(outdir_b, 'op_rand_err.txt'),
+            _out=pjoin(outdir_b, 'gem5_out.txt'),
+            _err=pjoin(outdir_b, 'gem5_err.txt'),
             *options
             )
 
@@ -125,6 +110,7 @@ def run(benchmark_cpt_id):
     benchmark, cpt_id = benchmark_cpt_id
     dir_name = "{}_{}".format(benchmark, cpt_id)
     outdir_b = pjoin(outdir, dir_name)
+
     if not os.path.isdir(outdir_b):
         os.makedirs(outdir_b)
 
@@ -135,7 +121,7 @@ def run(benchmark_cpt_id):
 
     if prerequisite:
         print('cpt flag found, is going to run gem5 on', dir_name)
-        c.avoid_repeated(o4_rand, outdir_b,
+        c.avoid_repeated(trad_4w, outdir_b,
                 pjoin(c.gem5_build(arch), 'gem5.opt'),
                 benchmark, some_extra_args, outdir_b, cpt_id)
     else:

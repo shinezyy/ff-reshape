@@ -23,9 +23,9 @@ else:
     d = ''
     insts = 19*10**6
 
-outdir =  f'{c.stats_base_dir}/o4_rand{d}'
+outdir =  f'{c.stats_base_dir}/o2_rand{d}'
 
-dq_groups = 4
+dq_groups = 2
 group_size = 192
 
 exp_options = [
@@ -44,7 +44,7 @@ exp_options = [
 
 arch = 'RISCV'
 
-def o4_rand(benchmark, some_extra_args, outdir_b, cpt_id):
+def o2_rand(benchmark, some_extra_args, outdir_b, cpt_id):
 
     interval = 200*10**6
     warmup = 20*10**6
@@ -135,7 +135,7 @@ def run(benchmark_cpt_id):
 
     if prerequisite:
         print('cpt flag found, is going to run gem5 on', dir_name)
-        c.avoid_repeated(o4_rand, outdir_b,
+        c.avoid_repeated(o2_rand, outdir_b,
                 pjoin(c.gem5_build(arch), 'gem5.opt'),
                 benchmark, some_extra_args, outdir_b, cpt_id)
     else:
