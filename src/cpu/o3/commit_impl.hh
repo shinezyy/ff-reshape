@@ -60,6 +60,7 @@
 #include "cpu/o3/thread_state.hh"
 #include "cpu/timebuf.hh"
 #include "debug/Activity.hh"
+#include "debug/BranchResolve.hh"
 #include "debug/Commit.hh"
 #include "debug/CommitRate.hh"
 #include "debug/Drain.hh"
@@ -1299,6 +1300,15 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
             DPRINTFR(ValueCommit, ", with v_addr: 0x%x\n", head_inst->effAddr);
         } else {
             DPRINTFR(ValueCommit, ", with v_addr: none\n");
+        }
+        if (head_inst->isControl()) {
+            TheISA::PCState tempPC = head_inst->pcState();
+            TheISA::advancePC(tempPC, head_inst->staticInst);
+            if (Debug::BranchResolve) {
+                fprintf(stderr, "0x%lx: %d\n",
+                    head_inst->instAddr(),
+                    head_inst->nextInstAddr() - head_inst->instAddr() == 4);
+            }
         }
         commitCounter = 0;
     } else {
