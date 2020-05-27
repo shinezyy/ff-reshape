@@ -4,8 +4,9 @@ from os.path import join as pjoin
 import os.path as osp
 
 
-def avoid_repeated(func, outdir, binary=None, *args, **kwargs):
-    func_name = func.__name__
+def avoid_repeated(func, outdir, func_id=None, binary=None, *args, **kwargs):
+    assert func_id is not None
+    func_name = func_id
 
     running_lock_name = 'running-{}'.format(func_name)
     running_lock_file = pjoin(outdir, running_lock_name)
@@ -33,7 +34,6 @@ def avoid_repeated(func, outdir, binary=None, *args, **kwargs):
     if not binary is None:
         binary_ts = os.path.getmtime(binary)
         newest = max(binary_ts, newest)
-
 
     if out_ts < newest:
         try:
@@ -66,18 +66,20 @@ def gem5_exec(spec_version = '2006'):
         return os.environ['spec2017_run_dir']
     return None
 
+
 def gem5_cpt_dir(arch, version=2006):
     cpt_dirs = {
             2006: {
                 'ARM': None,
-                'RISCV': osp.expanduser('~/spec-simpoint-cpt-riscv-gcc-8.2'),
+                'RISCV': None,
                 },
             2017: {
                 'ARM': None,
-                'RISCV': osp.expanduser('~/spec2017_simpoint_cpts'),
+                'RISCV': osp.expanduser('~/research-data/shrink_spec2017_simpoint_cpts'),
                 },
             }
     return cpt_dirs[version][arch]
+
 
 def get_mem_demand(cpt_dir, cpt_id):
     mem_usage_file = f'mem_demand_cpt_0{cpt_id}'
@@ -88,5 +90,173 @@ def get_mem_demand(cpt_dir, cpt_id):
     else:
         return None
 
-stats_base_dir = osp.expanduser('~/gem5-results-2017')
 
+class G5Config:
+    def __init__(self, benchmark, bmk_outdir, cpt_id, arch,
+                 full=True,
+                 cpu_model='OoO',
+                 window_size=192,
+                 debug=False,
+                 panic_tick=None,
+                 debug_flags=None,
+                 spec=2017,
+                 func_id=None,
+                 ):
+        self.interval = 200 * 10 ** 6
+        self.warmup = 20 * 10 ** 6
+        self.benchmark = benchmark
+        self.bmk_outdir = bmk_outdir
+        self.cpt_id = cpt_id
+        self.arch = arch
+        self.bench_cpt_dir = pjoin(gem5_cpt_dir(self.arch, 2017), benchmark)
+        self.mem_demand = get_mem_demand(self.bench_cpt_dir, cpt_id)
+        self.debug = debug
+        self.debug_flags = debug_flags
+        self.spec_version = spec
+        self.func_id = func_id
+
+        if full:
+            self.insts = 220 * 10 ** 6
+        else:
+            self.insts = 19 * 10 ** 6
+
+        self.options = []
+        self.arch_options = []
+        self.panic_tick = panic_tick
+        self.cpu_model = cpu_model
+        self.window_size = window_size
+        self.configurable_options = dict()
+
+        self.set_default_arch_options()
+
+    def lazy_set_options(self):
+
+        if self.debug and len(self.debug_flags):
+            self.options += [
+                    '--debug-flags={}'.format   (','.join(self.debug_flags)),
+                    ]
+            if self.panic_tick is not None:
+                self.options += [
+                        '--debug-start={}'.format   (self.panic_tick - 2000000),
+                        '--debug-end={}'.format     (self.panic_tick + 2000000),
+                        ]
+
+        self.options += [
+            '-q',
+            '--stats-file=stats.txt',
+            '--outdir=' + self.bmk_outdir,
+            pjoin(gem5_home(), 'configs/spec2017/se_spec17.py'),
+            '--spec-2017-bench',
+            '-b', '{}'.format(self.benchmark),
+
+            '--benchmark-stdout={}/out'.format(self.bmk_outdir),
+            '--benchmark-stderr={}/err'.format(self.bmk_outdir),
+            '-I {}'.format(self.insts),
+            '-r {}'.format(self.cpt_id + 1),
+            '--restore-simpoint-checkpoint',
+            '--checkpoint-dir={}'.format(self.bench_cpt_dir),
+            '--arch={}'.format(self.arch),
+            '--spec-size=ref',
+        ]
+
+        self.options += self.arch_options
+        if self.mem_demand is None:
+            self.options.append('--mem-size=512MB')
+        else:
+            self.options.append(f'--mem-size={self.mem_demand}')
+
+    def set_default_arch_options(self):
+        self.configurable_options = {
+            **self.configurable_options,
+            '--num-ROB': self.window_size,
+            '--num-PhysReg': self.window_size,
+            '--num-IQ': round(0.43 * self.window_size),
+            '--num-LQ': round(0.32 * self.window_size),
+            '--num-SQ': round(0.25 * self.window_size),
+        }
+
+        self.arch_options += [
+            '--use-zperceptron',
+        ]
+        if self.cpu_model == 'TimingSimple':
+            self.configurable_options = {
+                **self.configurable_options,
+                '--cpu-type': 'TimingSimpleCPU',
+                '--mem-type': 'SimpleMemory',
+            }
+        elif self.cpu_model == 'OoO':
+            self.arch_options += [
+                '--caches',
+                '--l2cache',
+            ]
+            self.configurable_options = {
+                **self.configurable_options,
+                '--cpu-type': 'DerivO3CPU',
+                '--mem-type': 'DDR3_1600_8x8',
+
+                '--cacheline_size': '64',
+
+                '--l1i_size': '32kB',
+                '--l1d_size': '32kB',
+                '--l1i_assoc': '8',
+                '--l1d_assoc': '8',
+
+                '--l2_size': '4MB',
+                '--l2_assoc': '8',
+            }
+        else:
+            print("Unknown CPU type")
+            assert False
+
+    def add_options(self, options):
+        self.options += options
+
+    def update_options(self, options: dict):
+        for option, value in options.items():
+            if option in self.configurable_options:
+                self.configurable_options[option] = value
+
+    def encode_options(self):
+        s = []
+        for option, value in self.configurable_options.items():
+            s.append(f'{option}={value}')
+        return s
+
+    def run(self):
+        self.lazy_set_options()
+        self.options += self.encode_options()
+        gem5 = sh.Command(pjoin(gem5_build(self.arch), 'gem5.opt'))
+        # sys.exit(0)
+        gem5(
+            _out=pjoin(self.bmk_outdir, 'gem5_out.txt'),
+            _err=pjoin(self.bmk_outdir, 'gem5_err.txt'),
+            *self.options
+        )
+
+    def check_and_run(self):
+        dir_name = "{}_{}".format(self.benchmark, self.cpt_id)
+
+        if not os.path.isdir(self.bmk_outdir):
+            os.makedirs(self.bmk_outdir)
+
+        cpt_flag_file = pjoin(
+            gem5_cpt_dir(self.arch, self.spec_version), self.benchmark,
+            'ts-take_cpt_for_benchmark')
+        prerequisite = os.path.isfile(cpt_flag_file)
+
+        if prerequisite:
+            print('cpt flag found, is going to run gem5 on', dir_name)
+            avoid_repeated(
+                self.run, self.bmk_outdir,
+                func_id=self.func_id,
+                binary=pjoin(gem5_build(self.arch), 'gem5.opt'),
+            )
+        else:
+            print('prerequisite not satisfied, abort on', dir_name)
+
+
+def run_wrapper(g5: G5Config):
+    g5.check_and_run()
+
+
+stats_base_dir = osp.expanduser('~/gem5-results-2017')
