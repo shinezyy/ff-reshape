@@ -6,8 +6,9 @@ sys.path.append('../')
 from os.path import join as pjoin
 from multiprocessing import Pool
 import common as c
+import local_config as lc
 
-num_thread = 2
+num_thread = lc.cores_per_task
 full = False
 if full:
     d = '-full'

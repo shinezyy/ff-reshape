@@ -2,7 +2,7 @@ import os
 import sh
 from os.path import join as pjoin
 import os.path as osp
-import path_config as pc
+import local_config as lc
 
 
 def avoid_repeated(func, outdir, func_id=None, binary=None, *args, **kwargs):
@@ -69,7 +69,7 @@ def gem5_exec(spec_version = '2006'):
 
 
 def gem5_cpt_dir(arch, version=2006):
-    return pc.cpt_dirs[version][arch]
+    return lc.cpt_dirs[version][arch]
 
 
 def get_mem_demand(cpt_dir, cpt_id):
@@ -250,4 +250,4 @@ def run_wrapper(g5: G5Config):
     g5.check_and_run()
 
 
-stats_base_dir = pc.stats_base_dir
+stats_base_dir = lc.stats_base_dir
