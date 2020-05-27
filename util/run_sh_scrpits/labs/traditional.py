@@ -11,26 +11,26 @@ from os.path import expanduser as uexp
 from multiprocessing import Pool
 import common as c
 
-num_thread = 1
-full = False
+num_thread = 60
+full = True
 if full:
     d = '-full'
 else:
     d = ''
-outdir = f'{c.stats_base_dir}/test_trad_4w{d}/'
+outdir = f'{c.stats_base_dir}/branch_oracle{d}/'
 
 def main():
     g5_configs = []
 
-    with open('./tmp.txt') as f:
-    # with open('../all_function_spec2017.txt') as f:
+    #with open('./tmp.txt') as f:
+    with open('../all_function_spec2017.txt') as f:
         for line in f:
             if not line.startswith('#'):
                 for cpt_id in range(0, 3):
                     benchmark = line.strip()
                     g5_config = c.G5Config(
                         benchmark=benchmark,
-                        bmk_outdir=pjoin(outdir, benchmark),
+                        bmk_outdir=pjoin(outdir, benchmark + '_' + str(cpt_id)),
                         cpt_id=cpt_id,
                         arch='RISCV',
                         full=full,
