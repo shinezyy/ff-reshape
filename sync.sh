@@ -8,7 +8,7 @@ push_source_only () {
         --exclude=build \
         --exclude='*.swp'\
         --exclude=SConstruct \
-        --exclude=util/run_sh_scrpits/path_config.py \
+        --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
         --no-owner --no-group \
         --copy-unsafe-links \
@@ -30,7 +30,7 @@ push_source_scripts () {
         --exclude=build \
         --exclude='*.swp'\
         --exclude=SConstruct \
-        --exclude=util/run_sh_scrpits/path_config.py \
+        --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
         --no-owner --no-group \
         --copy-unsafe-links \
@@ -50,7 +50,7 @@ push_source_scripts_git () {
         --exclude=build \
         --exclude='*.swp'\
         --exclude=SConstruct \
-        --exclude=util/run_sh_scrpits/path_config.py \
+        --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
         --no-owner --no-group \
         --copy-unsafe-links \
@@ -68,7 +68,7 @@ push_source_git () {
         --exclude=build \
         --exclude='*.swp'\
         --exclude=SConstruct \
-        --exclude=util/run_sh_scrpits/path_config.py \
+        --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
         --no-owner --no-group \
         --copy-unsafe-links \
@@ -87,7 +87,7 @@ pull_source_scripts () {
         --exclude=build \
         --exclude='*.swp'\
         --exclude=SConstruct \
-        --exclude=util/run_sh_scrpits/path_config.py \
+        --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
         --no-owner --no-group \
         --copy-unsafe-links \
@@ -107,7 +107,7 @@ pull_source_scripts_git () {
         --exclude=build \
         --exclude='*.swp'\
         --exclude=SConstruct \
-        --exclude=util/run_sh_scrpits/path_config.py \
+        --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
         --no-owner --no-group \
         --copy-unsafe-links \
