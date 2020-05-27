@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
 
-import os
-import re
 import sys
-import random
-import sh
-import time
+sys.path.append('../')
+
 from os.path import join as pjoin
-from os.path import expanduser as uexp
 from multiprocessing import Pool
 import common as c
 
-num_thread = 60
-full = True
+num_thread = 2
+full = False
 if full:
     d = '-full'
 else:
     d = ''
 outdir = f'{c.stats_base_dir}/branch_oracle{d}/'
+
 
 def main():
     g5_configs = []

@@ -2,6 +2,7 @@ import os
 import sh
 from os.path import join as pjoin
 import os.path as osp
+import path_config as pc
 
 
 def avoid_repeated(func, outdir, func_id=None, binary=None, *args, **kwargs):
@@ -68,17 +69,7 @@ def gem5_exec(spec_version = '2006'):
 
 
 def gem5_cpt_dir(arch, version=2006):
-    cpt_dirs = {
-            2006: {
-                'ARM': None,
-                'RISCV': None,
-                },
-            2017: {
-                'ARM': None,
-                'RISCV': osp.expanduser('~/research-data/shrink_spec2017_simpoint_cpts'),
-                },
-            }
-    return cpt_dirs[version][arch]
+    return pc.cpt_dirs[version][arch]
 
 
 def get_mem_demand(cpt_dir, cpt_id):
@@ -259,4 +250,4 @@ def run_wrapper(g5: G5Config):
     g5.check_and_run()
 
 
-stats_base_dir = osp.expanduser('~/gem5-results-2017')
+stats_base_dir = pc.stats_base_dir

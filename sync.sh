@@ -8,7 +8,7 @@ sync_source_only () {
         --exclude=build \
         --exclude='*.swp'\
         --exclude=SConstruct \
-        --exclude=util/run_sh_scrpits/common.py \
+        --exclude=util/run_sh_scrpits/path_config.py \
         --exclude='parsetab.py' \
         --no-owner --no-group \
         --copy-unsafe-links \
@@ -30,7 +30,7 @@ sync_source_scripts () {
         --exclude=build \
         --exclude='*.swp'\
         --exclude=SConstruct \
-        --exclude=util/run_sh_scrpits/common.py \
+        --exclude=util/run_sh_scrpits/path_config.py \
         --exclude='parsetab.py' \
         --no-owner --no-group \
         --copy-unsafe-links \
@@ -50,7 +50,7 @@ sync_source_scripts_git () {
         --exclude=build \
         --exclude='*.swp'\
         --exclude=SConstruct \
-        --exclude=util/run_sh_scrpits/common.py \
+        --exclude=util/run_sh_scrpits/path_config.py \
         --exclude='parsetab.py' \
         --no-owner --no-group \
         --copy-unsafe-links \
@@ -68,7 +68,7 @@ sync_source_git () {
         --exclude=build \
         --exclude='*.swp'\
         --exclude=SConstruct \
-        --exclude=util/run_sh_scrpits/common.py \
+        --exclude=util/run_sh_scrpits/path_config.py \
         --exclude='parsetab.py' \
         --no-owner --no-group \
         --copy-unsafe-links \
