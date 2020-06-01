@@ -10,6 +10,7 @@ push_source_only () {
         --exclude=SConstruct \
         --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
+        --exclude=venv \
         --no-owner --no-group \
         --copy-unsafe-links \
         --exclude=.git \
@@ -32,6 +33,7 @@ push_source_scripts () {
         --exclude=SConstruct \
         --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
+        --exclude=venv \
         --no-owner --no-group \
         --copy-unsafe-links \
         --exclude=.git \
@@ -52,6 +54,7 @@ push_source_scripts_git () {
         --exclude=SConstruct \
         --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
+        --exclude=venv \
         --no-owner --no-group \
         --copy-unsafe-links \
         ./ \
@@ -70,6 +73,7 @@ push_source_git () {
         --exclude=SConstruct \
         --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
+        --exclude=venv \
         --no-owner --no-group \
         --copy-unsafe-links \
         --exclude=util/run_sh_scrpits \
@@ -89,6 +93,7 @@ pull_source_scripts () {
         --exclude=SConstruct \
         --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
+        --exclude=venv \
         --no-owner --no-group \
         --copy-unsafe-links \
         --exclude=.git \
@@ -109,6 +114,7 @@ pull_source_scripts_git () {
         --exclude=SConstruct \
         --exclude=util/run_sh_scrpits/local_config.py \
         --exclude='parsetab.py' \
+        --exclude=venv \
         --no-owner --no-group \
         --copy-unsafe-links \
         $1:$2/ \
