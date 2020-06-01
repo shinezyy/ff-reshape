@@ -1,0 +1,11 @@
+syntax = "proto2";
+
+// Put all the generated messages in a namespace
+package ProtoMessage;
+
+message BranchInfo {
+    required uint32 branch_id = 1;
+    required bool taken = 2;
+    required uint32 branch_addr = 3;
+    required uint32 target_addr = 4 [default = 0];
+}

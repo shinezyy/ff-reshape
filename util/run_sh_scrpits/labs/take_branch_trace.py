@@ -9,12 +9,21 @@ import common as c
 import local_config as lc
 
 num_thread = lc.cores_per_task
-full = True
+full = False
 if full:
     d = '-full'
 else:
     d = ''
-outdir = f'{c.stats_base_dir}/branch_oracle{d}/'
+outdir = f'{c.stats_base_dir}/take-branch-trace{d}/'
+
+dict_options = {
+            '--branch-trace-file': 'branch.protobuf.gz',
+            }
+
+binary_options= [
+        '--branch-trace-en',
+        ]
+
 
 
 def main():
@@ -36,8 +45,10 @@ def main():
                         debug_flags=[
                             'BranchResolve',
                             ],
-                        func_id='trad_4w',
+                        func_id='take_branch_trace',
                     )
+                    g5_config.add_options(binary_options)
+                    g5_config.update_options(dict_options)
                     g5_configs.append(g5_config)
 
     if num_thread > 1:

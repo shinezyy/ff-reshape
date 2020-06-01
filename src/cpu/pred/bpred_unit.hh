@@ -201,6 +201,14 @@ class BPredUnit : public SimObject
 
     void dump();
 
+    virtual bool isOracle() {
+        return false;
+    }
+
+    virtual Addr getOracleAddr() {
+        return 0;
+    }
+
   private:
     struct PredictorHistory {
         /**

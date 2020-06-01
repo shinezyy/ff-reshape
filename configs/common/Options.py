@@ -199,6 +199,11 @@ def addCommonOptions(parser):
                       Elastic Trace probe in a capture simulation and
                       Trace CPU in a replay simulation""", default="")
 
+    parser.add_option("--branch-trace-en", action="store_true",
+                      help="""Enable capture of branch outcome.""")
+    parser.add_option("--branch-trace-file", action="store", type="string",
+                      help="""File to capture of branch outcome.""")
+
     parser.add_option("-l", "--lpae", action="store_true")
     parser.add_option("-V", "--virtualisation", action="store_true")
 

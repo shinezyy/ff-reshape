@@ -34,3 +34,4 @@ simpoint/
 /util/run_sh_scrpits/ts*
 /util/run_sh_scrpits/test/perf/
 util/run_sh_scrpits/labs/tmp.txt
+venv/

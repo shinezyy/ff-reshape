@@ -215,3 +215,10 @@ class SNN(BranchPredictor):
     # thresholdCounterBit = Param.Unsigned(0, "Bits used to store TC")
 
 
+class OracleBP(BranchPredictor):
+    type = 'OracleBP'
+    cxx_class = 'OracleBP'
+    cxx_header = "cpu/pred/oracle.hh"
+
+    checkAddr = Param.Bool(True, "check addr of branch inst before return")
+    outcomePath = Param.String('None', 'The branch outcome file')

@@ -66,29 +66,17 @@ def addO3Options(parser):
             action='store', type=int,
             help='n-bits to represent a history bit')
 
-    parser.add_option("--use-ltage",
-            action='store_true',
-            help='Use L-TAGE as branch predictor')
+    parser.add_option("--use-bp",
+            action='store', type='str',
+            help='Branch predictor type')
 
-    parser.add_option("--use-tournament",
-            action='store_true',
-            help='Use Tournament as branch predictor')
+    parser.add_option("--outcome-path",
+            action='store', type='str',
+            help='the path of branch outcomes')
 
-    parser.add_option("--use-ogb",
+    parser.add_option("--check-outcome-addr",
             action='store_true',
-            help='Use OGB as branch predictor')
-
-    parser.add_option("--use-nbbp",
-            action='store_true',
-            help='Use naive bayes as branch predictor')
-
-    parser.add_option("--use-zperceptron",
-            action='store_true',
-            help='Use zperceptron as branch predictor')
-
-    parser.add_option("--use-snn",
-            action='store_true',
-            help='Use snn as branch predictor')
+            help='check the addresses of branches')
 
     parser.add_option("--fanout-lambda",
             default=0.2,

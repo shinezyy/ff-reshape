@@ -18,18 +18,26 @@ def modifyO3CPUConfig(options, cpu):
 
     # TODO: check whether is perceptronBP
     #if cpu.branchPred == MyPerceptron:
-    if options.use_ltage:
-        cpu.branchPred = LTAGE()
-    if options.use_tournament:
-        cpu.branchPred = TournamentBP()
-    if options.use_ogb:
-        cpu.branchPred = OGBBP()
-    if options.use_nbbp:
-        cpu.branchPred = NBBP()
-    if options.use_zperceptron:
+    if options.use_bp == 'ZPerceptron':
         cpu.branchPred = ZPerceptron()
-    if options.use_snn:
+    elif options.use_bp == 'LTAGE':
+        cpu.branchPred = LTAGE()
+    elif options.use_bp == 'TournamentBP':
+        cpu.branchPred = TournamentBP()
+    elif options.use_bp == 'OGBBP':
+        cpu.branchPred = OGBBP()
+    elif options.use_bp == 'NBBP':
+        cpu.branchPred = NBBP()
+    elif options.use_bp == 'SNN':
         cpu.branchPred = SNN()
+    elif options.use_bp == 'OracleBP':
+        cpu.branchPred = OracleBP()
+        assert options.outcome_path is not None
+        cpu.branchPred.outcomePath = options.outcome_path
+        cpu.branchPred.checkAddr = options.check_outcome_addr is not None
+    else:
+        print('Unknow BP:', options.use_bp)
+        assert False
 
 
     if options.bp_size:

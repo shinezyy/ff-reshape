@@ -201,7 +201,6 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
     } else {
         ++condPredicted;
         pred_taken = lookup(tid, pc.instAddr(), bp_history);
-
         DPRINTF(Branch, "[tid:%i]: [sn:%i] Branch predictor"
                 " predicted %i for PC %s\n", tid, seqNum,  pred_taken, pc);
     }
@@ -211,7 +210,6 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
 
     PredictorHistory predict_record(seqNum, pc.instAddr(),
                                     pred_taken, bp_history, tid);
-
     // Now lookup in the BTB or RAS.
     if (pred_taken) {
         if (inst->isReturn()) {
@@ -303,6 +301,12 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                         tid);
             }
         }
+
+        // let oracle override it
+        if (isOracle()) {
+            target = getOracleAddr();
+        }
+
     } else {
         if (inst->isReturn()) {
            predict_record.wasReturn = true;

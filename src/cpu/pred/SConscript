@@ -52,6 +52,7 @@ Source('online_gradient_boosting.cc')
 Source('naive_bayes.cc')
 Source('zperceptron.cc')
 Source('snn.cc')
+Source('oracle.cc')
 
 DebugFlag('FreeList')
 DebugFlag('Branch')

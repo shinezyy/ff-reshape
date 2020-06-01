@@ -105,6 +105,7 @@ class G5Config:
         self.debug_flags = debug_flags
         self.spec_version = spec
         self.func_id = func_id
+        self.task = ''
 
         if full:
             self.insts = 220 * 10 ** 6
@@ -112,6 +113,7 @@ class G5Config:
             self.insts = 19 * 10 ** 6
 
         self.options = []
+        self.post_options = []
         self.arch_options = []
         self.panic_tick = panic_tick
         self.cpu_model = cpu_model
@@ -164,11 +166,9 @@ class G5Config:
             '--num-IQ': round(0.43 * self.window_size),
             '--num-LQ': round(0.32 * self.window_size),
             '--num-SQ': round(0.25 * self.window_size),
+            '--use-bp': 'ZPerceptron',
         }
 
-        self.arch_options += [
-            '--use-zperceptron',
-        ]
         if self.cpu_model == 'TimingSimple':
             self.configurable_options = {
                 **self.configurable_options,
@@ -200,12 +200,11 @@ class G5Config:
             assert False
 
     def add_options(self, options):
-        self.options += options
+        self.post_options += options
 
     def update_options(self, options: dict):
         for option, value in options.items():
-            if option in self.configurable_options:
-                self.configurable_options[option] = value
+            self.configurable_options[option] = value
 
     def encode_options(self):
         s = []
@@ -216,6 +215,14 @@ class G5Config:
     def run(self):
         self.lazy_set_options()
         self.options += self.encode_options()
+        self.options += self.post_options
+        # fix up branch outcome path
+        if '--use-bp' in self.configurable_options and \
+                self.configurable_options['--use-bp'] == 'OracleBP':
+            o_path = pjoin(lc.branch_outcome_dir, self.task, "BranchTrace.branch.protobuf.gz")
+            self.options += [
+                    f'--outcome-path={o_path}',
+                    ]
         gem5 = sh.Command(pjoin(gem5_build(self.arch), 'gem5.opt'))
         # sys.exit(0)
         gem5(
@@ -225,7 +232,7 @@ class G5Config:
         )
 
     def check_and_run(self):
-        dir_name = "{}_{}".format(self.benchmark, self.cpt_id)
+        self.task = "{}_{}".format(self.benchmark, self.cpt_id)
 
         if not os.path.isdir(self.bmk_outdir):
             os.makedirs(self.bmk_outdir)
@@ -236,14 +243,14 @@ class G5Config:
         prerequisite = os.path.isfile(cpt_flag_file)
 
         if prerequisite:
-            print('cpt flag found, is going to run gem5 on', dir_name)
+            print('cpt flag found, is going to run gem5 on', self.task)
             avoid_repeated(
                 self.run, self.bmk_outdir,
                 func_id=self.func_id,
                 binary=pjoin(gem5_build(self.arch), 'gem5.opt'),
             )
         else:
-            print('prerequisite not satisfied, abort on', dir_name)
+            print('prerequisite not satisfied, abort on', self.task)
 
 
 def run_wrapper(g5: G5Config):

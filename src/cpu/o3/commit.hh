@@ -50,6 +50,7 @@
 #include "base/statistics.hh"
 #include "cpu/exetrace.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/o3/probe/branch_trace.hh"
 #include "cpu/timebuf.hh"
 #include "sim/probe/probe.hh"
 
@@ -527,6 +528,10 @@ private:
     unsigned commitCounter;
 
     uint64_t commitAll{};
+
+    BranchTrace *branchTrace;
+
+    uint32_t branchCounter{};
 };
 
 #endif // __CPU_O3_COMMIT_HH__

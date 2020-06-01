@@ -124,6 +124,15 @@ def config_etrace(cpu_cls, cpu_list, options):
         fatal("%s does not support data dependency tracing. Use a CPU model of"
               " type or inherited from DerivO3CPU.", cpu_cls)
 
+def config_branch_trace(cpu_cls, cpu_list, options):
+    if issubclass(cpu_cls, m5.objects.DerivO3CPU):
+        # Assign the same file name to all cpus for now. This must be
+        # revisited when creating elastic traces for multi processor systems.
+        for cpu in cpu_list:
+            cpu.branchTrace = m5.objects.BranchTrace(
+                    branchTraceFile = options.branch_trace_file,)
+
+
 # Add all CPUs in the object hierarchy.
 for name, cls in inspect.getmembers(m5.objects, is_cpu_class):
     _cpu_classes[name] = cls

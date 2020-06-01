@@ -1,6 +1,4 @@
-# -*- mode:python -*-
-
-# Copyright (c) 2013 ARM Limited
+# Copyright (c) 2013 - 2015 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -35,20 +33,20 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# Authors: Matt Horsnell
+# Authors: Radhika Jagtap
+#          Andreas Hansson
+#          Thomas Grass
 
-Import('*')
+from Probe import *
+from m5.SimObject import SimObject
+from m5.params import *
 
-if 'O3CPU' in env['CPU_MODELS']:
-    SimObject('SimpleTrace.py')
-    Source('simple_trace.cc')
-    DebugFlag('SimpleTrace')
+class BranchTrace(SimObject):
+    type = 'BranchTrace'
+    cxx_class = 'BranchTrace'
+    cxx_header = 'cpu/o3/probe/branch_trace.hh'
 
-    if env['HAVE_PROTOBUF']:
-        SimObject('ElasticTrace.py')
-        Source('elastic_trace.cc')
-        DebugFlag('ElasticTrace')
-
-        SimObject('BranchTrace.py')
-        Source('branch_trace.cc')
-        DebugFlag('BranchTrace')
+    # Trace files for the following params are created in the output directory.
+    # User is forced to provide these when an instance of this class is created.
+    branchTraceFile = Param.String(desc="Protobuf trace file name for " \
+                                        "branch tracing")

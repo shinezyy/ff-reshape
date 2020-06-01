@@ -482,6 +482,8 @@ def run(options, root, testsys, cpu_class):
             if options.checker:
                 switch_cpus[i].addCheckerCpu()
 
+            if options.branch_trace_en:
+                CpuConfig.config_branch_trace(cpu_class, switch_cpus[i], options)
             # O3 Config
             SSConfig.modifyO3CPUConfig(options, switch_cpus[i])
 

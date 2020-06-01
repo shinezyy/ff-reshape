@@ -47,6 +47,7 @@ from BaseCPU import BaseCPU
 from FUPool import *
 from O3Checker import O3Checker
 from BranchPredictor import *
+from BranchTrace import *
 
 class DerivO3CPU(BaseCPU):
     type = 'DerivO3CPU'
@@ -179,6 +180,8 @@ class DerivO3CPU(BaseCPU):
                                        "Branch Predictor")
     needsTSO = Param.Bool(buildEnv['TARGET_ISA'] == 'x86',
                           "Enable TSO Memory model")
+
+    branchTrace = Param.BranchTrace(BranchTrace())
 
     def addCheckerCpu(self):
         if buildEnv['TARGET_ISA'] in ['arm']:

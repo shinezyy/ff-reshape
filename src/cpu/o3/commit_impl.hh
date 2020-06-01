@@ -149,6 +149,8 @@ DefaultCommit<Impl>::DefaultCommit(O3CPU *_cpu, DerivO3CPUParams *params)
         squashAfterInst[tid] = NULL;
     }
     interrupt = NoFault;
+
+    branchTrace = params->branchTrace;
 }
 
 template <class Impl>
@@ -1301,19 +1303,21 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
         } else {
             DPRINTFR(ValueCommit, ", with v_addr: none\n");
         }
-        if (head_inst->isControl()) {
-            TheISA::PCState tempPC = head_inst->pcState();
-            TheISA::advancePC(tempPC, head_inst->staticInst);
-            if (Debug::BranchResolve) {
-                fprintf(stderr, "0x%lx: %d\n",
-                    head_inst->instAddr(),
-                    head_inst->nextInstAddr() - head_inst->instAddr() == 4);
-            }
-        }
         commitCounter = 0;
     } else {
         commitCounter++;
     }
+
+    if (head_inst->isControl()) {
+        TheISA::PCState tempPC = head_inst->pcState();
+        TheISA::advancePC(tempPC, head_inst->staticInst);
+        if (Debug::BranchResolve) {
+            bool taken = head_inst->nextInstAddr() - head_inst->instAddr() != 4;
+            branchTrace->writeRecord(branchCounter++, taken,
+                    head_inst->instAddr(), head_inst->nextInstAddr());
+        }
+    }
+
     commitAll++;
 
     if (head_inst->traceData) {

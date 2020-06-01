@@ -242,6 +242,8 @@ system.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
 if options.elastic_trace_en:
     CpuConfig.config_etrace(CPUClass, system.cpu, options)
 
+CpuConfig.config_branch_trace(CPUClass, system.cpu, options)
+
 # All cpus belong to a common cpu_clk_domain, therefore running at a common
 # frequency.
 for cpu in system.cpu:
