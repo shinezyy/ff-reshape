@@ -36,6 +36,7 @@
 #include "base/logging.hh"
 #include "base/trace.hh"
 #include "debug/Fetch.hh"
+#include "debug/OracleBP.hh"
 
 OracleBP::OracleBP(const OracleBPParams *params)
     : BPredUnit(params),
@@ -44,6 +45,8 @@ OracleBP::OracleBP(const OracleBPParams *params)
 {
     DPRINTF(Fetch, "instruction shift amount: %i\n",
             instShiftAmt);
+    state.commit_bid = -1;
+    state.front_bid = -1;
 }
 
 void
@@ -62,7 +65,23 @@ OracleBP::btbUpdate(ThreadID tid, Addr branch_addr, void * &bp_history)
 bool
 OracleBP::lookup(ThreadID tid, Addr branch_addr, void * &bp_history)
 {
-    bool taken = getNextOutcome(branch_addr, true);
+    auto hist = new BPState(state);
+    bp_history = hist;
+
+    DPRINTF(OracleBP,
+            "Before direction prediction, front_bid = %u, commit_bid = %u\n",
+            state.front_bid, state.commit_bid);
+
+    advanceFront();
+    syncFront();
+    bool taken = getFrontDirection();
+
+
+    hist->predTaken = taken;
+
+    DPRINTF(OracleBP,
+            "After direction prediction, front_bid = %u, commit_bid = %u\n",
+            state.front_bid, state.commit_bid);
     return taken;
 }
 
@@ -70,45 +89,168 @@ void
 OracleBP::update(ThreadID tid, Addr branch_addr, bool taken, void *bp_history,
                 bool squashed)
 {
+    auto history_state = static_cast<BPState *>(bp_history);
+
+    if (squashed) {
+        // do nothing
+    } else {
+        DPRINTF(OracleBP, "Committing bid %u\n", history_state->front_bid + 1);
+        DPRINTF(OracleBP, "Back bid = %u\n",
+                orderedOracleEntries.back().branchID);
+
+        assert(history_state->front_bid + 1 == orderedOracleEntries.back().branchID);
+
+        orderedOracleEntries.pop_back();
+
+        DPRINTF(OracleBP, "Oracle table size: %lu.\n", orderedOracleEntries.size());
+
+        state.commit_bid++;
+        dumpState();
+
+        if (taken != history_state->predTaken) {
+            inform("Predicted direction is overridden unexpectedly! @0x%x:"
+                    "pred: %i, executed: %i\n",
+                    branch_addr,
+                    history_state->predTaken, taken);
+        }
+
+        delete history_state;
+    }
 }
 
 void
 OracleBP::uncondBranch(ThreadID tid, Addr pc, void *&bp_history)
 {
-    getNextOutcome(pc, false);
+    auto history_state = new BPState(state);
+    bp_history = history_state;
+
+    DPRINTF(OracleBP,
+            "Before uncond notification, front_bid = %u, commit_bid = %u\n",
+            state.front_bid, state.commit_bid);
+
+    history_state->predTaken = true;
+    advanceFront();
+    syncFront();
+
+    DPRINTF(OracleBP,
+            "After uncond notification, front_bid = %u, commit_bid = %u\n",
+            state.front_bid, state.commit_bid);
 }
 
-bool
-OracleBP::getNextOutcome(Addr pc, bool isConditional)
-{
-    if (!directionValid || !isConditional) {
-        if (!trace.read(branchInfo)) {
-            panic("Failed to obtain branch info from %s\n", branchTraceFile);
-        }
-        directionValid = isConditional;
-        addrValid = true;
-    }
-    if (pc == branchInfo.branch_addr()) {
-        inform("pc == pc_recorded, pc: 0x%lx, pc_recorded: 0x%lx\n",
-               pc, branchInfo.branch_addr());
-
-        directionValid = false;
-        return branchInfo.taken();
-
-    } else {
-        inform("pc != pc_recorded, pc: 0x%lx, pc_recorded: 0x%lx\n",
-               pc, branchInfo.branch_addr());
-
-        return false;
-    }
-}
 
 Addr OracleBP::getOracleAddr() {
-    assert(!directionValid);
-    assert(addrValid);
-    addrValid = false;
-    return branchInfo.target_addr();
+    return getFrontTarget();
 }
+
+void OracleBP::syncFront() {
+    DPRINTF(OracleBP, "Oracle table size: %lu.\n", orderedOracleEntries.size());
+
+    if (orderedOracleEntries.size() == 0) {
+        readNextBranch();
+        frontPointer = orderedOracleEntries.begin();
+        dumpState();
+
+    } else if (state.front_bid > orderedOracleEntries.front().branchID) {
+        // younger, must read from file
+        readNextBranch();
+        assert(orderedOracleEntries.size() < 3000);
+        DPRINTF(OracleBP,
+                "state.front_bid = %u, orderedOracleEntries.front().branchID = %u\n",
+                state.front_bid, orderedOracleEntries.front().branchID);
+        assert(state.front_bid == orderedOracleEntries.front().branchID);
+        frontPointer = orderedOracleEntries.begin();
+        dumpState();
+
+    } else {
+        if (frontPointer == orderedOracleEntries.end() ||
+                state.front_bid != frontPointer->branchID) {
+
+            frontPointer = orderedOracleEntries.begin();
+
+            while (frontPointer != orderedOracleEntries.end() &&
+                    state.front_bid != frontPointer->branchID) {
+                frontPointer++;
+            }
+
+            dumpState();
+
+            assert(frontPointer != orderedOracleEntries.end());
+        }
+    }
+}
+
+bool OracleBP::getFrontDirection() {
+    return orderedOracleEntries.front().taken;
+}
+
+void OracleBP::advanceFront() {
+    state.front_bid++;
+}
+
+void OracleBP::readNextBranch() {
+    ProtoMessage::BranchInfo branch_info;
+    if (!trace.read(branch_info)) {
+        panic("Failed to obtain branch info from %s\n", branchTraceFile);
+    }
+    orderedOracleEntries.push_front(
+            {(int32_t) branch_info.branch_id(),
+             branch_info.taken(),
+             branch_info.branch_addr(),
+             branch_info.target_addr()});
+}
+
+Addr OracleBP::getFrontTarget() {
+    return frontPointer->targetAddr;
+}
+
+void OracleBP::squash(ThreadID tid, void *bp_history) {
+    auto history_state = static_cast<BPState *>(bp_history);
+    if (history_state->front_bid < state.front_bid) {
+        state.front_bid = history_state->front_bid;
+
+        DPRINTF(OracleBP,
+                "After squash\n");
+        dumpState();
+
+        for (frontPointer = orderedOracleEntries.begin();
+                frontPointer != orderedOracleEntries.end();
+                frontPointer++) {
+            if (frontPointer->branchID == state.front_bid) {
+                break;
+            }
+        }
+        if (frontPointer == orderedOracleEntries.end()) {
+            assert(orderedOracleEntries.empty() ||
+                    orderedOracleEntries.back().branchID == state.front_bid + 1 ||
+                    state.front_bid == -1);
+        }
+        dumpState();
+    } else {
+        DPRINTF(OracleBP, "recorded fbid = %u, state.fbid = %u\n",
+                history_state->front_bid, state.front_bid);
+    }
+    delete history_state;
+}
+
+bool OracleBP::getLastDirection() {
+    return getFrontDirection();
+}
+
+void OracleBP::dumpState() {
+    if (orderedOracleEntries.size() > 0) {
+        DPRINTF(OracleBP, "cbid: %u, fbid: %u, frontPointer bid: %u, "
+                "table back: %u, table front: %u\n",
+                state.commit_bid, state.front_bid, frontPointer->branchID,
+                orderedOracleEntries.back().branchID,
+                orderedOracleEntries.front().branchID
+               );
+    } else {
+        DPRINTF(OracleBP, "cbid: %u, fbid: %u, frontPointer bid: %u\n",
+                state.commit_bid, state.front_bid, frontPointer->branchID
+               );
+    }
+}
+
 
 OracleBP*
 OracleBPParams::create()

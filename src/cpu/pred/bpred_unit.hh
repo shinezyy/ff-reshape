@@ -208,6 +208,9 @@ class BPredUnit : public SimObject
     virtual Addr getOracleAddr() {
         return 0;
     }
+    virtual bool getLastDirection() {
+        return false;
+    }
 
   private:
     struct PredictorHistory {

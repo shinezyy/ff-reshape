@@ -88,7 +88,7 @@ class OracleBP : public BPredUnit
      * @param bp_history Pointer to any bp history state.
      * @return Whether or not the branch is taken.
      */
-    void btbUpdate(ThreadID tid, Addr branch_addr, void * &bp_history);
+    void btbUpdate(ThreadID tid, Addr branch_addr, void * &bp_history) override;
 
     /**
      * Updates the branch predictor with the actual result of a branch.
@@ -96,10 +96,9 @@ class OracleBP : public BPredUnit
      * @param taken Whether or not the branch was taken.
      */
     void update(ThreadID tid, Addr branch_addr, bool taken, void *bp_history,
-                bool squashed);
+                bool squashed) override;
 
-    void squash(ThreadID tid, void *bp_history)
-    { assert(bp_history == NULL); }
+    void squash(ThreadID tid, void *bp_history) override;
 
     void reset();
 
@@ -107,22 +106,47 @@ class OracleBP : public BPredUnit
     bool isOracle() override {
         return true;
     }
-    virtual Addr getOracleAddr();
+    Addr getOracleAddr() override;
+
+    bool getLastDirection() override;
+
   private:
 
     std::string branchTraceFile;
 
     ProtoInputStream trace;
 
-    bool getNextOutcome(Addr pc, bool isConditional);
+    struct BPState {
+        int32_t commit_bid;
+        int32_t front_bid;
+        bool predTaken;
+    };
 
-    bool directionValid{};
+    BPState state;
 
-    bool addrValid{};
+    struct OracleEntry {
+        int32_t branchID;
+        bool taken;
+        Addr branchAddr;
+        Addr targetAddr;
+    };
 
-    ProtoMessage::BranchInfo branchInfo;
+    std::list<OracleEntry> orderedOracleEntries;
+    using EntryIter = std::list<OracleEntry>::iterator;
 
-    std::string lastLine;
+    EntryIter frontPointer;
+
+    bool getFrontDirection();
+
+    Addr getFrontTarget();
+
+    void syncFront();
+
+    void advanceFront();
+
+    void readNextBranch();
+
+    void dumpState();
 };
 
 #endif // __CPU_PRED_ORACLE_PRED_HH__
