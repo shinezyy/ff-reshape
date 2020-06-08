@@ -85,6 +85,7 @@ def get_mem_demand(cpt_dir, cpt_id):
 class G5Config:
     def __init__(self, benchmark, bmk_outdir, cpt_id, arch,
                  full=True,
+                 full_max_insts=200 * 10**6,
                  cpu_model='OoO',
                  window_size=192,
                  debug=False,
@@ -108,7 +109,7 @@ class G5Config:
         self.task = ''
 
         if full:
-            self.insts = 220 * 10 ** 6
+            self.insts = full_max_insts
         else:
             self.insts = 19 * 10 ** 6
 
