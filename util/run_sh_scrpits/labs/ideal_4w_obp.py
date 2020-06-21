@@ -9,27 +9,36 @@ import common as c
 import local_config as lc
 
 num_thread = lc.cores_per_task
+window_size = 192
+
+obp = True
 full = True
 if full:
-    d = '-full'
+    d = '_full'
 else:
     d = ''
-outdir = f'{c.stats_base_dir}/take-branch-trace{d}/'
+if obp:
+        obp_suffix = '_obp'
+else:
+        obp_suffix = ''
 
-dict_options = {
-            '--branch-trace-file': 'branch.protobuf.gz',
-            '--simpoint-interval': 220 * 10**6,
-            }
-
-binary_options= [
-        '--branch-trace-en',
-        '--override-interval',
-        ]
-
-
+config = f'ideal_4w{obp_suffix}'
+outdir = f'{c.stats_base_dir}/{config}{d}/'
 
 def main():
     g5_configs = []
+
+    dict_options = {
+            '--num-IQ': window_size,
+
+            '--use-bp': 'OracleBP',
+            '--branch-trace-file': 'useless_branch.protobuf.gz',
+            }
+    binary_options= [
+            '--check-outcome-addr',
+            '--branch-trace-en',
+            ]
+
 
     #with open('./tmp.txt') as f:
     with open('../all_function_spec2017.txt') as f:
@@ -37,17 +46,19 @@ def main():
             if not line.startswith('#'):
                 for cpt_id in range(0, 3):
                     benchmark = line.strip()
+                    task = benchmark + '_' + str(cpt_id)
                     g5_config = c.G5Config(
                         benchmark=benchmark,
-                        bmk_outdir=pjoin(outdir, benchmark + '_' + str(cpt_id)),
+                        bmk_outdir=pjoin(outdir, task),
                         cpt_id=cpt_id,
                         arch='RISCV',
                         full=full,
-                        debug=True,
+                        full_max_insts=220 * 10**6,
+                        debug=False,
                         debug_flags=[
-                            'BranchResolve',
+                            'Fetch',
                             ],
-                        func_id='take_branch_trace',
+                        func_id=config,
                     )
                     g5_config.add_options(binary_options)
                     g5_config.update_options(dict_options)

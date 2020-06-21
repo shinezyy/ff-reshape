@@ -1398,40 +1398,6 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
     pendingDelay += inst->pendingDelay;
     FUContentionDelay += inst->FUContentionDelay;
 
-    if (!inst->isSquashed() && inst->numDestRegs() > 0 && !inst->isForwarder()) {
-        totalFanoutPredictions++;
-        bool is_large_fanout = inst->numChildren > largeFanoutThreshold;
-        bool mis_pred = false;
-        if (is_large_fanout) {
-            largeFanoutInsts++;
-        }
-        if (inst->predLargeFanout && !is_large_fanout) {
-            falsePositiveLF++;
-            mis_pred = true;
-        } else if (!inst->predLargeFanout && is_large_fanout) {
-            falseNegativeLF++;
-            mis_pred = true;
-        }
-
-        const RegId& dest_reg = inst->destRegIdx(0);
-        fanoutPred->update(inst->instAddr(),
-                hash<std::pair<RegClass, RegIndex>>{}(
-                    std::make_pair(dest_reg.classValue(), dest_reg.index()) ),
-                inst->numChildren, mis_pred,
-                &inst->fpFeat, inst->reshapeContrib);
-
-        if (inst->predLargeFanout) {
-            if (inst->reshapeContrib - inst->negativeContrib <= 0) {
-                DPRINTF(Reshape2, "Reshape on inst[%lu] pc: %s with large fanout has no profit, "
-                        "with profit: %i, negative contribution: %i\n",
-                        inst->seqNum, inst->pcState(), inst->reshapeContrib, inst->negativeContrib);
-            } else {
-                DPRINTF(Reshape2, "Reshape on inst[%lu] pc: %s with large fanout has profit, "
-                        "with profit: %i, negative contribution: %i\n",
-                        inst->seqNum, inst->pcState(), inst->reshapeContrib, inst->negativeContrib);
-            }
-        }
-    }
 }
 
 template<class Impl>

@@ -154,3 +154,8 @@ def addO3Options(parser):
             type='int',
             help='number of DQ groups')
 
+    parser.add_option("--o3-core-width",
+            action='store',
+            type='int',
+            help='the core width of O3 cpu')
+

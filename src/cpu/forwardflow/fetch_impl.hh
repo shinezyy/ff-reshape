@@ -1366,8 +1366,6 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             thisPC = nextPC;
             inRom = isRomMicroPC(thisPC.microPC());
 
-            predictFanout(instruction);
-
             if (newMacro) {
                 fetchAddr = thisPC.instAddr() & BaseCPU::PCMask;
                 blkOffset = (fetchAddr - fetchBufferPC[tid]) / instSize;

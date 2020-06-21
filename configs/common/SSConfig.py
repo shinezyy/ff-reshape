@@ -102,3 +102,23 @@ def modifyO3CPUConfig(options, cpu):
 
         assert options.dq_groups
         cpu.numDQGroups = options.dq_groups
+
+    elif options.cpu_type == 'DerivO3CPU':
+
+        if options.o3_core_width is not None:
+
+            scale = options.o3_core_width / 4
+
+            cpu.fetchWidth = options.o3_core_width
+            cpu.decodeWidth = options.o3_core_width
+            cpu.renameWidth = options.o3_core_width
+
+            cpu.dispatchWidth = options.o3_core_width
+            cpu.issueWidth = options.o3_core_width
+            cpu.wbWidth = options.o3_core_width
+
+            cpu.commitWidth = options.o3_core_width
+            cpu.squashWidth = options.o3_core_width
+
+            for i in range(0, len(cpu.fuPool.FUList)):
+                cpu.fuPool.FUList[i].count *= scale
