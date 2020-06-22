@@ -48,6 +48,7 @@ from FUPool import *
 from O3Checker import O3Checker
 from BranchPredictor import *
 from BranchTrace import *
+from LoopBuffer import *
 
 class DerivO3CPU(BaseCPU):
     type = 'DerivO3CPU'
@@ -178,6 +179,7 @@ class DerivO3CPU(BaseCPU):
     #branchPred = Param.BranchPredictor(LocalBP(numThreads =
     #                                                   Parent.numThreads),
                                        "Branch Predictor")
+    loopBuffer = Param.LoopBuffer(LoopBuffer(), "Loopo Buffer")
     needsTSO = Param.Bool(buildEnv['TARGET_ISA'] == 'x86',
                           "Enable TSO Memory model")
 
