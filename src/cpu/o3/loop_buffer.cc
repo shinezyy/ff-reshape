@@ -1,4 +1,6 @@
+
 #include "cpu/o3/loop_buffer.hh"
+#include "debug/LoopBufferStack.hh"
 
 LoopBuffer::LoopBuffer(LoopBufferParams *params)
     :
@@ -6,7 +8,8 @@ LoopBuffer::LoopBuffer(LoopBufferParams *params)
         numEntries(params->numEntries),
         _name("LoopBuffer"),
         entrySize(params->entrySize),
-        mask(~(entrySize - 1))
+        mask(~(entrySize - 1)),
+        enable(params->enable)
 {
     assert(numEntries >= 2 * evictRange);
 }
@@ -30,8 +33,18 @@ LoopBuffer::processNewControl(Addr target)
 
     rank.emplace_back(table.find(target));
 
+    if (Debug::LoopBufferStack) {
+
+        DPRINTF(LoopBufferStack, "Inserted PC: 0x%x\n", target);
+        for (const auto &ele: rank) {
+            DPRINTFR(LoopBufferStack, "PC: 0x%x, used: %u\n",
+                    ele->first, ele->second.used);
+        }
+    }
+
     if (table.size() > numEntries) {
         auto evicted = random_mt.random<unsigned>(1, 1 + evictRange);
+        DPRINTF(LoopBufferStack, "Evicting -%u\n", evicted - 1);
         OrderRIt it = rank.rbegin(); // pointed to newly inserted
         std::advance(it, evicted);
 
@@ -72,6 +85,8 @@ LoopBuffer::updateControl(Addr target)
         assert(ele_pos != e);
 
         rank.splice(insert_pos, rank, ele_pos, std::next(ele_pos));
+        // rank.insert(insert_pos, *ele_pos);
+        // rank.erase(ele_pos);
     }
 
     assert(rank.size() == table.size());

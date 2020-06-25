@@ -401,7 +401,7 @@ DefaultFetch<Impl>::processCacheCompletion(PacketPtr pkt)
     memcpy(fetchBuffer[tid], pkt->getConstPtr<uint8_t>(), fetchBufferSize);
     fetchBufferValid[tid] = true;
 
-    if (lbuf->hasPendingRecordTxn() &&
+    if (lbuf->enable && lbuf->hasPendingRecordTxn() &&
             (lbuf->align(lbuf->getPendingEntryTarget())) == fetchBufferPC[tid]) {
         memcpy(lbuf->getPendingEntryPtr(), pkt->getConstPtr<uint8_t>(),
                 lbuf->entrySize);
@@ -1188,11 +1188,9 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
     bool inRom = isRomMicroPC(thisPC.microPC());
 
-    foundLine = lbuf->getBufferedLine(fetchAddr);
+    foundLine = lbuf->enable ? lbuf->getBufferedLine(fetchAddr) : nullptr;
 
-    bool used_loopbuffer = foundLine != nullptr;
-
-    Addr lbuf_start_pc = foundLine ? lbuf->align(fetchAddr) : 0;
+    unsigned used_loopbuffer = foundLine != nullptr;
 
     // If returning from the delay of a cache miss, then update the status
     // to running, otherwise do the cache access.  Possibly move this up
@@ -1268,7 +1266,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
     const unsigned numInsts = fetchBufferSize / instSize;
     unsigned blkOffset =
         (fetchAddr - fetchBufferPC[tid]) / instSize;
-
+    Addr lbuf_start_pc = 0;
     // Loop through instruction memory from the cache.
     // Keep issuing while fetchWidth is available and branch is not
     // predicted taken
@@ -1287,7 +1285,16 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             // If buffer is no longer valid or fetchAddr has moved to point
             // to the next cache block then start fetch from icache.
             if (foundLine) {
-                fetchFromLoopBuffer++;
+
+                Addr new_lbuf_start_pc = foundLine ? lbuf->align(fetchAddr) : 0;
+
+                if (!lbuf_start_pc) {
+                    lbuf_start_pc = new_lbuf_start_pc;
+
+                } else if (lbuf_start_pc != new_lbuf_start_pc) {
+                    break;
+                }
+
                 blkOffset = (fetchAddr - lbuf_start_pc) / instSize;
                 unsigned lbuf_entry_insts = lbuf->entrySize / instSize;
                 cacheInsts = reinterpret_cast<TheISA::MachInst *>(foundLine);
@@ -1369,9 +1376,11 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
             // If we're branching after this instruction, quit fetching
             // from the same block.
-            predictedBranch |= thisPC.branching();
-            predictedBranch |=
+
+            bool this_is_branch = thisPC.branching() ||
                 lookupAndUpdateNextPC(instruction, nextPC);
+            predictedBranch |= this_is_branch;
+
 
             if (predictedBranch) {
                 // predicted backward branch
@@ -1379,7 +1388,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             }
 
             Addr npc = nextPC.instAddr();
-            if (predictedBranch && thisPC.instAddr() > npc) {
+            if (lbuf->enable && predictedBranch && thisPC.instAddr() > npc) {
                 DPRINTF(Fetch, "Backward branch detected with PC = %s\n", thisPC);
 
                 foundLine = lbuf->getBufferedLine(npc);
@@ -1388,12 +1397,14 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                     // mark a Txn
                     lbuf->processNewControl(npc);
                 } else {
-                    lbuf->updateControl(npc);
+                    if (this_is_branch) {
+                        lbuf->updateControl(npc);
+                    }
 
                     if (used_loopbuffer) {
                         foundLine = nullptr; // port limitation -> cannot read anymore
                     } else {
-                        used_loopbuffer = true;
+                        used_loopbuffer += 1;
                     }
                 }
             }

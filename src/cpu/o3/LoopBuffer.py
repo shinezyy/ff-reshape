@@ -6,5 +6,6 @@ class LoopBuffer(SimObject):
     cxx_class = 'LoopBuffer'
     cxx_header = 'cpu/o3/loop_buffer.hh'
 
-    numEntries = Param.Unsigned(32, "Number of entries")
+    numEntries = Param.Unsigned(64, "Number of entries")
     entrySize = Param.Unsigned(64, "Size of entries in bytes")
+    enable = Param.Bool(True, "Enable")

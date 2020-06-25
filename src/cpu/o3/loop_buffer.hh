@@ -61,6 +61,8 @@ class LoopBuffer : public SimObject
 
     const unsigned evictRange{10};
 
+    const bool enable;
+
     void processNewControl(Addr target);
 
     void updateControl(Addr target);
