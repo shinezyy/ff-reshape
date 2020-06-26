@@ -1311,8 +1311,13 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
     if (head_inst->isControl()) {
         TheISA::PCState tempPC = head_inst->pcState();
         TheISA::advancePC(tempPC, head_inst->staticInst);
+
         if (Debug::BranchResolve) {
-            bool taken = head_inst->nextInstAddr() - head_inst->instAddr() != 4;
+            bool taken =
+                head_inst->pcState().compressed() ?
+                head_inst->nextInstAddr() - head_inst->instAddr() != 2:
+                head_inst->nextInstAddr() - head_inst->instAddr() != 4;
+
             branchTrace->writeRecord(branchCounter++, taken,
                     head_inst->instAddr(), head_inst->nextInstAddr());
         }

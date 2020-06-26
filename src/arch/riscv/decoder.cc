@@ -101,8 +101,10 @@ Decoder::decode(RiscvISA::PCState &nextPC)
 
     if (compressed(emi)) {
         nextPC.npc(nextPC.instAddr() + sizeof(MachInst) / 2);
+        nextPC.compressed(true);
     } else {
         nextPC.npc(nextPC.instAddr() + sizeof(MachInst));
+        nextPC.compressed(false);
     }
 
     return decode(emi, nextPC.instAddr());

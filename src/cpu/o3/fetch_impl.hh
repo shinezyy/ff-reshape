@@ -568,7 +568,10 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     bool predict_taken;
 
     if (!inst->isControl()) {
+        DPRINTF(Fetch, "Advancing PC from %s", nextPC);
         TheISA::advancePC(nextPC, inst->staticInst);
+        DPRINTFR(Fetch, " to %s\n", nextPC);
+
         inst->setPredTarg(nextPC);
         inst->setPredTaken(false);
         return false;
@@ -582,8 +585,9 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
         DPRINTF(Fetch, "[tid:%i]: [sn:%i]: Branch predicted to be taken to %s.\n",
                 tid, inst->seqNum, nextPC);
     } else {
-        DPRINTF(Fetch, "[tid:%i]: [sn:%i]: Branch predicted to be not taken.\n",
-                tid, inst->seqNum);
+        DPRINTF(Fetch, "[tid:%i]: [sn:%i]: Branch predicted to be not taken, "
+                "NPC: 0x%s.\n",
+                tid, inst->seqNum, nextPC);
     }
 
     DPRINTF(Fetch, "[tid:%i]: [sn:%i] Branch predicted to go to %s.\n",
@@ -1377,14 +1381,19 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             // If we're branching after this instruction, quit fetching
             // from the same block.
 
+            DPRINTF(Fetch, "Compressed: %i, This PC: 0x%x, NPC: 0x%x\n",
+                    thisPC.compressed(),
+                    thisPC.pc(),
+                    thisPC.npc());
             bool this_is_branch = thisPC.branching() ||
                 lookupAndUpdateNextPC(instruction, nextPC);
             predictedBranch |= this_is_branch;
 
 
-            if (predictedBranch) {
+            if (this_is_branch) {
                 // predicted backward branch
-                DPRINTF(Fetch, "Branch detected with PC = %s\n", thisPC);
+                DPRINTF(Fetch, "Branch detected with PC : 0x%x => 0x%x\n",
+                        cpc, npc);
             }
 
             Addr npc = nextPC.instAddr();
