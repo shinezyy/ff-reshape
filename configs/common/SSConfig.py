@@ -39,6 +39,10 @@ def modifyO3CPUConfig(options, cpu):
         print('Unknow BP:', options.use_bp)
         assert False
 
+    if options.enable_loop_buffer:
+        cpu.loopBuffer.enable = True
+    else:
+        cpu.loopBuffer.enable = False
 
     if options.bp_size:
         cpu.branchPred.globalPredictorSize = options.bp_size

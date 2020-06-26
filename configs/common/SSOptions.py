@@ -159,3 +159,7 @@ def addO3Options(parser):
             type='int',
             help='the core width of O3 cpu')
 
+    parser.add_option("--enable-loop-buffer",
+            action='store_true',
+            help='enable loop buffer')
+

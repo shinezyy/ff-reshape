@@ -1288,7 +1288,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         if (needMem) {
             // If buffer is no longer valid or fetchAddr has moved to point
             // to the next cache block then start fetch from icache.
-            if (foundLine) {
+            if (lbuf->enable && foundLine) {
 
                 Addr new_lbuf_start_pc = foundLine ? lbuf->align(fetchAddr) : 0;
 
@@ -1376,6 +1376,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             }
 #endif
 
+            Addr cpc = thisPC.instAddr();
             nextPC = thisPC;
 
             // If we're branching after this instruction, quit fetching
@@ -1389,6 +1390,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 lookupAndUpdateNextPC(instruction, nextPC);
             predictedBranch |= this_is_branch;
 
+            Addr npc = nextPC.instAddr();
 
             if (this_is_branch) {
                 // predicted backward branch
@@ -1396,9 +1398,9 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                         cpc, npc);
             }
 
-            Addr npc = nextPC.instAddr();
-            if (lbuf->enable && predictedBranch && thisPC.instAddr() > npc) {
-                DPRINTF(Fetch, "Backward branch detected with PC = %s\n", thisPC);
+            if (lbuf->enable && this_is_branch && thisPC.instAddr() > npc) {
+                DPRINTF(Fetch, "Branch detected with PC : 0x%x => 0x%x\n",
+                        cpc, npc);
 
                 foundLine = lbuf->getBufferedLine(npc);
 

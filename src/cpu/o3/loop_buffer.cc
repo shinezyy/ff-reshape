@@ -66,6 +66,7 @@ LoopBuffer::updateControl(Addr target)
 {
     assert(table.count(target));
     auto used = ++table[target].used;
+    totalUsed++;
 
     OrderIt insert_pos = rank.begin(), e = rank.end();
     for (; insert_pos != e; insert_pos++) {
@@ -87,6 +88,13 @@ LoopBuffer::updateControl(Addr target)
         rank.splice(insert_pos, rank, ele_pos, std::next(ele_pos));
         // rank.insert(insert_pos, *ele_pos);
         // rank.erase(ele_pos);
+    }
+
+    if (totalUsed > 100) {
+        for (auto &pair: table) {
+            pair.second.used *= 0.9;
+        }
+        totalUsed = 0;
     }
 
     assert(rank.size() == table.size());

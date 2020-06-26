@@ -45,6 +45,9 @@ class LoopBuffer : public SimObject
     bool pending{};
 
     Addr pendingTarget{};
+
+    uint64_t totalUsed{};
+
   public:
 
     LoopBuffer(LoopBufferParams *params);
