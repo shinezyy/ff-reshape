@@ -112,6 +112,10 @@ OracleBP::update(ThreadID tid, Addr branch_addr, bool taken, void *bp_history,
                     "pred: %i, executed: %i\n",
                     branch_addr,
                     history_state->predTaken, taken);
+            DPRINTF(OracleBP, "Predicted direction is overridden unexpectedly! @0x%x:"
+                    "pred: %i, executed: %i\n",
+                    branch_addr,
+                    history_state->predTaken, taken);
         }
 
         delete history_state;
@@ -180,7 +184,13 @@ void OracleBP::syncFront() {
 }
 
 bool OracleBP::getFrontDirection() {
-    return orderedOracleEntries.front().taken;
+    DPRINTF(OracleBP, "Current front direction: %i, front branch addr: 0x%x, "
+            "front target addr: 0x%x\n",
+            frontPointer->taken,
+            frontPointer->branchAddr,
+            frontPointer->targetAddr
+           );
+    return frontPointer->taken;
 }
 
 void OracleBP::advanceFront() {
@@ -200,6 +210,12 @@ void OracleBP::readNextBranch() {
 }
 
 Addr OracleBP::getFrontTarget() {
+    DPRINTF(OracleBP, "Current front direction: %i, front branch addr: 0x%x, "
+            "front target addr: 0x%x\n",
+            frontPointer->taken,
+            frontPointer->branchAddr,
+            frontPointer->targetAddr
+           );
     return frontPointer->targetAddr;
 }
 
