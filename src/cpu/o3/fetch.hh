@@ -581,6 +581,8 @@ class DefaultFetch
     LoopBuffer *lbuf;
 
     uint8_t *foundLine;
+
+    Addr lbufStartPC{};
 };
 
 #endif //__CPU_O3_FETCH_HH__

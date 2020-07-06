@@ -110,6 +110,8 @@ class LoopBuffer : public SimObject
     void recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size);
 
     static bool isBackward(Addr branch_pc, Addr target_pc);
+
+    bool inRange(Addr target, Addr fetch_pc);
 };
 
 #endif //__CPU_O3_LOOPBUFFER_HH__

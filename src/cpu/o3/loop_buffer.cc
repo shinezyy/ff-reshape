@@ -246,6 +246,7 @@ LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
         clearPending();
         txn.offset = 0;
         txn.expectedPC = 0;
+        table[txn.targetPC].branchPC = txn.branchPC;
         return;
     }
     txn.offset += inst_size;
@@ -266,6 +267,14 @@ LoopBuffer::getBufferedLineBranchPC(Addr target_pc)
     } else {
         return 0;
     }
+}
+
+bool
+LoopBuffer::inRange(Addr target, Addr fetch_pc)
+{
+    assert(table.count(target));
+    auto end_pc = table[target].branchPC;
+    return fetch_pc >= target && fetch_pc <= end_pc;
 }
 
 LoopBuffer *

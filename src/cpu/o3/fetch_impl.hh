@@ -1199,13 +1199,17 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
     bool inRom = isRomMicroPC(thisPC.microPC());
 
-    foundLine = lbuf->enable ? lbuf->getBufferedLine(fetchAddr) : nullptr;
-
     Addr loop_branch_pc;
+    if (lbuf->enable && lbufStartPC && lbuf->inRange(lbufStartPC, fetchAddr)) {
+        loop_branch_pc = lbuf->getBufferedLineBranchPC(lbufStartPC);
+        // leave foundLine without updating
+    } else {
+        foundLine = lbuf->enable ? lbuf->getBufferedLine(fetchAddr) : nullptr;
+        if (foundLine) {
 
-    if (foundLine) {
-        loop_branch_pc = lbuf->getBufferedLineBranchPC(fetchAddr);
-        assert(loop_branch_pc);
+            loop_branch_pc = lbuf->getBufferedLineBranchPC(fetchAddr);
+            assert(loop_branch_pc);
+        }
     }
 
     // If returning from the delay of a cache miss, then update the status
@@ -1282,7 +1286,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
     const unsigned numInsts = fetchBufferSize / instSize;
     unsigned blkOffset =
         (fetchAddr - fetchBufferPC[tid]) / instSize;
-    Addr lbuf_start_pc = 0;
+
     // Loop through instruction memory from the cache.
     // Keep issuing while fetchWidth is available and branch is not
     // predicted taken
@@ -1302,34 +1306,33 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             // to the next cache block then start fetch from icache.
             if (lbuf->enable && foundLine) {
 
-                if (!lbuf_start_pc) {
-
+                if (!lbufStartPC) {
                     if (lbuf->loopFiltering) {
-                        lbuf_start_pc = fetchAddr;
+                        lbufStartPC = fetchAddr;
                         DPRINTF(LoopBuffer,
                                 "Fetching from filtered loop buffer "
                                 "starting from: 0x%x\n", fetchAddr);
                     } else {
-                        lbuf_start_pc = lbuf->align(fetchAddr);
+                        lbufStartPC = lbuf->align(fetchAddr);
                     }
 
-                } else if (fetchAddr < lbuf_start_pc ||
-                        fetchAddr > loop_branch_pc) {
+                } else if (!lbuf->inRange(lbufStartPC, fetchAddr)) {
                     DPRINTF(LoopBuffer,
                             "Fetching from outside of lbuf,"
                             "fetchAddr: 0x%x, lbuf start: 0x%x, lbuf end: 0x%x\n",
-                            fetchAddr, lbuf_start_pc, loop_branch_pc);
+                            fetchAddr, lbufStartPC, loop_branch_pc);
+                    foundLine = nullptr;
+                    lbufStartPC = 0;
                     break;
                 }
-
-                blkOffset = (fetchAddr - lbuf_start_pc) / instSize;
+                blkOffset = (fetchAddr - lbufStartPC) / instSize;
 
                 DPRINTF(LoopBuffer,
                         "Fetching from loop buffer: line %p,"
                         " block start: 0x%x, end: 0x%x"
                         " fetching: 0x%x, blkOffset: %u, instSize: %u\n",
                         (void *)foundLine,
-                        lbuf_start_pc, loop_branch_pc, fetchAddr, blkOffset, instSize);
+                        lbufStartPC, loop_branch_pc, fetchAddr, blkOffset, instSize);
                 unsigned lbuf_entry_insts = lbuf->entrySize / instSize;
                 cacheInsts = reinterpret_cast<TheISA::MachInst *>(foundLine);
 
@@ -1400,6 +1403,9 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 newMacro |= staticInst->isLastMicroop();
             }
 
+            if (lbuf->enable && foundLine) {
+                fetchFromLoopBuffer++;
+            }
             DynInstPtr instruction =
                 buildInst(tid, staticInst, curMacroop,
                           thisPC, nextPC, true);
@@ -1438,9 +1444,10 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             if (this_is_branch) {
                 if (lbuf->enable) {
                     if (cpc == loop_branch_pc) {
-
+                        // loop back
                     } else {
                         foundLine = lbuf->getBufferedLine(npc);
+                        lbufStartPC = 0;
 
                         if (!foundLine) {
                             // mark a Txn
