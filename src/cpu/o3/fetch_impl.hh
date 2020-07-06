@@ -584,7 +584,7 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
                                         nextPC, tid);
 
-    if (lbuf->loopFiltering) {
+    if (lbuf->loopFiltering && predict_taken) {
         lbuf->probe(branch_pc, nextPC.pc());
     }
 
@@ -1325,7 +1325,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 blkOffset = (fetchAddr - lbuf_start_pc) / instSize;
 
                 DPRINTF(LoopBuffer,
-                        "Fetching from loop buffer: line 0x%x,"
+                        "Fetching from loop buffer: line %p,"
                         " block start: 0x%x, end: 0x%x"
                         " fetching: 0x%x, blkOffset: %u, instSize: %u\n",
                         (void *)foundLine,

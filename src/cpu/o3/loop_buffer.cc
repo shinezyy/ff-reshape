@@ -181,6 +181,7 @@ LoopBuffer::probe(Addr branch_pc, Addr target_pc)
                     txn.state = Recording;
                     // buffer size?
                     processNewControl(branch_pc, target_pc);
+                    pendingTarget = target_pc;
                     txn.expectedPC = target_pc;
                     txn.offset = 0;
                 }
@@ -227,10 +228,12 @@ LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
         txn.count = 0;
         txn.offset = 0;
         txn.expectedPC = 0;
+        return;
     }
 
-    DPRINTF(LoopBuffer, "0x%x|__>0x%x: recording 0x%x\n",
-            txn.branchPC, txn.targetPC, pc);
+    DPRINTF(LoopBuffer, "0x%x|__>0x%x: recording 0x%x to 0x%x (offset: %u)\n",
+            txn.branchPC, txn.targetPC, pc,
+            getPendingEntryTarget(), txn.offset);
     memcpy(getPendingEntryPtr() + txn.offset,
             building_inst, inst_size);
 
