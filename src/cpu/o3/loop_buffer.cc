@@ -1,5 +1,6 @@
 
 #include "cpu/o3/loop_buffer.hh"
+#include "debug/LoopBuffer.hh"
 #include "debug/LoopBufferStack.hh"
 
 LoopBuffer::LoopBuffer(LoopBufferParams *params)
@@ -9,7 +10,8 @@ LoopBuffer::LoopBuffer(LoopBufferParams *params)
         _name("LoopBuffer"),
         entrySize(params->entrySize),
         mask(~(entrySize - 1)),
-        enable(params->enable)
+        enable(params->enable),
+        loopFiltering(params->loopFiltering)
 {
     assert(numEntries >= 2 * evictRange);
 }
@@ -19,7 +21,7 @@ LoopBuffer::~LoopBuffer()
 }
 
 void
-LoopBuffer::processNewControl(Addr target)
+LoopBuffer::processNewControl(Addr branch_pc, Addr target)
 {
     if (table.count(target)) {
         assert(table[target].valid && !table[target].fetched);
@@ -30,6 +32,7 @@ LoopBuffer::processNewControl(Addr target)
     table[target].valid = true;
     table[target].fetched = false;
     table[target].used = 0;
+    table[target].branchPC = branch_pc;
 
     rank.emplace_back(table.find(target));
 
@@ -141,6 +144,125 @@ LoopBuffer::setFetched(Addr target)
     assert(table.count(target));
     assert(table[target].valid && !table[target].fetched);
     table[target].fetched = true;
+}
+
+void
+LoopBuffer::probe(Addr branch_pc, Addr target_pc)
+{
+    if (getBufferedLine(target_pc)) {
+        updateControl(target_pc);
+        return;
+    }
+    switch (txn.state){
+        case Recorded:
+        case Invalid:
+        case Aborted:
+            if (isBackward(branch_pc, target_pc) &&
+                    (branch_pc - target_pc) < entrySize) {
+                DPRINTF(LoopBuffer, "Observing 0x%x|__>0x%x\n",
+                        branch_pc, target_pc);
+                txn.state = LRTxnState::Observing;
+                txn.branchPC = branch_pc;
+                txn.targetPC = target_pc;
+                txn.count = 0;
+            }
+            break;
+
+        case Observing:
+            if (branch_pc == txn.branchPC && target_pc == txn.targetPC) {
+                txn.count++;
+
+                DPRINTF(LoopBuffer, "Counting 0x%x|__>0x%x: %u\n",
+                        txn.branchPC, txn.targetPC, txn.count);
+
+                if (txn.count >= txn.recordThreshold) {
+                    DPRINTF(LoopBuffer, "0x%x|__>0x%x is qualified\n",
+                            txn.branchPC, txn.targetPC);
+                    txn.state = Recording;
+                    // buffer size?
+                    processNewControl(branch_pc, target_pc);
+                    txn.expectedPC = target_pc;
+                    txn.offset = 0;
+                }
+            } else if (isBackward(branch_pc, target_pc) &&
+                    (branch_pc - target_pc) < entrySize) {
+                txn.branchPC = branch_pc;
+                txn.targetPC = target_pc;
+                txn.state = Observing;
+                txn.count = 0;
+                txn.offset = 0;
+                DPRINTF(LoopBuffer, "Switch to 0x%x|__>0x%x: %u\n",
+                        txn.branchPC, txn.targetPC, txn.count);
+            } else {
+                DPRINTF(LoopBuffer, "Abort 0x%x|__>0x%x due to another branch\n",
+                        txn.branchPC, txn.targetPC);
+                txn.state = Aborted;
+                txn.count = 0;
+                txn.offset = 0;
+                txn.expectedPC = 0;
+            }
+            break;
+
+        case Recording:
+            if (branch_pc == txn.branchPC) {
+                // A full loop has been recorded
+                txn.state = Recorded;
+            }
+            break;
+    }
+}
+
+void
+LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
+{
+    if (txn.state != Recording) {
+        return;
+    }
+
+    if (pc != txn.expectedPC) {
+        DPRINTF(LoopBuffer, "0x%x|__>0x%x: 0x%x does not match expectedPC: 0x%x, abort\n",
+                txn.branchPC, txn.targetPC, pc, txn.expectedPC);
+        // insn stream is redirected
+        txn.state = Aborted;
+        txn.count = 0;
+        txn.offset = 0;
+        txn.expectedPC = 0;
+    }
+
+    DPRINTF(LoopBuffer, "0x%x|__>0x%x: recording 0x%x\n",
+            txn.branchPC, txn.targetPC, pc);
+    memcpy(getPendingEntryPtr() + txn.offset,
+            building_inst, inst_size);
+
+    if (pc == txn.branchPC) {
+        DPRINTF(LoopBuffer,
+                "0x%x|__>0x%x: completely filled!\n",
+                txn.branchPC, txn.targetPC);
+        txn.state = Recorded;
+        setFetched(txn.targetPC);
+        clearPending();
+        txn.offset = 0;
+        txn.expectedPC = 0;
+        return;
+    }
+    txn.offset += inst_size;
+    txn.expectedPC += inst_size;
+}
+
+bool
+LoopBuffer::isBackward(Addr branch_pc, Addr target_pc)
+{
+    return branch_pc > target_pc;
+}
+
+Addr
+LoopBuffer::getBufferedLineBranchPC(Addr target_pc)
+{
+    if (table.count(target_pc)) {
+        return table[target_pc].branchPC;
+    } else {
+        return 0;
+    }
 }
 
 LoopBuffer *

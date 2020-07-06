@@ -9,3 +9,4 @@ class LoopBuffer(SimObject):
     numEntries = Param.Unsigned(64, "Number of entries")
     entrySize = Param.Unsigned(64, "Size of entries in bytes")
     enable = Param.Bool(False, "Enable")
+    loopFiltering = Param.Bool(True, "Enable")

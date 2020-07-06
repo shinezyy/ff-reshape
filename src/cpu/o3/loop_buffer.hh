@@ -11,9 +11,22 @@
 #include "params/LoopBuffer.hh"
 #include "sim/sim_object.hh"
 
+enum LRTxnState {
+    Invalid = 0,
+    Observing,
+    Recording,
+    Recorded,
+    Aborted
+};
+
 struct LoopRecordTransaction {
-    bool pending{};
-    Addr backwardBranchPC;
+    static const unsigned recordThreshold = 2;
+    LRTxnState state;
+    Addr targetPC;
+    Addr branchPC;
+    Addr expectedPC;
+    unsigned offset;
+    unsigned count{};
 };
 
 struct LoopEntry {
@@ -21,7 +34,7 @@ struct LoopEntry {
     bool valid{};
     bool fetched{};
     uint32_t used{};
-
+    Addr branchPC;
 };
 
 class LoopBuffer : public SimObject
@@ -66,7 +79,9 @@ class LoopBuffer : public SimObject
 
     const bool enable;
 
-    void processNewControl(Addr target);
+    const bool loopFiltering;
+
+    void processNewControl(Addr branch_pc, Addr target);
 
     void updateControl(Addr target);
 
@@ -80,9 +95,21 @@ class LoopBuffer : public SimObject
 
     void clearPending();
 
-    uint8_t* getBufferedLine(Addr branch_pc);
+    uint8_t* getBufferedLine(Addr target_pc);
+
+    Addr getBufferedLineBranchPC(Addr target_pc);
 
     Addr align(Addr addr) {return addr & mask;}
+
+    // loop identification
+
+    LoopRecordTransaction txn;
+
+    void probe(Addr branch_pc, Addr target_pc);
+
+    void recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size);
+
+    static bool isBackward(Addr branch_pc, Addr target_pc);
 };
 
 #endif //__CPU_O3_LOOPBUFFER_HH__

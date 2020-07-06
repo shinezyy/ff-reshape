@@ -65,6 +65,7 @@
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
 #include "debug/Fetch.hh"
+#include "debug/LoopBuffer.hh"
 #include "debug/O3PipeView.hh"
 #include "mem/packet.hh"
 #include "params/DerivO3CPU.hh"
@@ -401,7 +402,8 @@ DefaultFetch<Impl>::processCacheCompletion(PacketPtr pkt)
     memcpy(fetchBuffer[tid], pkt->getConstPtr<uint8_t>(), fetchBufferSize);
     fetchBufferValid[tid] = true;
 
-    if (lbuf->enable && lbuf->hasPendingRecordTxn() &&
+    if (lbuf->enable && !lbuf->loopFiltering &&
+            lbuf->hasPendingRecordTxn() &&
             (lbuf->align(lbuf->getPendingEntryTarget())) == fetchBufferPC[tid]) {
         memcpy(lbuf->getPendingEntryPtr(), pkt->getConstPtr<uint8_t>(),
                 lbuf->entrySize);
@@ -578,8 +580,13 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     }
 
     ThreadID tid = inst->threadNumber;
+    Addr branch_pc = nextPC.pc();
     predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
                                         nextPC, tid);
+
+    if (lbuf->loopFiltering) {
+        lbuf->probe(branch_pc, nextPC.pc());
+    }
 
     if (predict_taken) {
         DPRINTF(Fetch, "[tid:%i]: [sn:%i]: Branch predicted to be taken to %s.\n",
@@ -1194,7 +1201,12 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
     foundLine = lbuf->enable ? lbuf->getBufferedLine(fetchAddr) : nullptr;
 
-    unsigned used_loopbuffer = foundLine != nullptr;
+    Addr loop_branch_pc;
+
+    if (foundLine) {
+        loop_branch_pc = lbuf->getBufferedLineBranchPC(fetchAddr);
+        assert(loop_branch_pc);
+    }
 
     // If returning from the delay of a cache miss, then update the status
     // to running, otherwise do the cache access.  Possibly move this up
@@ -1290,16 +1302,34 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             // to the next cache block then start fetch from icache.
             if (lbuf->enable && foundLine) {
 
-                Addr new_lbuf_start_pc = foundLine ? lbuf->align(fetchAddr) : 0;
-
                 if (!lbuf_start_pc) {
-                    lbuf_start_pc = new_lbuf_start_pc;
 
-                } else if (lbuf_start_pc != new_lbuf_start_pc) {
+                    if (lbuf->loopFiltering) {
+                        lbuf_start_pc = fetchAddr;
+                        DPRINTF(LoopBuffer,
+                                "Fetching from filtered loop buffer "
+                                "starting from: 0x%x\n", fetchAddr);
+                    } else {
+                        lbuf_start_pc = lbuf->align(fetchAddr);
+                    }
+
+                } else if (fetchAddr < lbuf_start_pc ||
+                        fetchAddr > loop_branch_pc) {
+                    DPRINTF(LoopBuffer,
+                            "Fetching from outside of lbuf,"
+                            "fetchAddr: 0x%x, lbuf start: 0x%x, lbuf end: 0x%x\n",
+                            fetchAddr, lbuf_start_pc, loop_branch_pc);
                     break;
                 }
 
                 blkOffset = (fetchAddr - lbuf_start_pc) / instSize;
+
+                DPRINTF(LoopBuffer,
+                        "Fetching from loop buffer: line 0x%x,"
+                        " block start: 0x%x, end: 0x%x"
+                        " fetching: 0x%x, blkOffset: %u, instSize: %u\n",
+                        (void *)foundLine,
+                        lbuf_start_pc, loop_branch_pc, fetchAddr, blkOffset, instSize);
                 unsigned lbuf_entry_insts = lbuf->entrySize / instSize;
                 cacheInsts = reinterpret_cast<TheISA::MachInst *>(foundLine);
 
@@ -1316,6 +1346,13 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 // We need to process more memory, but we've run out of the
                 // current block.
                 break;
+            }
+
+            if (lbuf->loopFiltering) {
+                lbuf->recordInst(
+                        reinterpret_cast<uint8_t *>(cacheInsts + blkOffset),
+                        fetchAddr,
+                        instSize);
             }
 
             MachInst inst = TheISA::gtoh(cacheInsts[blkOffset]);
@@ -1388,7 +1425,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                     thisPC.npc());
             bool this_is_branch = thisPC.branching() ||
                 lookupAndUpdateNextPC(instruction, nextPC);
-            predictedBranch |= this_is_branch;
+            predictedBranch = this_is_branch;
 
             Addr npc = nextPC.instAddr();
 
@@ -1398,25 +1435,34 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                         cpc, npc);
             }
 
-            if (lbuf->enable && this_is_branch && thisPC.instAddr() > npc) {
-                DPRINTF(Fetch, "Branch detected with PC : 0x%x => 0x%x\n",
-                        cpc, npc);
+            if (this_is_branch) {
+                if (lbuf->enable) {
+                    if (cpc == loop_branch_pc) {
 
-                foundLine = lbuf->getBufferedLine(npc);
-
-                if (!foundLine) {
-                    // mark a Txn
-                    lbuf->processNewControl(npc);
-                } else {
-                    if (this_is_branch) {
-                        lbuf->updateControl(npc);
-                    }
-
-                    if (used_loopbuffer) {
-                        foundLine = nullptr; // port limitation -> cannot read anymore
                     } else {
-                        used_loopbuffer += 1;
+                        foundLine = lbuf->getBufferedLine(npc);
+
+                        if (!foundLine) {
+                            // mark a Txn
+                            if (!lbuf->loopFiltering) {
+                                lbuf->processNewControl(cpc, npc);
+                            }
+                        } else {
+                            loop_branch_pc = lbuf->getBufferedLineBranchPC(npc);
+                            assert(loop_branch_pc);
+
+                            if (this_is_branch && !lbuf->loopFiltering) {
+                                lbuf->updateControl(npc);
+                            }
+                            // if (used_loopbuffer) {
+                            //     foundLine = nullptr; // port limitation -> cannot read anymore
+                            // } else {
+                            //     used_loopbuffer += 1;
+                            // }
+                        }
                     }
+                } else {
+                    foundLine = nullptr;
                 }
             }
 
