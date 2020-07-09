@@ -1283,7 +1283,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
     TheISA::MachInst *cacheInsts =
         reinterpret_cast<TheISA::MachInst *>(fetchBuffer[tid]);
 
-    const unsigned numInsts = fetchBufferSize / instSize;
+    unsigned numInsts = fetchBufferSize / instSize;
     unsigned blkOffset =
         (fetchAddr - fetchBufferPC[tid]) / instSize;
 
@@ -1335,10 +1335,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                         lbufStartPC, loop_branch_pc, fetchAddr, blkOffset, instSize);
                 unsigned lbuf_entry_insts = lbuf->entrySize / instSize;
                 cacheInsts = reinterpret_cast<TheISA::MachInst *>(foundLine);
-
-                if (blkOffset > lbuf_entry_insts) {
-                    break;
-                }
+                numInsts = lbuf_entry_insts;
 
             } else if (!fetchBufferValid[tid] ||
                 fetchBufferBlockPC != fetchBufferPC[tid]) {
