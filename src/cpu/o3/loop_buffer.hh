@@ -19,6 +19,46 @@ enum LRTxnState {
     Aborted
 };
 
+struct ForwardBranch {
+    Addr branch;
+    Addr target;
+    ForwardBranch () {};
+    ForwardBranch (Addr branch_, Addr target_):
+        branch(branch_),
+        target(target_)
+    {
+    }
+};
+
+struct ExpectedForwardBranch {
+    bool valid;
+    ForwardBranch pair;
+
+    void invalidate() {
+        valid = false;
+    }
+
+    void set(const ForwardBranch &forwardBranch) {
+        pair = forwardBranch;
+        valid = true;
+    }
+};
+
+struct ForwardBranchState {
+    bool valid{};
+    bool firstLap{};
+    unsigned recordIndex{};
+    unsigned observingIndex{};
+    std::vector<ForwardBranch> forwardBranches;
+
+    void clear() {
+        valid = false;
+        recordIndex = 0;
+        observingIndex = 0;
+        forwardBranches.clear();
+    }
+};
+
 struct LoopRecordTransaction {
     static const unsigned recordThreshold = 2;
     LRTxnState state;
@@ -27,6 +67,27 @@ struct LoopRecordTransaction {
     Addr expectedPC;
     unsigned offset;
     unsigned count{};
+    std::shared_ptr<ForwardBranchState> forwardBranchState;
+
+    LoopRecordTransaction () {
+        state = Invalid;
+        reset();
+    }
+
+    void reset() { // reset @ use
+        count = 0;
+        offset = 0;
+        expectedPC = 0;
+        if (!forwardBranchState) {
+            forwardBranchState =
+                std::make_shared<ForwardBranchState>();
+        }
+        forwardBranchState->clear();
+    }
+
+    void abort() {
+        state = Aborted;
+    }
 };
 
 struct LoopEntry {
@@ -81,6 +142,10 @@ class LoopBuffer : public SimObject
 
     const bool loopFiltering;
 
+    const unsigned maxForwardBranches;
+
+    ExpectedForwardBranch expectedForwardBranch;
+
     void processNewControl(Addr branch_pc, Addr target);
 
     void updateControl(Addr target);
@@ -105,11 +170,13 @@ class LoopBuffer : public SimObject
 
     LoopRecordTransaction txn;
 
-    void probe(Addr branch_pc, Addr target_pc);
+    void probe(Addr branch_pc, Addr target_pc, bool pred_taken);
 
     void recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size);
 
     static bool isBackward(Addr branch_pc, Addr target_pc);
+
+    static bool isForward(Addr branch_pc, Addr target_pc);
 
     bool inRange(Addr target, Addr fetch_pc);
 };

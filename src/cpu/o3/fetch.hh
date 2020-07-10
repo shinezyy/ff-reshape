@@ -583,6 +583,13 @@ class DefaultFetch
     uint8_t *foundLine;
 
     Addr lbufStartPC{};
+
+    enum FetchSource {
+        CacheLine = 0,
+        LoopBuf
+    };
+
+    FetchSource fetchSource;
 };
 
 #endif //__CPU_O3_FETCH_HH__

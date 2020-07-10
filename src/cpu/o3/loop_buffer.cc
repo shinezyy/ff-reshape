@@ -11,9 +11,11 @@ LoopBuffer::LoopBuffer(LoopBufferParams *params)
         entrySize(params->entrySize),
         mask(~(entrySize - 1)),
         enable(params->enable),
-        loopFiltering(params->loopFiltering)
+        loopFiltering(params->loopFiltering),
+        maxForwardBranches(params->maxForwardBranches)
 {
     assert(numEntries >= 2 * evictRange);
+    expectedForwardBranch.invalidate();
 }
 
 LoopBuffer::~LoopBuffer()
@@ -147,12 +149,14 @@ LoopBuffer::setFetched(Addr target)
 }
 
 void
-LoopBuffer::probe(Addr branch_pc, Addr target_pc)
+LoopBuffer::probe(Addr branch_pc, Addr target_pc, bool pred_taken)
 {
     if (getBufferedLine(target_pc)) {
         updateControl(target_pc);
         return;
     }
+
+    // if not taken but recording a forward branch
     switch (txn.state){
         case Recorded:
         case Invalid:
@@ -161,16 +165,20 @@ LoopBuffer::probe(Addr branch_pc, Addr target_pc)
                     (branch_pc - target_pc) < entrySize) {
                 DPRINTF(LoopBuffer, "Observing 0x%x|__>0x%x\n",
                         branch_pc, target_pc);
+                txn.reset();
                 txn.state = LRTxnState::Observing;
                 txn.branchPC = branch_pc;
                 txn.targetPC = target_pc;
-                txn.count = 0;
             }
             break;
 
         case Observing:
             if (branch_pc == txn.branchPC && target_pc == txn.targetPC) {
                 txn.count++;
+
+                if (txn.forwardBranchState->valid && txn.forwardBranchState->firstLap) {
+                    txn.forwardBranchState->firstLap = false;
+                }
 
                 DPRINTF(LoopBuffer, "Counting 0x%x|__>0x%x: %u\n",
                         txn.branchPC, txn.targetPC, txn.count);
@@ -185,22 +193,82 @@ LoopBuffer::probe(Addr branch_pc, Addr target_pc)
                     txn.expectedPC = target_pc;
                     txn.offset = 0;
                 }
+
             } else if (isBackward(branch_pc, target_pc) &&
                     (branch_pc - target_pc) < entrySize) {
+                txn.reset();
                 txn.branchPC = branch_pc;
                 txn.targetPC = target_pc;
                 txn.state = Observing;
-                txn.count = 0;
-                txn.offset = 0;
                 DPRINTF(LoopBuffer, "Switch to 0x%x|__>0x%x: %u\n",
                         txn.branchPC, txn.targetPC, txn.count);
+
+            } else if (isForward(branch_pc, target_pc) &&
+                    target_pc < txn.branchPC) { // in-loop forward branch
+                bool new_f_jump = false;
+                auto &fb_state = txn.forwardBranchState;
+                auto &fw_branches = fb_state->forwardBranches;
+                if (!fb_state->valid) {
+                    // validate it
+                    fb_state->valid = true;
+                    fb_state->firstLap = true;
+                    fw_branches.emplace_back(
+                            branch_pc, target_pc);
+                    new_f_jump = true;
+
+                } else if (fb_state->firstLap) {
+                    if (fw_branches.size() >= maxForwardBranches) {
+                        txn.abort();
+                        DPRINTF(LoopBuffer, "Abort 0x%x|__>0x%x due to forward branch:"
+                                "0x%x|__>0x%x exceeds size limit\n",
+                                txn.branchPC, txn.targetPC,
+                                branch_pc, target_pc);
+                    } else {
+                        fw_branches.emplace_back(
+                            branch_pc, target_pc);
+                        fb_state->observingIndex++;
+                        new_f_jump = true;
+                    }
+
+                } else {
+                    // valid and not in the first lap
+                    if (fw_branches[fb_state->observingIndex].branch == branch_pc &&
+                            fw_branches[fb_state->observingIndex].target == target_pc) {
+                        DPRINTF(LoopBuffer, "Forward branch 0x%x|__>0x%x of loop "
+                                "0x%x|__>0x%x is confirmed again\n",
+                                branch_pc, target_pc,
+                                txn.branchPC, txn.targetPC);
+                    } else {
+                        // on a different path
+                        if (fw_branches[fb_state->observingIndex].target != target_pc) {
+                            DPRINTF(LoopBuffer, "Forward branch 0x%x|__>0x%x of loop "
+                                    "0x%x|__>0x%x jumped to different place\n",
+                                    branch_pc, target_pc,
+                                    txn.branchPC, txn.targetPC);
+                        } else {
+                            DPRINTF(LoopBuffer, "Forward branch 0x%x|__>0x%x of loop "
+                                    "0x%x|__>0x%x is unexpected\n",
+                                    branch_pc, target_pc,
+                                    txn.branchPC, txn.targetPC);
+                        }
+                        txn.abort();
+                    }
+                }
+
+                if (new_f_jump) {
+                    DPRINTF(LoopBuffer, "Register new forward jump 0x%x|__>0x%x"
+                            " in loop 0x%x|__>0x%x\n",
+                            branch_pc, target_pc,
+                            txn.branchPC, txn.targetPC
+                            );
+                }
+
             } else {
-                DPRINTF(LoopBuffer, "Abort 0x%x|__>0x%x due to another branch\n",
-                        txn.branchPC, txn.targetPC);
-                txn.state = Aborted;
-                txn.count = 0;
-                txn.offset = 0;
-                txn.expectedPC = 0;
+                DPRINTF(LoopBuffer, "Abort 0x%x|__>0x%x due to another branch:"
+                        "0x%x|__>0x%x\n",
+                        txn.branchPC, txn.targetPC,
+                        branch_pc, target_pc);
+                txn.abort();
             }
             break;
 
@@ -224,10 +292,7 @@ LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
         DPRINTF(LoopBuffer, "0x%x|__>0x%x: 0x%x does not match expectedPC: 0x%x, abort\n",
                 txn.branchPC, txn.targetPC, pc, txn.expectedPC);
         // insn stream is redirected
-        txn.state = Aborted;
-        txn.count = 0;
-        txn.offset = 0;
-        txn.expectedPC = 0;
+        txn.abort();
         return;
     }
 
@@ -244,19 +309,36 @@ LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
         txn.state = Recorded;
         setFetched(txn.targetPC);
         clearPending();
-        txn.offset = 0;
-        txn.expectedPC = 0;
         table[txn.targetPC].branchPC = txn.branchPC;
         return;
     }
     txn.offset += inst_size;
-    txn.expectedPC += inst_size;
+
+    auto &fb_state = txn.forwardBranchState;
+    auto &fw_branches = fb_state->forwardBranches;
+
+    if (fb_state->valid &&
+            pc == fw_branches[fb_state->recordIndex].branch) {
+        txn.expectedPC = fw_branches[fb_state->recordIndex].target;
+        DPRINTF(LoopBuffer, "0x%x|__>0x%x: recording will jump to 0x%x (offset: %u)\n",
+                txn.branchPC, txn.targetPC, txn.expectedPC);
+        fb_state->recordIndex++;
+
+    } else {
+        txn.expectedPC += inst_size;
+    }
 }
 
 bool
 LoopBuffer::isBackward(Addr branch_pc, Addr target_pc)
 {
     return branch_pc > target_pc;
+}
+
+bool
+LoopBuffer::isForward(Addr branch_pc, Addr target_pc)
+{
+    return branch_pc < target_pc;
 }
 
 Addr

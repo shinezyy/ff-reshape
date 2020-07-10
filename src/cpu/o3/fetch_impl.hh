@@ -584,8 +584,8 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
                                         nextPC, tid);
 
-    if (lbuf->loopFiltering && predict_taken) {
-        lbuf->probe(branch_pc, nextPC.pc());
+    if (lbuf->loopFiltering) {
+        lbuf->probe(branch_pc, nextPC.pc(), predict_taken);
     }
 
     if (predict_taken) {
@@ -1199,16 +1199,21 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
     bool inRom = isRomMicroPC(thisPC.microPC());
 
-    Addr loop_branch_pc;
-    if (lbuf->enable && lbufStartPC && lbuf->inRange(lbufStartPC, fetchAddr)) {
+    Addr loop_branch_pc = 0;
+    // if (lbuf->enable && lbufStartPC && lbuf->inRange(lbufStartPC, fetchAddr)) {
+    if (lbuf->enable && fetchSource == LoopBuf &&
+            lbuf->inRange(lbufStartPC, fetchAddr)) {
         loop_branch_pc = lbuf->getBufferedLineBranchPC(lbufStartPC);
         // leave foundLine without updating
     } else {
-        foundLine = lbuf->enable ? lbuf->getBufferedLine(fetchAddr) : nullptr;
-        if (foundLine) {
-
+        if (lbuf->enable && lbuf->getBufferedLine(fetchAddr)) {
+            fetchSource = LoopBuf;
+            foundLine = lbuf->getBufferedLine(fetchAddr);
             loop_branch_pc = lbuf->getBufferedLineBranchPC(fetchAddr);
             assert(loop_branch_pc);
+
+        } else {
+            fetchSource = CacheLine;
         }
     }
 
@@ -1228,7 +1233,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         // to the next cache block, AND we have no remaining ucode
         // from a macro-op, then start fetch from icache.
         if (!(fetchBufferValid[tid] && fetchBufferBlockPC == fetchBufferPC[tid])
-            && !inRom && !macroop[tid] && !foundLine) {
+            && !inRom && !macroop[tid] && fetchSource != LoopBuf) {
             DPRINTF(Fetch, "[tid:%i]: Attempting to translate and read "
                     "instruction, starting at PC %s.\n", tid, thisPC);
 
@@ -1291,7 +1296,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
     // Keep issuing while fetchWidth is available and branch is not
     // predicted taken
     while (numInst < fetchWidth && fetchQueue[tid].size() < fetchQueueSize
-           && !(predictedBranch && !foundLine) && !quiesce) {
+           && !(predictedBranch && fetchSource != LoopBuf) && !quiesce) {
         // We need to process more memory if we aren't going to get a
         // StaticInst from the rom, the current macroop, or what's already
         // in the decoder.
@@ -1304,9 +1309,9 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         if (needMem) {
             // If buffer is no longer valid or fetchAddr has moved to point
             // to the next cache block then start fetch from icache.
-            if (lbuf->enable && foundLine) {
-
-                if (!lbufStartPC) {
+            if (lbuf->enable && fetchSource == LoopBuf) {
+                // fetchSource is set either before the while loop or at the end of it
+                if (!lbufStartPC) { // it is set when entering loop buf
                     if (lbuf->loopFiltering) {
                         lbufStartPC = fetchAddr;
                         DPRINTF(LoopBuffer,
@@ -1323,9 +1328,16 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                             fetchAddr, lbufStartPC, loop_branch_pc);
                     foundLine = nullptr;
                     lbufStartPC = 0;
+                    fetchSource = CacheLine;
                     break;
                 }
-                blkOffset = (fetchAddr - lbufStartPC) / instSize;
+
+                if (lbufStartPC == fetchAddr) { // is just entering
+                    blkOffset = 0;
+
+                } else {
+                    blkOffset += instSize;
+                }
 
                 DPRINTF(LoopBuffer,
                         "Fetching from loop buffer: line %p,"
@@ -1333,6 +1345,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                         " fetching: 0x%x, blkOffset: %u, instSize: %u\n",
                         (void *)foundLine,
                         lbufStartPC, loop_branch_pc, fetchAddr, blkOffset, instSize);
+
                 unsigned lbuf_entry_insts = lbuf->entrySize / instSize;
                 cacheInsts = reinterpret_cast<TheISA::MachInst *>(foundLine);
                 numInsts = lbuf_entry_insts;
@@ -1400,7 +1413,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 newMacro |= staticInst->isLastMicroop();
             }
 
-            if (lbuf->enable && foundLine) {
+            if (lbuf->enable && fetchSource == LoopBuf) {
                 fetchFromLoopBuffer++;
             }
             DynInstPtr instruction =
@@ -1443,31 +1456,61 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                     if (cpc == loop_branch_pc) {
                         // loop back
                     } else {
-                        foundLine = lbuf->getBufferedLine(npc);
-                        lbufStartPC = 0;
+                        if (lbuf->isBackward(cpc, npc)) {
+                            foundLine = lbuf->getBufferedLine(npc);
+                            lbufStartPC = 0;
 
-                        if (!foundLine) {
-                            // mark a Txn
-                            if (!lbuf->loopFiltering) {
-                                lbuf->processNewControl(cpc, npc);
-                            }
-                        } else {
-                            loop_branch_pc = lbuf->getBufferedLineBranchPC(npc);
-                            assert(loop_branch_pc);
+                            if (!foundLine) {
+                                fetchSource = CacheLine;
+                                // mark a Txn
+                                if (!lbuf->loopFiltering) {
+                                    lbuf->processNewControl(cpc, npc);
+                                }
+                            } else {
+                                fetchSource = LoopBuf;
+                                loop_branch_pc = lbuf->getBufferedLineBranchPC(npc);
+                                assert(loop_branch_pc);
 
-                            if (this_is_branch && !lbuf->loopFiltering) {
-                                lbuf->updateControl(npc);
+                                if (this_is_branch && !lbuf->loopFiltering) {
+                                    lbuf->updateControl(npc);
+                                }
                             }
-                            // if (used_loopbuffer) {
-                            //     foundLine = nullptr; // port limitation -> cannot read anymore
-                            // } else {
-                            //     used_loopbuffer += 1;
-                            // }
+                        } else if (lbuf->isForward(cpc, npc)) {
+                            if (fetchSource == LoopBuf &&
+                                    lbuf->inRange(lbufStartPC, npc)) {
+                                // a in-loop forward branch
+                                if (lbuf->expectedForwardBranch.valid &&
+                                        cpc == lbuf->expectedForwardBranch.pair.branch) {
+                                    // TODO: let it fetch from here, offset modification
+                                    // should be changed
+
+                                } else {
+                                    foundLine = nullptr;
+                                    lbufStartPC = 0;
+                                    fetchSource = CacheLine;
+                                    DPRINTF(LoopBuffer,
+                                            "Fw branch is not expected to taken"
+                                            " in trace cache\n");
+                                    break;
+                                }
+                            }
                         }
                     }
-                } else {
+
+                } else { // no lbuf
                     foundLine = nullptr;
+                    fetchSource = CacheLine;
                 }
+            }
+
+            if (lbuf->expectedForwardBranch.valid &&
+                    cpc == lbuf->expectedForwardBranch.pair.branch &&
+                    npc != lbuf->expectedForwardBranch.pair.target) {
+                foundLine = nullptr;
+                lbufStartPC = 0;
+                fetchSource = CacheLine;
+                DPRINTF(LoopBuffer, "Branch does not go as the trace cache\n");
+                break;
             }
 
             newMacro |= thisPC.instAddr() != nextPC.instAddr();
