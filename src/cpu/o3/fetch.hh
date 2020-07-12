@@ -580,10 +580,6 @@ class DefaultFetch
 
     LoopBuffer *lbuf;
 
-    uint8_t *foundLine;
-
-    Addr lbufStartPC{};
-
     enum FetchSource {
         CacheLine = 0,
         LoopBuf

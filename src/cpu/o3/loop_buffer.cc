@@ -1,4 +1,3 @@
-
 #include "cpu/o3/loop_buffer.hh"
 #include "debug/LoopBuffer.hh"
 #include "debug/LoopBufferStack.hh"
@@ -15,7 +14,7 @@ LoopBuffer::LoopBuffer(LoopBufferParams *params)
         maxForwardBranches(params->maxForwardBranches)
 {
     assert(numEntries >= 2 * evictRange);
-    expectedForwardBranch.invalidate();
+    instSupply.invalidate();
 }
 
 LoopBuffer::~LoopBuffer()
@@ -141,6 +140,41 @@ LoopBuffer::getBufferedLine(Addr pc)
 }
 
 void
+LoopBuffer::switchTo(Addr target_pc)
+{
+    instSupply.valid    = true;
+
+    instSupply.buf      = getBufferedLine(target_pc);
+    assert(instSupply.buf);
+    instSupply.offset   = 0;
+
+    instSupply.start    = target_pc;
+    instSupply.end      = getBufferedLineBranchPC(target_pc);
+    DPRINTF(LoopBuffer, "Switch to loop 0x%x|_>0x%x\n",
+            instSupply.end, instSupply.start);
+
+    instSupply.expectedPC = target_pc;
+
+    auto fb_state = table[target_pc].forwardBranchState;
+    instSupply.forwardBranchIndex = 0;
+    if (fb_state->valid) {
+        instSupply.expectedForwardBranch.set(
+                fb_state->forwardBranches[instSupply.forwardBranchIndex]);
+    }
+}
+
+bool
+LoopBuffer::canProvide(Addr pc)
+{
+    if (table.count(pc) && table[pc].valid && table[pc].fetched) {
+        switchTo(pc);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void
 LoopBuffer::setFetched(Addr target)
 {
     assert(table.count(target));
@@ -194,16 +228,22 @@ LoopBuffer::probe(Addr branch_pc, Addr target_pc, bool pred_taken)
                     txn.offset = 0;
                 }
 
-            } else if (isBackward(branch_pc, target_pc) &&
+            } else if (pred_taken && isBackward(branch_pc, target_pc) &&
                     (branch_pc - target_pc) < entrySize) {
                 txn.reset();
-                txn.branchPC = branch_pc;
-                txn.targetPC = target_pc;
-                txn.state = Observing;
-                DPRINTF(LoopBuffer, "Switch to 0x%x|__>0x%x: %u\n",
-                        txn.branchPC, txn.targetPC, txn.count);
+                if (!table.count(target_pc)) {
+                    txn.branchPC = branch_pc;
+                    txn.targetPC = target_pc;
+                    txn.state = Observing;
+                    DPRINTF(LoopBuffer, "Switch to observe 0x%x|__>0x%x: %u\n",
+                            txn.branchPC, txn.targetPC, txn.count);
+                } else {
+                    txn.abort();
+                    DPRINTF(LoopBuffer, "Loop 0x%x|__>? is in current loop, "
+                            "do not support nested loop, abort\n", target_pc);
+                }
 
-            } else if (isForward(branch_pc, target_pc) &&
+            } else if (pred_taken && isForward(branch_pc, target_pc) &&
                     target_pc < txn.branchPC) { // in-loop forward branch
                 bool new_f_jump = false;
                 auto &fb_state = txn.forwardBranchState;
@@ -310,6 +350,8 @@ LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
         setFetched(txn.targetPC);
         clearPending();
         table[txn.targetPC].branchPC = txn.branchPC;
+        table[txn.targetPC].forwardBranchState = txn.forwardBranchState;
+        txn.forwardBranchState = nullptr;
         return;
     }
     txn.offset += inst_size;
@@ -321,7 +363,7 @@ LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
             pc == fw_branches[fb_state->recordIndex].branch) {
         txn.expectedPC = fw_branches[fb_state->recordIndex].target;
         DPRINTF(LoopBuffer, "0x%x|__>0x%x: recording will jump to 0x%x (offset: %u)\n",
-                txn.branchPC, txn.targetPC, txn.expectedPC);
+                txn.branchPC, txn.targetPC, txn.expectedPC, txn.offset);
         fb_state->recordIndex++;
 
     } else {
@@ -357,6 +399,108 @@ LoopBuffer::inRange(Addr target, Addr fetch_pc)
     assert(table.count(target));
     auto end_pc = table[target].branchPC;
     return fetch_pc >= target && fetch_pc <= end_pc;
+}
+
+bool
+LoopBuffer::canContinueOnPC(Addr pc)
+{
+    bool cont = pc == instSupply.expectedPC;
+    if (!cont) {
+        instSupply.invalidate();
+    }
+    return cont;
+}
+
+uint8_t*
+LoopBuffer::getInst(Addr pc, unsigned inst_size)
+{
+    assert(pc == instSupply.expectedPC);
+    auto ret = instSupply.buf + instSupply.offset;
+
+    DPRINTF(LoopBuffer, "Supplying with loop 0x%x|_>0x%x offset: %u\n",
+            instSupply.end, instSupply.start, instSupply.offset);
+    instSupply.offset += inst_size;
+
+    auto &efb = instSupply.expectedForwardBranch;
+    if (pc == instSupply.end) {
+        instSupply.expectedPC = instSupply.start;
+        instSupply.offset = 0;
+
+    } else if (efb.valid && efb.pair.branch == pc) {
+        instSupply.expectedPC = efb.pair.target;
+        instSupply.forwardBranchIndex++;
+        auto fb_state = table[instSupply.start].forwardBranchState;
+        if (fb_state->valid &&
+                fb_state->forwardBranches.size() > instSupply.forwardBranchIndex) {
+            // switch to next fb
+            instSupply.expectedForwardBranch.set(
+                    fb_state->forwardBranches[instSupply.forwardBranchIndex]);
+        } else {
+            instSupply.expectedForwardBranch.invalidate();
+        }
+
+    } else {
+        instSupply.expectedPC += inst_size;
+    }
+    return ret;
+}
+
+bool
+LoopBuffer::canContinueOnNPC(Addr cpc, Addr npc, bool is_taken)
+{
+    auto &efb = instSupply.expectedForwardBranch;
+    bool cont;
+    if (is_taken) {
+        if (!instSupply.valid) {
+            cont = false;
+        } else if (cpc == instSupply.end) {
+            // normal loop back
+            cont = true;
+        } else if (isBackward(cpc, npc)) {
+            // do not support loop in loop
+            cont = false;
+        } else if (isForward(cpc, npc)) {
+            if (efb.valid && efb.pair.branch == cpc
+                    && efb.pair.target == npc) {
+                DPRINTF(LoopBuffer, "Forward branch: 0x%x|_>0x%x matched\n",
+                        cpc, npc);
+                cont = true;
+            } else {
+                DPRINTF(LoopBuffer, "Forward branch(T): 0x%x|_>0x%x mismatched"
+                        ", expected(T): 0x%x|_>0x%x\n",
+                        cpc, npc, efb.pair.branch, efb.pair.target);
+                cont = false;
+            }
+
+        } else {
+            panic("Unexpected path\n");
+            cont = false;
+        }
+    } else {
+        if (efb.valid && cpc == efb.pair.branch) {
+            DPRINTF(LoopBuffer, "Forward branch(NT): 0x%x|_>0x%x mismatched"
+                    ", expected(T): 0x%x|_>0x%x\n",
+                    cpc, npc, efb.pair.branch, efb.pair.target);
+            cont = false;
+
+        } else if (cpc == instSupply.end) {
+            cont = false;
+
+        } else {
+            cont = true;
+        }
+    }
+    if (!cont) {
+        instSupply.invalidate();
+    }
+    return cont;
+}
+
+void
+InstSupplyState::invalidate()
+{
+    valid = false;
+    expectedForwardBranch.invalidate();
 }
 
 LoopBuffer *

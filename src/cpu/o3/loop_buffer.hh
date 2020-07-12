@@ -78,10 +78,8 @@ struct LoopRecordTransaction {
         count = 0;
         offset = 0;
         expectedPC = 0;
-        if (!forwardBranchState) {
-            forwardBranchState =
-                std::make_shared<ForwardBranchState>();
-        }
+        forwardBranchState =
+            std::make_shared<ForwardBranchState>();
         forwardBranchState->clear();
     }
 
@@ -96,6 +94,22 @@ struct LoopEntry {
     bool fetched{};
     uint32_t used{};
     Addr branchPC;
+
+    std::shared_ptr<ForwardBranchState> forwardBranchState;
+};
+
+struct InstSupplyState {
+    bool valid{};
+    Addr start; // target
+    Addr end; // branch
+    unsigned offset;
+    uint8_t *buf;
+    Addr lastPC;
+    Addr expectedPC;
+    ExpectedForwardBranch expectedForwardBranch;
+    unsigned forwardBranchIndex;
+
+    void invalidate();
 };
 
 class LoopBuffer : public SimObject
@@ -144,8 +158,6 @@ class LoopBuffer : public SimObject
 
     const unsigned maxForwardBranches;
 
-    ExpectedForwardBranch expectedForwardBranch;
-
     void processNewControl(Addr branch_pc, Addr target);
 
     void updateControl(Addr target);
@@ -179,6 +191,18 @@ class LoopBuffer : public SimObject
     static bool isForward(Addr branch_pc, Addr target_pc);
 
     bool inRange(Addr target, Addr fetch_pc);
+
+    InstSupplyState instSupply;
+
+    void switchTo(Addr target_pc);
+
+    bool canProvide(Addr pc);
+
+    bool canContinueOnPC(Addr pc);
+
+    bool canContinueOnNPC(Addr cpc, Addr npc, bool is_taken);
+
+    uint8_t* getInst(Addr pc, unsigned inst_size);
 };
 
 #endif //__CPU_O3_LOOPBUFFER_HH__
