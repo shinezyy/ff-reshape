@@ -150,7 +150,7 @@ class LoopBuffer : public SimObject
 
     const Addr mask;
 
-    const unsigned evictRange{10};
+    const unsigned evictRange{6};
 
     const bool enable;
 

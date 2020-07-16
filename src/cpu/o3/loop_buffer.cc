@@ -160,6 +160,8 @@ LoopBuffer::switchTo(Addr target_pc)
     if (fb_state->valid) {
         instSupply.expectedForwardBranch.set(
                 fb_state->forwardBranches[instSupply.forwardBranchIndex]);
+    } else {
+        instSupply.expectedForwardBranch.invalidate();
     }
 }
 
@@ -303,8 +305,8 @@ LoopBuffer::probe(Addr branch_pc, Addr target_pc, bool pred_taken)
                             );
                 }
 
-            } else {
-                DPRINTF(LoopBuffer, "Abort 0x%x|__>0x%x due to another branch:"
+            } else if (pred_taken) {
+                DPRINTF(LoopBuffer, "Abort 0x%x|__>0x%x due to another taken branch:"
                         "0x%x|__>0x%x\n",
                         txn.branchPC, txn.targetPC,
                         branch_pc, target_pc);
@@ -344,8 +346,9 @@ LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
 
     if (pc == txn.branchPC) {
         DPRINTF(LoopBuffer,
-                "0x%x|__>0x%x: completely filled!\n",
-                txn.branchPC, txn.targetPC);
+                "0x%x|__>0x%x: completely filled! with %u fjumps\n",
+                txn.branchPC, txn.targetPC,
+                txn.forwardBranchState->forwardBranches.size());
         txn.state = Recorded;
         setFetched(txn.targetPC);
         clearPending();
@@ -415,6 +418,7 @@ uint8_t*
 LoopBuffer::getInst(Addr pc, unsigned inst_size)
 {
     assert(pc == instSupply.expectedPC);
+    assert(pc >= instSupply.start && pc <= instSupply.end);
     auto ret = instSupply.buf + instSupply.offset;
 
     DPRINTF(LoopBuffer, "Supplying with loop 0x%x|_>0x%x offset: %u\n",
@@ -436,7 +440,7 @@ LoopBuffer::getInst(Addr pc, unsigned inst_size)
             instSupply.expectedForwardBranch.set(
                     fb_state->forwardBranches[instSupply.forwardBranchIndex]);
         } else {
-            instSupply.expectedForwardBranch.invalidate();
+            // instSupply.expectedForwardBranch.invalidate();
         }
 
     } else {
@@ -453,7 +457,7 @@ LoopBuffer::canContinueOnNPC(Addr cpc, Addr npc, bool is_taken)
     if (is_taken) {
         if (!instSupply.valid) {
             cont = false;
-        } else if (cpc == instSupply.end) {
+        } else if (cpc == instSupply.end && npc == instSupply.start) {
             // normal loop back
             cont = true;
         } else if (isBackward(cpc, npc)) {
@@ -467,13 +471,15 @@ LoopBuffer::canContinueOnNPC(Addr cpc, Addr npc, bool is_taken)
                 cont = true;
             } else {
                 DPRINTF(LoopBuffer, "Forward branch(T): 0x%x|_>0x%x mismatched"
-                        ", expected(T): 0x%x|_>0x%x\n",
-                        cpc, npc, efb.pair.branch, efb.pair.target);
+                        ", expected(T): (%i) 0x%x|_>0x%x\n",
+                        cpc, npc,
+                        efb.valid,
+                        efb.pair.branch, efb.pair.target);
                 cont = false;
             }
 
         } else {
-            panic("Unexpected path\n");
+            warn("Unexpected path\n");
             cont = false;
         }
     } else {

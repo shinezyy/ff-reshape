@@ -574,7 +574,9 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
                                         nextPC, tid);
 
-    lbuf->probe(branch_pc, nextPC.pc(), predict_taken);
+    if (lbuf->enable) {
+        lbuf->probe(branch_pc, nextPC.pc(), predict_taken);
+    }
 
     if (predict_taken) {
         DPRINTF(Fetch, "[tid:%i]: [sn:%i]: Branch predicted to be taken to %s.\n",
@@ -1421,7 +1423,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             thisPC = nextPC;
             inRom = isRomMicroPC(thisPC.microPC());
 
-            if (newMacro && fetchSource == CacheLine) {
+            if (newMacro) {
                 fetchAddr = thisPC.instAddr() & BaseCPU::PCMask;
                 blkOffset = (fetchAddr - fetchBufferPC[tid]) / instSize;
                 pcOffset = 0;
@@ -1457,7 +1459,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 }
             }
         } else { // from cache line
-            if (predictedBranch && lbuf->canProvide(npc)) {
+            if (lbuf->enable && predictedBranch && lbuf->canProvide(npc)) {
                 DPRINTF(LoopBuffer, "Will switch to fetch from lbuf\n");
                 fetchSource = LoopBuf;
             }
