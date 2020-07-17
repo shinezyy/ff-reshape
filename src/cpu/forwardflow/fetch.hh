@@ -51,6 +51,8 @@
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
 #include "cpu/fanout_pred.hh"
+#include "cpu/fanout_pred.hh"
+#include "cpu/o3/loop_buffer.hh"
 #include "cpu/pc_event.hh"
 #include "cpu/pred/bpred_unit.hh"
 #include "cpu/timebuf.hh"
@@ -578,6 +580,8 @@ class DefaultFetch
     /** Number of instruction fetched per cycle. */
     Stats::Formula fetchRate;
 
+    Stats::Scalar fetchFromLoopBuffer;
+
     FanoutPred *fanoutPred;
 
     void predictFanout(DynInstPtr &inst);
@@ -597,6 +601,15 @@ class DefaultFetch
     std::mt19937 gen;
 public:
     void setFanoutPred(FanoutPred *fanoutPred1);
+
+    LoopBuffer *lbuf;
+
+    enum FetchSource {
+        CacheLine = 0,
+        LoopBuf
+    };
+
+    FetchSource fetchSource;
 };
 
 }
