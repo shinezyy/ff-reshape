@@ -21,6 +21,7 @@
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FUW.hh"
+#include "debug/ObFU.hh"
 #include "debug/QClog.hh"
 #include "debug/RSProbe1.hh"
 #include "debug/RSProbe2.hh"
@@ -65,7 +66,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params,
 
         fu_requests(nBanks * OpGroups::nOpGroups),
         fu_req_ptrs(nBanks * OpGroups::nOpGroups),
-        fu_granted_ptrs(nBanks),
+        fu_granted_ptrs(nBanks * OpGroups::nOpGroups),
 
         wakeup_requests(nBanks * nOps),
         wake_req_granted(nBanks * nOps),
@@ -151,8 +152,8 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params,
 
         fu_req_ptrs[i] = &fu_requests[i];
     }
-    fuPointer[OpGroups::MultDiv] = std::vector<unsigned>{0, 0, 2, 2};
-    fuPointer[OpGroups::FPAdd] = std::vector<unsigned>{1, 1, 3, 3};
+    fuPointer[OpGroups::MultDiv] = std::vector<unsigned>{0, 1, 4, 5};
+    fuPointer[OpGroups::FPAdd] = std::vector<unsigned>{2, 3, 6, 7};
 
     resetState();
 
@@ -163,7 +164,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params,
     nullFWPkt.destBits = boost::dynamic_bitset<>(ceilLog2(nOps * nBanks) + 1);
 
     nullInstPkt.valid = false;
-    nullInstPkt.destBits = boost::dynamic_bitset<>(ceilLog2(nBanks) + 1);
+    nullInstPkt.destBits = boost::dynamic_bitset<>(ceilLog2(nBanks * nOpGroups) + 1);
 }
 
 
@@ -209,7 +210,7 @@ void DataflowQueues<Impl>::tick()
     //      to wake up the child one cycle before its value arrived
 
     DPRINTF(DQ, "FU selecting ready insts from banks\n");
-    if (Debug::DQV2) {
+    if (Debug::DQV2 || Debug::ObFU) {
         DPRINTF(DQV2, "FU req packets:\n");
         dumpInstPackets(fu_req_ptrs);
     }
@@ -221,18 +222,22 @@ void DataflowQueues<Impl>::tick()
                                      false, inst_pkt_valid_or);
     if (any_valid) {
 
-    fu_granted_ptrs = bankFUXBar.select(fu_req_ptrs, &nullInstPkt, nFUGroups);
+    fu_granted_ptrs = bankFUXBar.select(fu_req_ptrs, &nullInstPkt, nBanks * nOpGroups);
     CombSelNet++;
     for (unsigned b = 0; b < nBanks; b++) {
+    for (unsigned x = 0; x < 2; x++) {
 
-        assert(fu_granted_ptrs[b]);
-        if (!fu_granted_ptrs[b]->valid || !fu_granted_ptrs[b]->payload) {
+        unsigned idx = b * 2 + x;
+        assert(fu_granted_ptrs[idx]);
+        if (!fu_granted_ptrs[idx]->valid || !fu_granted_ptrs[idx]->payload) {
             continue;
         }
-        DynInstPtr &inst = fu_granted_ptrs[b]->payload;
+        DynInstPtr &inst = fu_granted_ptrs[idx]->payload;
 
-        DPRINTF(DQWake, "Inst[%d] selected by fu%u\n", inst->seqNum, b);
-        unsigned source_bank = fu_granted_ptrs[b]->source/2;
+        DPRINTF(DQWake || Debug::ObFU, "Inst[%d]:%s selected by fu %u\n",
+                inst->seqNum, inst->staticInst->disassemble(inst->instAddr()), b);
+
+        unsigned source_bank = fu_granted_ptrs[idx]->source/2;
 
         if (inst->isSquashed()) {
             DPRINTF(FFSquash, "Skip squashed inst[%llu] from bank[%u] \n",
@@ -256,6 +261,7 @@ void DataflowQueues<Impl>::tick()
                 llBlockedNext = true;
             }
         }
+    }
     }
     }
 
@@ -443,8 +449,8 @@ void DataflowQueues<Impl>::tick()
         if (dest.valid) {
             q1 = allocateWakeQ();
             DPRINTF(DQWake || Debug::RSProbe2,
-                    "Got wakeup pointer to" ptrfmt ", pushed to wakeQueue[%i]\n",
-                    extptr(dest), q1);
+                    "Got wakeup pointer to" ptrfmt ", val %i: %lu, pushed to wakeQueue[%i]\n",
+                    extptr(dest), dest.hasVal, dest.val.i, q1);
             if (dest.group == groupID) {
                 pushToWakeQueue(q1, WKPointer(dest));
                 numPendingWakeups++;
@@ -991,6 +997,12 @@ void DataflowQueues<Impl>::dumpInstPackets(vector<DQPacket<DynInstPtr> *> &v)
         DPRINTFR(DQV2, "v: %d, dest: %lu, src: %d,",
                 pkt->valid, pkt->destBits.to_ulong(), pkt->source);
         DPRINTFR(DQV2, " inst: %p\n", pkt->payload);
+
+        if (Debug::ObFU && pkt->valid && pkt->payload) {
+            auto inst = pkt->payload;
+            DPRINTF(ObFU, "Inst[%d]:%s is competing for an FU\n",
+                    inst->seqNum, inst->staticInst->disassemble(inst->instAddr()));
+        }
     }
 }
 

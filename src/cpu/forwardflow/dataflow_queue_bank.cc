@@ -12,6 +12,7 @@
 #include "debug/FFDisp.hh"
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
+#include "debug/ObFU.hh"
 #include "debug/RSProbe1.hh"
 #include "debug/Reshape.hh"
 
@@ -839,6 +840,10 @@ void DataflowQueueBank<Impl>::countUpPendingInst()
     for (auto &q: readyInstsQueue->preScheduledQueues) {
         for (auto &inst: q) {
             inst->FUContentionDelay++;
+            DPRINTF(ObFU, "Inst[%lu]: %s has been waiting for %i cycles\n",
+                    inst->seqNum,
+                    inst->staticInst->disassemble(inst->instAddr()),
+                    inst->FUContentionDelay);
         }
     }
 }

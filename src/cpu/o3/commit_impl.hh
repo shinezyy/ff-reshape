@@ -1290,7 +1290,7 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
             head_inst->seqNum, head_inst->pcState());
 
     if (commitCounter == commitTraceInterval) {
-        DPRINTFR(ValueCommit, "@%llu Committing %llu instruction with sn:%lli PC:%s",
+        DPRINTFR(ValueCommit, "%llu VCommitting %llu instruction with sn:%lli PC:%s",
                 curTick(), commitAll, head_inst->seqNum, head_inst->pcState());
         if (head_inst->numDestRegs() > 0) {
             DPRINTFR(ValueCommit, ", with wb value: %llu",

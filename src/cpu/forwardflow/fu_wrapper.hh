@@ -123,9 +123,7 @@ public:
 
     std::array<DQPointer, 2> toWakeup;
 
-    bool toExec;
-
-    InstSeqNum seqToExec;
+    std::list<InstSeqNum> seqToExec;
 
     typedef FFFUPoolParams Params;
 
@@ -151,6 +149,7 @@ private:
     std::array<unsigned, Num_OpClasses> opLat; // {Num_OpClasses};
     std::array<bool, Num_OpClasses> canPipelined; // {Num_OpClasses};
     std::bitset<Num_OpClasses> capabilityList;
+    std::bitset<Num_OpClasses> usedCapa;
 
     std::bitset<Impl::MaxOpLatency> wbScheduled;
     std::bitset<Impl::MaxOpLatency> wbScheduledNext;
