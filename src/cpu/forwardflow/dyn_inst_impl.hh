@@ -171,6 +171,8 @@ BaseO3DynInst<Impl>::initVars()
     negativeContrib = 0;
 
     receivedDest = false;
+
+    readyTick = 0;
 }
 
 template <class Impl>

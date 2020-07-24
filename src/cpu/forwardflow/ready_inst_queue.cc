@@ -47,9 +47,24 @@ ReadyInstsQueue<Impl>::getInst(OpGroups group)
 
 template<class Impl>
 void
+ReadyInstsQueue<Impl>::insert(std::list<DynInstPtr> &q, DynInstPtr inst)
+{
+    if (!age) {
+        q.push_back(inst);
+    } else {
+        auto pos = q.begin(), e = q.end();
+        while (pos != e && (*pos)->seqNum > inst->seqNum) {
+            pos++;
+        }
+        q.insert(pos, inst);
+    }
+}
+
+template<class Impl>
+void
 ReadyInstsQueue<Impl>::insertInst(OpGroups group, DynInstPtr &inst)
 {
-    preScheduledQueues[group].push_back(inst);
+    insert(preScheduledQueues[group], inst);
 }
 
 template<class Impl>
@@ -58,11 +73,11 @@ ReadyInstsQueue<Impl>::insertEmpirically(DynInstPtr &inst)
 {
     if (preScheduledQueues[OpGroups::MultDiv].size() <
         preScheduledQueues[OpGroups::FPAdd].size()) {
-        preScheduledQueues[OpGroups::MultDiv].push_back(inst);
+        insert(preScheduledQueues[OpGroups::MultDiv], inst);
         DPRINTF(DQWake, "Inst[%lu] inserted into MD queue empirically\n", inst->seqNum);
 
     } else {
-        preScheduledQueues[OpGroups::FPAdd].push_back(inst);
+        insert(preScheduledQueues[OpGroups::FPAdd], inst);
         DPRINTF(DQWake, "Inst[%lu] inserted into FPAdd queue empirically\n", inst->seqNum);
     }
 }

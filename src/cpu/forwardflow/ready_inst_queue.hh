@@ -48,6 +48,10 @@ public:
     std::string name() const { return _name; }
 private:
     std::string _name;
+
+    const bool age{true};
+
+    void insert(std::list<DynInstPtr> &q, DynInstPtr inst);
 };
 
 }

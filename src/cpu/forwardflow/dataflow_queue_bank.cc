@@ -334,6 +334,9 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
                 if (!inst->isForwarder()) {
                     wakeup_count++;
+                    if (inst->readyTick == 0)  {
+                        inst->readyTick = curTick();
+                    }
                     if (!first) {
                         if (ptr.wkType != WKPointer::WKOp || ptr.isFwExtra) {
                             inst->wkDelayedCycle = std::max((int) 0, ((int) ptr.queueTime) - 1);
@@ -355,6 +358,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                         DPRINTF(DQWake||Debug::RSProbe1,
                                 "inst [%llu] has no luck in this bank\n", inst->seqNum);
                         need_pending_ptr[op] = true;
+                        inst->readyInBankDelay += 1;
                     }
                 } else {
                     inst->queueingDelay = ptr.queueTime;

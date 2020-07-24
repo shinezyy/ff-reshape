@@ -442,6 +442,15 @@ public:
     Stats::Scalar pendingDelay;
     Stats::Scalar FUContentionDelay;
 
+    Stats::Scalar HeadNotExec;
+    Stats::Scalar headExecDistance;
+    Stats::Formula meanHeadExecDistance;
+
+    Stats::Scalar readyExecDelayTicks;
+    Stats::Scalar readyInBankDelay;
+    Stats::Scalar headReadyExecDelayTicks;
+    Stats::Scalar headReadyNotExec;
+
     ArchState *getArchState() {return &archState;}
 
     DQTop *getDQ() {return &dq;}
@@ -490,6 +499,8 @@ private:
     bool EnableReshape;
 
     uint64_t commitAll{};
+
+    InstSeqNum youngestExecuted{};
 };
 
 

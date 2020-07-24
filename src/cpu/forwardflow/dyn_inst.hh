@@ -479,6 +479,12 @@ public:
 
     unsigned wkDelayedCycle{};
 
+    unsigned readyTick{};
+    unsigned readyExecDelayTicks{};
+    unsigned headNotExec{};
+
+    unsigned readyInBankDelay{};
+
     unsigned forwardOp{100000};
 
     bool forwardOpReady();

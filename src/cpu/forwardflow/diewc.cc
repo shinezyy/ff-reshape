@@ -7,6 +7,7 @@
 #include "cpu/forwardflow/arch_state.hh"
 #include "cpu/forwardflow/store_set.hh"
 #include "debug/Commit.hh"
+#include "debug/CommitObserve.hh"
 #include "debug/CommitRate.hh"
 #include "debug/DIEWC.hh"
 #include "debug/DQGOF.hh"
@@ -621,6 +622,20 @@ FFDIEWC<Impl>::
         } else {
             DPRINTF(Commit || Debug::FFCommit, "Normal inst[%d] has not been executed yet\n",
                     head_inst->seqNum);
+
+            HeadNotExec++;
+            if (youngestExecuted == 0) {
+                youngestExecuted = head_inst->seqNum;
+            }
+            if (head_inst->readyTick) {
+                headReadyNotExec++;
+                head_inst->headNotExec = true;
+            }
+            DPRINTF(CommitObserve, "youngestExecuted: %lu, head_inst: %lu\n",
+                    youngestExecuted, head_inst->seqNum);
+            if (youngestExecuted > head_inst->seqNum) {
+                headExecDistance += ((youngestExecuted - head_inst->seqNum) / 100);
+            }
         }
         return false;
     }
@@ -882,6 +897,20 @@ FFDIEWC<Impl>::commitInsts()
         }
         if (!head_inst->readyToCommit()) {
             DPRINTF(Commit || Debug::FFCommit, "Break commit because oldest inst is not ready to commit\n");
+            HeadNotExec++;
+            if (youngestExecuted == 0) {
+                youngestExecuted = head_inst->seqNum;
+            }
+            if (head_inst->readyTick) {
+                headReadyNotExec++;
+                head_inst->headNotExec = true;
+            }
+
+            DPRINTF(CommitObserve, "youngestExecuted: %lu, head_inst: %lu\n",
+                    youngestExecuted, head_inst->seqNum);
+            if (youngestExecuted > head_inst->seqNum) {
+                headExecDistance += ((youngestExecuted - head_inst->seqNum) / 100);
+            }
             break;
         }
 
@@ -1878,6 +1907,38 @@ void FFDIEWC<Impl>::regStats()
     FUContentionDelay
         .name(name() + ".FUContentionDelay")
         .desc("FUContentionDelay");
+
+    HeadNotExec
+        .name(name() + ".HeadNotExec")
+        .desc("HeadNotExec")
+        ;
+    headExecDistance
+        .name(name() + ".headExecDistance")
+        .desc("headExecDistance")
+        ;
+    meanHeadExecDistance
+        .name(name() + ".meanHeadExecDistance")
+        .desc("meanHeadExecDistance")
+        ;
+    meanHeadExecDistance = headExecDistance / HeadNotExec;
+
+    readyExecDelayTicks
+        .name(name() + ".readyExecDelayTicks")
+        .desc("readyExecDelayTicks")
+        ;
+    readyInBankDelay
+        .name(name() + ".readyInBankDelay")
+        .desc("readyInBankDelay")
+        ;
+    headReadyExecDelayTicks
+        .name(name() + ".headReadyExecDelayTicks")
+        .desc("headReadyExecDelayTicks")
+        ;
+    headReadyNotExec
+        .name(name() + ".headReadyNotExec")
+        .desc("headReadyNotExec")
+        ;
+
 }
 
 template<class Impl>
@@ -1897,6 +1958,10 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
     DPRINTF(ValueExec, "Executing inst[%lu] ", inst->seqNum);
     if (Debug::ValueExec) {
         std::cout << inst->staticInst->disassemble(inst->instAddr()) << endl;
+    }
+
+    if (inst->seqNum > youngestExecuted) {
+        youngestExecuted = inst->seqNum;
     }
 
     activityThisCycle();
@@ -1975,6 +2040,16 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
         }
         inst->setExecuted();
         inst->completeTick = curTick() - inst->fetchTick;
+
+        if (inst->readyTick) {
+            inst->readyExecDelayTicks = curTick() - inst->readyTick;
+            readyExecDelayTicks += inst->readyExecDelayTicks;
+            if (inst->headNotExec) {
+                headReadyExecDelayTicks += inst->readyExecDelayTicks;
+            }
+        }
+        readyInBankDelay += inst->readyInBankDelay;
+
         DPRINTF(DIEWC, "set completeTick to %u\n", inst->completeTick);
         inst->setCanCommit();
         archState.postExecInst(inst);

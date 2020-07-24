@@ -286,6 +286,11 @@ DefaultCommit<Impl>::regStats()
         .name(name() + ".bw_lim_events")
         .desc("number cycles where commit BW limit reached")
         ;
+
+    HeadNotExec
+        .name(name() + ".HeadNotExec")
+        .desc("HeadNotExec")
+        ;
 }
 
 template <class Impl>
@@ -1001,6 +1006,7 @@ DefaultCommit<Impl>::commitInsts()
 
         if (commit_thread == -1 || !rob->isHeadReady(commit_thread)) {
             DPRINTF(Commit, "commit_thread = %i || ROB head not ready.\n", commit_thread);
+            HeadNotExec++;
             break;
         }
 
