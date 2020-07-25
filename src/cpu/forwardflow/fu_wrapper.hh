@@ -37,8 +37,8 @@ struct SingleFUWrapper {
     struct SFUTimeReg {
         bool hasPendingInst;
         InstSeqNum seq;
-        DQPointer oneCyclePointer[2];
-        DQPointer longLatencyPointer[2];
+        std::array<DQPointer, 2> oneCyclePointer;
+        std::array<DQPointer, 2> longLatencyPointer;
         unsigned cycleLeft;
     };
     SFUTimeReg timeReg;
@@ -121,9 +121,48 @@ public:
 
     void startCycle();
 
-    std::array<DQPointer, 2> toWakeup;
+    using WBPair = std::array<DQPointer, 2>;
 
-    std::list<InstSeqNum> seqToExec;
+    struct WBInfo {
+        WBPair wbPair;
+        InstSeqNum seq;
+
+        DQPointer& operator [] (int index) {
+            return wbPair[index];
+        }
+
+        explicit WBInfo ()
+        {
+            wbPair[0].valid = false;
+            wbPair[1].valid = false;
+            seq = 0;
+        }
+
+        WBInfo(const WBPair &p, InstSeqNum _seq)
+        {
+            wbPair = p;
+            seq = _seq;
+        }
+    };
+
+    WBPair toWakeup;
+
+    std::list<WBInfo> wbQueue;
+
+    using WBPos = typename std::list<WBInfo>::iterator;
+
+    struct ExecInfo {
+        InstSeqNum seq;
+        WBPos wbPos;
+
+        ExecInfo(InstSeqNum _seq, const WBPos &p)
+        {
+            seq = _seq;
+            wbPos = p;
+        }
+    };
+
+    std::list<ExecInfo> execQueue;
 
     typedef FFFUPoolParams Params;
 
@@ -151,9 +190,6 @@ private:
     std::bitset<Num_OpClasses> capabilityList;
     std::bitset<Num_OpClasses> usedCapa;
 
-    std::bitset<Impl::MaxOpLatency> wbScheduled;
-    std::bitset<Impl::MaxOpLatency> wbScheduledNext;
-
     unsigned wrapperID;
 
 public:
@@ -163,7 +199,7 @@ public:
 
     void setWakeup();
 
-    void dumpWBSchedule() const;
+    void setWakeupPostExec();
 
     void squash(InstSeqNum squash_seq);
 
@@ -175,6 +211,9 @@ private:
     bool active;
 
     unsigned groupID;
+
+    int setInstWakeup(
+            const WBPair &to_wakeup, InstSeqNum seq);
 };
 
 }

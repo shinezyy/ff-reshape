@@ -441,6 +441,10 @@ void DataflowQueues<Impl>::tick()
         wrapper.executeInsts();
     }
 
+    for (auto &wrapper: fuWrappers) {
+        wrapper.setWakeupPostExec();
+    }
+
     for (unsigned b = 0; b < nBanks; b++) {
         const DQPointer &src = fuWrappers[b].toWakeup[SrcPtr];
         const DQPointer &dest = fuWrappers[b].toWakeup[DestPtr];
