@@ -12,6 +12,7 @@
 #include "debug/FUSched.hh"
 #include "debug/FUW.hh"
 #include "debug/FUW2.hh"
+#include "debug/ObExec.hh"
 #include "debug/ObFU.hh"
 #include "debug/RSProbe1.hh"
 #include "fu_wrapper.hh"
@@ -48,10 +49,10 @@ bool FUWrapper<Impl>::canServe(DynInstPtr &inst, InstSeqNum &waitee) {
 
     bool ret = has_capability && fu_free;
     if (ret) {
-        DPRINTF(ObFU, "Inst %s is accepted\n",
+        DPRINTF(ObFU || Debug::ObExec, "Inst %s is accepted\n",
                 inst->staticInst->disassemble(inst->instAddr()));
     } else {
-        DPRINTF(ObFU, "Inst %s is rejected because of %s\n",
+        DPRINTF(ObFU || Debug::ObExec, "Inst %s is rejected because of %s\n",
                 inst->staticInst->disassemble(inst->instAddr()),
                 !has_capability ? "no capability!" :
                 !fu_free ? "fu busy" : "Unknow reason!");
@@ -514,6 +515,15 @@ void FUWrapper<Impl>::squash(InstSeqNum squash_seq)
         }
 
         // no need to handle single-cycle instructions, right?
+    }
+
+    auto it = wbQueue.begin(), e = wbQueue.end();
+    while (it != e) {
+        if (it->seq > squash_seq) {
+            it = wbQueue.erase(it);
+        } else {
+            it++;
+        }
     }
 }
 

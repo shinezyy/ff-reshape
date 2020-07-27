@@ -12,6 +12,7 @@
 #include "debug/FFDisp.hh"
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
+#include "debug/ObExec.hh"
 #include "debug/ObFU.hh"
 #include "debug/RSProbe1.hh"
 #include "debug/Reshape.hh"
@@ -67,6 +68,12 @@ DataflowQueueBank<Impl>::clear(bool markSquashed)
     }
     nearlyWakeup.reset();
     readyQueue.clear();
+
+    for (auto &pointers: prematureFwPointers) {
+        for (auto &ptr: pointers) {
+            ptr.valid =false;
+        }
+    }
 }
 
 template<class Impl>
@@ -78,6 +85,11 @@ DataflowQueueBank<Impl>::erase(DQPointer p, bool markSquashed)
                 instArray[p.index]->seqNum, extptr(p));
         instArray[p.index]->setSquashed();
     }
+
+    for (unsigned op = 0; op < nOps; op++) {
+        prematureFwPointers[p.index][op].valid = false;
+    }
+
     instArray[p.index] = nullptr;
     nearlyWakeup.reset(p.index);
     RegWriteValid++;
@@ -331,7 +343,8 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         if (handle_wakeup) {
             if (nearlyWakeup[ptr.index]) {
                 assert(inst->numBusyOps() == 0);
-                DPRINTF(DQWake, "inst [%llu] is ready to waken up\n", inst->seqNum);
+                DPRINTF(DQWake || Debug::ObExec, "inst [%llu]: %s is ready to waken up\n",
+                        inst->seqNum, inst->staticInst->disassemble(inst->instAddr()));
                 if (!inst->isForwarder()) {
                     wakeup_count++;
                     if (inst->readyTick == 0)  {
@@ -636,6 +649,17 @@ DataflowQueueBank<Impl>::writeInstsToBank(
     auto index = pointer.index;
     assert(!instArray[index]);
     instArray[index] = inst;
+
+    for (unsigned i = 0; i < nOps; i++) {
+        auto &ptr = prematureFwPointers[index][i];
+        if (ptr.valid && ptr.term == inst->dqPosition.term) {
+            inst->pointers[i] = ptr;
+            DPRINTF(DQWrite || Debug::FFDisp, "Adapted premature pointer" ptrfmt "\n",
+                    extptr(ptr));
+        }
+        ptr.valid = false;
+    }
+
     SRAMWriteInst++;
     SRAMWriteValue += nOps;
 
@@ -656,8 +680,10 @@ void DataflowQueueBank<Impl>::checkReadiness(DQPointer pointer)
     unsigned busy_count = inst->numBusyOps();
 
     if (busy_count == 0) {
-        DPRINTF(DQWake||Debug::RSProbe1,
-                "inst [%llu] becomes ready on dispatch\n", inst->seqNum);
+        DPRINTF(DQWake||Debug::RSProbe1 || Debug::ObExec,
+                "inst [%llu]: %s becomes ready on dispatch\n",
+                inst->seqNum,
+                inst->staticInst->disassemble(inst->instAddr()));
         directReady++;
         nearlyWakeup.set(index);
         readyQueue.push_back(pointer);

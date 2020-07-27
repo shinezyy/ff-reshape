@@ -164,7 +164,7 @@ public:
 
     void insertForwardPointer(PointerPair pair);
 
-    void digestForwardPointer();
+    void digestPairs();
 
 
     bool stallToUnclog() const;
@@ -213,7 +213,9 @@ private:
             PointerPair &pair, DynInstPtr &inst);
 
 
-    void readQueueHeads();
+    void readPairQueueHeads();
+
+    void readWakeQueueHeads();
 
     void dumpInstPackets(std::vector<DQPacket<DynInstPtr>*>&);
 
@@ -224,6 +226,18 @@ private:
     void extraWakeup(const WKPointer &wk);
 
     void dumpQueues();
+
+    void setWakeupPointersFromFUs();
+
+    void readReadyInstsFromLastCycle();
+
+    void selectReadyInsts();
+
+    void writeFwPointersToNextCycle();
+
+    void wakeupInsts();
+
+    void selectPointersFromWakeQueues();
 
 public:
     void alignTails();
@@ -249,8 +263,6 @@ public:
     DynInstPtr findBySeq(InstSeqNum seq);
 
     bool queuesEmpty();
-
-    void endCycle();
 
 private:
 
@@ -295,18 +307,18 @@ private:
 
     std::vector<std::deque<WKPointer>> tempWakeQueues;
 
-    void mergeExtraWKPointers();
-
     void dumpWkQSize();
 
     void dumpWkQ();
 
-    void readPointersToWkQ();
+    void readPointersFromLastCycleToWakeQueues();
 
 public:
     void clearInflightPackets();
 
     void clearPending2SquashedRange(unsigned start, unsigned end);
+
+    void mergeExtraWKPointers();
 
 private:
     int headTerm;
@@ -410,6 +422,7 @@ public:
 private:
     void pickInterGroupPointers();
 
+    unsigned fuFAIndex, fuMDIndex;
 public:
     Stats::Scalar QueueWriteTxBuf;
     Stats::Scalar QueueReadTxBuf;

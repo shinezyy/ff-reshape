@@ -21,6 +21,7 @@
 #include "debug/FanoutLog.hh"
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
+#include "debug/ObExec.hh"
 #include "debug/RSProbe1.hh"
 #include "debug/Reshape.hh"
 #include "debug/Reshape2.hh"
@@ -1953,7 +1954,8 @@ template<class Impl>
 void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
 {
     assert(inst);
-    DPRINTF(DIEWC||Debug::RSProbe1 || Debug::FFExec, "Executing inst[%lu] %s\n", inst->seqNum,
+    DPRINTF(DIEWC||Debug::RSProbe1 || Debug::FFExec || Debug::ObExec,
+            "Executing inst[%lu] %s\n", inst->seqNum,
             inst->staticInst->disassemble(inst->instAddr()));
     DPRINTF(ValueExec, "Executing inst[%lu] ", inst->seqNum);
     if (Debug::ValueExec) {

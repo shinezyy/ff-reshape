@@ -21,6 +21,7 @@
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FUW.hh"
+#include "debug/ObExec.hh"
 #include "debug/ObFU.hh"
 #include "debug/QClog.hh"
 #include "debug/RSProbe1.hh"
@@ -140,7 +141,7 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params,
         fuWrappers[b].setDQ(this);
 
         dqs.push_back(new XDataflowQueueBank(params, b, this, top));
-        readyInstsQueues.push_back(new XReadyInstsQueue(params, name()));
+        readyInstsQueues.push_back(new XReadyInstsQueue(params, name(), b % 2));
         dqs[b]->readyInstsQueue = readyInstsQueues[b];
 //        dqs[b]->setTop(top);
     }
@@ -152,8 +153,8 @@ DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params,
 
         fu_req_ptrs[i] = &fu_requests[i];
     }
-    fuPointer[OpGroups::MultDiv] = std::vector<unsigned>{0, 1, 4, 5};
-    fuPointer[OpGroups::FPAdd] = std::vector<unsigned>{2, 3, 6, 7};
+    fuPointer[OpGroups::MultDiv] = std::vector<unsigned>{0, 4, 1, 5};
+    fuPointer[OpGroups::FPAdd] = std::vector<unsigned>{2, 6, 3, 7};
 
     resetState();
 
@@ -177,101 +178,48 @@ void DataflowQueues<Impl>::tick()
     for (auto &wrapper: fuWrappers) {
         wrapper.startCycle();
     }
-    readPointersToWkQ();
+    readPairQueueHeads();
 
-    readQueueHeads();
+    digestPairs();
 
-    digestForwardPointer();
+    readReadyInstsFromLastCycle();
 
-    diewc->tryResetRef();
+    selectReadyInsts();
 
-    DPRINTF(DQ, "Setup fu requests\n");
-    // For each bank
-    //  get ready instructions produced by last tick from time struct
-    for (unsigned i = 0; i < nBanks*OpGroups::nOpGroups; i++) {
-        fu_requests[i].valid = fromLastCycle->instValids[i];
-        if (fromLastCycle->instValids[i]) {
-            DPRINTF(DQ || Debug::DQWake, "inst[%d] valid, &inst: %lu\n",
-                    i, fromLastCycle->insts[i]->seqNum);
-
-            fu_requests[i].payload = fromLastCycle->insts[i];
-            std::tie(fu_requests[i].dest, fu_requests[i].destBits) =
-                coordinateFU(fromLastCycle->insts[i], i);
-        } else {
-            DPRINTF(DQV2, "From last cycle[%d] invalid\n", i);
-        }
-    }
-    shuffleNeighbors();
-    // For each bank
-
-    //  For each valid ready instruction compete for a FU via the omega network
-    //  FU should ensure that this is no write port hazard next cycle
-    //      If FU grant an inst, pass its direct child pointer to this FU's corresponding Pointer Queue
-    //      to wake up the child one cycle before its value arrived
-
-    DPRINTF(DQ, "FU selecting ready insts from banks\n");
-    if (Debug::DQV2 || Debug::ObFU) {
-        DPRINTF(DQV2, "FU req packets:\n");
-        dumpInstPackets(fu_req_ptrs);
+    DPRINTF(DQ, "Wrappers setting instructions to be executed and waken up"
+            " (actually in last cycle)\n");
+    for (auto &wrapper: fuWrappers) {
+        wrapper.setWakeup();
     }
 
-    auto inst_pkt_valid_or = []
-            (bool x, DQPacket<DynInstPtr>* y)
-    {return x || y->valid;};
-    bool any_valid = std::accumulate(fu_req_ptrs.begin(), fu_req_ptrs.end(),
-                                     false, inst_pkt_valid_or);
-    if (any_valid) {
-
-    fu_granted_ptrs = bankFUXBar.select(fu_req_ptrs, &nullInstPkt, nBanks * nOpGroups);
-    CombSelNet++;
-    for (unsigned b = 0; b < nBanks; b++) {
-    for (unsigned x = 0; x < 2; x++) {
-
-        unsigned idx = b * 2 + x;
-        assert(fu_granted_ptrs[idx]);
-        if (!fu_granted_ptrs[idx]->valid || !fu_granted_ptrs[idx]->payload) {
-            continue;
-        }
-        DynInstPtr &inst = fu_granted_ptrs[idx]->payload;
-
-        DPRINTF(DQWake || Debug::ObFU, "Inst[%d]:%s selected by fu %u\n",
-                inst->seqNum, inst->staticInst->disassemble(inst->instAddr()), b);
-
-        unsigned source_bank = fu_granted_ptrs[idx]->source/2;
-
-        if (inst->isSquashed()) {
-            DPRINTF(FFSquash, "Skip squashed inst[%llu] from bank[%u] \n",
-                    inst->seqNum, source_bank);
-            dqs[source_bank]->clearPending(inst);
-
-        } else {
-            InstSeqNum waitee;
-            bool can_accept = fuWrappers[b].canServe(inst, waitee);
-            if (waitee && waitee > inst->seqNum) {
-                oldWaitYoung++;
-            }
-            if (can_accept) {
-                DPRINTF(DQWake, "Inst[%lli] from bank[%u] accepted\n",
-                        inst->seqNum, source_bank);
-                fuWrappers[b].consume(inst);
-                dqs[source_bank]->clearPending(inst);
-
-            } else if (opLat[inst->opClass()] > 1){
-                readyWaitTime[b] += 1;
-                llBlockedNext = true;
-            }
-        }
-    }
-    }
+    for (auto &wrapper: fuWrappers) {
+        wrapper.executeInsts();
     }
 
+    for (auto &wrapper: fuWrappers) {
+        wrapper.setWakeupPostExec();
+    }
+
+    setWakeupPointersFromFUs(); // this func also insert them into wake queues
+
+    readPointersFromLastCycleToWakeQueues();
+
+    readWakeQueueHeads();
+
+    selectPointersFromWakeQueues();
     // DPRINTF(DQ, "Tell dq banks who was granted\n");
     // mark it for banks
     for (unsigned b = 0; b < nBanks; b++) {
         dqs[b]->countUpPendingInst();
     }
 
-    // For each bank, check
+    writeFwPointersToNextCycle(); // this func read forward pointers from banks
+
+    wakeupInsts(); // this func also write insts to Next cycle
+
+    diewc->tryResetRef();
+
+        // For each bank, check
     //  whether there's an inst to be waken up
     //  whether there are multiple instruction to wake up, if so
     //      buffer it and reject further requests in following cycles
@@ -285,262 +233,21 @@ void DataflowQueues<Impl>::tick()
     // record the state
     genFUValidMask();
 
-
-    auto wk_ptr_valid_or = []
-            (bool x, DQPacket<WKPointer>* y)
-    {return x || y->valid;};
-    any_valid = std::accumulate(wakeup_req_ptrs.begin(),wakeup_req_ptrs.end(),
-                                false, wk_ptr_valid_or);
-
-    if (any_valid) {
-    if (MINWakeup) {
-        wakeup_granted_ptrs = wakeupQueueBankMIN.select(wakeup_req_ptrs);
-
-    } else if (XBarWakeup) {
-        wakeup_granted_ptrs = wakeupQueueBankXBar.select(wakeup_req_ptrs, &nullWKPkt);
-
-    } else if (NarrowXBarWakeup) {
-        wakeup_granted_ptrs = wakeupQueueBankNarrowXBar.select(wakeup_req_ptrs, &nullWKPkt);
-
-    } else if (DediXBarWakeup) {
-        wakeup_granted_ptrs = wakeupQueueBankDediXBar.select(wakeup_req_ptrs, &nullWKPkt);
-
-    } else {
-        panic("Unknown topology\n");
-    }
-    CombWKNet++;
-
-    for (auto &ptr : wakeup_granted_ptrs) {
-        if (ptr->valid) {
-            DPRINTF(DQWake||Debug::RSProbe2,
-                    "WakePtr[%d] pointer" ptrfmt "granted\n",
-                    ptr->source, extptr(ptr->payload));
-        }
-    }
-
-    assert(opPrioList.size() == 4);
-    // check whether each bank can really accept
-    unsigned wk_pkt_passed = 0;
-    for (unsigned b = 0; b < nBanks; b++) {
-        for (unsigned op: opPrioList) {
-            if (dqs[b]->canServeNew()) {
-                const auto &pkt = wakeup_granted_ptrs[b * nOps + op];
-                if (!pkt->valid) {
-                    continue;
-                }
-                // DPRINTF(DQWake, "granted[%i.%i]: dest:%i" ptrfmt "\n",
-                //         b, op, pkt->valid, extptr(pkt->payload));
-                DPRINTF(DQWake, "granted[%i.%i]: dest:[%llu] (%i) " ptrfmt "\n",
-                        b, op, pkt->destBits.to_ulong(),
-                        pkt->valid, extptr(pkt->payload));
-
-                WKPointer &ptr = pkt->payload;
-                if (ptr.wkType == WKPointer::WKOp) {
-                    if (ptr.op == 0) {
-                        DestOpPackets++;
-                    } else {
-                        SrcOpPackets++;
-                    }
-
-                } else if (ptr.wkType == WKPointer::WKMem) {
-                    MemPackets++;
-
-                } else if (ptr.wkType == WKPointer::WKOrder) {
-                    OrderPackets++;
-
-                } else {
-                    assert(ptr.wkType == WKPointer::WKMisc);
-                    MiscPackets++;
-                }
-
-                if (dqs[b]->wakeup(ptr)) {
-
-                    // pop accepted pointers.
-                    assert(!wakeQueues[pkt->source].empty());
-                    if (wakeQueues[pkt->source].size() == numPendingWakeupMax) {
-                        numPendingWakeupMax--;
-                    }
-                    DPRINTF(DQWake || RSProbe2, "Pop WakePtr (%i %i) (%i)from wakequeue[%u]\n",
-                            ptr.bank, ptr.index, ptr.op, pkt->source);
-                    wakeQueues[pkt->source].pop_front();
-                    numPendingWakeups--;
-                    wk_pkt_passed++;
-                    DPRINTF(DQWake, "After pop, numPendingWakeups = %u\n", numPendingWakeups);
-
-                } else {
-                    DPRINTF(Reshape, "Skipped because conflict to/by forwarder\n");
-                }
-            }
-        }
-    }
-
-    if (wk_pkt_passed != 0) {
-        assert(wk_pkt_passed <= nOps * nBanks);
-        WKFlowUsage[wk_pkt_passed]++;
-    }
-
-    } else {
-        for (unsigned b = 0; b < nBanks; b++) {
-            dqs[b]->canServeNew();
-        }
-    }
-
-    if (Debug::QClog) {
-        dumpQueues();
-    }
-
     rearrangePrioList();
 
     countUpPointers();
 
     tryResetRef();
 
-    if (NarrowXBarWakeup && NarrowLocalForward) {
-        mergeLocalWKPointers();
-    }
-
-    // todo: write forward pointers from bank to time buffer!
-    for (unsigned b = 0; b < nBanks; b++) {
-        std::vector<DQPointer> forward_ptrs = dqs[b]->readPointersFromBank();
-
-        if (NarrowXBarWakeup && NarrowLocalForward) {
-            for (unsigned op = 0; op < nOps; op++) {
-                auto &ptr = forward_ptrs[op];
-                if (ptr.valid && (ptr.bank == b)) {
-                    // TODO: move to time buf
-                    auto &pending_ptr = dqs[b]->localWKPointers[ptr.op];
-                    if (!pending_ptr.valid) {
-                        pending_ptr = WKPointer(ptr);
-                        pending_ptr.isLocal = true;
-                        DPRINTF(DQ, "Move wk ptr (%i) (%i %i) (%i) to local\n",
-                                ptr.valid, ptr.bank, ptr.index, ptr.op);
-                        ptr.valid = false;
-                    }
-                }
-            }
-        }
-
-        for (unsigned op = 0; op < nOps; op++) {
-            const auto &ptr = forward_ptrs[op];
-            // dqs[b]->dumpOutPointers();
-            if (ptr.valid) {
-                DPRINTF(DQWake, "Putting wk ptr" ptrfmt "to time buffer\n", extptr(ptr));
-            } else {
-                DPRINTF(DQV2, "Putting wk ptr" ptrfmt "to time buffer\n", extptr(ptr));
-            }
-            toNextCycle->pointers[b * nOps + op] = forward_ptrs[op];
-        }
-    }
-
-    DPRINTF(DQ, "Wrappers setting instructions to be waken up\n");
-    for (auto &wrapper: fuWrappers) {
-        wrapper.setWakeup();
-    }
-
-    for (auto &wrapper: fuWrappers) {
-        wrapper.executeInsts();
-    }
-
-    for (auto &wrapper: fuWrappers) {
-        wrapper.setWakeupPostExec();
-    }
-
-    for (unsigned b = 0; b < nBanks; b++) {
-        const DQPointer &src = fuWrappers[b].toWakeup[SrcPtr];
-        const DQPointer &dest = fuWrappers[b].toWakeup[DestPtr];
-
-        int q1 = -1, q2 = -1;
-        if (dest.valid) {
-            q1 = allocateWakeQ();
-            DPRINTF(DQWake || Debug::RSProbe2,
-                    "Got wakeup pointer to" ptrfmt ", val %i: %lu, pushed to wakeQueue[%i]\n",
-                    extptr(dest), dest.hasVal, dest.val.i, q1);
-            if (dest.group == groupID) {
-                pushToWakeQueue(q1, WKPointer(dest));
-                numPendingWakeups++;
-                DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
-            } else {
-                put2OutBuffer(WKPointer(dest));
-                DPRINTF(DQWake, "Move to inter-group buffer\n");
-            }
-
-        }
-
-        if (src.valid) {
-            q2 = allocateWakeQ();
-            DPRINTF(DQWake || Debug::RSProbe2,
-                    "Got inverse wakeup pointer to" ptrfmt ", pushed to wakeQueue[%i]\n",
-                    extptr(src), q2);
-            pushToWakeQueue(q2, WKPointer(src));
-            numPendingWakeups++;
-            DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
-
-        }
-
-        if ((q1 >= 0 && wakeQueues[q1].size() > maxQueueDepth) ||
-                (q2 >= 0 && wakeQueues[q2].size() > maxQueueDepth)) {
-            processWKQueueFull();
-        }
-    }
-
-    // todo: write insts from bank to time buffer!
-    for (unsigned i = 0; i < nBanks; i++) {
-        DynInstPtr inst;
-        // todo ! this function must be called after readPointersFromBank(),
-        inst = dqs[i]->wakeupInstsFromBank();
-
-        auto &ready_insts_queue = readyInstsQueues[i];
-        if (!inst) {
-            DPRINTF(DQWake, "No inst from bank %i this cycle\n", i);
-
-        } else {
-            DPRINTF(DQWake, "Pushing valid inst[%lu]\n", inst->seqNum);
-            inst->inReadyQueue = true;
-            // 应该在wakeupInstsFromBank函数中插入下面的队列，而不是这里
-            if (matchInGroup(inst->opClass(), OpGroups::MultDiv)) {
-                ready_insts_queue->insertInst(OpGroups::MultDiv, inst);
-                DPRINTF(DQWake, "Inst[%lu] inserted into MD queue\n", inst->seqNum);
-
-            } else if (matchInGroup(inst->opClass(), OpGroups::FPAdd)) {
-                ready_insts_queue->insertInst(OpGroups::FPAdd, inst);
-                DPRINTF(DQWake, "Inst[%lu] inserted into FPadd queue\n", inst->seqNum);
-
-            } else {
-                ready_insts_queue->insertEmpirically(inst);
-            }
-        }
-
-        DynInstPtr md_group = ready_insts_queue->getInst(OpGroups::MultDiv);
-        DynInstPtr fp_add_group = ready_insts_queue->getInst(OpGroups::FPAdd);
-
-        toNextCycle->instValids[2*i] = !!md_group && !md_group->fuGranted;
-        toNextCycle->insts[2*i] = md_group;
-
-        toNextCycle->instValids[2*i + 1] = !!fp_add_group && !fp_add_group->fuGranted;
-        toNextCycle->insts[2*i + 1] = fp_add_group;
-        if (!toNextCycle->instValids[2*i + 1]) {
-            DPRINTF(DQWake, "Inst from FP add valid: %i\n", fp_add_group);
-            if (fp_add_group) {
-                DPRINTF(DQWake, "Inst[%lu] fu granted: %i\n", fp_add_group->seqNum,
-                        fp_add_group->fuGranted);
-            }
-        }
-
-        if (toNextCycle->instValids[2*i]) {
-            DPRINTF(DQWake, "toNext cycle inst[%lu]\n", toNextCycle->insts[2*i]->seqNum);
-        }
-
-        if (toNextCycle->instValids[2*i + 1]) {
-            DPRINTF(DQWake, "toNext cycle inst[%lu]\n", toNextCycle->insts[2*i + 1]->seqNum);
-        }
-    }
+    // if (NarrowXBarWakeup && NarrowLocalForward) {
+    //     mergeLocalWKPointers();
+    // }
 
     pickInterGroupPointers();
 
     for (unsigned i = 0; i < nBanks; i++) {
         dqs[i]->countUpPendingPointers();
     }
-
 }
 
 template<class Impl>
@@ -555,6 +262,9 @@ void DataflowQueues<Impl>::cycleStart()
         DPRINTF(FUW, "ll blocked last cycle\n");
     }
     clearSent();
+
+    fuFAIndex = 0;
+    fuMDIndex = 0;
 }
 
 
@@ -565,35 +275,22 @@ DataflowQueues<Impl>::coordinateFU(
 {
     // find another FU group with desired capability.
     DPRINTF(FUW, "Coordinating req %u.%u  with llb:%i\n", from/2, from%2, llBlocked);
-    // if (llBlocked) {
-    //     auto fu_bitmap = fuGroupCaps[inst->opClass()];
-    //     do {
-    //         fuPointer[from] = (fuPointer[from] + 1) % nBanks;
-    //     } while (!fu_bitmap[fuPointer[from]]);
-    //     DPRINTF(FUW, "switch to req fu %u\n", fuPointer[from]);
-
-    // } else if (opLat[inst->opClass()] == 1) {
-    //     fuPointer[from] = from;
-    //     DPRINTF(FUW, "reset to origin\n");
-    // }
-
-    int type = from%2,
-        bank = from/2;
+    int type = from%2;
     int md = OpGroups::MultDiv,
         fa = OpGroups::FPAdd;
-    const int group_ipr = 3;
+    const unsigned group_ipr = 3;
+    unsigned target;
     if (inst->opClass() == OpClass::IprAccess) {
-        DPRINTF(FUW, "Routing inst[%lu] to %i\n", inst->seqNum, group_ipr);
-        return std::make_pair(group_ipr, c->uint2Bits(group_ipr));
+        target = group_ipr;
+
     } else if (type == md){ //OpGroups::MultDiv
-        DPRINTF(FUW, "Routing inst[%lu] to %i\n", inst->seqNum, fuPointer[md][bank]);
-        return std::make_pair(fuPointer[md][bank],
-                              c->uint2Bits(fuPointer[md][bank]));
+        target = fuPointer[md][fuMDIndex++];
+
+    } else { // type == fa
+        target = fuPointer[fa][fuFAIndex++];
     }
-    //else (type == fa){ //OpGroups::FPadd
-    DPRINTF(FUW, "Routing inst[%lu] to %i\n", inst->seqNum, fuPointer[fa][bank]);
-    return std::make_pair(fuPointer[fa][bank],
-                          c->uint2Bits(fuPointer[fa][bank]));
+    DPRINTF(FUW || ObExec, "Routing inst[%lu] to %i\n", inst->seqNum, target);
+    return std::make_pair(target, c->uint2Bits(target));
 }
 
 template<class Impl>
@@ -610,7 +307,8 @@ void DataflowQueues<Impl>::insertForwardPointer(PointerPair pair)
         pkt.dest = d;
         pkt.destBits = c->uint2Bits(d);
 
-        DPRINTF(DQGOF || Debug::DQWake || Debug::FFDisp, "Insert Fw Pointer" ptrfmt "->" ptrfmt "\n",
+        DPRINTF(DQGOF || Debug::DQWake || Debug::FFDisp,
+                "Insert Fw Pair" ptrfmt "->" ptrfmt "\n",
                 extptr(pair.dest), extptr(pair.payload));
 
         forwardPointerQueue[forwardPtrIndex].push_back(pkt);
@@ -778,10 +476,6 @@ DataflowQueues<Impl>::markFwPointers(
         std::array<DQPointer, 4> &pointers, PointerPair &pair, DynInstPtr &inst)
 {
     unsigned op = pair.dest.op;
-    if (inst) {
-        DPRINTF(Reshape, "Source inst[%lu] is forwarder: %i, forwardOp: %i\n",
-                inst->seqNum, inst->isForwarder(), inst->forwardOp);
-    }
     if (pointers[op].valid) {
         SRAMWritePointer++;
         DPRINTF(FFSquash, "Overriding previous (squashed) sibling:(%d %d) (%d)\n",
@@ -834,9 +528,18 @@ DataflowQueues<Impl>::markFwPointers(
         inst->destReforward = true;
     }
     pointers[op] = pair.payload;
-    DPRINTF(FFDisp || Debug::DQWake,
-            "And let it forward its value to" ptrfmt "\n",
-            extptr(pair.payload));
+    if (pair.dest.valid) {
+        if (inst) {
+            DPRINTF(FFDisp || Debug::DQWake, "Pair arrives at inst[%lu] "
+                    "@" ptrfmt " \n", inst->seqNum, extptr(pair.dest));
+        } else {
+            DPRINTF(FFDisp || Debug::DQWake, "Pair arrives at null inst "
+                    "@" ptrfmt " \n", extptr(pair.dest));
+        }
+        DPRINTFR(FFDisp || Debug::DQWake,
+                "and let it forward its value to" ptrfmt "\n",
+                extptr(pair.payload));
+    }
 }
 
 
@@ -946,7 +649,7 @@ void DataflowQueues<Impl>::regStats()
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::readQueueHeads()
+void DataflowQueues<Impl>::readPairQueueHeads()
 {
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
@@ -961,7 +664,16 @@ void DataflowQueues<Impl>::readQueueHeads()
                 QueueReadPairBuf++;
                 DPRINTF(DQGOF, "Read valid pair:" ptrfmt "\n", extptr(fw_pkt.payload.dest));
             }
+        }
+    }
+}
 
+template<class Impl>
+void DataflowQueues<Impl>::readWakeQueueHeads()
+{
+    for (unsigned b = 0; b < nBanks; b++) {
+        for (unsigned op = 0; op < nOps; op++) {
+            unsigned i = b * nOps + op;
             // read wakeup pointers
             auto &wk_pkt = wakeup_requests[i];
             const auto &q = wakeQueues[i];
@@ -978,7 +690,7 @@ void DataflowQueues<Impl>::readQueueHeads()
                 unsigned d = ptr.bank * nOps + ptr.op;
                 wk_pkt.dest = d;
                 wk_pkt.destBits = c->uint2Bits(d);
-//                wk_pkt.source = i;
+                //                wk_pkt.source = i;
             }
         }
     }
@@ -1105,7 +817,7 @@ unsigned DataflowQueues<Impl>::numInFlightFw()
 }
 
 template<class Impl>
-void DataflowQueues<Impl>::digestForwardPointer()
+void DataflowQueues<Impl>::digestPairs()
 {
     if (Debug::DQV2) {
         DPRINTF(DQV2, "Pair packets before selection\n");
@@ -1259,15 +971,6 @@ void DataflowQueues<Impl>::dumpQueues()
             printf("\n");
         }
     }
-}
-
-template<class Impl>
-void DataflowQueues<Impl>::endCycle()
-{
-//    for (auto &wrapper: fuWrappers) {
-//        wrapper.endCycle();
-//    }
-    mergeExtraWKPointers();
 }
 
 template<class Impl>
@@ -1547,7 +1250,7 @@ DataflowQueues<Impl>::dumpWkQSize()
 
 template<class Impl>
 void
-DataflowQueues<Impl>::readPointersToWkQ()
+DataflowQueues<Impl>::readPointersFromLastCycleToWakeQueues()
 {
     DPRINTF(DQ, "Reading wk pointers from banks to wake queus\n");
     // push forward pointers to queues
@@ -1768,19 +1471,20 @@ template<class Impl>
 void
 DataflowQueues<Impl>::shuffleNeighbors()
 {
+    panic("Not implemented\n");
     std::shuffle(std::begin(fuPointer[OpGroups::MultDiv]),
             std::end(fuPointer[OpGroups::MultDiv]), gen);
     std::shuffle(std::begin(fuPointer[OpGroups::FPAdd]),
             std::end(fuPointer[OpGroups::FPAdd]), gen);
-    DPRINTF(FUW, "shuffled pointers:\n");
+    DPRINTF(FUW || ObExec, "shuffled pointers:\n");
     for (const auto x:fuPointer[OpGroups::MultDiv]) {
-        DPRINTFR(FUW, "%i ", x);
+        DPRINTFR(FUW || ObExec, "%i ", x);
     }
-    DPRINTFR(FUW, "\n");
+    DPRINTFR(FUW || ObExec, "\n");
     for (const auto x:fuPointer[OpGroups::FPAdd]) {
-        DPRINTFR(FUW, "%i ", x);
+        DPRINTFR(FUW || ObExec, "%i ", x);
     }
-    DPRINTFR(FUW, "\n");
+    DPRINTFR(FUW || ObExec, "\n");
 }
 
 template<class Impl>
@@ -1882,6 +1586,343 @@ void DataflowQueues<Impl>::pickInterGroupPointers()
     }
 }
 
+template<class Impl>
+void DataflowQueues<Impl>::setWakeupPointersFromFUs()
+{
+    for (unsigned b = 0; b < nBanks; b++) {
+        const DQPointer &src = fuWrappers[b].toWakeup[SrcPtr];
+        const DQPointer &dest = fuWrappers[b].toWakeup[DestPtr];
+
+        int q1 = -1, q2 = -1;
+        if (dest.valid) {
+            q1 = allocateWakeQ();
+            DPRINTF(DQWake || Debug::RSProbe2,
+                    "Got wakeup pointer to" ptrfmt ", val %i: %lu, pushed to wakeQueue[%i]\n",
+                    extptr(dest), dest.hasVal, dest.val.i, q1);
+            if (dest.group == groupID) {
+                pushToWakeQueue(q1, WKPointer(dest));
+                numPendingWakeups++;
+                DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
+            } else {
+                put2OutBuffer(WKPointer(dest));
+                DPRINTF(DQWake, "Move to inter-group buffer\n");
+            }
+
+        }
+
+        if (src.valid) {
+            q2 = allocateWakeQ();
+            DPRINTF(DQWake || Debug::RSProbe2,
+                    "Got inverse wakeup pointer to" ptrfmt ", pushed to wakeQueue[%i]\n",
+                    extptr(src), q2);
+            pushToWakeQueue(q2, WKPointer(src));
+            numPendingWakeups++;
+            DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
+
+        }
+
+        if ((q1 >= 0 && wakeQueues[q1].size() > maxQueueDepth) ||
+                (q2 >= 0 && wakeQueues[q2].size() > maxQueueDepth)) {
+            processWKQueueFull();
+        }
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::readReadyInstsFromLastCycle()
+{
+    DPRINTF(DQ, "Setup fu requests\n");
+    // For each bank
+    //  get ready instructions produced by last tick from time struct
+    for (unsigned i = 0; i < nBanks*OpGroups::nOpGroups; i++) {
+        fu_requests[i].valid = fromLastCycle->instValids[i];
+        if (fromLastCycle->instValids[i]) {
+            DPRINTF(DQ || Debug::DQWake || ObExec,
+                    "inst source: %i, &inst: %lu\n",
+                    i, fromLastCycle->insts[i]->seqNum);
+
+            fu_requests[i].payload = fromLastCycle->insts[i];
+            std::tie(fu_requests[i].dest, fu_requests[i].destBits) =
+                coordinateFU(fromLastCycle->insts[i], i);
+        } else {
+            DPRINTF(DQV2, "From last cycle[%d] invalid\n", i);
+        }
+    }
+}
+
+
+template<class Impl>
+void DataflowQueues<Impl>::selectReadyInsts()
+{
+    // shuffleNeighbors();
+    // For each bank
+
+    //  For each valid ready instruction compete for a FU via the omega network
+    //  FU should ensure that this is no write port hazard next cycle
+    //      If FU grant an inst, pass its direct child pointer to this FU's corresponding Pointer Queue
+    //      to wake up the child one cycle before its value arrived
+
+    DPRINTF(DQ, "FU selecting ready insts from banks\n");
+    if (Debug::DQV2 || Debug::ObFU) {
+        DPRINTF(DQV2, "FU req packets:\n");
+        dumpInstPackets(fu_req_ptrs);
+    }
+
+    auto inst_pkt_valid_or = []
+        (bool x, DQPacket<DynInstPtr>* y)
+        {return x || y->valid;};
+    bool any_valid = std::accumulate(fu_req_ptrs.begin(), fu_req_ptrs.end(),
+            false, inst_pkt_valid_or);
+    if (any_valid) {
+
+        fu_granted_ptrs = bankFUXBar.select(fu_req_ptrs,
+                &nullInstPkt, nBanks * nOpGroups);
+        CombSelNet++;
+        for (unsigned b = 0; b < nBanks; b++) {
+            for (unsigned x = 0; x < 2; x++) {
+
+                unsigned idx = b * 2 + x;
+                assert(fu_granted_ptrs[idx]);
+                if (!fu_granted_ptrs[idx]->valid || !fu_granted_ptrs[idx]->payload) {
+                    continue;
+                }
+                DynInstPtr &inst = fu_granted_ptrs[idx]->payload;
+
+                DPRINTF(DQWake || Debug::ObFU || Debug::ObExec,
+                        "Inst[%d]:%s (req index: %i) selected by fu %u\n",
+                        inst->seqNum,
+                        inst->staticInst->disassemble(inst->instAddr()),
+                        idx,
+                        b);
+
+                unsigned source_bank = fu_granted_ptrs[idx]->source/2;
+
+                if (inst->isSquashed()) {
+                    DPRINTF(FFSquash, "Skip squashed inst[%llu] from bank[%u] \n",
+                            inst->seqNum, source_bank);
+                    dqs[source_bank]->clearPending(inst);
+
+                } else {
+                    InstSeqNum waitee;
+                    bool can_accept = fuWrappers[b].canServe(inst, waitee);
+                    if (waitee && waitee > inst->seqNum) {
+                        oldWaitYoung++;
+                    }
+                    if (can_accept) {
+                        DPRINTF(DQWake, "Inst[%lli] from bank[%u] accepted\n",
+                                inst->seqNum, source_bank);
+                        fuWrappers[b].consume(inst);
+                        dqs[source_bank]->clearPending(inst);
+
+                    } else if (opLat[inst->opClass()] > 1){
+                        readyWaitTime[b] += 1;
+                        llBlockedNext = true;
+                    }
+                }
+            }
+        }
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>:: writeFwPointersToNextCycle()
+{
+    // todo: write forward pointers from bank to time buffer!
+    for (unsigned b = 0; b < nBanks; b++) {
+        std::vector<DQPointer> forward_ptrs = dqs[b]->readPointersFromBank();
+
+        if (NarrowXBarWakeup && NarrowLocalForward) {
+            for (unsigned op = 0; op < nOps; op++) {
+                auto &ptr = forward_ptrs[op];
+                if (ptr.valid && (ptr.bank == b)) {
+                    // TODO: move to time buf
+                    auto &pending_ptr = dqs[b]->localWKPointers[ptr.op];
+                    if (!pending_ptr.valid) {
+                        pending_ptr = WKPointer(ptr);
+                        pending_ptr.isLocal = true;
+                        DPRINTF(DQ, "Move wk ptr (%i) (%i %i) (%i) to local\n",
+                                ptr.valid, ptr.bank, ptr.index, ptr.op);
+                        ptr.valid = false;
+                    }
+                }
+            }
+        }
+
+        for (unsigned op = 0; op < nOps; op++) {
+            const auto &ptr = forward_ptrs[op];
+            // dqs[b]->dumpOutPointers();
+            if (ptr.valid) {
+                DPRINTF(DQWake, "Putting wk ptr" ptrfmt "to time buffer\n", extptr(ptr));
+            } else {
+                DPRINTF(DQV2, "Putting wk ptr" ptrfmt "to time buffer\n", extptr(ptr));
+            }
+            toNextCycle->pointers[b * nOps + op] = forward_ptrs[op];
+        }
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::wakeupInsts()
+{
+    // todo: write insts from bank to time buffer!
+    for (unsigned i = 0; i < nBanks; i++) {
+        DynInstPtr inst;
+        // todo ! this function must be called after readPointersFromBank(),
+        inst = dqs[i]->wakeupInstsFromBank();
+
+        auto &ready_insts_queue = readyInstsQueues[i];
+        if (!inst) {
+            DPRINTF(DQWake, "No inst from bank %i this cycle\n", i);
+
+        } else {
+            DPRINTF(DQWake, "Pushing valid inst[%lu]\n", inst->seqNum);
+            inst->inReadyQueue = true;
+            // 应该在wakeupInstsFromBank函数中插入下面的队列，而不是这里
+            if (matchInGroup(inst->opClass(), OpGroups::MultDiv)) {
+                ready_insts_queue->insertInst(OpGroups::MultDiv, inst);
+                DPRINTF(DQWake, "Inst[%lu] inserted into MD queue\n", inst->seqNum);
+
+            } else if (matchInGroup(inst->opClass(), OpGroups::FPAdd)) {
+                ready_insts_queue->insertInst(OpGroups::FPAdd, inst);
+                DPRINTF(DQWake, "Inst[%lu] inserted into FPadd queue\n", inst->seqNum);
+
+            } else {
+                ready_insts_queue->insertEmpirically(inst);
+            }
+        }
+
+        DynInstPtr md_group = ready_insts_queue->getInst(OpGroups::MultDiv);
+        DynInstPtr fp_add_group = ready_insts_queue->getInst(OpGroups::FPAdd);
+
+        toNextCycle->instValids[2*i] = !!md_group && !md_group->fuGranted;
+        toNextCycle->insts[2*i] = md_group;
+
+        toNextCycle->instValids[2*i + 1] = !!fp_add_group && !fp_add_group->fuGranted;
+        toNextCycle->insts[2*i + 1] = fp_add_group;
+        if (!toNextCycle->instValids[2*i + 1]) {
+            DPRINTF(DQWake, "Inst from FP add valid: %i\n", fp_add_group);
+            if (fp_add_group) {
+                DPRINTF(DQWake, "Inst[%lu] fu granted: %i\n", fp_add_group->seqNum,
+                        fp_add_group->fuGranted);
+            }
+        }
+
+        if (toNextCycle->instValids[2*i]) {
+            DPRINTF(DQWake, "toNext cycle inst[%lu]\n", toNextCycle->insts[2*i]->seqNum);
+        }
+
+        if (toNextCycle->instValids[2*i + 1]) {
+            DPRINTF(DQWake, "toNext cycle inst[%lu]\n", toNextCycle->insts[2*i + 1]->seqNum);
+        }
+    }
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::selectPointersFromWakeQueues()
+{
+    auto wk_ptr_valid_or = []
+        (bool x, DQPacket<WKPointer>* y)
+        {return x || y->valid;};
+    bool any_valid = std::accumulate(wakeup_req_ptrs.begin(),wakeup_req_ptrs.end(),
+            false, wk_ptr_valid_or);
+
+    if (any_valid) {
+        if (MINWakeup) {
+            wakeup_granted_ptrs = wakeupQueueBankMIN.select(wakeup_req_ptrs);
+
+        } else if (XBarWakeup) {
+            wakeup_granted_ptrs = wakeupQueueBankXBar.select(wakeup_req_ptrs, &nullWKPkt);
+
+        } else if (NarrowXBarWakeup) {
+            wakeup_granted_ptrs = wakeupQueueBankNarrowXBar.select(wakeup_req_ptrs, &nullWKPkt);
+
+        } else if (DediXBarWakeup) {
+            wakeup_granted_ptrs = wakeupQueueBankDediXBar.select(wakeup_req_ptrs, &nullWKPkt);
+
+        } else {
+            panic("Unknown topology\n");
+        }
+        CombWKNet++;
+
+        for (auto &ptr : wakeup_granted_ptrs) {
+            if (ptr->valid) {
+                DPRINTF(DQWake||Debug::RSProbe2,
+                        "WakePtr[%d] pointer" ptrfmt "granted\n",
+                        ptr->source, extptr(ptr->payload));
+            }
+        }
+
+        assert(opPrioList.size() == 4);
+        // check whether each bank can really accept
+        unsigned wk_pkt_passed = 0;
+        for (unsigned b = 0; b < nBanks; b++) {
+            for (unsigned op: opPrioList) {
+                if (dqs[b]->canServeNew()) {
+                    const auto &pkt = wakeup_granted_ptrs[b * nOps + op];
+                    if (!pkt->valid) {
+                        continue;
+                    }
+                    // DPRINTF(DQWake, "granted[%i.%i]: dest:%i" ptrfmt "\n",
+                    //         b, op, pkt->valid, extptr(pkt->payload));
+                    DPRINTF(DQWake, "granted[%i.%i]: dest:[%llu] (%i) " ptrfmt "\n",
+                            b, op, pkt->destBits.to_ulong(),
+                            pkt->valid, extptr(pkt->payload));
+
+                    WKPointer &ptr = pkt->payload;
+                    if (ptr.wkType == WKPointer::WKOp) {
+                        if (ptr.op == 0) {
+                            DestOpPackets++;
+                        } else {
+                            SrcOpPackets++;
+                        }
+
+                    } else if (ptr.wkType == WKPointer::WKMem) {
+                        MemPackets++;
+
+                    } else if (ptr.wkType == WKPointer::WKOrder) {
+                        OrderPackets++;
+
+                    } else {
+                        assert(ptr.wkType == WKPointer::WKMisc);
+                        MiscPackets++;
+                    }
+
+                    if (dqs[b]->wakeup(ptr)) {
+
+                        // pop accepted pointers.
+                        assert(!wakeQueues[pkt->source].empty());
+                        if (wakeQueues[pkt->source].size() == numPendingWakeupMax) {
+                            numPendingWakeupMax--;
+                        }
+                        DPRINTF(DQWake || RSProbe2, "Pop WakePtr (%i %i) (%i)from wakequeue[%u]\n",
+                                ptr.bank, ptr.index, ptr.op, pkt->source);
+                        wakeQueues[pkt->source].pop_front();
+                        numPendingWakeups--;
+                        wk_pkt_passed++;
+                        DPRINTF(DQWake, "After pop, numPendingWakeups = %u\n", numPendingWakeups);
+
+                    } else {
+                        DPRINTF(Reshape, "Skipped because conflict to/by forwarder\n");
+                    }
+                }
+            }
+        }
+
+        if (wk_pkt_passed != 0) {
+            assert(wk_pkt_passed <= nOps * nBanks);
+            WKFlowUsage[wk_pkt_passed]++;
+        }
+
+    } else {
+        for (unsigned b = 0; b < nBanks; b++) {
+            dqs[b]->canServeNew();
+        }
+    }
+
+    if (Debug::QClog) {
+        dumpQueues();
+    }
+}
 
 } // namespace
 

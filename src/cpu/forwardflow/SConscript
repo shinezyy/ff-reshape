@@ -121,6 +121,7 @@ if 'FFCPU' in env['CPU_MODELS']:
 
     DebugFlag('ObFU')
     DebugFlag('CommitObserve')
+    DebugFlag('ObExec')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',

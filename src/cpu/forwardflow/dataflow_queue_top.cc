@@ -48,7 +48,7 @@ DQTop<Impl>::DQTop(DerivFFCPUParams *params)
     dispatchingGroup = dqGroups[0];
     clearPairBuffer();
     clearInstBuffer();
-    printf("inter buffer size: %zu\n", interGroupBuffer.size());
+    // printf("inter buffer size: %zu\n", interGroupBuffer.size());
 }
 
 template<class Impl>
@@ -70,14 +70,21 @@ void DQTop<Impl>::tick()
     // for each group dispatch
     distributeInstsToGroup();
 
+    if (c.nGroups == 1) {
+        groupsRxFromCenterBuffer();
+        for (auto group: dqGroups) {
+            group->mergeExtraWKPointers();
+        }
+    }
+
+    // for each group dispatch pairs
+    distributePairsToGroup();
+
     // per group tick, because there is no combinational signals across groups
     // their "ticks" can be executed in parallel
     for (auto group: dqGroups) {
         group->tick();
     }
-
-    // for each group dispatch pairs
-    distributePairsToGroup();
 
     // for each group receive from prev group
     groupsRxFromPrevGroup();
@@ -85,9 +92,14 @@ void DQTop<Impl>::tick()
     // this execute order is  to guarantee 2 cycle latency
     groupsTxPointers();
 
-    // for each group receive from center buffer
-    // this will be executed before lsq/mdu send to guarantee 2 cycle latency
-    groupsRxFromCenterBuffer();
+    if (c.nGroups > 1) {
+        // for each group receive from center buffer
+        // this will be executed before lsq/mdu send to guarantee 2 cycle latency
+        groupsRxFromCenterBuffer();
+        for (auto group: dqGroups) {
+            group->mergeExtraWKPointers();
+        }
+    }
 
     replayMemInsts();
     DPRINTF(DQ, "Size of blockedMemInsts: %llu, size of retryMemInsts: %llu\n",
@@ -142,6 +154,10 @@ void DQTop<Impl>::advanceHead()
         clearInflightPackets();
         head = inc(head);
         tail = inc(tail);
+        if (head == 0) {
+            headTerm = (headTerm + 1) % c.termMax;
+            DPRINTF(FFSquash, "Update head term to %u\n", headTerm);
+        }
         return;
     } else {
         assert(!isFull());
@@ -150,6 +166,7 @@ void DQTop<Impl>::advanceHead()
 
     if (head == 0) {
         headTerm = (headTerm + 1) % c.termMax;
+        DPRINTF(FFSquash, "Update head term to %u\n", headTerm);
     }
 
     auto allocated = c.uint2Pointer(head);
@@ -314,7 +331,11 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
     DQPointer allocated = inst->dqPosition;
 
     // this is for checking; we do not need to decentralize it
-    DPRINTF(DQWake || Debug::DQGDisp, "Inst[%lli] allocated @" ptrfmt "\n", inst->seqNum, extptr(allocated));
+    DPRINTF(DQWake || Debug::DQGDisp,
+            "Inst[%lli]: %s allocated @" ptrfmt "\n",
+            inst->seqNum,
+            inst->staticInst->disassemble(inst->instAddr()),
+            extptr(allocated));
     auto group = dqGroups[allocated.group];
     auto dead_inst = (*group)[allocated.bank]->readInstsFromBank(allocated);
     if (dead_inst) {
@@ -481,6 +502,8 @@ void DQTop<Impl>::squash(DQPointer p, bool all, bool including)
         memDepUnit.squash(0, DummyTid);
         diewc->DQPointerJumped = true;
         cpu->removeInstsUntil(0, DummyTid);
+        headTerm = (headTerm + 1) % c.termMax;
+        DPRINTF(FFSquash, "Update head term to %u\n", headTerm);
         return;
     }
 
@@ -520,6 +543,10 @@ void DQTop<Impl>::squash(DQPointer p, bool all, bool including)
                 break;
             }
             u = inc(u);
+            if (u == 0) {
+                headTerm = (headTerm + 1) % c.termMax;
+                DPRINTF(FFSquash, "Update head term to %u\n", headTerm);
+            }
         }
         DPRINTF(FFSquash, "DQ logic head becomes %d, physical is %d, tail is %d\n",
                 head_next, head, tail);
@@ -1010,10 +1037,6 @@ void DQTop<Impl>::addReadyMemInst(DynInstPtr inst, bool isOrderDep)
 template<class Impl>
 void DQTop<Impl>::endCycle()
 {
-    for (auto group: dqGroups) {
-        group->endCycle();
-    }
-
     checkFlagsAndUpdate();
 }
 

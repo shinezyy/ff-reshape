@@ -9,10 +9,12 @@ namespace FF
 {
 
 template<class Impl>
-ReadyInstsQueue<Impl>::ReadyInstsQueue(DerivFFCPUParams *params, const std::string& parent_name)
+ReadyInstsQueue<Impl>::ReadyInstsQueue(
+        DerivFFCPUParams *params, const std::string& parent_name, bool prefer_md)
         :   maxReadyQueueSize(params->MaxReadyQueueSize),
             preScheduledQueues(nOpGroups),
-            _name(parent_name + ".ReadyInstQueue")
+            _name(parent_name + ".ReadyInstQueue"),
+            preferMD(prefer_md)
 {
 }
 
@@ -71,15 +73,25 @@ template<class Impl>
 void
 ReadyInstsQueue<Impl>::insertEmpirically(DynInstPtr &inst)
 {
-    if (preScheduledQueues[OpGroups::MultDiv].size() <
-        preScheduledQueues[OpGroups::FPAdd].size()) {
-        insert(preScheduledQueues[OpGroups::MultDiv], inst);
-        DPRINTF(DQWake, "Inst[%lu] inserted into MD queue empirically\n", inst->seqNum);
+    size_t md_size = preScheduledQueues[OpGroups::MultDiv].size(),
+           fa_size = preScheduledQueues[OpGroups::FPAdd].size();
+    int insert_group;
+    if (md_size == fa_size) {
+        if (preferMD) {
+            insert_group = OpGroups::MultDiv;
+        } else {
+            insert_group = OpGroups::FPAdd;
+        }
+
+    } else if (md_size < fa_size) {
+        insert_group = OpGroups::MultDiv;
 
     } else {
-        insert(preScheduledQueues[OpGroups::FPAdd], inst);
-        DPRINTF(DQWake, "Inst[%lu] inserted into FPAdd queue empirically\n", inst->seqNum);
+        insert_group = OpGroups::FPAdd;
     }
+    insert(preScheduledQueues[insert_group], inst);
+    DPRINTF(DQWake, "Inst[%lu] inserted into %s queue empirically\n",
+            inst->seqNum, insert_group == OpGroups::FPAdd ? "FPAdd" : "MultDiv");
 }
 
 template<class Impl>

@@ -27,7 +27,8 @@ class ReadyInstsQueue{
 public:
     typedef typename Impl::DynInstPtr DynInstPtr;
 
-    explicit ReadyInstsQueue(DerivFFCPUParams *params, const std::string& parent_name);
+    explicit ReadyInstsQueue(DerivFFCPUParams *params,
+            const std::string& parent_name, bool prefer_md);
 
     void squash(InstSeqNum inst_seq);
 
@@ -50,6 +51,8 @@ private:
     std::string _name;
 
     const bool age{true};
+
+    const bool preferMD;
 
     void insert(std::list<DynInstPtr> &q, DynInstPtr inst);
 };
