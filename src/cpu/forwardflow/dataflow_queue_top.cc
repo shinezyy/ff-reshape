@@ -478,6 +478,10 @@ void DQTop<Impl>::tryFastCleanup()
     if (isEmpty()) {
         tail = inc(tail);
         head = inc(head);
+        if (head == 0) {
+            headTerm = (headTerm + 1) % c.termMax;
+            DPRINTF(FFSquash, "Update head term to %u\n", headTerm);
+        }
     }
     DPRINTF(FFCommit || Debug::FFSquash,
             "Fastly advance youngest ptr to %d, oldest ptr to %d" ptrfmt "\n",
@@ -893,6 +897,11 @@ void DQTop<Impl>::switchDispatchingGroup()
 template<class Impl>
 void DQTop<Impl>::distributePairsToGroup()
 {
+    if (switchDispGroup) {
+        DPRINTF(FFDisp, "Skip distributing pairs this cycle "
+                "because of switching dispatch group.\n");
+        return;
+    }
     auto it = centerPairBuffer.begin();
     while (!centerPairBuffer.empty()) {
         PointerPair &p = *it;
