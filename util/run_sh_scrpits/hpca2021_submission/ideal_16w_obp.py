@@ -9,6 +9,7 @@ import common as c
 import local_config as lc
 
 num_thread = lc.cores_per_task
+window_size = 192 * 4
 
 obp = True
 full = True
@@ -21,16 +22,19 @@ if obp:
 else:
         obp_suffix = ''
 
-config = f'trad_4w_small_iq{obp_suffix}'
+config = f'ideal_16w{obp_suffix}'
 outdir = f'{c.stats_base_dir}/{config}{d}/'
 
 def main():
     g5_configs = []
 
     dict_options = {
+            '--num-IQ': window_size,
+            '--o3-core-width': 16,
+
             '--use-bp': 'OracleBP',
             '--branch-trace-file': 'useless_branch.protobuf.gz',
-                        '--num-IQ': 48,
+
             }
     binary_options= [
             '--check-outcome-addr',
@@ -47,6 +51,7 @@ def main():
                     task = benchmark + '_' + str(cpt_id)
                     g5_config = c.G5Config(
                         benchmark=benchmark,
+                                                window_size=window_size,
                         bmk_outdir=pjoin(outdir, task),
                         cpt_id=cpt_id,
                         arch='RISCV',

@@ -11,27 +11,35 @@ import local_config as lc
 num_thread = lc.cores_per_task
 window_size = 192 * 2
 
-buffer_on = False
+buffer_on = True
 obp = True
 full = True
+debug = True
+# panic_tick = 274820700031500
+panic_tick = None
+#simpoint_list = [0, 1, 2]
+simpoint_list = [1]
+#benchmark_list_file = '../all_function_spec2017.txt'
+benchmark_list_file = './tmp.txt'
 
 if full:
-    d = '_full'
+    d = '_f'
 else:
-    d = ''
+    d = '_s'
 
 if obp:
-        obp_suffix = '_obp'
+        obp_suffix = '_o'
 else:
-        obp_suffix = ''
+        obp_suffix = '_p'
 
 if buffer_on:
-    buffer_suffix = '_on'
+    buffer_suffix = '_lbuf'
 else:
-    buffer_suffix = '_off'
+    buffer_suffix = '_nbuf'
 
 # config = f'ideal_8w{obp_suffix}'
-config = f'loop_buffer{buffer_suffix}{obp_suffix}'
+config = f'gold{buffer_suffix}{obp_suffix}'
+#config = f'ob_lbuf{buffer_suffix}{obp_suffix}'
 outdir = f'{c.stats_base_dir}/{config}{d}/'
 
 def main():
@@ -41,9 +49,14 @@ def main():
             '--num-IQ': window_size,
             '--o3-core-width': 8,
 
-            '--use-bp': 'OracleBP',
             '--branch-trace-file': 'useless_branch.protobuf.gz',
+            '--trace-interval': 0,
             }
+
+    if obp:
+        dict_options['--use-bp'] = 'OracleBP'
+    else:
+        dict_options['--use-bp'] = 'ZPerceptron'
 
     binary_options= [
             '--check-outcome-addr',
@@ -54,25 +67,27 @@ def main():
                 '--enable-loop-buffer',
                 )
 
-    #with open('./tmp.txt') as f:
-    with open('../all_function_spec2017.txt') as f:
+    with open(benchmark_list_file) as f:
         for line in f:
             if not line.startswith('#'):
-                for cpt_id in range(0, 3):
+                for cpt_id in simpoint_list:
                     benchmark = line.strip()
                     task = benchmark + '_' + str(cpt_id)
                     g5_config = c.G5Config(
                         benchmark=benchmark,
-                                                window_size=window_size,
+                        window_size=window_size,
                         bmk_outdir=pjoin(outdir, task),
                         cpt_id=cpt_id,
                         arch='RISCV',
                         full=full,
                         full_max_insts=220 * 10**6,
-                        debug=False,
+                        debug=debug,
+                        panic_tick=panic_tick,
                         debug_flags=[
-                            'LoopBufferStack',
-                            'Fetch',
+                            'ValueCommit',
+                            # 'LoopBufferStack',
+                            # 'Fetch',
+                            # 'LoopBuffer',
                             ],
                         func_id=config,
                     )

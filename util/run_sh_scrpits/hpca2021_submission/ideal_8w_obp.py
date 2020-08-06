@@ -9,19 +9,33 @@ import common as c
 import local_config as lc
 
 num_thread = lc.cores_per_task
+window_size = 192 * 2
+
+obp = True
 full = True
 if full:
-    d = '-full'
+    d = '_full'
 else:
     d = ''
-outdir = f'{c.stats_base_dir}/branch_oracle{d}/'
+if obp:
+        obp_suffix = '_obp'
+else:
+        obp_suffix = ''
+
+config = f'ideal_8w{obp_suffix}'
+# config = f'loop_buffer_off_8w{obp_suffix}'
+outdir = f'{c.stats_base_dir}/{config}{d}/'
 
 def main():
     g5_configs = []
 
     dict_options = {
+            '--num-IQ': window_size,
+            '--o3-core-width': 8,
+
             '--use-bp': 'OracleBP',
             '--branch-trace-file': 'useless_branch.protobuf.gz',
+
             }
     binary_options= [
             '--check-outcome-addr',
@@ -38,16 +52,17 @@ def main():
                     task = benchmark + '_' + str(cpt_id)
                     g5_config = c.G5Config(
                         benchmark=benchmark,
+                                                window_size=window_size,
                         bmk_outdir=pjoin(outdir, task),
                         cpt_id=cpt_id,
                         arch='RISCV',
                         full=full,
-                        full_max_insts=199 * 10**6,
+                        full_max_insts=220 * 10**6,
                         debug=False,
                         debug_flags=[
                             'Fetch',
                             ],
-                        func_id='oracle_bp_test',
+                        func_id=config,
                     )
                     g5_config.add_options(binary_options)
                     g5_config.update_options(dict_options)
