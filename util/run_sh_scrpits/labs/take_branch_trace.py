@@ -44,8 +44,10 @@ def main():
                         arch='RISCV',
                         full=full,
                         debug=True,
+                        # panic_tick = 105201940169500,
                         debug_flags=[
                             'BranchResolve',
+                            # 'Fetch',
                             ],
                         func_id='take_branch_trace',
                     )

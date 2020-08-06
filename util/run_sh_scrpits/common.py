@@ -131,8 +131,8 @@ class G5Config:
                     ]
             if self.panic_tick is not None:
                 self.options += [
-                        '--debug-start={}'.format   (self.panic_tick - 2000000),
-                        '--debug-end={}'.format     (self.panic_tick + 2000000),
+                        '--debug-start={}'.format   (self.panic_tick - 20000 * 500),
+                        '--debug-end={}'.format     (self.panic_tick + 20000 * 500),
                         ]
 
         self.options += [
@@ -164,7 +164,7 @@ class G5Config:
             **self.configurable_options,
             '--num-ROB': self.window_size,
             '--num-PhysReg': self.window_size,
-            '--num-IQ': round(0.43 * self.window_size),
+            '--num-IQ': round(0.417 * self.window_size),
             '--num-LQ': round(0.32 * self.window_size),
             '--num-SQ': round(0.25 * self.window_size),
             '--use-bp': 'ZPerceptron',

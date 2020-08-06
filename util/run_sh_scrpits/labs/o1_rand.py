@@ -9,50 +9,68 @@ import common as c
 import local_config as lc
 
 num_thread = lc.cores_per_task
-window_size = 192 * 2
 
+lbuf_on = True
 obp = True
 full = True
-if full:
-    d = '_full'
-else:
-    d = ''
-if obp:
-        obp_suffix = '_obp'
-else:
-        obp_suffix = ''
+simpoint_list = [0, 1, 2]
+benchmark_list_file = '../all_function_spec2017.txt'
+#benchmark_list_file = './tmp.txt'
 
-config = f'ideal_8w{obp_suffix}'
-# config = f'loop_buffer_off_8w{obp_suffix}'
+if full:
+    d = '_f'
+else:
+    d = '_s'
+if obp:
+    obp_suffix = '_o'
+else:
+    obp_suffix = '_p'
+if lbuf_on:
+    lbuf_suffix = '_lbuf'
+else:
+    lbuf_suffix = '_nbuf'
+
+config = f'o1_rand_ltu1_b2b_x5{lbuf_suffix}{obp_suffix}'
 outdir = f'{c.stats_base_dir}/{config}{d}/'
 
 def main():
     g5_configs = []
 
     dict_options = {
-            '--num-IQ': window_size,
-            '--o3-core-width': 8,
+            '--cpu-type': 'DerivFFCPU',
+            '--dq-groups': 1,
 
-            '--use-bp': 'OracleBP',
             '--branch-trace-file': 'useless_branch.protobuf.gz',
 
+            '--narrow-xbar-wk': 0,
+            '--xbar-wk': 0,
+            '--min-wk': 1,
             }
+    if obp:
+        dict_options['--use-bp'] = 'OracleBP'
+    else:
+        dict_options['--use-bp'] = 'ZPerceptron'
+
     binary_options= [
+            '--rand-op-position',
+            # '--ready-hint',
+
             '--check-outcome-addr',
             '--branch-trace-en',
+            '--fanout-lambda=0.5',
             ]
 
+    if lbuf_on:
+        binary_options.append('--enable-loop-buffer',)
 
-    #with open('./tmp.txt') as f:
-    with open('../all_function_spec2017.txt') as f:
+    with open(benchmark_list_file) as f:
         for line in f:
             if not line.startswith('#'):
-                for cpt_id in range(0, 3):
+                for cpt_id in simpoint_list:
                     benchmark = line.strip()
                     task = benchmark + '_' + str(cpt_id)
                     g5_config = c.G5Config(
                         benchmark=benchmark,
-                                                window_size=window_size,
                         bmk_outdir=pjoin(outdir, task),
                         cpt_id=cpt_id,
                         arch='RISCV',
