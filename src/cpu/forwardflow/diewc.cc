@@ -701,6 +701,13 @@ FFDIEWC<Impl>::
         head_inst->setCompleted();
     }
 
+    if (head_inst->isLoad()) {
+        mDepPred->update(head_inst->instAddr(),
+                head_inst->shouldForward,
+                head_inst->shouldForwFrom,
+                head_inst->memPredHistory);
+    }
+
     if (inst_fault != NoFault) {
         DPRINTF(Commit || Debug::FFCommit, "Inst [sn:%lli] PC %s has a fault\n",
                 head_inst->seqNum, head_inst->pcState());
@@ -1287,7 +1294,8 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         commitTraceInterval(params->commitTraceInterval),
         commitCounter(0),
         largeFanoutThreshold(params->LargeFanoutThreshold),
-        EnableReshape(params->EnableReshape)
+        EnableReshape(params->EnableReshape),
+        mDepPred(params->mDepPred)
 {
     skidBufferMax = (allocationToDIEWCDelay + 1 + 4)*width;
     dq.setLSQ(&ldstQueue);
@@ -2133,6 +2141,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
             fetchRedirect = true;
 
             // Tell the instruction queue that a violation has occured.
+            //          %store  %load
             dq.violation(inst, violator);
 
             // Squash.

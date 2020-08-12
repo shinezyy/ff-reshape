@@ -60,6 +60,7 @@
 #include "cpu/timebuf.hh"
 #include "debug/FFLSQ.hh"
 #include "debug/LSQUnit.hh"
+#include "debug/NoSQPred.hh"
 #include "mem/packet.hh"
 #include "mem/port.hh"
 
@@ -707,6 +708,14 @@ LSQUnit<Impl>::read(const RequestPtr &req,
             // for now.
             // @todo: Need to make this a parameter.
             cpu->schedule(wb, curTick());
+
+            load_inst->shouldForward = true;
+            load_inst->shouldForwFrom =
+                load_inst->storeSeq - storeQueue[store_idx].inst->storeSeq;
+
+            DPRINTF(NoSQPred, "Load [%lu] forward from store [%lu] with "
+                    "SSN: %lu\n", load_inst->seqNum, storeQueue[store_idx].inst->seqNum,
+                    storeQueue[store_idx].inst->storeSeq);
 
             ++lsqForwLoads;
             return NoFault;

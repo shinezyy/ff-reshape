@@ -68,7 +68,8 @@ DefaultDecode<Impl>::DefaultDecode(O3CPU *_cpu, DerivFFCPUParams *params)
       commitToDecodeDelay(params->commitToDecodeDelay),
       fetchToDecodeDelay(params->fetchToDecodeDelay),
       decodeWidth(params->decodeWidth),
-      numThreads(params->numThreads)
+      numThreads(params->numThreads),
+      mDepPred(params->mDepPred)
 {
     if (decodeWidth > Impl::MaxWidth)
         fatal("decodeWidth (%d) is larger than compiled limit (%d),\n"
@@ -688,6 +689,19 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
         // too much for function correctness.
         if (inst->numSrcRegs() == 0) {
             inst->setCanIssue();
+        }
+
+        if (inst->isStore()) {
+            inst->storeSeq = storeSeq++;
+        }
+
+        if (inst->isLoad()) {
+            inst->storeSeq = storeSeq;
+            mDepPred->predict(inst->instAddr(), inst->memPredHistory);
+        }
+
+        if (inst->isCondCtrl() || inst->isCall()) {
+            mDepPred->recordPath(inst->instAddr(), inst->isCall());
         }
 
         // This current instruction is valid, so add it into the decode

@@ -15,6 +15,7 @@
 //#include "cpu/forwardflow/dataflow_queue.hh"
 //#include "cpu/forwardflow/lsq.hh"
 #include "cpu/forwardflow/thread_state.hh"
+#include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/timebuf.hh"
 
 struct DerivFFCPUParams;
@@ -501,6 +502,8 @@ private:
     uint64_t commitAll{};
 
     InstSeqNum youngestExecuted{};
+
+    MemDepPredictor *mDepPred;
 };
 
 

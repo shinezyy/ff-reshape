@@ -394,7 +394,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     }
 #endif
 
-public:
+  public:
     std::array<DQPointer, 4> pointers;
 
     std::array<bool, 4> hasOp;
@@ -492,11 +492,18 @@ public:
     unsigned opLat{};
 
     bool receivedDest;
-private:
+  private:
     FFRegValue destValue;
 
     std::array<FFRegValue, 3> srcValues;
 
+  public:
+    uint64_t storeSeq{};
+
+    bool shouldForward{};
+    unsigned shouldForwFrom{};
+
+    void *memPredHistory;
 };
 
 }

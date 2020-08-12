@@ -47,6 +47,7 @@ from BaseCPU import BaseCPU
 from FFFUPool import *
 from FFChecker import FFChecker
 from BranchPredictor import *
+from MemDepPredictor import *
 from LoopBuffer import *
 
 coreWidth = 4
@@ -183,6 +184,9 @@ class DerivFFCPU(BaseCPU):
     #branchPred = Param.BranchPredictor(LocalBP(numThreads =
     #                                                   Parent.numThreads),
                                        "Branch Predictor")
+
+    mDepPred = Param.MemDepPredictor(MemDepPredictor(), "memory dep predictor")
+
     loopBuffer = Param.LoopBuffer(LoopBuffer(), "Loopo Buffer")
     needsTSO = Param.Bool(buildEnv['TARGET_ISA'] == 'x86',
                           "Enable TSO Memory model")

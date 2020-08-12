@@ -600,6 +600,14 @@ LSQUnit<Impl>::checkViolations(int load_idx, DynInstPtr &inst)
                         inst->seqNum, ld_inst->seqNum, ld_eff_addr1);
                 memDepViolator = ld_inst;
 
+                ld_inst->shouldForward = true;
+                ld_inst->shouldForwFrom = ld_inst->storeSeq - inst->storeSeq;
+
+                DPRINTF(NoSQPred, "Load [%lu] should have forwarded from"
+                        " store [%lu] with SSN: %lu\n",
+                        ld_inst->seqNum,
+                        inst->seqNum, inst->storeSeq);
+
                 ++lsqMemOrderViolation;
 
                 return std::make_shared<GenericISA::M5PanicFault>(
