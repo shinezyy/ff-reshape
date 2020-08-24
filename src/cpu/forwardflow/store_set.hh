@@ -77,6 +77,8 @@ class StoreSet
      * and the older store. */
     void violation(Addr store_PC, Addr load_PC);
 
+    void fpBypass(Addr load_PC);
+
     /** Clears the store set predictor every so often so that all the
      * entries aren't used and stores are constantly predicted as
      * conflicting.

@@ -20,6 +20,7 @@
 #include "debug/FFSquash.hh"
 #include "debug/FanoutLog.hh"
 #include "debug/IEW.hh"
+#include "debug/NoSQSMB.hh"
 #include "debug/O3PipeView.hh"
 #include "debug/ObExec.hh"
 #include "debug/RSProbe1.hh"
@@ -296,7 +297,10 @@ void FFDIEWC<Impl>::dispatch() {
 
                 insertPointerPairs(archState.recordAndUpdateMap(inst));
 
-                jumped = dq.insertNonSpec(inst);
+                auto [jumped, pair] = dq.insertNonSpec(inst);
+                if (pair.dest.valid) {
+                    insertPointerPair(pair);
+                }
 
                 normally_add_to_dq = false;
 
@@ -311,7 +315,11 @@ void FFDIEWC<Impl>::dispatch() {
             // get who is the oldest consumer
             insertPointerPairs(archState.recordAndUpdateMap(inst));
 
-            jumped = dq.insertBarrier(inst);
+            auto [jumped, pair] = dq.insertBarrier(inst);
+            if (pair.dest.valid) {
+                insertPointerPair(pair);
+            }
+
             normally_add_to_dq = false;
 
         } else if (inst->isNop()) {
@@ -332,7 +340,10 @@ void FFDIEWC<Impl>::dispatch() {
 
             insertPointerPairs(archState.recordAndUpdateMap(inst));
 
-            jumped = dq.insertNonSpec(inst);
+            auto [jumped, pair] = dq.insertNonSpec(inst);
+            if (pair.dest.valid) {
+                insertPointerPair(pair);
+            }
 
             ++dispNonSpecInsts;
             normally_add_to_dq = false;
@@ -343,7 +354,14 @@ void FFDIEWC<Impl>::dispatch() {
 //            DPRINTF(DIEWC, "dispatch reach 7.1\n");
             insertPointerPairs(archState.recordAndUpdateMap(inst));
 //            DPRINTF(DIEWC, "dispatch reach 7.2\n");
-            jumped = dq.insert(inst, false);
+            auto [jumped, pair] = dq.insert(inst, false);
+
+            if (pair.dest.valid) {
+                DPRINTF(NoSQSMB, "NoSQ SMB bypass " ptrfmt " to " ptrfmt "\n",
+                        extptr(pair.dest), extptr(pair.payload));
+                insertPointerPair(pair);
+            }
+
             youngestSeqNum = inst->seqNum;
 //            DPRINTF(DIEWC, "dispatch reach 7.3\n");
         }
@@ -1448,6 +1466,14 @@ void FFDIEWC<Impl>::insertPointerPairs(const std::list<PointerPair>& pairs) {
 }
 
 template<class Impl>
+void FFDIEWC<Impl>::insertPointerPair(const PointerPair& pair) {
+    pointerPackets.push(pair);
+    DPRINTF(FFDisp, "Size of pair buffer after merge 1 pair: %lu\n",
+            pointerPackets.size());
+}
+
+
+template<class Impl>
 void FFDIEWC<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered,
         bool isFalsePositive)
 {
@@ -1486,7 +1512,13 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
     // assert(inst->sfuWrapper);
     // inst->sfuWrapper->markWb();
     archState.postExecInst(inst);
-    dq.writebackLoad(inst);
+    auto violation = dq.writebackLoad(inst);
+    if (violation) {
+        dq.fpBypass(inst);
+        fetchRedirect = true;
+        ++memOrderViolationEvents;
+        squashDueToFPBypass(inst);
+    }
 }
 
 template<class Impl>
@@ -2171,7 +2203,62 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator)
+void
+FFDIEWC<Impl>::squashDueToFPBypass(DynInstPtr &violator)
+{
+    DPRINTF(DIEWC, "Memory violation, squashing violator and younger "
+                 "insts, PC: %s [sn:%i].\n", violator->pcState(), violator->seqNum);
+
+    if ((!toNextCycle->diewc2diewc.squash ||
+        violator->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum)
+            //more primary than that found in this cyle
+        && (!fromLastCycle->diewc2diewc.squash ||
+        violator->seqNum <= fromLastCycle->diewc2diewc.squashedSeqNum)
+        //more primary than that found in last cyle
+        ) {
+
+        InstSeqNum youngest_cpted_inst_seq = archState.getYoungestCPTBefore(violator->seqNum);
+
+        if (!youngest_cpted_inst_seq) {
+            squashAll();
+            // Where to find a cpt hint?
+            // cptHint = true;
+            // toCheckpoint = victim->instAddr();
+            // DPRINTF(FFSquash, "Hint to checkpoint on pc: 0x%llx next time"
+            //         " in case mem violation\n", toCheckpoint);
+
+        } else {
+            toNextCycle->diewc2diewc.squash = true;
+
+            toNextCycle->diewc2diewc.doneSeqNum = youngest_cpted_inst_seq;
+            toNextCycle->diewc2diewc.squashedSeqNum = youngest_cpted_inst_seq;
+            DynInstPtr innocent_victim = dq.findBySeq(youngest_cpted_inst_seq);
+            toNextCycle->diewc2diewc.squashedPointer = innocent_victim->dqPosition;
+
+            TheISA::PCState npc;
+            if (innocent_victim->isControl() && !innocent_victim->isExecuted() ) {
+                npc = innocent_victim->predPC;
+            } else {
+                npc = innocent_victim->pcState();
+                TheISA::advancePC(npc, innocent_victim->staticInst);
+            }
+            toNextCycle->diewc2diewc.pc = npc;
+            DPRINTF(IEW, "Will replay after inst[%llu].\n", innocent_victim->seqNum);
+            DPRINTF(IEW, "toNextCycle PC: %s.\n", npc);
+            toNextCycle->diewc2diewc.mispredictInst = nullptr;
+
+            // Must include the memory violator in the squash.
+            // todo: note that this is not true in forward flow
+            toNextCycle->diewc2diewc.includeSquashInst = false;
+
+            wroteToTimeBuffer = true;
+        }
+        toNextCycle->diewc2diewc.memViolation = true;
+    }
+}
+template<class Impl>
+void
+FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator)
 {
     DPRINTF(DIEWC, "Memory violation, squashing violator and younger "
                  "insts, PC: %s [sn:%i].\n", violator->pcState(), violator->seqNum);

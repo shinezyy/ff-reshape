@@ -249,7 +249,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         if (op == 0 && !(ptr.wkType == WKPointer::WKMem ||
                          ptr.wkType == WKPointer::WKMisc || ptr.wkType == WKPointer::WKOrder)) {
-            DPRINTF(DQWake, "Mark received dest after ont wakeup pointer to Dest\n");
+            DPRINTF(DQWake, "Mark received dest after wakeup pointer arrives at Dest\n");
             inst->receivedDest = true;
             if (anyPending) {
                 ptr.valid = false;
@@ -289,52 +289,30 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             }
 
         } else { //  if (ptr.wkType == WKPointer::WKOp)
+            // NOTE: With NoSQ, WKOp might carry memory response!
             handle_wakeup = true;
             inst->opReady[op] = true;
             if (op != 0) {
-                assert(inst->indirectRegIndices.at(op).size());
+                assert(inst->indirectRegIndices.at(op).size() ||
+                        op == inst->bypassOp);
                 assert(ptr.hasVal);
 
-                int src_reg_idx = inst->indirectRegIndices.at(op).front();
-                FFRegValue v = ptr.val;
+                if (inst->indirectRegIndices.at(op).size()) {
+                    FFRegValue v = ptr.val;
 
-                for (const auto i: inst->indirectRegIndices.at(op)) {
-                    DPRINTF(FFExec, "Setting src reg[%i] of inst[%llu] to %llu\n",
-                            i, inst->seqNum, v.i);
-                    inst->setSrcValue(i, v);
-                }
-                SRAMWriteValue++;
-
-                if (!inst->isForwarder() &&
-                    ptr.reshapeOp >= 0 && ptr.reshapeOp <= 2 &&
-                    (ptr.wkType == WKPointer::WKOp && !ptr.isFwExtra &&
-                     !anyPending)) {
-                    if (nearlyWakeup[ptr.index]) {
-
-                        inst->gainFromReshape = ptr.fwLevel*2 + (ptr.reshapeOp + 1) - 2;
-                        DynInstPtr parent = top->checkAndGetParent(
-                                inst->getSrcPointer(src_reg_idx), inst->dqPosition);
-
-                        if (parent) {
-                            parent->reshapeContrib += inst->gainFromReshape;
-                            DPRINTF(Reshape||Debug::RSProbe1, "inst[%llu] gain %i from reshape,"
-                                                              " ancestor cummulative contrib: %i\n",
-                                    inst->seqNum, inst->gainFromReshape, parent->reshapeContrib);
-                        }
-                    } else {
-                        inst->nonCriticalFw += 1;
-                        DPRINTF(Reshape||Debug::RSProbe1,
-                                "inst[%llu] received non-critial fw %i from reshape\n",
-                                inst->seqNum, inst->nonCriticalFw);
-
-                        DynInstPtr parent = top->checkAndGetParent(
-                                inst->getSrcPointer(src_reg_idx), inst->dqPosition);
-                        if (parent) {
-                            parent->negativeContrib += 1;
-                        }
+                    for (const auto i: inst->indirectRegIndices.at(op)) {
+                        DPRINTF(FFExec, "Setting src reg[%i] of inst[%llu] to %llu\n",
+                                i, inst->seqNum, v.i);
+                        inst->setSrcValue(i, v);
                     }
+                    SRAMWriteValue++;
+                } else { // bypass op
+                    assert(inst->bypassOp);
+                    inst->bypassVal = ptr.val;
+                    inst->orderDepReady = true;
+
                 }
-            } else {
+
             }
             DPRINTF(DQWake||Debug::RSProbe1,
                     "Mark op[%d] of inst [%llu] ready\n", op, inst->seqNum);
@@ -345,7 +323,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 assert(inst->numBusyOps() == 0);
                 DPRINTF(DQWake || Debug::ObExec, "inst [%llu]: %s is ready to waken up\n",
                         inst->seqNum, inst->staticInst->disassemble(inst->instAddr()));
-                if (!inst->isForwarder()) {
+                if (true) { // no reshape now
                     wakeup_count++;
                     if (inst->readyTick == 0)  {
                         inst->readyTick = curTick();
@@ -373,16 +351,6 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                         need_pending_ptr[op] = true;
                         inst->readyInBankDelay += 1;
                     }
-                } else {
-                    inst->queueingDelay = ptr.queueTime;
-                    inst->pendingDelay = ptr.pendingTime;
-
-                    DPRINTF(DQWake, "inst [%llu] is forwarder and skipped\n",
-                            inst->seqNum);
-                    inst->setIssued();
-                    inst->execute();
-                    inst->setExecuted();
-                    inst->setCanCommit();
                 }
             } else {
                 unsigned busy_count = inst->numBusyOps();
@@ -478,7 +446,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
 
         } else {
             DPRINTF(DQ || Debug::DQWake, "op = %i\n", op);
-            DPRINTF(DQWake, "Reading forward pointer according to" ptrfmt "\n",
+            DPRINTF(DQWake, "Reading forward pointer at" ptrfmt "\n",
                     extptr(ptr));
             const auto &inst = instArray.at(ptr.index);
             if (!inst) {
@@ -496,7 +464,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                     outputPointers[0].valid = false; // dest register should never be forwarded
                 }
 
-                if (inst->isForwarder() && op == inst->forwardOp) {
+                if (false) {
                     served_forwarder = true;
                     for (unsigned out_op = 0; out_op < nOps; out_op++) {
                         auto &out_ptr = outputPointers[out_op];
@@ -548,6 +516,16 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                         ptr.isLocal = false;
                         DPRINTF(DQWake, "Pointer" ptrfmt "isLocal <- false\n", extptr(optr));
                     }
+                }
+
+                if (inst->bypassOp && (inst->bypassOp == op) && inst->pointers[0].valid) {
+                    auto wk_ptr = WKPointer(inst->pointers[0]);
+                    wk_ptr.hasVal = true;
+                    wk_ptr.val = ptr.val;
+                    DPRINTF(DQWake,
+                            "Bypassing load from " ptrfmt " to " ptrfmt "\n",
+                            extptr(ptr), extptr(wk_ptr));
+                    dq->extraWakeup(wk_ptr);
                 }
             }
         }

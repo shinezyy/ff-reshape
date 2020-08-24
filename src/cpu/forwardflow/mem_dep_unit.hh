@@ -49,6 +49,7 @@
 #include <unordered_map>
 
 #include "base/statistics.hh"
+#include "cpu/forwardflow/dq_pointer.hh"
 #include "cpu/inst_seq.hh"
 #include "debug/MemDepUnit.hh"
 
@@ -117,7 +118,7 @@ class MemDepUnit
     void setIQ(InstructionQueue *iq_ptr);
 
     /** Inserts a memory instruction. */
-    void insert(DynInstPtr &inst);
+    PointerPair insert(DynInstPtr &inst);
 
     /** Inserts a non-speculative memory instruction. */
     void insertNonSpec(DynInstPtr &inst);
@@ -156,6 +157,8 @@ class MemDepUnit
     /** Indicates an ordering violation between a store and a younger load. */
     void violation(DynInstPtr &store_inst, DynInstPtr &violating_load);
 
+    void fpBypass(DynInstPtr &violating_load);
+
     /** Issues the given instruction */
     void issue(DynInstPtr &inst);
 
@@ -180,6 +183,11 @@ class MemDepUnit
             : inst(new_inst), regsReady(false), memDepReady(false),
               completed(false), squashed(false)
         {
+            if (inst->isStore()) {
+                latestPosition = new_inst->dqPosition;
+            } else {
+                latestPosition.valid = false;
+            }
 #ifdef DEBUG
             ++memdep_count;
 
@@ -223,6 +231,10 @@ class MemDepUnit
         /** If the instruction is squashed. */
         bool squashed;
 
+        bool positionInvalid{false};
+
+        DQPointer latestPosition;
+
         /** For debugging. */
 #ifdef DEBUG
         static int memdep_count;
@@ -257,14 +269,13 @@ class MemDepUnit
      */
     MemDepPred depPred;
 
-    /** Is there an outstanding load barrier that loads must wait on. */
-    bool loadBarrier;
-    /** The sequence number of the load barrier. */
-    InstSeqNum loadBarrierSN;
-    /** Is there an outstanding store barrier that loads must wait on. */
-    bool storeBarrier;
-    /** The sequence number of the store barrier. */
-    InstSeqNum storeBarrierSN;
+    struct BarrierInfo {
+        bool valid;
+        InstSeqNum SN;
+        DQPointer position;
+    };
+
+    BarrierInfo loadBarrier, storeBarrier;
 
     /** Pointer to the IQ. */
     InstructionQueue *iqPtr;

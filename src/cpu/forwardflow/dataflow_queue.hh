@@ -223,8 +223,10 @@ private:
 
     DIEWC *diewc;
 
+public:
     void extraWakeup(const WKPointer &wk);
 
+private:
     void dumpQueues();
 
     void setWakeupPointersFromFUs();

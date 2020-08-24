@@ -398,6 +398,11 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     std::array<DQPointer, 4> pointers;
 
     std::array<bool, 4> hasOp;
+
+    unsigned findSpareSourceOp();
+
+    DQPointer findSpareSourcePointer();
+
     std::array<bool, 4> opReady;
     bool opFulfilled(unsigned);
 
@@ -420,6 +425,10 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     bool hasOrderDep;
     bool orderDepReady;
     bool orderFulfilled();
+
+    int bypassOp{0};
+
+    FFRegValue bypassVal;
 
     DQPointer dqPosition;
 

@@ -12,6 +12,7 @@
 #include "debug/FFCommit.hh"
 #include "debug/FFDisp.hh"
 #include "debug/FFSquash.hh"
+#include "debug/NoSQSMB.hh"
 #include "debug/RSProbe1.hh"
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
@@ -299,14 +300,16 @@ bool DQTop<Impl>::validPosition(unsigned u) const
 }
 
 template<class Impl>
-bool DQTop<Impl>::insertBarrier(DynInstPtr &inst)
+std::pair<bool, PointerPair>
+DQTop<Impl>::insertBarrier(DynInstPtr &inst)
 {
     memDepUnit.insertBarrier(inst);
     return insertNonSpec(inst);
 }
 
 template<class Impl>
-bool DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
+std::pair<bool, PointerPair>
+DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
 {
     bool non_spec = false;
     if (inst->isStoreConditional()) {
@@ -320,7 +323,8 @@ bool DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
 }
 
 template<class Impl>
-bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
+std::pair<bool, PointerPair>
+DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 {
     // TODO: this is centralized now; Decentralize it with buffers
     // todo: send to allocated DQ position
@@ -357,11 +361,13 @@ bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
     // we don't need to add to dependents or producers here,
     //  which is maintained in DIEWC by archState
 
+    PointerPair pair;
+    pair.dest.valid = false;
     if (inst->isMemRef() && !nonSpec) {
-        memDepUnit.insert(inst);
+        pair = memDepUnit.insert(inst);
     }
 
-    return jumped;
+    return std::make_pair(jumped, pair);
 }
 
 template<class Impl>
@@ -705,13 +711,29 @@ void DQTop<Impl>::cacheUnblocked()
 }
 
 template<class Impl>
-void DQTop<Impl>::writebackLoad(DynInstPtr &inst)
+bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
 {
-    //    DPRINTF(DQWake, "Original ptr: (%i) (%i %i) (%i)\n",
-    //            inst->pointers[0].valid, inst->pointers[0].bank,
-    //            inst->pointers[0].index, inst->pointers[0].op);
     DPRINTF(DQWake, "Writeback Load[%lu]\n", inst->seqNum);
-    if (inst->pointers[0].valid) {
+    if (inst->bypassOp) {
+
+        if (inst->getDestValue().i != inst->bypassVal.i) {
+            DPRINTF(NoSQSMB,
+                    "Memory misspeculation detected with speculated value:"
+                    "%lu, loaded value: %lu\n",
+                    inst->bypassVal.i, inst->getDestValue().i
+                   );
+            return true;
+        } else {
+            DPRINTF(NoSQSMB, "Correctly speculated\n");
+        }
+
+        DPRINTF(DQWake || Debug::NoSQSMB,
+                "Skip to send pointer to consumer" ptrfmt
+                "that depends on load[%llu] because speculatively bypassed\n",
+                extptr(inst->pointers[0]), inst->seqNum);
+    }
+
+    if (inst->pointers[0].valid && !inst->bypassOp) {
         WKPointer wk(inst->pointers[0]);
         DPRINTF(DQWake,
                 "Sending pointer to consumer" ptrfmt
@@ -731,6 +753,7 @@ void DQTop<Impl>::writebackLoad(DynInstPtr &inst)
         inst->opReady[0] = true;
         completeMemInst(inst);
     }
+    return false;
 }
 
 template<class Impl>
@@ -759,6 +782,12 @@ template<class Impl>
 void DQTop<Impl>::violation(DynInstPtr store, DynInstPtr violator)
 {
     memDepUnit.violation(store, violator);
+}
+
+template<class Impl>
+void DQTop<Impl>::fpBypass(DynInstPtr violator)
+{
+    memDepUnit.fpBypass(violator);
 }
 
 template<class Impl>
@@ -1036,11 +1065,17 @@ void DQTop<Impl>::addReadyMemInst(DynInstPtr inst, bool isOrderDep)
     DPRINTF(DQWake, "Replaying mem inst[%llu]\n", inst->seqNum);
     WKPointer wk(inst->dqPosition);
     if (isOrderDep) {
-        wk.wkType = WKPointer::WKOrder;
+        if (inst->isLoad()) {
+            // pass
+        } else {
+            wk.wkType = WKPointer::WKOrder;
+            centralizedExtraWakeup(wk);
+        }
+
     } else {
         wk.wkType = WKPointer::WKMem;
+        centralizedExtraWakeup(wk);
     }
-    centralizedExtraWakeup(wk);
 }
 
 template<class Impl>

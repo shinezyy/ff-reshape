@@ -395,6 +395,27 @@ BaseO3DynInst<Impl>::forwardOpReady()
     return opReady[forwardOp];
 }
 
+template<class Impl>
+unsigned
+BaseO3DynInst<Impl>::findSpareSourceOp()
+{
+    for (unsigned i = 1; i < 4; i++) {
+        if (!hasOp[i]) {
+            return i;
+        }
+    }
+    return 0;
+}
+
+template<class Impl>
+DQPointer
+BaseO3DynInst<Impl>::findSpareSourcePointer()
+{
+    auto pointer = dqPosition;
+    pointer.op = findSpareSourceOp();
+    return pointer;
+}
+
 }
 
 #endif//__CPU_FF_DYN_INST_IMPL_HH__

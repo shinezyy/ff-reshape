@@ -3,6 +3,7 @@
 //
 
 #include "debug/DQWake.hh"
+#include "debug/FFSquash.hh"
 #include "ready_inst_queue.hh"
 
 namespace FF
@@ -27,6 +28,9 @@ ReadyInstsQueue<Impl>::squash(InstSeqNum seq)
         auto it = q.begin();
         while (it != end) {
             if ((*it)->seqNum > seq) {
+                DPRINTF(DQWake || Debug::FFSquash,
+                        "Squashing inst[%lu] (> %lu) from ready queue\n",
+                        (*it)->seqNum, seq);
                 it = q.erase(it);
             } else {
                 it++;
@@ -107,6 +111,25 @@ ReadyInstsQueue<Impl>::isFull(OpGroups group)
 {
     assert(group < preScheduledQueues.size());
     return preScheduledQueues[group].size() >= maxReadyQueueSize;
+}
+
+template<class Impl>
+void
+ReadyInstsQueue<Impl>::dump()
+{
+    unsigned group = 0;
+    for (auto &q: preScheduledQueues) {
+        DPRINTF(DQWake, "In ready queue group %u:\n", group);
+        group++;
+        const auto end = q.end();
+        auto it = q.begin();
+        while (it != end) {
+            if (*it) {
+                DPRINTF(DQWake, "Inst[%lu]\n", (*it)->seqNum);
+            }
+            it++;
+        }
+    }
 }
 
 }

@@ -139,11 +139,11 @@ public:
     void alignTails();
 
     // dispatch
-    bool insertBarrier(DynInstPtr &inst);
+    std::pair<bool, PointerPair> insertBarrier(DynInstPtr &inst);
 
-    bool insertNonSpec(DynInstPtr &inst);
+    std::pair<bool, PointerPair> insertNonSpec(DynInstPtr &inst);
 
-    bool insert(DynInstPtr &inst, bool nonSpec);
+    std::pair<bool, PointerPair> insert(DynInstPtr &inst, bool nonSpec);
 
     void insertForwardPointer(PointerPair pair);
 
@@ -195,13 +195,15 @@ public:
 
     void cacheUnblocked();
 
-    void writebackLoad(DynInstPtr &inst);
+    bool writebackLoad(DynInstPtr &inst);
 
     void wakeMemRelated(DynInstPtr &inst);
 
     void completeMemInst(DynInstPtr &inst);
 
     void violation(DynInstPtr store, DynInstPtr violator);
+
+    void fpBypass(DynInstPtr violator);
 
     // Drain, Switch, Initiation
     void takeOverFrom();

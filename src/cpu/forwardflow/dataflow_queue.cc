@@ -523,6 +523,17 @@ DataflowQueues<Impl>::markFwPointers(
         }
         extraWakeup(wk_ptr);
 
+    } else if (inst && inst->isLoad() && inst->bypassOp && op == 0 &&
+            inst->orderFulfilled()) {
+        DPRINTF(DQWake, "which is a bypassing load and "
+                " has already been waken up! op[%i] ready: %i\n",
+                inst->bypassOp, inst->opReady[inst->bypassOp]);
+        auto wk_ptr = WKPointer(pair.payload);
+        wk_ptr.isFwExtra = true;
+        wk_ptr.hasVal = true;
+        wk_ptr.val = inst->bypassVal;
+        extraWakeup(wk_ptr);
+
     } else if (inst && (op == 0 && inst->fuGranted && !inst->opReady[op])) {
         DPRINTF(FFSquash, "And mark it to new coming child\n");
         inst->destReforward = true;
@@ -1790,6 +1801,8 @@ void DataflowQueues<Impl>::wakeupInsts()
                 ready_insts_queue->insertEmpirically(inst);
             }
         }
+
+        ready_insts_queue->dump();
 
         DynInstPtr md_group = ready_insts_queue->getInst(OpGroups::MultDiv);
         DynInstPtr fp_add_group = ready_insts_queue->getInst(OpGroups::FPAdd);

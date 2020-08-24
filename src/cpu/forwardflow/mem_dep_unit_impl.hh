@@ -47,15 +47,17 @@
 
 #include "cpu/forwardflow/mem_dep_unit.hh"
 #include "debug/MemDepUnit.hh"
+#include "debug/NoSQSMB.hh"
 #include "params/DerivFFCPU.hh"
 
 namespace FF{
 
 template <class MemDepPred, class Impl>
 MemDepUnit<MemDepPred, Impl>::MemDepUnit()
-    : loadBarrier(false), loadBarrierSN(0), storeBarrier(false),
-      storeBarrierSN(0), iqPtr(NULL)
+    : iqPtr(NULL)
 {
+    loadBarrier.valid = false;
+    storeBarrier.valid = false;
 }
 
 template <class MemDepPred, class Impl>
@@ -63,9 +65,10 @@ MemDepUnit<MemDepPred, Impl>::MemDepUnit(DerivFFCPUParams *params)
     : _name(params->name + ".memdepunit"),
       depPred(params->store_set_clear_period, params->SSITSize,
               params->LFSTSize),
-      loadBarrier(false), loadBarrierSN(0), storeBarrier(false),
-      storeBarrierSN(0), iqPtr(NULL)
+      iqPtr(NULL)
 {
+    loadBarrier.valid = false;
+    storeBarrier.valid = false;
     DPRINTF(MemDepUnit, "Creating MemDepUnit object.\n");
 }
 
@@ -158,8 +161,8 @@ void
 MemDepUnit<MemDepPred, Impl>::takeOverFrom()
 {
     // Be sure to reset all state.
-    loadBarrier = storeBarrier = false;
-    loadBarrierSN = storeBarrierSN = 0;
+    loadBarrier.valid = storeBarrier.valid = false;
+    loadBarrier.SN = storeBarrier.SN = 0;
     depPred.clear();
 }
 
@@ -171,7 +174,7 @@ MemDepUnit<MemDepPred, Impl>::setIQ(InstructionQueue *iq_ptr)
 }
 
 template <class MemDepPred, class Impl>
-void
+PointerPair
 MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
 {
     ThreadID tid = inst->threadNumber;
@@ -181,6 +184,10 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
     // Add the MemDepEntry to the hash.
     memDepHash.insert(
         std::pair<InstSeqNum, MemDepEntryPtr>(inst->seqNum, inst_entry));
+    if (inst->isStore()) {
+        DPRINTF(NoSQSMB, "Inserting store @ " ptrfmt "\n",
+                extptr(inst->dqPosition));
+    };
 #ifdef DEBUG
     MemDepEntry::memdep_insert++;
 #endif
@@ -192,14 +199,14 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
     // Check any barriers and the dependence predictor for any
     // producing memrefs/stores.
     InstSeqNum producing_store;
-    if (inst->isLoad() && loadBarrier) {
+    if (inst->isLoad() && loadBarrier.valid) {
         DPRINTF(MemDepUnit, "Load barrier [sn:%lli] in flight\n",
-                loadBarrierSN);
-        producing_store = loadBarrierSN;
-    } else if (inst->isStore() && storeBarrier) {
+                loadBarrier.SN);
+        producing_store = loadBarrier.SN;
+    } else if (inst->isStore() && storeBarrier.valid) {
         DPRINTF(MemDepUnit, "Store barrier [sn:%lli] in flight\n",
-                storeBarrierSN);
-        producing_store = storeBarrierSN;
+                storeBarrier.SN);
+        producing_store = storeBarrier.SN;
     } else {
         producing_store = depPred.checkInst(inst->instAddr());
     }
@@ -217,6 +224,8 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
         }
     }
 
+    PointerPair pair;
+    pair.dest.valid = false;
     // If no store entry, then instruction can issue as soon as the registers
     // are ready.
     if (!store_entry) {
@@ -242,11 +251,31 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
         }
         inst->hasOrderDep = true;
 
+
         // Clear the bit saying this instruction can issue.
         inst->clearCanIssue();
 
         // Add this instruction to the list of dependents.
         store_entry->dependInsts.push_back(inst_entry);
+
+
+        if (!store_entry->positionInvalid && inst->isLoad()) {
+            auto position = inst->findSpareSourcePointer();
+            inst->bypassOp = position.op;
+
+            pair.dest = store_entry->latestPosition;
+            pair.payload = position;
+
+            store_entry->latestPosition = position;
+            DPRINTF(NoSQSMB, "Creating a valid SMB pair\n");
+
+        } else if (!inst->isLoad()) {
+            DPRINTF(NoSQSMB, "Inst[%lu] is no load, skip\n", inst->seqNum);
+
+        } else {
+            DPRINTF(NoSQSMB, "Store @ " ptrfmt " is invalidated!\n",
+                    extptr(store_entry->latestPosition));
+        }
 
         if (inst->isLoad()) {
             ++conflictingLoads;
@@ -267,6 +296,8 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
     } else {
         panic("Unknown type! (most likely a barrier).");
     }
+
+    return pair;
 }
 
 template <class MemDepPred, class Impl>
@@ -312,15 +343,15 @@ MemDepUnit<MemDepPred, Impl>::insertBarrier(DynInstPtr &barr_inst)
     InstSeqNum barr_sn = barr_inst->seqNum;
     // Memory barriers block loads and stores, write barriers only stores.
     if (barr_inst->isMemBarrier()) {
-        loadBarrier = true;
-        loadBarrierSN = barr_sn;
-        storeBarrier = true;
-        storeBarrierSN = barr_sn;
+        loadBarrier.valid = true;
+        loadBarrier.SN = barr_sn;
+        storeBarrier.valid = true;
+        storeBarrier.SN = barr_sn;
         DPRINTF(MemDepUnit, "Inserted a memory barrier %s SN:%lli\n",
                 barr_inst->pcState(),barr_sn);
     } else if (barr_inst->isWriteBarrier()) {
-        storeBarrier = true;
-        storeBarrierSN = barr_sn;
+        storeBarrier.valid = true;
+        storeBarrier.SN = barr_sn;
         DPRINTF(MemDepUnit, "Inserted a write barrier\n");
     }
 
@@ -440,13 +471,13 @@ MemDepUnit<MemDepPred, Impl>::completeBarrier(DynInstPtr &inst)
     DPRINTF(MemDepUnit, "barrier completed: %s SN:%lli\n", inst->pcState(),
             inst->seqNum);
     if (inst->isMemBarrier()) {
-        if (loadBarrierSN == barr_sn)
-            loadBarrier = false;
-        if (storeBarrierSN == barr_sn)
-            storeBarrier = false;
+        if (loadBarrier.SN == barr_sn)
+            loadBarrier.valid = false;
+        if (storeBarrier.SN == barr_sn)
+            storeBarrier.valid = false;
     } else if (inst->isWriteBarrier()) {
-        if (storeBarrierSN == barr_sn)
-            storeBarrier = false;
+        if (storeBarrier.SN == barr_sn)
+            storeBarrier.valid = false;
     }
 }
 
@@ -509,17 +540,27 @@ MemDepUnit<MemDepPred, Impl>::squash(const InstSeqNum &squashed_num,
 
     MemDepHashIt hash_it;
 
+    for (auto &pair: memDepHash) {
+        if (pair.second->latestPosition.valid &&
+                pair.second->latestPosition.op != 0) {
+            // it is not pointing to a store
+            pair.second->positionInvalid = true;
+            DPRINTF(NoSQSMB, "Marking store @ " ptrfmt " invalid\n",
+                    extptr(pair.second->latestPosition));
+        }
+    }
+
     while (!instList[tid].empty() &&
            (*squash_it)->seqNum > squashed_num) {
 
         DPRINTF(MemDepUnit, "Squashing inst [sn:%lli]\n",
                 (*squash_it)->seqNum);
 
-        if ((*squash_it)->seqNum == loadBarrierSN)
-              loadBarrier = false;
+        if ((*squash_it)->seqNum == loadBarrier.SN)
+              loadBarrier.valid = false;
 
-        if ((*squash_it)->seqNum == storeBarrierSN)
-              storeBarrier = false;
+        if ((*squash_it)->seqNum == storeBarrier.SN)
+              storeBarrier.valid = false;
 
         hash_it = memDepHash.find((*squash_it)->seqNum);
 
@@ -551,6 +592,17 @@ MemDepUnit<MemDepPred, Impl>::violation(DynInstPtr &store_inst,
             store_inst->instAddr());
     // Tell the memory dependence unit of the violation.
     depPred.violation(store_inst->instAddr(), violating_load->instAddr());
+}
+
+template <class MemDepPred, class Impl>
+void
+MemDepUnit<MemDepPred, Impl>::fpBypass(DynInstPtr &violating_load)
+{
+    DPRINTF(MemDepUnit, "Passing violating PCs to predictor,"
+            " load: %#x\n", violating_load->instAddr());
+    // Tell the memory dependence unit of the violation.
+    depPred.fpBypass(violating_load->instAddr());
+
 }
 
 template <class MemDepPred, class Impl>

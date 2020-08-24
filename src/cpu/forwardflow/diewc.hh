@@ -373,6 +373,8 @@ private:
 
     void insertPointerPairs(const std::list<PointerPair>&);
 
+    void insertPointerPair(const PointerPair&);
+
     void squashDueToBranch(DynInstPtr &ffdiewc);
 
     std::list <ThreadID> *activeThreads;
@@ -459,6 +461,8 @@ public:
     void executeInst(DynInstPtr &inst);
 
     void squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator);
+
+    void squashDueToFPBypass(DynInstPtr &violator);
 
 private:
     void sendBackwardInfo();

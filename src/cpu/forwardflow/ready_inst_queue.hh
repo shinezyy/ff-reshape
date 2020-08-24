@@ -32,6 +32,8 @@ public:
 
     void squash(InstSeqNum inst_seq);
 
+    void dump();
+
     DynInstPtr getInst(FF::OpGroups group);
 
     void insertInst(FF::OpGroups group, DynInstPtr &inst);

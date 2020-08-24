@@ -81,11 +81,24 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
     to_wake[DestPtr].valid = false;
 
     if (dest.valid) {
-        if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder())) {
+        if (inst->isLoad() && inst->bypassOp) {
+            DPRINTFR(FUW, "Skip to wake up " ptrfmt ", (already been bypassed)\n",
+                    extptr(dest));
+            // to_wake[DestPtr] = dest;
+            // to_wake[DestPtr].hasVal = true;
+            // to_wake[DestPtr].val = inst->bypassVal;
+
+        } else if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder())) {
             DPRINTFR(FUW, "to wake up " ptrfmt "\n", extptr(dest));
             to_wake[DestPtr] = dest;
+            if (inst->isStore()) {
+                to_wake[DestPtr].hasVal = true;
+                // should not perform at exec but at val arrives
+                to_wake[DestPtr].val.i = inst->readIntRegOperand(nullptr, 1);
+            }
+
         } else {
-            DPRINTFR(FUW, "(let loads/SC/forwarder forget) to wake up " ptrfmt "\n",
+            DPRINTFR(FUW, "(let loads/SC/forwarder) forget to wake up " ptrfmt "\n",
                      extptr(dest));
         }
     }
