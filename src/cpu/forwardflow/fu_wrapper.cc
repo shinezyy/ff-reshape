@@ -76,7 +76,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
 
     DQPointer &dest = inst->pointers[0];
 
-    std::array<DQPointer, 2> to_wake;
+    std::array<WKPointer, 2> to_wake;
     to_wake[SrcPtr].valid = false;
     to_wake[DestPtr].valid = false;
 
@@ -91,9 +91,13 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
         } else if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder())) {
             DPRINTFR(FUW, "to wake up " ptrfmt "\n", extptr(dest));
             to_wake[DestPtr] = dest;
-            if (inst->isStore()) {
+            if (inst->isMemBarrier() || inst->isWriteBarrier()) {
+                DPRINTFR(FUW, "without value because of it's barrier");
+                to_wake[DestPtr].wkType = WKPointer::WKType::WKOrder;
+                to_wake[DestPtr].hasVal = false;
+            } else if (inst->isStore()) {
+                DPRINTFR(FUW, "with value because of it's store");
                 to_wake[DestPtr].hasVal = true;
-                // should not perform at exec but at val arrives
                 to_wake[DestPtr].val.i = inst->readIntRegOperand(nullptr, 1);
             }
 
@@ -207,8 +211,8 @@ void FUWrapper<Impl>::setWakeupPostExec()
     }
 
     if (Debug::FUW) {
-        const DQPointer &src = toWakeup[SrcPtr];
-        const DQPointer &dest = toWakeup[DestPtr];
+        const auto &src = toWakeup[SrcPtr];
+        const auto &dest = toWakeup[DestPtr];
         if (src.valid) {
             DPRINTF(FUW, "To wakeup source: " ptrfmt "\n",
                     extptr(src));
@@ -545,7 +549,7 @@ SingleFUWrapper::init(
         bool pipe, bool single_cycle, bool long_lat,
         unsigned _latency, unsigned max_pipe_lat, unsigned _op)
 {
-    DQPointer inv;
+    WKPointer inv;
     inv.valid = false;
 
     seq = 0;

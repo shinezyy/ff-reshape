@@ -70,8 +70,15 @@ DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o, int
 
 WKPointer::WKPointer(const DQPointer &dqPointer)
 {
+    operator = (dqPointer);
+}
+
+
+void
+WKPointer::operator=(const DQPointer &dqPointer)
+{
+    wkType = WKType::WKOp;
     valid = dqPointer.valid;
-    wkType = WKOp;
     group = dqPointer.group;
     bank = dqPointer.bank;
     index = dqPointer.index;

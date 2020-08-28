@@ -246,20 +246,20 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
                 "inst PC %s is dependent on [sn:%lli].\n",
                 inst->pcState(), producing_store);
 
-        if (inst->readyToIssue()) {
-            inst_entry->regsReady = true;
-        }
-        inst->hasOrderDep = true;
-
-
-        // Clear the bit saying this instruction can issue.
-        inst->clearCanIssue();
-
-        // Add this instruction to the list of dependents.
-        store_entry->dependInsts.push_back(inst_entry);
-
 
         if (!store_entry->positionInvalid && inst->isLoad()) {
+
+            if (inst->readyToIssue()) {
+                inst_entry->regsReady = true;
+            }
+            inst->hasOrderDep = true;
+
+            // Clear the bit saying this instruction can issue.
+            inst->clearCanIssue();
+
+            // Add this instruction to the list of dependents.
+            store_entry->dependInsts.push_back(inst_entry);
+
             auto position = inst->findSpareSourcePointer();
             inst->bypassOp = position.op;
 
@@ -267,13 +267,16 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
             pair.payload = position;
 
             store_entry->latestPosition = position;
-            DPRINTF(NoSQSMB, "Creating a valid SMB pair\n");
+            DPRINTF(NoSQSMB, "Creating a valid SMB pair:" ptrfmt "->" ptrfmt "\n",
+                    extptr(pair.dest), extptr(pair.payload));
 
         } else if (!inst->isLoad()) {
+            inst->hasOrderDep = false;
             DPRINTF(NoSQSMB, "Inst[%lu] is no load, skip\n", inst->seqNum);
 
         } else {
-            DPRINTF(NoSQSMB, "Store @ " ptrfmt " is invalidated!\n",
+            inst->hasOrderDep = false;
+            DPRINTF(NoSQSMB, "Store @ " ptrfmt " is found to be invalidated!\n",
                     extptr(store_entry->latestPosition));
         }
 
@@ -506,6 +509,7 @@ MemDepUnit<MemDepPred, Impl>::wakeDependents(DynInstPtr &inst)
 
         // if (woken_inst->regsReady && !woken_inst->squashed) {
         //     moveToReady(woken_inst);
+        // !!! note that now we do not wake up dependants from mdu
         // } else {
         //     woken_inst->memDepReady = true;
         // }

@@ -299,7 +299,11 @@ void FFDIEWC<Impl>::dispatch() {
 
                 auto [jumped, pair] = dq.insertNonSpec(inst);
                 if (pair.dest.valid) {
+                    DPRINTF(NoSQSMB, "NoSQ SMB bypass " ptrfmt " to " ptrfmt "\n",
+                            extptr(pair.dest), extptr(pair.payload));
                     insertPointerPair(pair);
+                } else {
+                    DPRINTF(NoSQSMB, "SMB Pair is invalid\n");
                 }
 
                 normally_add_to_dq = false;
@@ -310,6 +314,8 @@ void FFDIEWC<Impl>::dispatch() {
             toAllocation->diewcInfo.dispatchedToSQ++;
 
         } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
+            DPRINTF(DIEWC, "Mem barrier: %s\n",
+                    inst->staticInst->disassemble(inst->instAddr()));
             inst->setCanCommit();
 
             // get who is the oldest consumer
@@ -317,8 +323,13 @@ void FFDIEWC<Impl>::dispatch() {
 
             auto [jumped, pair] = dq.insertBarrier(inst);
             if (pair.dest.valid) {
+                DPRINTF(NoSQSMB, "NoSQ SMB bypass " ptrfmt " to " ptrfmt "\n",
+                        extptr(pair.dest), extptr(pair.payload));
                 insertPointerPair(pair);
+            } else {
+                DPRINTF(NoSQSMB, "SMB Pair is invalid\n");
             }
+
 
             normally_add_to_dq = false;
 
@@ -342,28 +353,30 @@ void FFDIEWC<Impl>::dispatch() {
 
             auto [jumped, pair] = dq.insertNonSpec(inst);
             if (pair.dest.valid) {
+                DPRINTF(NoSQSMB, "NoSQ SMB bypass " ptrfmt " to " ptrfmt "\n",
+                        extptr(pair.dest), extptr(pair.payload));
                 insertPointerPair(pair);
+            } else {
+                DPRINTF(NoSQSMB, "SMB Pair is invalid\n");
             }
 
             ++dispNonSpecInsts;
             normally_add_to_dq = false;
         }
 
-//        DPRINTF(DIEWC, "dispatch reach 7\n");
         if (normally_add_to_dq) {
-//            DPRINTF(DIEWC, "dispatch reach 7.1\n");
             insertPointerPairs(archState.recordAndUpdateMap(inst));
-//            DPRINTF(DIEWC, "dispatch reach 7.2\n");
             auto [jumped, pair] = dq.insert(inst, false);
 
             if (pair.dest.valid) {
                 DPRINTF(NoSQSMB, "NoSQ SMB bypass " ptrfmt " to " ptrfmt "\n",
                         extptr(pair.dest), extptr(pair.payload));
                 insertPointerPair(pair);
+            } else {
+                DPRINTF(NoSQSMB, "SMB Pair is invalid\n");
             }
 
             youngestSeqNum = inst->seqNum;
-//            DPRINTF(DIEWC, "dispatch reach 7.3\n");
         }
 
         if (jumped) {
@@ -1467,6 +1480,9 @@ void FFDIEWC<Impl>::insertPointerPairs(const std::list<PointerPair>& pairs) {
 
 template<class Impl>
 void FFDIEWC<Impl>::insertPointerPair(const PointerPair& pair) {
+    DPRINTF(FFDisp, "Inserting single pair:" ptrfmt "->" ptrfmt "\n",
+            extptr(pair.dest), extptr(pair.payload));
+    setOldestFw(pair.dest);
     pointerPackets.push(pair);
     DPRINTF(FFDisp, "Size of pair buffer after merge 1 pair: %lu\n",
             pointerPackets.size());

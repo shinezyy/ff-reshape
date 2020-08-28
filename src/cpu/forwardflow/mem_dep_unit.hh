@@ -183,7 +183,7 @@ class MemDepUnit
             : inst(new_inst), regsReady(false), memDepReady(false),
               completed(false), squashed(false)
         {
-            if (inst->isStore()) {
+            if (inst->isStore() || inst->isMemBarrier() || inst->isWriteBarrier()) {
                 latestPosition = new_inst->dqPosition;
             } else {
                 latestPosition.valid = false;

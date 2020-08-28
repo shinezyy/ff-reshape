@@ -37,8 +37,8 @@ struct SingleFUWrapper {
     struct SFUTimeReg {
         bool hasPendingInst;
         InstSeqNum seq;
-        std::array<DQPointer, 2> oneCyclePointer;
-        std::array<DQPointer, 2> longLatencyPointer;
+        std::array<WKPointer, 2> oneCyclePointer;
+        std::array<WKPointer, 2> longLatencyPointer;
         unsigned cycleLeft;
     };
     SFUTimeReg timeReg;
@@ -46,13 +46,13 @@ struct SingleFUWrapper {
     SFUTimeReg *fromLastCycle;
 
     InstSeqNum seq;
-    std::array<DQPointer, 2> oneCyclePointer;
-    std::array<DQPointer, 2> longLatencyPointer;
+    std::array<WKPointer, 2> oneCyclePointer;
+    std::array<WKPointer, 2> longLatencyPointer;
     unsigned cycleLeft;  // for long latency
 
     struct PipelineStruct {
         bool valid;
-        std::array<DQPointer, 2> pointer;
+        std::array<WKPointer, 2> pointer;
         InstSeqNum seq;
     };
 
@@ -121,13 +121,13 @@ public:
 
     void startCycle();
 
-    using WBPair = std::array<DQPointer, 2>;
+    using WBPair = std::array<WKPointer, 2>;
 
     struct WBInfo {
         WBPair wbPair;
         InstSeqNum seq;
 
-        DQPointer& operator [] (int index) {
+        WKPointer& operator [] (int index) {
             return wbPair[index];
         }
 
@@ -205,7 +205,7 @@ public:
 
 private:
 
-    DQPointer inv;
+    WKPointer inv;
     unsigned numFU;
 
     bool active;

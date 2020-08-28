@@ -501,6 +501,19 @@ DataflowQueues<Impl>::markFwPointers(
             DPRINTF(FFSquash, "And mark it to wakeup new child\n");
             inst->destReforward = true;
         }
+
+    } else if (inst && inst->isLoad() &&
+            inst->bypassOp && (op == 0 || op == inst->bypassOp) &&
+            inst->orderFulfilled()) {
+        DPRINTF(DQWake, "which is a bypassing load and "
+                " has already been waken up! op[%i] ready: %i\n",
+                inst->bypassOp, inst->opReady[inst->bypassOp]);
+        auto wk_ptr = WKPointer(pair.payload);
+        wk_ptr.isFwExtra = true;
+        wk_ptr.hasVal = true;
+        wk_ptr.val = inst->bypassVal;
+        extraWakeup(wk_ptr);
+
     } else if (inst && ( (!inst->isForwarder() && inst->opReady[op]) ||
                 (inst->isForwarder() && inst->forwardOpReady()))) {
         DPRINTF(DQWake, "which has already been waken up! op[%i] ready: %i\n",
@@ -521,17 +534,6 @@ DataflowQueues<Impl>::markFwPointers(
                 wk_ptr.val = inst->getOpValue(op);
             }
         }
-        extraWakeup(wk_ptr);
-
-    } else if (inst && inst->isLoad() && inst->bypassOp && op == 0 &&
-            inst->orderFulfilled()) {
-        DPRINTF(DQWake, "which is a bypassing load and "
-                " has already been waken up! op[%i] ready: %i\n",
-                inst->bypassOp, inst->opReady[inst->bypassOp]);
-        auto wk_ptr = WKPointer(pair.payload);
-        wk_ptr.isFwExtra = true;
-        wk_ptr.hasVal = true;
-        wk_ptr.val = inst->bypassVal;
         extraWakeup(wk_ptr);
 
     } else if (inst && (op == 0 && inst->fuGranted && !inst->opReady[op])) {
@@ -1601,8 +1603,8 @@ template<class Impl>
 void DataflowQueues<Impl>::setWakeupPointersFromFUs()
 {
     for (unsigned b = 0; b < nBanks; b++) {
-        const DQPointer &src = fuWrappers[b].toWakeup[SrcPtr];
-        const DQPointer &dest = fuWrappers[b].toWakeup[DestPtr];
+        const WKPointer &src = fuWrappers[b].toWakeup[SrcPtr];
+        const WKPointer &dest = fuWrappers[b].toWakeup[DestPtr];
 
         int q1 = -1, q2 = -1;
         if (dest.valid) {
@@ -1611,11 +1613,11 @@ void DataflowQueues<Impl>::setWakeupPointersFromFUs()
                     "Got wakeup pointer to" ptrfmt ", val %i: %lu, pushed to wakeQueue[%i]\n",
                     extptr(dest), dest.hasVal, dest.val.i, q1);
             if (dest.group == groupID) {
-                pushToWakeQueue(q1, WKPointer(dest));
+                pushToWakeQueue(q1, dest);
                 numPendingWakeups++;
                 DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
             } else {
-                put2OutBuffer(WKPointer(dest));
+                put2OutBuffer(dest);
                 DPRINTF(DQWake, "Move to inter-group buffer\n");
             }
 
@@ -1626,7 +1628,7 @@ void DataflowQueues<Impl>::setWakeupPointersFromFUs()
             DPRINTF(DQWake || Debug::RSProbe2,
                     "Got inverse wakeup pointer to" ptrfmt ", pushed to wakeQueue[%i]\n",
                     extptr(src), q2);
-            pushToWakeQueue(q2, WKPointer(src));
+            pushToWakeQueue(q2, src);
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 

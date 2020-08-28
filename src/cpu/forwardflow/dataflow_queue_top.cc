@@ -1064,13 +1064,13 @@ void DQTop<Impl>::addReadyMemInst(DynInstPtr inst, bool isOrderDep)
     }
     DPRINTF(DQWake, "Replaying mem inst[%llu]\n", inst->seqNum);
     WKPointer wk(inst->dqPosition);
-    if (isOrderDep) {
-        if (inst->isLoad()) {
-            // pass
-        } else {
-            wk.wkType = WKPointer::WKOrder;
-            centralizedExtraWakeup(wk);
-        }
+    if (isOrderDep) { // default to True
+        // pass
+        // if (inst->isLoad()) {
+        // } else {
+        //     wk.wkType = WKPointer::WKOrder;
+        //     centralizedExtraWakeup(wk);
+        // }
 
     } else {
         wk.wkType = WKPointer::WKMem;
