@@ -134,9 +134,20 @@ void FFDIEWC<Impl>::tick() {
     }
 #undef tbuf
 
+    tryVerifyTailLoad();
+
     sendBackwardInfo();
 
     clearAtEnd();
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::tryVerifyTailLoad() {
+    auto tail = getTailInst();
+    if (tail && tail->isLoad() && tail->seqNum != verifiedTailLoad) {
+        dq.reExecTailLoad();
+        verifiedTailLoad = tail->seqNum;
+    }
 }
 
 template<class Impl>
@@ -687,6 +698,12 @@ FFDIEWC<Impl>::
         return false;
     }
 
+    if (head_inst->isLoad() && !head_inst->loadVerified) {
+        DPRINTF(FFCommit, "Inst[%llu] is load but not verified yet,"
+                          " cannot commit\n", head_inst->seqNum);
+        return false;
+    }
+
     if (!dq.logicallyLT(dq.c.pointer2uint(head_inst->dqPosition), oldestForwarded) &&
             !(head_inst->isStoreConditional() || head_inst->isSerializeAfter())) {
         DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is forwarded recently,"
@@ -695,14 +712,6 @@ FFDIEWC<Impl>::
                           head_inst->dqPosition.index);
         return false;
     }
-    // if (!dq.logicallyLT(dq.c.pointer2uint(head_inst->dqPosition), dq.getOldestUsed()) &&
-    //         !(head_inst->isStoreConditional() || head_inst->isSerializeAfter())) {
-    //     DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is referenced recently,"
-    //                       " and cannot be committed right now\n",
-    //                       head_inst->seqNum, head_inst->dqPosition.bank,
-    //                       head_inst->dqPosition.index);
-    //     return false;
-    // }
 
     if (head_inst->numDestRegs() && !head_inst->receivedDest) {
         DPRINTF(FFCommit, "Instruction[%lu] has not obtained its value from "
@@ -732,12 +741,6 @@ FFDIEWC<Impl>::
         head_inst->setCompleted();
     }
 
-    if (head_inst->isLoad()) {
-        mDepPred->update(head_inst->instAddr(),
-                head_inst->shouldForward,
-                head_inst->shouldForwFrom,
-                head_inst->memPredHistory);
-    }
 
     if (inst_fault != NoFault) {
         DPRINTF(Commit || Debug::FFCommit, "Inst [sn:%lli] PC %s has a fault\n",
@@ -797,6 +800,13 @@ FFDIEWC<Impl>::
     }
 
     updateComInstStats(head_inst);
+
+    if (head_inst->isLoad()) {
+        mDepPred->update(head_inst->instAddr(),
+                         head_inst->shouldForward,
+                         head_inst->shouldForwFrom,
+                         head_inst->memPredHistory);
+    }
 
     if (FullSystem) {
         panic("FF does not consider FullSystem yet\n");
@@ -1306,7 +1316,7 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         dq(params),
         archState(params),
         fuWrapper(),
-        ldstQueue(cpu, this, params), // todo: WTF fix it !!!!!!!
+        ldstQueue(cpu, this, params),
         fetchRedirect(false),
         dqSquashing(false),
         dqSquashSeq(0),
@@ -1329,11 +1339,15 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
         mDepPred(params->mDepPred)
 {
     skidBufferMax = (allocationToDIEWCDelay + 1 + 4)*width;
+
     dq.setLSQ(&ldstQueue);
     dq.setDIEWC(this);
     dq.setCPU(cpu);
+
     archState.setDIEWC(this);
     archState.setDQ(&dq);
+
+    ldstQueue.setDQCommon(&dq.c);
 }
 
 template<class Impl>
@@ -1530,7 +1544,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
     archState.postExecInst(inst);
     auto violation = dq.writebackLoad(inst);
     if (violation) {
-        dq.fpBypass(inst);
+//        dq.fpBypass(inst);
         fetchRedirect = true;
         ++memOrderViolationEvents;
         squashDueToFPBypass(inst);
@@ -2078,7 +2092,6 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
                 DPRINTF(DIEWC, "set completeTick to %u\n", inst->completeTick);
                 inst->setCanCommit();
 
-                dq.wakeMemRelated(inst);
                 if (!inst->isStoreConditional()) {
                     dq.completeMemInst(inst);
                 }
@@ -2173,7 +2186,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
             } else {
                 predictedNotTakenIncorrect++;
             }
-        } else if (ldstQueue.violation(DummyTid)) {
+        } else if (ldstQueue.violation(DummyTid)) { // todo: switched to check from value comparison
             assert(inst->isMemRef());
             // If there was an ordering violation, then get the
             // DynInst that caused the violation.  Note that this
@@ -2187,10 +2200,6 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
                     inst->pcState(), inst->seqNum, inst->physEffAddrLow);
 
             fetchRedirect = true;
-
-            // Tell the instruction queue that a violation has occured.
-            //          %store  %load
-            dq.violation(inst, violator);
 
             // Squash.
             squashDueToMemOrder(inst, violator);

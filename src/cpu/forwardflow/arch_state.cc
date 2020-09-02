@@ -4,10 +4,12 @@
 #include "cpu/forwardflow/arch_state.hh"
 
 #include "base/trace.hh"
+#include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/thread_context.hh"
 #include "debug/FFCommit.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FanoutPred.hh"
+#include "debug/NoSQSMB.hh"
 #include "debug/RSProbe1.hh"
 #include "debug/ReadyHint.hh"
 #include "debug/Rename.hh"
@@ -209,7 +211,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             auto &old = renameMap[src_reg];
             auto dest = inst->dqPosition;
             dest.op = phy_op;
-            pairs.push_back({old, dest});
+            pairs.emplace_back(old, dest);
 
             RegReadMap++;
             if (!predecessor_is_forwarder || old.op == 3) {
@@ -233,6 +235,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             }
         }
     }
+
     numBusyOperands[num_src_ops] += num_busy_ops;
     numDispInsts[num_src_ops]++;
 
@@ -280,6 +283,26 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
         takeCheckpoint(inst);
 //        diewc->cptHint = false;
     }
+
+    DPRINTF(NoSQSMB, "Reach 1\n");
+    if (inst->isLoad() && inst->memPredHistory->bypass) { // NoSQ
+        DPRINTF(NoSQSMB, "Reach 2\n");
+        int ld_position = dq->c.pointer2uint(inst->dqPosition);
+        int predecessor_position = ld_position - (int) inst->memPredHistory->storeDistance; // predicted
+        if (predecessor_position < 0) {
+            predecessor_position += dq->c.dqSize;
+        }
+        DPRINTF(NoSQSMB, "Reach 3\n");
+        DQPointer receiver = inst->findSpareSourcePointer();
+        inst->bypassOp = receiver.op;
+        auto predecessor_pointer = dq->c.uint2Pointer(predecessor_position);
+        DPRINTF(NoSQSMB, "Reach 4\n");
+        predecessor_pointer.op = 3; // hard-coded which is reserved for load
+        // TODO: update in pair consuming, especially for store
+        pairs.emplace_back(predecessor_pointer, receiver);
+        DPRINTF(NoSQSMB, "Reach 5\n");
+    }
+    DPRINTF(NoSQSMB, "Reach 6\n");
 
     DPRINTF(Rename, "Rename produces %lu pairs\n", pairs.size());
     return pairs;
@@ -638,8 +661,14 @@ template<class Impl>
 void
 ArchState<Impl>::randomizeOp(DynInstPtr &inst)
 {
-    std::shuffle(std::begin(inst->indirectRegIndices) + 1,
-            std::end(inst->indirectRegIndices), gen);
+    if (inst->isLoad() || inst->isStore()) {
+        // the last position is reserved for Store->L->L chaining
+        std::shuffle(std::begin(inst->indirectRegIndices) + 1,
+                     std::end(inst->indirectRegIndices) - 1, gen);
+    } else {
+        std::shuffle(std::begin(inst->indirectRegIndices) + 1,
+                     std::end(inst->indirectRegIndices), gen);
+    }
 }
 
 template<class Impl>

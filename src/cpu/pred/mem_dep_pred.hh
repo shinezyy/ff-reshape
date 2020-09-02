@@ -5,6 +5,10 @@
 #include <map>
 #include <vector>
 
+#include "base/random.hh"
+#include "base/types.hh"
+#include "cpu/forwardflow/dq_pointer.hh"
+#include "cpu/inst_seq.hh"
 #include "cpu/pred/sat_counter.hh"
 #include "params/MemDepPredictor.hh"
 #include "sim/sim_object.hh"
@@ -31,17 +35,70 @@ struct MemPredHistory
     FoldedPC path;
 };
 
+struct SSBFCell
+{
+    using SSN = InstSeqNum;
+    SSN lastStore{};
+    BasePointer lastStorePosition;
+    BasePointer predecessorPosition;
+};
+
+template <class Container>
+void checkAndRandEvict(Container &set, unsigned randRange)
+{
+    if (set.size() >= randRange) { // eviction
+        unsigned evicted = random_mt.random<unsigned>(0, randRange - 1);
+        auto it = set.begin(), e = set.end();
+        while (evicted) {
+            it++;
+            evicted--;
+        }
+        assert(it != e);
+        set.erase(it);
+    }
+}
+
+class TSSBF: public SimObject
+{
+  private:
+    // T-SSBF
+    const unsigned TagBits;
+    const unsigned TagMask;
+
+    const unsigned Size;
+    const unsigned Assoc;
+    const unsigned Depth;
+    const unsigned IndexBits;
+    const unsigned IndexMask;
+
+    using SSBFSet = std::map<Addr, SSBFCell>;
+    using SSBFTable = std::vector<SSBFSet>;
+
+    SSBFTable table;
+
+  public:
+    typedef MemDepPredictorParams Params;
+    explicit TSSBF(const Params *p);
+
+    SSBFCell *find(Addr key);
+
+    SSBFCell *allocate(Addr key);
+
+  private:
+    Addr extractIndex(Addr key) const;
+    Addr extractTag(Addr key) const;
+};
 
 class MemDepPredictor: public SimObject
 {
   public:
     typedef MemDepPredictorParams Params;
 
-    MemDepPredictor(const Params *p);
+    explicit MemDepPredictor(const Params *p);
 
     const std::string _name;
 
-    const std::string name() const {return _name;}
+    const std::string name() const override {return _name;}
 
   private:
     const unsigned pcShamt{2};
@@ -85,12 +142,14 @@ class MemDepPredictor: public SimObject
 
     using MemPredTable = std::vector<MemPredSet>;
 
+  private:
     MemPredTable pcTable;
     MemPredTable pathTable;
+    TSSBF tssbf;
+  public:
+    std::pair<bool, unsigned> predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist);
 
-    bool predict(Addr load_pc, FoldedPC path, void *&hist);
-
-    bool predict(Addr load_pc, void *&hist);
+    std::pair<bool, unsigned> predict(Addr load_pc, MemPredHistory *&hist);
 
     void recordPath(Addr control_pc, bool isCall);
 
@@ -99,13 +158,21 @@ class MemDepPredictor: public SimObject
     unsigned controlPath{};
 
     void update(Addr load_pc, bool should_bypass,
-            unsigned actual_dist, void* &hist);
+            unsigned actual_dist, MemPredHistory* &hist);
 
-    void squash(void* &hist);
+    void squash(MemPredHistory* &hist);
+
+    void clear();
+
+    void commitStore(Addr eff_addr, InstSeqNum sn, BasePointer &position);
+
+    InstSeqNum lookupAddr(Addr eff_addr);
+
+    void commitLoad(Addr eff_addr, InstSeqNum sn, BasePointer &position);
 
   private:
 
-    Addr genPathKey(Addr pc, FoldedPC path);
+    Addr genPathKey(Addr pc, FoldedPC path) const;
 
     Addr extractIndex(Addr key, bool isPath);
 
@@ -121,7 +188,7 @@ class MemDepPredictor: public SimObject
 
     void increment(MemPredTable &table, Addr key, unsigned dist, bool isPath);
 
-    FoldedPC getPath();
+    FoldedPC getPath() const;
 };
 
 #endif // __MEM_DEP_PRED_HH__

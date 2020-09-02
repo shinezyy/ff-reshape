@@ -84,6 +84,8 @@ public:
 
     void scheduleNonSpec();
 
+    void reExecTailLoad();
+
     void centralizedExtraWakeup(const WKPointer &wk);
 
     bool hasTooManyPendingInsts();
@@ -197,13 +199,7 @@ public:
 
     bool writebackLoad(DynInstPtr &inst);
 
-    void wakeMemRelated(DynInstPtr &inst);
-
     void completeMemInst(DynInstPtr &inst);
-
-    void violation(DynInstPtr store, DynInstPtr violator);
-
-    void fpBypass(DynInstPtr violator);
 
     // Drain, Switch, Initiation
     void takeOverFrom();

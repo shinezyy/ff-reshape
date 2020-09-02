@@ -601,7 +601,8 @@ LSQUnit<Impl>::checkViolations(int load_idx, DynInstPtr &inst)
                 memDepViolator = ld_inst;
 
                 ld_inst->shouldForward = true;
-                ld_inst->shouldForwFrom = ld_inst->storeSeq - inst->storeSeq;
+                ld_inst->shouldForwFrom =
+                    dqc->computeDist(ld_inst->dqPosition, inst->dqPosition);
 
                 DPRINTF(NoSQPred, "Load [%lu] should have forwarded from"
                         " store [%lu] with SSN: %lu\n",

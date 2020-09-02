@@ -10,16 +10,19 @@
 
 #include "base/types.hh"
 
+struct BasePointer {
+    bool valid{};
+    unsigned group{};
+    unsigned bank{};
+    unsigned index{};
+    unsigned op{};
+};
+
 struct WKPointer;
 
-struct DQPointer{
-    bool valid;
-    unsigned group;
-    unsigned bank;
-    unsigned index;
-    unsigned op;
+struct DQPointer: public BasePointer{
 
-    bool hasVal;
+    bool hasVal{false};
     FFRegValue val;
 
     int reshapeOp{-1};
@@ -50,19 +53,15 @@ struct DQPointer{
 
 };
 
-struct WKPointer{
-    bool valid{};
+struct WKPointer: public BasePointer{
     enum WKType {
         WKOp, // wakeup operands
         WKMem, // wakeup mem blocked dependency
         WKOrder, // wakeup store to load dependency
-        WKMisc // wakeup non-speculative, barrier, etc.
+        WKMisc, // wakeup non-speculative, barrier, etc.
+        WKLdReExec // wakeup non-speculative, barrier, etc.
     };
     WKType wkType;
-    unsigned group{};
-    unsigned bank{};
-    unsigned index{};
-    unsigned op{};
 
     bool hasVal;
     FFRegValue val;
@@ -93,6 +92,15 @@ struct WKPointer{
 struct PointerPair{
     DQPointer dest;
     DQPointer payload;
+    PointerPair() {
+        dest.valid = false;
+        dest.hasVal = false;
+        payload.valid = false;
+        payload.hasVal = false;
+    };
+    PointerPair(const DQPointer &d, const DQPointer &p)
+    : dest(d), payload(p)
+    {}
 };
 
 namespace std

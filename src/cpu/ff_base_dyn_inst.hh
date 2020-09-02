@@ -1055,10 +1055,10 @@ BaseDynInst<Impl>::initiateTranslation(const RequestPtr &req,
             fault = NoFault;
 
             // Save memory requests.
-            savedReq = state->mainReq;
             savedSreqLow = state->sreqLow;
             savedSreqHigh = state->sreqHigh;
         }
+        savedReq = state->mainReq;
     } else {
         WholeTranslationState *state =
             new WholeTranslationState(req, sreqLow, sreqHigh, NULL, res, mode);
@@ -1080,10 +1080,10 @@ BaseDynInst<Impl>::initiateTranslation(const RequestPtr &req,
             fault = NoFault;
 
             // Save memory requests.
-            savedReq = state->mainReq;
             savedSreqLow = state->sreqLow;
             savedSreqHigh = state->sreqHigh;
         }
+        savedReq = state->mainReq;
     }
 }
 

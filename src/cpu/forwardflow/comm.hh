@@ -78,6 +78,10 @@ enum {
     centerPairBufferSize = 16 * 4
 };
 
+enum {
+    memBypassOp = 3
+};
+
 extern ThreadID DummyTid;
 
 /** Physical register ID.

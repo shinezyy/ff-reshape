@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "base/intmath.hh"
-#include "base/random.hh"
 #include "debug/NoSQPred.hh"
 
 MemDepPredictor::MemDepPredictor(const Params *params)
@@ -36,18 +35,19 @@ MemDepPredictor::MemDepPredictor(const Params *params)
     BranchPathLen(params->BranchPathLen),
     CallPathLen(params->CallPathLen),
     pcTable(PCTableDepth),
-    pathTable(PathTableDepth)
+    pathTable(PathTableDepth),
+    tssbf(params)
 {
 }
 
-bool
-MemDepPredictor::predict(Addr load_pc, void *&hist)
+std::pair<bool, unsigned>
+MemDepPredictor::predict(Addr load_pc, MemPredHistory *&hist)
 {
     return predict(load_pc, controlPath, hist);
 }
 
-bool
-MemDepPredictor::predict(Addr load_pc, FoldedPC path, void *&hist)
+std::pair<bool, unsigned>
+MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
 {
     auto mp_history = new MemPredHistory;
     hist = mp_history;
@@ -55,9 +55,9 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, void *&hist)
     auto pc_index = load_pc;
     auto path_index = genPathKey(load_pc, path);
 
-    bool found;
-    MemPredCell *cell;
-    std::tie(found, cell) = find(pathTable, path_index, true);
+    // bool found;
+    // MemPredCell *cell;
+    auto [found, cell] = find(pathTable, path_index, true);
     if (found) { // in path table
         mp_history->bypass = cell->conf.read() > 0;
         mp_history->pathSensitive = true;
@@ -108,15 +108,13 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, void *&hist)
             mp_history->pathSensitive, mp_history->storeDistance);
 
     mp_history->path = path;
-
-    return mp_history->bypass;
+    return std::make_pair(mp_history->bypass, mp_history->storeDistance);
 }
 
 void
 MemDepPredictor::update(Addr load_pc, bool should_bypass,
-        unsigned actual_dist, void* &hist_)
+        unsigned actual_dist, MemPredHistory* &hist)
 {
-    auto hist = static_cast<MemPredHistory *>(hist_);
     bool pred_bypass = hist->bypass;
     if (!pred_bypass && !should_bypass) {
         // NOTE: check
@@ -218,9 +216,8 @@ MemDepPredictor::increment(MemPredTable &table, Addr key, unsigned dist, bool is
 
 
 void
-MemDepPredictor::squash(void* &hist_)
+MemDepPredictor::squash(MemPredHistory* &hist)
 {
-    auto hist = static_cast<MemPredHistory *>(hist_);
     delete hist;
 }
 
@@ -234,7 +231,7 @@ MemDepPredictor::recordPath(Addr control_pc, bool isCall)
 }
 
 Addr
-MemDepPredictor::genPathKey(Addr pc, FoldedPC path)
+MemDepPredictor::genPathKey(Addr pc, FoldedPC path) const
 {
     return pc ^ (path & PathMask);
 }
@@ -251,11 +248,11 @@ MemDepPredictor::extractTag(Addr key, bool isPath)
 {
     unsigned shamt = isPath ? PathTableIndexBits : PCTableIndexBits;
     shamt += 2;
-    return (key >> 2) & TagMask;
+    return (key >> shamt) & TagMask;
 }
 
 MemDepPredictor::FoldedPC
-MemDepPredictor::getPath()
+MemDepPredictor::getPath() const
 {
     return controlPath;
 }
@@ -286,16 +283,7 @@ MemDepPredictor::allocate(MemPredTable &table, Addr key, bool isPath)
     auto tag = extractTag(key, isPath);
     assert(!set.count(tag));
 
-    if (set.size() >= assoc) { // eviction
-        unsigned evicted = random_mt.random<unsigned>(0, assoc - 1);
-        auto it = set.begin(), e = set.end();
-        while (evicted) {
-            it++;
-            evicted--;
-        }
-        assert(it != e);
-        set.erase(it);
-    }
+    checkAndRandEvict(set, assoc);
 
     auto pair = set.emplace(tag, MemPredCell(ConfidenceBits));
 
@@ -310,8 +298,97 @@ MemDepPredictor::allocate(MemPredTable &table, Addr key, bool isPath)
     return &(pair.first->second);
 }
 
+void
+MemDepPredictor::clear()
+{
+    for (auto &set: pcTable) {
+        set.clear();
+    }
+    for (auto &set: pathTable) {
+        set.clear();
+    }
+    controlPath = 0;
+}
+
+void MemDepPredictor::commitStore(Addr eff_addr, InstSeqNum sn, BasePointer &position) {
+    SSBFCell *cell = tssbf.find(eff_addr);
+    if (!cell) {
+        cell = tssbf.allocate(eff_addr);
+    }
+    cell->lastStore = sn;
+    cell->lastStorePosition = position;
+    cell->predecessorPosition = position;
+}
+
+InstSeqNum MemDepPredictor::lookupAddr(Addr eff_addr) {
+    SSBFCell *cell = tssbf.find(eff_addr);
+    if (!cell) {
+        return 0;
+    } else {
+        return cell->lastStore;
+    }
+}
+
+void MemDepPredictor::commitLoad(Addr eff_addr, InstSeqNum sn, BasePointer &position) {
+    SSBFCell *cell = tssbf.find(eff_addr);
+    if (!cell) {
+        DPRINTF(NoSQPred, "When committing load producing store is not found\n");
+    } else {
+        cell->predecessorPosition = position;
+    }
+}
+
 MemDepPredictor *MemDepPredictorParams::create()
 {
     return new MemDepPredictor(this);
 }
+
+TSSBF::TSSBF(const Params *p)
+        : SimObject(p),
+          TagBits(p->TSSBFTagBits),
+          TagMask((1 << TagBits) - 1),
+          Size(p->TSSBFSize),
+          Assoc(p->TSSBFAssoc),
+          Depth(Size/Assoc),
+          IndexBits(ceilLog2(Depth)),
+          IndexMask((1 << IndexBits) - 1),
+          table(Depth)
+{
+
+}
+
+Addr TSSBF::extractIndex(Addr key) const {
+    return key & IndexMask;
+}
+
+Addr TSSBF::extractTag(Addr key) const {
+    return (key >> IndexBits) & TagMask;
+}
+
+SSBFCell *TSSBF::find(Addr key) {
+    auto &set = table[extractIndex(key)];
+    auto tag = extractTag(key);
+    auto it = set.find(tag);
+    if (it != set.end()) {
+        return nullptr;
+    } else {
+        return &it->second;
+    }
+}
+
+SSBFCell *TSSBF::allocate(Addr key) {
+    auto &set = table[extractIndex(key)];
+    auto tag = extractTag(key);
+    assert (set.count(tag) == 0);
+
+    checkAndRandEvict(set, Assoc);
+
+    auto pair = set.emplace(tag, SSBFCell());
+
+    assert(pair.second); // no old equal key found
+    assert(set.size() <= Assoc);
+
+    return &(pair.first->second);
+}
+
 

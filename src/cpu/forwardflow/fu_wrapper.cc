@@ -92,11 +92,11 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
             DPRINTFR(FUW, "to wake up " ptrfmt "\n", extptr(dest));
             to_wake[DestPtr] = dest;
             if (inst->isMemBarrier() || inst->isWriteBarrier()) {
-                DPRINTFR(FUW, "without value because of it's barrier");
+                DPRINTFR(FUW, "without value because of it's barrier\n");
                 to_wake[DestPtr].wkType = WKPointer::WKType::WKOrder;
                 to_wake[DestPtr].hasVal = false;
             } else if (inst->isStore()) {
-                DPRINTFR(FUW, "with value because of it's store");
+                DPRINTFR(FUW, "with value because of it's store\n");
                 to_wake[DestPtr].hasVal = true;
                 to_wake[DestPtr].val.i = inst->readIntRegOperand(nullptr, 1);
             }
@@ -122,7 +122,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
                     extptr(dest));
         }
     } else {
-        DPRINTFR(FUW, "but wake up nobody\n");
+        DPRINTFR(FUW, "with not ISA defined dest\n");
     }
 
     // store wakeup info

@@ -130,6 +130,24 @@ void DQTop<Impl>::scheduleNonSpec()
 }
 
 template<class Impl>
+void DQTop<Impl>::reExecTailLoad()
+{
+    if (!getTail()) {
+        DPRINTF(FFSquash, "Ignore scheduling attempt to squashing inst\n");
+        return;
+    }
+    if (!getTail()->isLoad()) {
+        DPRINTF(NoSQSMB, "Head inst is not load!\n");
+        return;
+    }
+    WKPointer wk = WKPointer(getTail()->dqPosition);
+    DPRINTF(DQ, "Scheduling tail load inst " ptrfmt "\n", extptr(wk));
+    wk.wkType = WKPointer::WKLdReExec;
+    centralizedExtraWakeup(wk);
+}
+
+
+template<class Impl>
 void DQTop<Impl>::centralizedExtraWakeup(const WKPointer &wk)
 {
     // store in a buffer? or insert directly?
@@ -714,8 +732,7 @@ template<class Impl>
 bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
 {
     DPRINTF(DQWake, "Writeback Load[%lu]\n", inst->seqNum);
-    if (inst->bypassOp) {
-
+    if (inst->bypassOp && !inst->loadVerified) {
         if (inst->getDestValue().i != inst->bypassVal.i) {
             DPRINTF(NoSQSMB,
                     "Memory misspeculation detected with speculated value:"
@@ -757,37 +774,16 @@ bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
 }
 
 template<class Impl>
-void DQTop<Impl>::wakeMemRelated(DynInstPtr &inst)
-{
-    if (inst->isMemRef()) {
-        memDepUnit.wakeDependents(inst);
-    }
-}
-
-template<class Impl>
 void DQTop<Impl>::completeMemInst(DynInstPtr &inst)
 {
     inst->receivedDest = true;
     if (inst->isMemRef()) {
         // complateMemInst
         inst->memOpDone(true);
-        memDepUnit.completed(inst);
 
     } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
         memDepUnit.completeBarrier(inst);
     }
-}
-
-template<class Impl>
-void DQTop<Impl>::violation(DynInstPtr store, DynInstPtr violator)
-{
-    memDepUnit.violation(store, violator);
-}
-
-template<class Impl>
-void DQTop<Impl>::fpBypass(DynInstPtr violator)
-{
-    memDepUnit.fpBypass(violator);
 }
 
 template<class Impl>
@@ -1164,6 +1160,7 @@ unsigned DQTop<Impl>::incIndex(unsigned u)
 {
     return (u+1) % dispatchWidth;
 }
+
 
 }
 

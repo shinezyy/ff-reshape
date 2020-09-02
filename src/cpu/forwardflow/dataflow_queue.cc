@@ -481,8 +481,7 @@ DataflowQueues<Impl>::markFwPointers(
         DPRINTF(FFSquash, "Overriding previous (squashed) sibling:(%d %d) (%d)\n",
                 pointers[op].bank, pointers[op].index, pointers[op].op);
 
-        if (inst && (inst->isExecuted() || (!inst->isForwarder() && inst->opReady[op]) ||
-                    (inst->isForwarder() && inst->forwardOpReady()))) {
+        if (inst && (inst->isExecuted() || inst->opReady[op])) {
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
             auto wk_ptr = WKPointer(pair.payload);
             wk_ptr.isFwExtra = true;
@@ -503,8 +502,8 @@ DataflowQueues<Impl>::markFwPointers(
         }
 
     } else if (inst && inst->isLoad() &&
-            inst->bypassOp && (op == 0 || op == inst->bypassOp) &&
-            inst->orderFulfilled()) {
+               inst->bypassOp && (op == 0 || op == memBypassOp) &&
+               inst->orderFulfilled()) {
         DPRINTF(DQWake, "which is a bypassing load and "
                 " has already been waken up! op[%i] ready: %i\n",
                 inst->bypassOp, inst->opReady[inst->bypassOp]);
@@ -514,14 +513,10 @@ DataflowQueues<Impl>::markFwPointers(
         wk_ptr.val = inst->bypassVal;
         extraWakeup(wk_ptr);
 
-    } else if (inst && ( (!inst->isForwarder() && inst->opReady[op]) ||
-                (inst->isForwarder() && inst->forwardOpReady()))) {
+    } else if (inst && inst->opReady[op]) {
         DPRINTF(DQWake, "which has already been waken up! op[%i] ready: %i\n",
                 op, inst->opReady[op]);
-        if (inst->isForwarder()) {
-            DPRINTF(DQWake, "fw op(%i) ready: %i\n",
-                    inst->forwardOp, inst->forwardOpReady());
-        }
+
         auto wk_ptr = WKPointer(pair.payload);
         wk_ptr.isFwExtra = true;
         wk_ptr.hasVal = true;
@@ -540,7 +535,7 @@ DataflowQueues<Impl>::markFwPointers(
         DPRINTF(FFSquash, "And mark it to new coming child\n");
         inst->destReforward = true;
     }
-    pointers[op] = pair.payload;
+
     if (pair.dest.valid) {
         if (inst) {
             DPRINTF(FFDisp || Debug::DQWake, "Pair arrives at inst[%lu] "
@@ -552,6 +547,17 @@ DataflowQueues<Impl>::markFwPointers(
         DPRINTFR(FFDisp || Debug::DQWake,
                 "and let it forward its value to" ptrfmt "\n",
                 extptr(pair.payload));
+    }
+
+    if (inst->isStore() && op == memBypassOp) {
+        DPRINTF(FFDisp || Debug::DQWake,
+                "Storing pointer to dest field of store\n");
+        pointers[0] = pair.payload;
+    } else {
+        pointers[op] = pair.payload;
+    }
+    if (inst->isLoad() && op == memBypassOp) {
+        inst->bypassOp = memBypassOp;
     }
 }
 
@@ -696,8 +702,8 @@ void DataflowQueues<Impl>::readWakeQueueHeads()
                 QueueReadTxBuf++;
                 const WKPointer &ptr = q.front();
                 DPRINTF(DQWake||Debug::RSProbe1,
-                        "WKQ[%i] Found valid wakePtr:(%i) (%i %i) (%i)\n",
-                        i, ptr.valid, ptr.bank, ptr.index, ptr.op);
+                        "WKQ[%i] Found valid wakePtr:" ptrfmt "\n",
+                        i, extptr(ptr));
                 wk_pkt.valid = ptr.valid;
                 wk_pkt.payload = ptr;
                 unsigned d = ptr.bank * nOps + ptr.op;
@@ -909,12 +915,6 @@ void DataflowQueues<Impl>::digestPairs()
     }
 
     }
-}
-
-template<class Impl>
-void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
-{
-
 }
 
 template<class Impl>
@@ -1896,6 +1896,9 @@ void DataflowQueues<Impl>::selectPointersFromWakeQueues()
 
                     } else if (ptr.wkType == WKPointer::WKOrder) {
                         OrderPackets++;
+
+                    } else if (ptr.wkType == WKPointer::WKLdReExec) {
+                        // pass
 
                     } else {
                         assert(ptr.wkType == WKPointer::WKMisc);

@@ -32,6 +32,9 @@ public:
 
     unsigned pointer2uint(const WKPointer &ptr) const;
 
+    // assuming that o is older than y
+    unsigned computeDist(const DQPointer &y, const DQPointer &o);
+
     const int FPAddOps[3]{OpClass::FloatAdd,
                           OpClass::FloatCmp,
                           OpClass::FloatCvt};

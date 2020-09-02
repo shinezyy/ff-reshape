@@ -53,6 +53,7 @@
 #include "cpu/forwardflow/cpu.hh"
 #include "cpu/forwardflow/isa_specific.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/reg_class.hh"
 #include "debug/FFExec.hh"
 #include "debug/FFReg.hh"
@@ -512,7 +513,9 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     bool shouldForward{};
     unsigned shouldForwFrom{};
 
-    void *memPredHistory;
+    MemPredHistory *memPredHistory;
+
+    bool loadVerified{false};
 };
 
 }

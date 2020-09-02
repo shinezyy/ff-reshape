@@ -126,11 +126,6 @@ class MemDepUnit
     /** Inserts a barrier instruction. */
     void insertBarrier(DynInstPtr &barr_inst);
 
-    /** Indicate that an instruction has its registers ready. */
-    void regsReady(DynInstPtr &inst);
-
-    /** Indicate that a non-speculative instruction is ready. */
-    void nonSpecInstReady(DynInstPtr &inst);
 
     /** Reschedules an instruction to be re-executed. */
     void reschedule(DynInstPtr &inst);
@@ -140,30 +135,13 @@ class MemDepUnit
      */
     void replay();
 
-    /** Completes a memory instruction. */
-    void completed(DynInstPtr &inst);
-
     /** Completes a barrier instruction. */
     void completeBarrier(DynInstPtr &inst);
-
-    /** Wakes any dependents of a memory instruction. */
-    void wakeDependents(DynInstPtr &inst);
 
     /** Squashes all instructions up until a given sequence number for a
      *  specific thread.
      */
     void squash(const InstSeqNum &squashed_num, ThreadID tid);
-
-    /** Indicates an ordering violation between a store and a younger load. */
-    void violation(DynInstPtr &store_inst, DynInstPtr &violating_load);
-
-    void fpBypass(DynInstPtr &violating_load);
-
-    /** Issues the given instruction */
-    void issue(DynInstPtr &inst);
-
-    /** Debugging function to dump the lists of instructions. */
-    void dumpLists();
 
   private:
     typedef typename std::list<DynInstPtr>::iterator ListIt;
@@ -243,21 +221,16 @@ class MemDepUnit
 #endif
     };
 
-    /** Finds the memory dependence entry in the hash map. */
-    inline MemDepEntryPtr &findInHash(const DynInstPtr &inst);
-
     /** Moves an entry to the ready list. */
-    inline void moveToReady(MemDepEntryPtr &ready_inst_entry);
+    inline void moveToReady(DynInstPtr &ready_inst_entry);
 
     typedef std::unordered_map<InstSeqNum, MemDepEntryPtr, SNHash> MemDepHash;
 
     typedef typename MemDepHash::iterator MemDepHashIt;
 
-    /** A hash map of all memory dependence entries. */
-    MemDepHash memDepHash;
+    MemDepHash barrierTable;
 
     /** A list of all instructions in the memory dependence unit. */
-    std::list<DynInstPtr> instList[Impl::MaxThreads];
 
     /** A list of all instructions that are going to be replayed. */
     std::list<DynInstPtr> instsToReplay;
@@ -267,8 +240,6 @@ class MemDepUnit
      *  this unit what instruction the newly added instruction is dependent
      *  upon.
      */
-    MemDepPred depPred;
-
     struct BarrierInfo {
         bool valid;
         InstSeqNum SN;
@@ -283,14 +254,8 @@ class MemDepUnit
     /** The thread id of this memory dependence unit. */
     int id;
 
-    /** Stat for number of inserted loads. */
-    Stats::Scalar insertedLoads;
-    /** Stat for number of inserted stores. */
-    Stats::Scalar insertedStores;
-    /** Stat for number of conflicting loads that had to wait for a store. */
-    Stats::Scalar conflictingLoads;
-    /** Stat for number of conflicting stores that had to wait for a store. */
-    Stats::Scalar conflictingStores;
+  private:
+    void checkAndSquashBarrier(BarrierInfo &info);
 };
 
 }

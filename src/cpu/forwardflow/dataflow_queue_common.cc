@@ -61,5 +61,15 @@ void DQCommon::notImplemented()
     panic("Not implemented!\n");
 }
 
+unsigned
+DQCommon::computeDist(const DQPointer &y, const DQPointer &o)
+{
+    unsigned yu = pointer2uint(y);
+    unsigned ou = pointer2uint(o);
+    if (ou > yu) {
+        yu += dqSize;
+    }
+    return yu - ou;
+}
 
 }

@@ -508,6 +508,10 @@ private:
     InstSeqNum youngestExecuted{};
 
     MemDepPredictor *mDepPred;
+
+    InstSeqNum verifiedTailLoad{0};
+
+    void tryVerifyTailLoad();
 };
 
 

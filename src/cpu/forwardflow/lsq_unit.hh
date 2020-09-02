@@ -56,6 +56,7 @@
 #include "arch/mmapped_ipr.hh"
 #include "arch/riscv/faults.hh"
 #include "config/the_isa.hh"
+#include "cpu/forwardflow/dataflow_queue_common.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/timebuf.hh"
 #include "debug/FFLSQ.hh"
@@ -552,6 +553,11 @@ class LSQUnit {
 
     /** Returns whether or not the LSQ unit is stalled. */
     bool isStalled()  { return stalled; }
+
+    void setDQCommon(DQCommon *c) {dqc = c;}
+
+  private:
+    DQCommon *dqc;
 };
 
 template <class Impl>
@@ -711,7 +717,8 @@ LSQUnit<Impl>::read(const RequestPtr &req,
 
             load_inst->shouldForward = true;
             load_inst->shouldForwFrom =
-                load_inst->storeSeq - storeQueue[store_idx].inst->storeSeq;
+                dqc->computeDist(load_inst->dqPosition, storeQueue[store_idx].inst->dqPosition);
+                // load_inst->storeSeq - storeQueue[store_idx].inst->storeSeq;
 
             DPRINTF(NoSQPred, "Load [%lu] forward from store [%lu] with "
                     "SSN: %lu\n", load_inst->seqNum, storeQueue[store_idx].inst->seqNum,

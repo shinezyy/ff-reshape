@@ -12,6 +12,7 @@
 #include "debug/FFDisp.hh"
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
+#include "debug/NoSQSMB.hh"
 #include "debug/ObExec.hh"
 #include "debug/ObFU.hh"
 #include "debug/RSProbe1.hh"
@@ -248,7 +249,9 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         }
 
         if (op == 0 && !(ptr.wkType == WKPointer::WKMem ||
-                         ptr.wkType == WKPointer::WKMisc || ptr.wkType == WKPointer::WKOrder)) {
+                         ptr.wkType == WKPointer::WKMisc ||
+                         ptr.wkType == WKPointer::WKOrder ||
+                         ptr.wkType == WKPointer::WKLdReExec)) {
             DPRINTF(DQWake, "Mark received dest after wakeup pointer arrives at Dest\n");
             inst->receivedDest = true;
             if (anyPending) {
@@ -286,6 +289,15 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             } else {
                 DPRINTF(DQWake, "But ignore it because inst [%llu] has already been granted\n",
                         inst->seqNum);
+            }
+        } else if (ptr.wkType == WKPointer::WKLdReExec) {
+            assert(inst->isLoad());
+            if (!inst->loadVerified) {
+                DPRINTF(DQWake, "Will verify load inst [%llu]\n", inst->seqNum);
+                handle_wakeup = true;
+                inst->fuGranted = false;
+            } else {
+                DPRINTF(DQWake, "Inst [%llu] has already been verified\n", inst->seqNum);
             }
 
         } else { //  if (ptr.wkType == WKPointer::WKOp)
@@ -425,15 +437,11 @@ DataflowQueueBank<Impl>::readPointersFromBank()
 {
     DPRINTF(DQWake, "Reading pointers from banks\n");
     DPRINTF(DQ, "Tail: %i\n", tail);
-    bool served_forwarder = false;
 
     bool grab_from_local_fw = dq->NarrowXBarWakeup && dq->NarrowLocalForward && anyPending;
 
     SRAMReadPointer += nOps;
     for (unsigned op = 0; op < nOps; op++) {
-        if (served_forwarder) {
-            break;
-        }
         auto &ptr = grab_from_local_fw ? pendingWakeupPointers[op] : inputPointers[op];
         auto &optr = outputPointers[op];
         RegReadRxBuf++;
@@ -459,29 +467,16 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                         ptr.term, inst->dqPosition.term);
                 optr.valid = false;
 
+            } else if (ptr.wkType == WKPointer::WKLdReExec) {
+                DPRINTF(DQWake || Debug::NoSQSMB, "Load Re-exec does not generate fw pointer\n");
+                optr.valid = false;
+
             } else {
                 if (op == 0) {
                     outputPointers[0].valid = false; // dest register should never be forwarded
                 }
 
-                if (false) {
-                    served_forwarder = true;
-                    for (unsigned out_op = 0; out_op < nOps; out_op++) {
-                        auto &out_ptr = outputPointers[out_op];
-                        out_ptr = inst->pointers[out_op];
-                        out_ptr.reshapeOp = out_op;
-                        out_ptr.fwLevel = inst->fwLevel;
-                        out_ptr.ssrDelay = ptr.ssrDelay + 1;
-
-                        if (out_ptr.valid) {
-                            DPRINTF(FFSquash||Debug::RSProbe1,
-                                    "Put forwarding wakeup Pointer (%i %i) (%i)"
-                                    " to outputPointers, reshapeOp: %i\n",
-                                    out_ptr.bank, out_ptr.index, out_ptr.op, out_op);
-                        }
-                    }
-
-                } else if (inst->pointers[op].valid) {
+                if (inst->pointers[op].valid) {
                     DPRINTF(DQ, "op now = %i\n", op);
                     if (op != 0 || inst->destReforward) {
                         optr = inst->pointers[op];

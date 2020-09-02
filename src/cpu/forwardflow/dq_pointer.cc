@@ -97,3 +97,4 @@ WKPointer::operator=(const DQPointer &dqPointer)
 
     isLocal = dqPointer.isLocal;
 }
+

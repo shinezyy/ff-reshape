@@ -331,6 +331,13 @@ class LSQ {
 
     /** Number of Threads. */
     ThreadID numThreads;
+
+  public:
+    void setDQCommon(DQCommon *c) {
+        for (unsigned i = 0; i < numThreads; i++) {
+            thread[i].setDQCommon(c);
+        }
+    }
 };
 
 template <class Impl>

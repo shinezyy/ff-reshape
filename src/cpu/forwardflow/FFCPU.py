@@ -250,3 +250,5 @@ class DerivFFCPU(BaseCPU):
     MaxReadyQueueSize = Param.Unsigned(4, "MaxReadyQueueSize")
 
     NarrowLocalForward = Param.Bool(False, 'NarrowLocalForward')
+
+    MemInstAllowedAfterFence = Param.Unsigned(6, "MemInstAllowedAfterFence ")
