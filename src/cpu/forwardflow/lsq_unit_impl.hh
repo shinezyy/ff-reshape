@@ -1148,8 +1148,8 @@ LSQUnit<Impl>::writeback(DynInstPtr &inst, PacketPtr pkt)
         return;
     }
 
+    inst->setExecuted();
     if (!inst->isExecuted()) {
-        inst->setExecuted();
 
         if (inst->fault == NoFault) {
             // Complete access to copy data to proper place.
@@ -1164,6 +1164,23 @@ LSQUnit<Impl>::writeback(DynInstPtr &inst, PacketPtr pkt)
 
             DPRINTF(LSQUnit, "Not completing instruction [sn:%lli] access "
                     "due to pending fault.\n", inst->seqNum);
+        }
+    } else {
+        // load verifying
+        if (inst->fault == NoFault) {
+            // Complete access to copy data to proper place.
+            inst->speculativeLoadValue.i = inst->getDestValue().i;
+            inst->completeAcc(pkt);
+        } else {
+            // If the instruction has an outstanding fault, we cannot complete
+            // the access as this discards the current fault.
+
+            // If we have an outstanding fault, the fault should only be of
+            // type ReExec.
+            assert(dynamic_cast<ReExec*>(inst->fault.get()) != nullptr);
+
+            DPRINTF(LSQUnit, "Not completing instruction [sn:%lli] access "
+                             "due to pending fault.\n", inst->seqNum);
         }
     }
 

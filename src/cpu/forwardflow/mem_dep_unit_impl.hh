@@ -297,7 +297,7 @@ MemDepUnit<MemDepPred, Impl>::moveToReady(DynInstPtr &woken_inst)
 {
     DPRINTF(MemDepUnit, "Notify DQ to wakeup [sn:%lli].\n",
             woken_inst->seqNum);
-    iqPtr->addReadyMemInst(woken_inst);
+    iqPtr->addReadyMemInst(woken_inst, false);
 }
 
 template<class MemDepPred, class Impl>

@@ -284,25 +284,19 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 //        diewc->cptHint = false;
     }
 
-    DPRINTF(NoSQSMB, "Reach 1\n");
     if (inst->isLoad() && inst->memPredHistory->bypass) { // NoSQ
-        DPRINTF(NoSQSMB, "Reach 2\n");
         int ld_position = dq->c.pointer2uint(inst->dqPosition);
         int predecessor_position = ld_position - (int) inst->memPredHistory->storeDistance; // predicted
         if (predecessor_position < 0) {
             predecessor_position += dq->c.dqSize;
         }
-        DPRINTF(NoSQSMB, "Reach 3\n");
         DQPointer receiver = inst->findSpareSourcePointer();
         inst->bypassOp = receiver.op;
         auto predecessor_pointer = dq->c.uint2Pointer(predecessor_position);
-        DPRINTF(NoSQSMB, "Reach 4\n");
         predecessor_pointer.op = 3; // hard-coded which is reserved for load
         // TODO: update in pair consuming, especially for store
         pairs.emplace_back(predecessor_pointer, receiver);
-        DPRINTF(NoSQSMB, "Reach 5\n");
     }
-    DPRINTF(NoSQSMB, "Reach 6\n");
 
     DPRINTF(Rename, "Rename produces %lu pairs\n", pairs.size());
     return pairs;

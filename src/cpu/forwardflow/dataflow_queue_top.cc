@@ -729,28 +729,47 @@ void DQTop<Impl>::cacheUnblocked()
 }
 
 template<class Impl>
+bool DQTop<Impl>::checkViolation(DynInstPtr &inst) {
+    assert(inst->isLoad());
+    if (inst->bypassOp) {
+        // compare bypassed value against dest
+        if (inst->bypassVal.i != inst->getDestValue().i) {
+            return true;
+        } else {
+            inst->loadVerified = true;
+        }
+    } else {
+        // compare old dest against new dest
+        inst->loadVerifying = false;
+        if (inst->speculativeLoadValue.i != inst->getDestValue().i) {
+            return true;
+        } else {
+            inst->loadVerified = true;
+        }
+    }
+    DPRINTF(NoSQSMB, "No violation detected, mark inst as verified\n");
+    return false;
+}
+
+
+template<class Impl>
 bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
 {
     DPRINTF(DQWake, "Writeback Load[%lu]\n", inst->seqNum);
-    if (inst->bypassOp && !inst->loadVerified) {
-        if (inst->getDestValue().i != inst->bypassVal.i) {
-            DPRINTF(NoSQSMB,
-                    "Memory misspeculation detected with speculated value:"
-                    "%lu, loaded value: %lu\n",
-                    inst->bypassVal.i, inst->getDestValue().i
-                   );
-            return true;
-        } else {
-            DPRINTF(NoSQSMB, "Correctly speculated\n");
-        }
+    assert(!inst->loadVerified);
 
-        DPRINTF(DQWake || Debug::NoSQSMB,
-                "Skip to send pointer to consumer" ptrfmt
-                "that depends on load[%llu] because speculatively bypassed\n",
-                extptr(inst->pointers[0]), inst->seqNum);
+    if (inst->bypassOp || (inst->loadVerifying && inst->execCount == 2)) {
+        bool violation = checkViolation(inst);
+        if (violation) {
+            DPRINTF(NoSQSMB, "violation detected!\n");
+            return true;
+        }
     }
 
-    if (inst->pointers[0].valid && !inst->bypassOp) {
+    bool not_verifying = !inst->bypassOp && // if bypassOp writebackLoad must be verifying
+            inst->execCount == 1; // ==0: impossible; ==2: verifying
+
+    if (inst->pointers[0].valid && not_verifying) {
         WKPointer wk(inst->pointers[0]);
         DPRINTF(DQWake,
                 "Sending pointer to consumer" ptrfmt

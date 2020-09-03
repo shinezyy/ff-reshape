@@ -516,6 +516,9 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     MemPredHistory *memPredHistory;
 
     bool loadVerified{false};
+    bool loadVerifying{false};
+
+    FFRegValue speculativeLoadValue{0};
 };
 
 }
