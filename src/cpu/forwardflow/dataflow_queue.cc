@@ -549,15 +549,17 @@ DataflowQueues<Impl>::markFwPointers(
                 extptr(pair.payload));
     }
 
-    if (inst->isStore() && op == memBypassOp) {
-        DPRINTF(FFDisp || Debug::DQWake,
-                "Storing pointer to dest field of store\n");
-        pointers[0] = pair.payload;
-    } else {
-        pointers[op] = pair.payload;
-    }
-    if (inst->isLoad() && op == memBypassOp) {
-        inst->bypassOp = memBypassOp;
+    if (inst) {
+        if (inst->isStore() && op == memBypassOp) {
+            DPRINTF(FFDisp || Debug::DQWake,
+                    "Storing pointer to dest field of store\n");
+            pointers[0] = pair.payload;
+        } else {
+            pointers[op] = pair.payload;
+        }
+        if (inst->isLoad() && op == memBypassOp) {
+            inst->bypassOp = memBypassOp;
+        }
     }
 }
 

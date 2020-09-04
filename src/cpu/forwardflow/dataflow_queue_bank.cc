@@ -631,7 +631,11 @@ DataflowQueueBank<Impl>::writeInstsToBank(
             DPRINTF(DQWrite || Debug::FFDisp, "Adapted premature pointer" ptrfmt "\n",
                     extptr(ptr));
         }
+
         ptr.valid = false;
+    }
+    if (inst->isLoad() && inst->pointers[memBypassOp].valid) {
+        inst->bypassOp = memBypassOp;
     }
 
     SRAMWriteInst++;
