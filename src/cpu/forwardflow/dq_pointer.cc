@@ -56,16 +56,24 @@ DQPointer::DQPointer(bool v, unsigned g, unsigned b, unsigned i, unsigned o, int
     index = i;
     op = o;
 
+    term = t;
+
     reshapeOp = -1;
     ssrDelay = 0;
     fwLevel = 0;
 
     queueTime = 0;
     pendingTime = 0;
-    term = t;
 
     hasVal = false;
     val.i = ~0;
+}
+
+void DQPointer::operator=(const TermedPointer &pointer)
+{
+    TermedPointer::operator=(pointer);
+
+    hasVal = false;
 }
 
 WKPointer::WKPointer(const DQPointer &dqPointer)
@@ -77,13 +85,9 @@ WKPointer::WKPointer(const DQPointer &dqPointer)
 void
 WKPointer::operator=(const DQPointer &dqPointer)
 {
-    wkType = WKType::WKOp;
-    valid = dqPointer.valid;
-    group = dqPointer.group;
-    bank = dqPointer.bank;
-    index = dqPointer.index;
-    op = dqPointer.op;
-    term = dqPointer.term;
+    TermedPointer::operator=(dqPointer);
+
+    hasVal = dqPointer.hasVal;
 
     reshapeOp = dqPointer.reshapeOp;
     ssrDelay = dqPointer.ssrDelay;
@@ -92,9 +96,32 @@ WKPointer::operator=(const DQPointer &dqPointer)
     queueTime = dqPointer.queueTime;
     pendingTime = dqPointer.pendingTime;
 
-    hasVal = dqPointer.hasVal;
     val = dqPointer.val;
 
     isLocal = dqPointer.isLocal;
 }
 
+WKPointer::WKPointer(const TermedPointer &pointer)
+{
+    operator = (pointer);
+}
+
+void WKPointer::operator=(const TermedPointer &pointer)
+{
+    TermedPointer::operator=(pointer);
+
+    wkType = WKType::WKOp;
+    hasVal = false;
+}
+
+void TermedPointer::operator=(const TermedPointer &pointer)
+{
+    valid = pointer.valid;
+
+    group = pointer.group;
+    bank = pointer.bank;
+    index = pointer.index;
+    op = pointer.op;
+
+    term = pointer.term;
+}

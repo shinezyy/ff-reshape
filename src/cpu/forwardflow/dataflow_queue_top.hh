@@ -71,7 +71,7 @@ public:
 
     std::list<DynInstPtr> retryMemInsts;
 
-    std::unordered_map<DQPointer, FFRegValue> committedValues;
+    std::unordered_map<BasePointer, FFRegValue> committedValues;
 
     explicit DQTop(DerivFFCPUParams *params);
 
@@ -108,9 +108,7 @@ public:
 
     DynInstPtr getHead() const;
 
-    DynInstPtr readInst(const DQPointer &p) const;
-
-    DynInstPtr checkAndGetParent(const DQPointer &parent, const DQPointer &child) const;
+    DynInstPtr readInst(const BasePointer &p) const;
 
     unsigned int head;
 
@@ -165,7 +163,7 @@ public:
 
     void tryFastCleanup();
 
-    void squash(DQPointer p, bool all, bool including);
+    void squash(BasePointer p, bool all, bool including);
 
     bool queuesEmpty();
 

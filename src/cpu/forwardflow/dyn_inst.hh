@@ -402,7 +402,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
     unsigned findSpareSourceOp();
 
-    DQPointer findSpareSourcePointer();
+    BasePointer findSpareSourcePointer();
 
     std::array<bool, 4> opReady;
     bool opFulfilled(unsigned);
@@ -431,7 +431,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
     FFRegValue bypassVal;
 
-    DQPointer dqPosition;
+    TermedPointer dqPosition;
 
     FFRegValue getDestValue();
 
@@ -519,6 +519,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     bool loadVerifying{false};
 
     FFRegValue speculativeLoadValue{0};
+
+    InstSeqNum seqNVul;
 };
 
 }

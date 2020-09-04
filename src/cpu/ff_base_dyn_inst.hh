@@ -255,12 +255,12 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Physical register index of the destination registers of this
      *  instruction.
      */
-    std::array<DQPointer, TheISA::MaxInstDestRegs> _destRegIdx;
+    std::array<BasePointer, TheISA::MaxInstDestRegs> _destRegIdx;
 
     /** Physical register index of the source registers of this
      *  instruction.
      */
-    std::array<DQPointer, TheISA::MaxInstSrcRegs> _srcInstPointer;
+    std::array<BasePointer, TheISA::MaxInstSrcRegs> _srcInstPointer;
 
   public:
     /** Records changes to result? */
@@ -386,16 +386,16 @@ class BaseDynInst : public ExecContext, public RefCounted
      *  has/will produce that logical register's result.
      *  @todo: add in whether or not the source register is ready.
      */
-    void renameSrcReg(int idx, DQPointer renamed_src)
+    void renameSrcReg(int idx, BasePointer renamed_src)
     {
         _srcInstPointer[idx] = renamed_src;
     }
-    DQPointer getSrcPointer(int idx)
+    BasePointer getSrcPointer(int idx)
     {
         return _srcInstPointer[idx];
     }
 
-    void trackSrcInst(int idx, DQPointer ptr)
+    void trackSrcInst(int idx, BasePointer ptr)
     {
 
     }

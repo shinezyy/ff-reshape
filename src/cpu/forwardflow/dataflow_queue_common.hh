@@ -28,12 +28,10 @@ public:
 
     DQPointer uint2Pointer(unsigned u) const;
 
-    unsigned pointer2uint(const DQPointer &ptr) const;
-
-    unsigned pointer2uint(const WKPointer &ptr) const;
+    unsigned pointer2uint(const BasePointer &ptr) const;
 
     // assuming that o is older than y
-    unsigned computeDist(const DQPointer &y, const DQPointer &o);
+    unsigned computeDist(const BasePointer &y, const BasePointer &o);
 
     const int FPAddOps[3]{OpClass::FloatAdd,
                           OpClass::FloatCmp,

@@ -74,8 +74,11 @@ template<class Impl>
 class FUWrapper {
 public:
 
-//    using DynInstPtr = BaseO3DynInst<Impl>*;
+#ifdef __JETBRAINS_IDE__
+    using DynInstPtr = BaseO3DynInst<Impl>*;
+#else
     typedef typename Impl::DynInstPtr DynInstPtr;
+#endif
 
     typedef typename Impl::CPUPol::LSQ LSQ;
 

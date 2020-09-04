@@ -350,7 +350,7 @@ DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 
     bool jumped = false;
 
-    DQPointer allocated = inst->dqPosition;
+    TermedPointer allocated = inst->dqPosition;
 
     // this is for checking; we do not need to decentralize it
     DPRINTF(DQWake || Debug::DQGDisp,
@@ -516,7 +516,7 @@ void DQTop<Impl>::tryFastCleanup()
 }
 
 template<class Impl>
-void DQTop<Impl>::squash(DQPointer p, bool all, bool including)
+void DQTop<Impl>::squash(BasePointer p, bool all, bool including)
 {
     centerInstBuffer.clear();
 
@@ -1004,7 +1004,7 @@ DQTop<Impl>::getHead() const
 
 template<class Impl>
 typename Impl::DynInstPtr
-DQTop<Impl>::readInst(const DQPointer &p) const
+DQTop<Impl>::readInst(const BasePointer &p) const
 {
     auto group = dqGroups[p.group];
     const auto &inst = group->readInst(p);
@@ -1041,22 +1041,6 @@ bool DQTop<Impl>::notifyHalfSquash(InstSeqNum new_seq, Addr new_pc)
     return true;
 }
 
-template<class Impl>
-typename Impl::DynInstPtr
-DQTop<Impl>::checkAndGetParent(const DQPointer &parent, const DQPointer &child) const
-{
-    assert(child.valid);
-    assert(parent.valid);
-    assert(readInst(child));
-
-    unsigned pu = c.pointer2uint(parent);
-
-    if (!validPosition(pu)) return nullptr;
-
-    if (!logicallyLT(pu, c.pointer2uint(child))) return nullptr;
-
-    return readInst(parent);
-}
 
 template<class Impl>
 void DQTop<Impl>::alignTails()

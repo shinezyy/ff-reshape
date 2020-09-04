@@ -13,12 +13,29 @@
 #include "params/MemDepPredictor.hh"
 #include "sim/sim_object.hh"
 
+struct DistancePair
+{
+    unsigned snDistance{};
+    unsigned dqDistance{};
+
+    DistancePair() = default;
+
+    DistancePair(unsigned sn, unsigned dq)
+    : snDistance(sn), dqDistance(dq) {}
+
+    DistancePair &operator = (const DistancePair &pair) {
+        snDistance = pair.snDistance;
+        dqDistance = pair.dqDistance;
+        return *this;
+    }
+};
+
 struct MemPredCell
 {
     SignedSatCounter conf;
-    unsigned distance{};
+    DistancePair distPair;
 
-    MemPredCell (unsigned counter_bits):
+    explicit MemPredCell (unsigned counter_bits):
         conf(counter_bits)
     {}
 };
@@ -30,7 +47,10 @@ struct MemPredHistory
     bool pathBypass;
 
     bool pathSensitive;
-    unsigned storeDistance;
+    DistancePair distPair;
+
+    bool predecessorIsLoad;
+
     using FoldedPC = unsigned;
     FoldedPC path;
 };
@@ -39,6 +59,7 @@ struct SSBFCell
 {
     using SSN = InstSeqNum;
     SSN lastStore{};
+    uint8_t size;
     BasePointer lastStorePosition;
     BasePointer predecessorPosition;
 };
@@ -145,11 +166,13 @@ class MemDepPredictor: public SimObject
   private:
     MemPredTable pcTable;
     MemPredTable pathTable;
-    TSSBF tssbf;
-  public:
-    std::pair<bool, unsigned> predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist);
 
-    std::pair<bool, unsigned> predict(Addr load_pc, MemPredHistory *&hist);
+  public:
+    TSSBF tssbf;
+
+    std::pair<bool, DistancePair> predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist);
+
+    std::pair<bool, DistancePair> predict(Addr load_pc, MemPredHistory *&hist);
 
     void recordPath(Addr control_pc, bool isCall);
 
@@ -158,13 +181,16 @@ class MemDepPredictor: public SimObject
     unsigned controlPath{};
 
     void update(Addr load_pc, bool should_bypass,
-            unsigned actual_dist, MemPredHistory* &hist);
+                unsigned sn_dist, unsigned dq_dist,
+                MemPredHistory *&hist);
 
     void squash(MemPredHistory* &hist);
 
     void clear();
 
-    void commitStore(Addr eff_addr, InstSeqNum sn, BasePointer &position);
+    void execStore(Addr eff_addr, uint8_t size, InstSeqNum sn, BasePointer &position);
+
+    void commitStore(Addr eff_addr, InstSeqNum sn, const BasePointer &position);
 
     InstSeqNum lookupAddr(Addr eff_addr);
 
@@ -186,9 +212,11 @@ class MemDepPredictor: public SimObject
 
     void decrement(MemPredTable &table, Addr key, bool alloc, bool isPath);
 
-    void increment(MemPredTable &table, Addr key, unsigned dist, bool isPath);
+    void increment(MemPredTable &table, Addr key, const DistancePair &pair, bool isPath);
 
     FoldedPC getPath() const;
+
+    Addr shiftAddr(Addr addr);
 };
 
 #endif // __MEM_DEP_PRED_HH__

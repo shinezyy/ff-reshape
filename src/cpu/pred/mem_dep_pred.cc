@@ -40,13 +40,13 @@ MemDepPredictor::MemDepPredictor(const Params *params)
 {
 }
 
-std::pair<bool, unsigned>
+std::pair<bool, DistancePair>
 MemDepPredictor::predict(Addr load_pc, MemPredHistory *&hist)
 {
     return predict(load_pc, controlPath, hist);
 }
 
-std::pair<bool, unsigned>
+std::pair<bool, DistancePair>
 MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
 {
     auto mp_history = new MemPredHistory;
@@ -61,7 +61,7 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
     if (found) { // in path table
         mp_history->bypass = cell->conf.read() > 0;
         mp_history->pathSensitive = true;
-        mp_history->storeDistance = cell->distance;
+        mp_history->distPair = cell->distPair;
         mp_history->pathBypass = mp_history->bypass;
 
         // DPRINTF(NoSQPred, "Found Cell@: %p with path: 0x%lx, index: 0x%lx\n",
@@ -70,7 +70,7 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
                 "path predictor predict %i with confi: %i "
                 "to storeDistance %u\n",
                 load_pc, path, mp_history->pathBypass, cell->conf.read(),
-                cell->distance);
+                cell->distPair.snDistance);
 
     } else {
         mp_history->pathSensitive = false;
@@ -85,7 +85,7 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
     if (found) {
         if (!mp_history->pathSensitive) {
             mp_history->bypass = cell->conf.read() > 0;
-            mp_history->storeDistance = cell->distance;
+            mp_history->distPair = cell->distPair;
         }
         mp_history->pcBypass = cell->conf.read() > 0;
 
@@ -93,7 +93,7 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
                 "pc predictor predict %i with confi: 0x%i "
                 "to storeDistance %u\n",
                 load_pc, mp_history->pcBypass, cell->conf.read(),
-                cell->distance);
+                cell->distPair.snDistance);
     } else {
         if (!mp_history->pathSensitive) {
             mp_history->bypass = false;
@@ -105,15 +105,15 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
             "overall: bypass: %i, pc: %i, path: 0x%lx, path sensitive: %i, store dist: %i\n",
             load_pc,
             mp_history->bypass, mp_history->pcBypass, mp_history->pathBypass,
-            mp_history->pathSensitive, mp_history->storeDistance);
+            mp_history->pathSensitive, mp_history->distPair.snDistance);
 
     mp_history->path = path;
-    return std::make_pair(mp_history->bypass, mp_history->storeDistance);
+    return std::make_pair(mp_history->bypass, mp_history->distPair);
 }
 
 void
-MemDepPredictor::update(Addr load_pc, bool should_bypass,
-        unsigned actual_dist, MemPredHistory* &hist)
+MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
+                        unsigned dq_dist, MemPredHistory *&hist)
 {
     bool pred_bypass = hist->bypass;
     if (!pred_bypass && !should_bypass) {
@@ -146,14 +146,15 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass,
 
         // if (!hist->pcBypass) {
         if (true) {
-            DPRINTF(NoSQPred, "Inc conf in pc table with dist: %i, ", actual_dist);
-            increment(pcTable, load_pc, actual_dist, false);
+            DPRINTF(NoSQPred, "Inc conf in pc table with dist: %i, ", sn_dist);
+            increment(pcTable, load_pc, {sn_dist, dq_dist}, false);
         }
         // if (!hist->pathBypass) {
         if (true) {
             DPRINTF(NoSQPred, "Inc conf in path table with dist: %i, path: 0x%lx, ",
-                    actual_dist, hist->path);
-            increment(pathTable, genPathKey(load_pc, hist->path), actual_dist, false);
+                    sn_dist, hist->path);
+            increment(pathTable, genPathKey(load_pc, hist->path),
+                      {sn_dist, dq_dist}, false);
         }
     }
     delete hist;
@@ -182,34 +183,31 @@ MemDepPredictor::decrement(MemPredTable &table, Addr key, bool alloc, bool isPat
         cell->conf.decrement();
         DPRINTF(NoSQPred, "conf after dec: %i\n", cell->conf.read());
 
-        bool found;
-        MemPredCell *cell;
-        std::tie(found, cell) = find(table, key, isPath);
+        auto [found, cell] = find(table, key, isPath);
         assert(found);
     }
 }
 
 void
-MemDepPredictor::increment(MemPredTable &table, Addr key, unsigned dist, bool isPath)
+MemDepPredictor::increment(MemPredTable &table, Addr key,
+                           const DistancePair &dist_pair, bool isPath)
 {
     bool found;
     MemPredCell *cell;
     std::tie(found, cell) = find(table, key, isPath);
     if (found) {
         // DPRINTF(NoSQPred, "Inc in place\n");
-        cell->distance = dist;
+        cell->distPair = dist_pair;
         cell->conf.increment();
         DPRINTF(NoSQPred, "conf after inc: %i\n", cell->conf.read());
     } else {
         // DPRINTF(NoSQPred, "Inc on allocation\n");
         cell = allocate(table, key, isPath);
-        cell->distance = dist;
+        cell->distPair = dist_pair;
         cell->conf.increment();
         DPRINTF(NoSQPred, "conf after inc: %i\n", cell->conf.read());
 
-        bool found;
-        MemPredCell *cell;
-        std::tie(found, cell) = find(table, key, isPath);
+        auto [found, cell] = find(table, key, isPath);
         assert(found);
     }
 }
@@ -310,7 +308,7 @@ MemDepPredictor::clear()
     controlPath = 0;
 }
 
-void MemDepPredictor::commitStore(Addr eff_addr, InstSeqNum sn, BasePointer &position) {
+void MemDepPredictor::commitStore(Addr eff_addr, InstSeqNum sn, const BasePointer &position) {
     SSBFCell *cell = tssbf.find(eff_addr);
     if (!cell) {
         cell = tssbf.allocate(eff_addr);
@@ -336,6 +334,25 @@ void MemDepPredictor::commitLoad(Addr eff_addr, InstSeqNum sn, BasePointer &posi
     } else {
         cell->predecessorPosition = position;
     }
+}
+
+void
+MemDepPredictor::execStore(Addr eff_addr, uint8_t size, InstSeqNum sn, BasePointer &position)
+{
+    eff_addr = shiftAddr(eff_addr);
+    auto cell = tssbf.find(eff_addr);
+    if (!cell) {
+        cell = tssbf.allocate(eff_addr);
+    }
+
+    cell->lastStore = sn;
+    cell->size = size;
+}
+
+Addr
+MemDepPredictor::shiftAddr(Addr addr)
+{
+    return addr;
 }
 
 MemDepPredictor *MemDepPredictorParams::create()

@@ -338,6 +338,12 @@ class LSQ {
             thread[i].setDQCommon(c);
         }
     }
+
+    void setMemDepPred(MemDepPredictor *m) {
+        for (unsigned i = 0; i < numThreads; i++) {
+            thread[i].setMemDepPred(m);
+        }
+    }
 };
 
 template <class Impl>

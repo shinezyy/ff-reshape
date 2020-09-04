@@ -408,7 +408,7 @@ BaseO3DynInst<Impl>::findSpareSourceOp()
 }
 
 template<class Impl>
-DQPointer
+BasePointer
 BaseO3DynInst<Impl>::findSpareSourcePointer()
 {
     auto pointer = dqPosition;

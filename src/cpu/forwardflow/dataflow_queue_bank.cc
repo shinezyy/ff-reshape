@@ -79,7 +79,7 @@ DataflowQueueBank<Impl>::clear(bool markSquashed)
 
 template<class Impl>
 void
-DataflowQueueBank<Impl>::erase(DQPointer p, bool markSquashed)
+DataflowQueueBank<Impl>::erase(BasePointer p, bool markSquashed)
 {
     if (markSquashed && instArray[p.index]) {
         DPRINTF(FFSquash, "Squash and erase inst[%lu] @" ptrfmt "\n",
@@ -155,7 +155,7 @@ DataflowQueueBank<Impl>::tryWakeDirect()
     if (readyQueue.empty()) {
         return nullptr;
     }
-    const DQPointer &ptr = readyQueue.front();
+    const BasePointer &ptr = readyQueue.front();
     DynInstPtr inst = instArray.at(ptr.index);
     if (!inst) {
         DPRINTF(DQWake, "Inst at [%d] is null (squashed), skip\n", tail);
@@ -594,7 +594,7 @@ void DataflowQueueBank<Impl>::checkPending()
 
 template<class Impl>
 typename DataflowQueueBank<Impl>::DynInstPtr
-DataflowQueueBank<Impl>::readInstsFromBank(DQPointer pointer) const
+DataflowQueueBank<Impl>::readInstsFromBank(const BasePointer &pointer) const
 {
 //    DPRINTF(DQB, "pointer: %i, %i, %i\n",
 //            pointer.bank, pointer.index, pointer.op);
@@ -616,7 +616,7 @@ DataflowQueueBank<Impl>::findInst(InstSeqNum num) const
 template<class Impl>
 void
 DataflowQueueBank<Impl>::writeInstsToBank(
-        DQPointer pointer, DataflowQueueBank::DynInstPtr &inst)
+        const BasePointer &pointer, DataflowQueueBank::DynInstPtr &inst)
 {
     DPRINTF(DQWrite || Debug::FFDisp, "insert inst[%llu] to" ptrfmt "\n",
             inst->seqNum, extptr(pointer));
@@ -645,7 +645,7 @@ DataflowQueueBank<Impl>::writeInstsToBank(
 }
 
 template<class Impl>
-void DataflowQueueBank<Impl>::checkReadiness(DQPointer pointer)
+void DataflowQueueBank<Impl>::checkReadiness(BasePointer pointer)
 {
     auto index = pointer.index;
     assert(instArray[index]);
@@ -789,7 +789,7 @@ bool DataflowQueueBank<Impl>::hasTooManyPendingInsts()
 }
 
 template<class Impl>
-void DataflowQueueBank<Impl>::squashReady(const DQPointer &squash_ptr)
+void DataflowQueueBank<Impl>::squashReady(const BasePointer &squash_ptr)
 {
 //    DPRINTF(DQGOF, "Top: %p\n", top);
     DPRINTF(FFSquash, "Squashing ready\n");

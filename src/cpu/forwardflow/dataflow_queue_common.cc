@@ -30,15 +30,11 @@ DQPointer DQCommon::uint2Pointer(unsigned u) const
 
 }
 
-unsigned DQCommon::pointer2uint(const DQPointer &ptr) const
+unsigned DQCommon::pointer2uint(const BasePointer &ptr) const
 {
     return ptr.group * groupSize + ptr.bank + ptr.index * nBanks;
 }
 
-unsigned DQCommon::pointer2uint(const WKPointer &ptr) const
-{
-    return ptr.group * groupSize + ptr.bank + ptr.index * nBanks;
-}
 
 DQCommon::DQCommon(DerivFFCPUParams *params)
         :
@@ -62,7 +58,7 @@ void DQCommon::notImplemented()
 }
 
 unsigned
-DQCommon::computeDist(const DQPointer &y, const DQPointer &o)
+DQCommon::computeDist(const BasePointer &y, const BasePointer &o)
 {
     unsigned yu = pointer2uint(y);
     unsigned ou = pointer2uint(o);

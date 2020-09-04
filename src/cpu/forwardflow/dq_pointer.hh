@@ -16,11 +16,25 @@ struct BasePointer {
     unsigned bank{};
     unsigned index{};
     unsigned op{};
+
+    bool operator==(const BasePointer& that) const {
+        return group == that.group &&
+               bank == that.bank &&
+               index == that.index &&
+               op == that.op;
+    }
+
+};
+
+struct TermedPointer: public BasePointer {
+    int term{-1};
+
+    void operator = (const TermedPointer &pointer);
 };
 
 struct WKPointer;
 
-struct DQPointer: public BasePointer{
+struct DQPointer: public TermedPointer{
 
     bool hasVal{false};
     FFRegValue val;
@@ -38,22 +52,15 @@ struct DQPointer: public BasePointer{
 
     DQPointer(bool, unsigned, unsigned, unsigned, unsigned, int);
 
-    explicit DQPointer(const WKPointer&);
+    void operator = (const TermedPointer &dqPointer);
 
-    int term{-1};
+    explicit DQPointer(const WKPointer&);
 
     bool isLocal{false};
 
-    bool operator==(const DQPointer& that) const {
-        return group == that.group &&
-            bank == that.bank &&
-            index == that.index &&
-            op == that.op;
-    }
-
 };
 
-struct WKPointer: public BasePointer{
+struct WKPointer: public TermedPointer{
     enum WKType {
         WKOp, // wakeup operands
         WKMem, // wakeup mem blocked dependency
@@ -73,9 +80,12 @@ struct WKPointer: public BasePointer{
     unsigned queueTime{};
     unsigned pendingTime{};
 
-    int term{-1};
 
     WKPointer() = default;;
+
+    explicit WKPointer(const TermedPointer &pointer);
+
+    void operator = (const TermedPointer &dqPointer);
 
     explicit WKPointer(const DQPointer &dqPointer);
 
@@ -90,15 +100,13 @@ struct WKPointer: public BasePointer{
 
 
 struct PointerPair{
-    DQPointer dest;
-    DQPointer payload;
+    TermedPointer dest;
+    TermedPointer payload;
     PointerPair() {
         dest.valid = false;
-        dest.hasVal = false;
         payload.valid = false;
-        payload.hasVal = false;
     };
-    PointerPair(const DQPointer &d, const DQPointer &p)
+    PointerPair(const TermedPointer &d, const TermedPointer &p)
     : dest(d), payload(p)
     {}
 };
@@ -106,9 +114,9 @@ struct PointerPair{
 namespace std
 {
 template<>
-struct hash<DQPointer>
+struct hash<BasePointer>
 {
-    size_t operator()(const DQPointer& ptr) const
+    size_t operator()(const BasePointer& ptr) const
     {
         const size_t g = ptr.group << 16; // no more that 2^16 entry in a group
         const size_t i = ptr.index << 5; // 32 bank max

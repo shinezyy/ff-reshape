@@ -75,7 +75,7 @@ private:
 
     unsigned readyQueueSize;
 
-    std::deque<DQPointer> readyQueue;
+    std::deque<BasePointer> readyQueue;
 
 public:
     void advanceTail();
@@ -93,11 +93,11 @@ public:
 
     std::vector<DQPointer> readPointersFromBank();
 
-    DynInstPtr readInstsFromBank(DQPointer pointer) const;
+    DynInstPtr readInstsFromBank(const BasePointer &pointer) const;
 
-    void writeInstsToBank(DQPointer pointer, DynInstPtr &inst);
+    void writeInstsToBank(const BasePointer &pointer, DynInstPtr &inst);
 
-    void checkReadiness(DQPointer pointer);
+    void checkReadiness(BasePointer pointer);
 
     DynInstPtr findInst(InstSeqNum) const;
 
@@ -119,7 +119,7 @@ public:
 
     void clear(bool markSquashed);
 
-    void erase(DQPointer p, bool markSquashed);
+    void erase(BasePointer p, bool markSquashed);
 
     void cycleStart();
 
@@ -142,7 +142,7 @@ public:
 
     bool hasTooManyPendingInsts();
 
-    void squashReady(const DQPointer &squash_from);
+    void squashReady(const BasePointer &squash_from);
 
     bool servedForwarder;
 

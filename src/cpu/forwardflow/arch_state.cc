@@ -163,10 +163,6 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             inst->opReady[phy_op] = true;
             pairs.push_back(invalid_pair);
 
-            DQPointer parent_ptr = parentMap[src_reg];
-
-            countChild(parent_ptr, inst);
-
             DPRINTF(Rename||Debug::RSProbe1,
                     "Inst[%llu] read reg[%s %d] fortunately from hint RF",
                     inst->seqNum, src_reg.className(), src_reg.index());
@@ -186,12 +182,10 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             }
             num_busy_ops++;
 
-            DQPointer parent_ptr = parentMap[src_reg];
+            BasePointer parent_ptr = parentMap[src_reg];
 
             DPRINTF(Rename, "Looking up %s arch reg %i, got pointer" ptrfmt "\n",
                     src_reg.className(), src_reg.index(), extptr(parent_ptr));
-
-            countChild(parent_ptr, inst);
 
             for (const auto i: indirect_indices) {
                 inst->renameSrcReg(i, parent_ptr);
@@ -286,14 +280,22 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
     if (inst->isLoad() && inst->memPredHistory->bypass) { // NoSQ
         int ld_position = dq->c.pointer2uint(inst->dqPosition);
-        int predecessor_position = ld_position - (int) inst->memPredHistory->storeDistance; // predicted
+        int predecessor_position = ld_position - (int) inst->memPredHistory->distPair.dqDistance; // predicted
         if (predecessor_position < 0) {
             predecessor_position += dq->c.dqSize;
         }
-        DQPointer receiver = inst->findSpareSourcePointer();
-        inst->bypassOp = receiver.op;
+        inst->bypassOp = memBypassOp;
+
         auto predecessor_pointer = dq->c.uint2Pointer(predecessor_position);
-        predecessor_pointer.op = 3; // hard-coded which is reserved for load
+        if (inst->memPredHistory->predecessorIsLoad) {
+            predecessor_pointer.op = memBypassOp; // hard-coded which is reserved for load
+        } else {
+            predecessor_pointer.op = 0;
+        }
+
+        auto receiver = inst->dqPosition;
+        receiver.op = memBypassOp;
+
         // TODO: update in pair consuming, especially for store
         pairs.emplace_back(predecessor_pointer, receiver);
     }
@@ -623,7 +625,7 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
             continue; // do not need to forward anymore
         }
 
-        DQPointer renamed_ptr = renameMap[src_reg];
+        BasePointer renamed_ptr = renameMap[src_reg];
         DynInstPtr predecessor = dq->readInst(renamed_ptr); // sibling or parent
         if (!predecessor || predecessor->isSquashed()) {
             DPRINTF(Reshape, "Skip squashed\n");

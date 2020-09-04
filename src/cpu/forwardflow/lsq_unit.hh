@@ -58,6 +58,7 @@
 #include "config/the_isa.hh"
 #include "cpu/forwardflow/dataflow_queue_common.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/timebuf.hh"
 #include "debug/FFLSQ.hh"
 #include "debug/LSQUnit.hh"
@@ -556,8 +557,12 @@ class LSQUnit {
 
     void setDQCommon(DQCommon *c) {dqc = c;}
 
+    void setMemDepPred(MemDepPredictor *m) {mDepPred = m;}
+
   private:
     DQCommon *dqc;
+
+    MemDepPredictor *mDepPred;
 };
 
 template <class Impl>
@@ -672,6 +677,11 @@ LSQUnit<Impl>::read(const RequestPtr &req,
     if (!TheISA::HasUnalignedMemAcc || !sreqLow) {
         // Point the first packet at the main data packet.
         fst_data_pkt = data_pkt;
+
+//        mDepPred->execLoad(
+//                req->getPaddr(), req->getSize(),
+//                storeQueue[store_idx].inst->seqNum,
+//                storeQueue[store_idx].inst->dqPosition);
     } else {
         // Create the split packets.
         fst_data_pkt = Packet::createRead(sreqLow);
@@ -686,6 +696,15 @@ LSQUnit<Impl>::read(const RequestPtr &req,
         state->isSplit = true;
         state->outstanding = 2;
         state->mainPkt = data_pkt;
+
+//        mDepPred->execLoad(
+//                sreqLow->getPaddr(), sreqLow->getSize(),
+//                storeQueue[store_idx].inst->seqNum,
+//                storeQueue[store_idx].inst->dqPosition);
+//        mDepPred->execLoad(
+//                sreqHigh->getPaddr(), sreqHigh->getSize(),
+//                storeQueue[store_idx].inst->seqNum,
+//                storeQueue[store_idx].inst->dqPosition);
     }
 
     // For now, load throughput is constrained by the number of
@@ -780,6 +799,19 @@ LSQUnit<Impl>::write(const RequestPtr &req,
     // a store request has been split, sreqLow and sreqHigh will be non-null.
     if (TheISA::HasUnalignedMemAcc && sreqLow) {
         storeQueue[store_idx].isSplit = true;
+        mDepPred->execStore(
+                sreqLow->getPaddr(), sreqLow->getSize(),
+                storeQueue[store_idx].inst->seqNum,
+                storeQueue[store_idx].inst->dqPosition);
+        mDepPred->execStore(
+                sreqHigh->getPaddr(), sreqHigh->getSize(),
+                storeQueue[store_idx].inst->seqNum,
+                storeQueue[store_idx].inst->dqPosition);
+    } else {
+        mDepPred->execStore(
+                req->getPaddr(), req->getSize(),
+                storeQueue[store_idx].inst->seqNum,
+                storeQueue[store_idx].inst->dqPosition);
     }
 
     if (!(req->getFlags() & Request::CACHE_BLOCK_ZERO) && \

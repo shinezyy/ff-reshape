@@ -1156,7 +1156,7 @@ void DataflowQueues<Impl>::processFWQueueFull()
 
 template<class Impl>
 typename DataflowQueues<Impl>::DynInstPtr
-DataflowQueues<Impl>::readInst(const DQPointer &p) const
+DataflowQueues<Impl>::readInst(const BasePointer &p) const
 {
     const XDataflowQueueBank *bank = dqs[p.bank];
     const auto &inst = bank->readInstsFromBank(p);

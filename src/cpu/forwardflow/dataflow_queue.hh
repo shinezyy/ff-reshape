@@ -149,7 +149,7 @@ public:
 
 public:
 
-    std::unordered_map<DQPointer, FFRegValue> committedValues;
+    std::unordered_map<BasePointer, FFRegValue> committedValues;
 
     std::list<DynInstPtr> getBankHeads();
 
@@ -271,7 +271,7 @@ private:
 public:
     void dumpFwQSize();
 
-    DynInstPtr readInst(const DQPointer &p) const;
+    DynInstPtr readInst(const BasePointer &p) const;
 
     Stats::Vector readyWaitTime;
 

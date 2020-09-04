@@ -211,7 +211,7 @@ class MemDepUnit
 
         bool positionInvalid{false};
 
-        DQPointer latestPosition;
+        TermedPointer latestPosition;
 
         /** For debugging. */
 #ifdef DEBUG

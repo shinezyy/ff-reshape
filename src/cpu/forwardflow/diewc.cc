@@ -34,6 +34,10 @@ namespace FF{
 
 using namespace std;
 
+//#ifdef __JETBRAINS_IDE__
+//using DynInstPtr = BaseO3DynInst<Impl>*;
+//#endif
+
 template<class Impl>
 void FFDIEWC<Impl>::tick() {
 
@@ -145,7 +149,36 @@ template<class Impl>
 void FFDIEWC<Impl>::tryVerifyTailLoad() {
     auto tail = getTailInst();
     if (tail && tail->isLoad() && tail->seqNum != verifiedTailLoad) {
-        dq.reExecTailLoad();
+        InstSeqNum nvul = tail->seqNVul;
+        bool skip_verify;
+        InstSeqNum low_ssn = 0, high_ssn = 0, ssn = 0;
+
+        if (tail->physEffAddrHigh) { // split
+            low_ssn = mDepPred->lookupAddr(tail->physEffAddrLow);
+            high_ssn = mDepPred->lookupAddr(tail->physEffAddrHigh);
+        } else {
+            ssn = mDepPred->lookupAddr(tail->physEffAddrLow);
+        }
+
+        if (tail->memPredHistory->bypass) {
+            if (tail->physEffAddrHigh) {
+                skip_verify = (low_ssn == nvul) && (high_ssn == nvul);
+            } else {
+                skip_verify = ssn == nvul;
+            }
+        } else {
+            if (tail->physEffAddrHigh) {
+                skip_verify = (nvul <= low_ssn) && (nvul <= high_ssn);
+            } else {
+                skip_verify = nvul <= ssn;
+            }
+        }
+
+        if (skip_verify) {
+            tail->loadVerified = true;
+        } else {
+            dq.reExecTailLoad();
+        }
         verifiedTailLoad = tail->seqNum;
     }
 }
@@ -739,6 +772,14 @@ FFDIEWC<Impl>::
     // Stores mark themselves as completed.
     if (!head_inst->isStore() && inst_fault == NoFault) {
         head_inst->setCompleted();
+
+        mDepPred->commitStore(head_inst->physEffAddrLow,
+                              head_inst->seqNum, head_inst->dqPosition);
+
+        if (head_inst->physEffAddrHigh) {
+            mDepPred->commitStore(head_inst->physEffAddrHigh,
+                                  head_inst->seqNum, head_inst->dqPosition);
+        }
     }
 
 
@@ -802,10 +843,16 @@ FFDIEWC<Impl>::
     updateComInstStats(head_inst);
 
     if (head_inst->isLoad()) {
+        mDepPred->commitLoad(head_inst->physEffAddrLow,
+                             head_inst->seqNum, head_inst->dqPosition);
+
+        if (head_inst->physEffAddrHigh) {
+            // pass yet
+        }
         mDepPred->update(head_inst->instAddr(),
-                         head_inst->shouldForward,
-                         head_inst->shouldForwFrom,
-                         head_inst->memPredHistory);
+                     head_inst->shouldForward,
+                     head_inst->shouldForwFrom, 0,
+                     head_inst->memPredHistory);
     }
 
     if (FullSystem) {
@@ -1348,6 +1395,7 @@ FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
     archState.setDQ(&dq);
 
     ldstQueue.setDQCommon(&dq.c);
+    ldstQueue.setMemDepPred(mDepPred);
 }
 
 template<class Impl>
@@ -1544,10 +1592,29 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
     archState.postExecInst(inst);
     auto violation = dq.writebackLoad(inst);
     if (violation) {
-//        dq.fpBypass(inst);
         fetchRedirect = true;
         ++memOrderViolationEvents;
         squashDueToFPBypass(inst);
+
+        SSBFCell *cell = mDepPred->tssbf.find(inst->physEffAddrLow);
+        if (inst->bypassOp) {
+            // false positive
+            mDepPred->update(inst->physEffAddrLow, false,
+                             0, // dont care
+                             0, // dont care
+                             inst->memPredHistory
+            );
+
+        } else {
+            // false negative
+            mDepPred->update(inst->physEffAddrLow, true,
+
+                             inst->seqNum - cell->lastStore, //sn dist
+                             dq.c.computeDist(inst->dqPosition, cell->predecessorPosition),
+
+                             // pointer dist to last predecessor
+                             inst->memPredHistory);
+        }
     }
 }
 
@@ -2379,7 +2446,7 @@ void FFDIEWC<Impl>::sendBackwardInfo()
 
 
 template<class Impl>
-void FFDIEWC<Impl>::setOldestFw(DQPointer _ptr)
+void FFDIEWC<Impl>::setOldestFw(BasePointer _ptr)
 {
     auto ptr = dq.c.pointer2uint(_ptr);
     assert(dq.validPosition(ptr));
@@ -2552,6 +2619,19 @@ FFDIEWC<Impl>::tryResetRef()
         resetOldestFw();
     } else if (Debug::DQV2) {
         dq.dumpFwQSize();
+    }
+}
+
+template<class Impl>
+void
+FFDIEWC<Impl>::setUpLoad(DynInstPtr &inst)
+{
+    MemPredHistory *hist = inst->memPredHistory;
+    if (hist->bypass) {
+        inst->seqNVul = inst->seqNum - hist->distPair.snDistance;
+        // touch tssbf!
+    } else {
+        inst->seqNVul = getTailInst()->seqNum;
     }
 }
 
