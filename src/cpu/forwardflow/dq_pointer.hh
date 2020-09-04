@@ -83,13 +83,15 @@ struct WKPointer: public TermedPointer{
 
     WKPointer() = default;;
 
+    void operator = (const TermedPointer &dqPointer);
     explicit WKPointer(const TermedPointer &pointer);
 
-    void operator = (const TermedPointer &dqPointer);
-
-    explicit WKPointer(const DQPointer &dqPointer);
 
     void operator = (const DQPointer &dqPointer);
+    explicit WKPointer(const DQPointer &dqPointer);
+
+    WKPointer &operator = (const WKPointer &pointer);
+    WKPointer(const WKPointer &pointer);
 
     // explicit WKPointer(DQPointer &&dqPointer);
 

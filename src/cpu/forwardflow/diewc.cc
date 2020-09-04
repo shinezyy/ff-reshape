@@ -150,31 +150,38 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
     auto tail = getTailInst();
     if (tail && tail->isLoad() && tail->seqNum != verifiedTailLoad) {
         InstSeqNum nvul = tail->seqNVul;
+        DPRINTF(NoSQSMB, "NVul of load [%lu] is %lu\n", tail->seqNum, nvul);
         bool skip_verify;
         InstSeqNum low_ssn = 0, high_ssn = 0, ssn = 0;
 
         if (tail->physEffAddrHigh) { // split
+            DPRINTF(NoSQSMB, "Load [%lu] is split\n", tail->seqNum);
             low_ssn = mDepPred->lookupAddr(tail->physEffAddrLow);
             high_ssn = mDepPred->lookupAddr(tail->physEffAddrHigh);
         } else {
             ssn = mDepPred->lookupAddr(tail->physEffAddrLow);
+            DPRINTF(NoSQSMB, "Load [%lu] consists of only one access,"
+                    "with last store SN: %lu\n", tail->seqNum, ssn);
         }
 
         if (tail->memPredHistory->bypass) {
+            DPRINTF(NoSQSMB, "Load [%lu] is predicted to bypass\n", tail->seqNum);
             if (tail->physEffAddrHigh) {
                 skip_verify = (low_ssn == nvul) && (high_ssn == nvul);
             } else {
                 skip_verify = ssn == nvul;
             }
         } else {
+            DPRINTF(NoSQSMB, "Load [%lu] is predicted to not bypass\n", tail->seqNum);
             if (tail->physEffAddrHigh) {
-                skip_verify = (nvul <= low_ssn) && (nvul <= high_ssn);
+                skip_verify = (low_ssn <= nvul) && (high_ssn <= nvul);
             } else {
-                skip_verify = nvul <= ssn;
+                skip_verify = ssn <= nvul;
             }
         }
 
         if (skip_verify) {
+            DPRINTF(NoSQSMB, "Skip verifying load [%lu]\n", tail->seqNum);
             tail->loadVerified = true;
         } else {
             dq.reExecTailLoad();
@@ -329,6 +336,8 @@ void FFDIEWC<Impl>::dispatch() {
                            "to LQ = %d\n",
                     inst->seqNum, toAllocation->diewcInfo.dispatchedToLQ);
             toAllocation->diewcInfo.dispatchedToLQ++;
+
+            setUpLoad(inst);
 
         } else if (inst->isStore()) {
             ldstQueue.insertStore(inst);
@@ -2313,11 +2322,11 @@ FFDIEWC<Impl>::squashDueToFPBypass(DynInstPtr &violator)
 
         if (!youngest_cpted_inst_seq) {
             squashAll();
-            // Where to find a cpt hint?
-            // cptHint = true;
-            // toCheckpoint = victim->instAddr();
-            // DPRINTF(FFSquash, "Hint to checkpoint on pc: 0x%llx next time"
-            //         " in case mem violation\n", toCheckpoint);
+             // Where to find a cpt hint?
+             cptHint = true;
+             toCheckpoint = violator->instAddr() - 4;
+             DPRINTF(FFSquash, "Hint to checkpoint on pc: 0x%llx next time"
+                     " in case mem violation\n", toCheckpoint);
 
         } else {
             toNextCycle->diewc2diewc.squash = true;
@@ -2631,7 +2640,11 @@ FFDIEWC<Impl>::setUpLoad(DynInstPtr &inst)
         inst->seqNVul = inst->seqNum - hist->distPair.snDistance;
         // touch tssbf!
     } else {
-        inst->seqNVul = getTailInst()->seqNum;
+        if (getTailInst()) {
+            inst->seqNVul = getTailInst()->seqNum;
+        } else {
+            inst->seqNVul = 0;
+        }
     }
 }
 

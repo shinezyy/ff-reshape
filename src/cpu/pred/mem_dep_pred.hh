@@ -10,6 +10,7 @@
 #include "cpu/forwardflow/dq_pointer.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/pred/sat_counter.hh"
+#include "debug/NoSQPred.hh"
 #include "params/MemDepPredictor.hh"
 #include "sim/sim_object.hh"
 
@@ -67,10 +68,12 @@ struct SSBFCell
 template <class Container>
 void checkAndRandEvict(Container &set, unsigned randRange)
 {
+    DPRINTF(NoSQPred, "reach 9\n");
     if (set.size() >= randRange) { // eviction
         unsigned evicted = random_mt.random<unsigned>(0, randRange - 1);
         auto it = set.begin(), e = set.end();
         while (evicted) {
+            assert(it != e);
             it++;
             evicted--;
         }
@@ -84,13 +87,13 @@ class TSSBF: public SimObject
   private:
     // T-SSBF
     const unsigned TagBits;
-    const unsigned TagMask;
+    const uint64_t TagMask;
 
     const unsigned Size;
     const unsigned Assoc;
     const unsigned Depth;
     const unsigned IndexBits;
-    const unsigned IndexMask;
+    const uint64_t IndexMask;
 
     using SSBFSet = std::map<Addr, SSBFCell>;
     using SSBFTable = std::vector<SSBFSet>;
@@ -162,6 +165,8 @@ class MemDepPredictor: public SimObject
     using MemPredSet = std::map<Addr, MemPredCell>;
 
     using MemPredTable = std::vector<MemPredSet>;
+
+    SSBFCell *debug;
 
   private:
     MemPredTable pcTable;

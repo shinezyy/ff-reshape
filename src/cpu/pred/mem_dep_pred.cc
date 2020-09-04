@@ -262,7 +262,7 @@ MemDepPredictor::find(MemPredTable &table, Addr key, bool isPath)
     bool found;
     MemPredCell *cell = nullptr;
 
-    MemPredSet &set = table[extractIndex(key, isPath)];
+    MemPredSet &set = table.at(extractIndex(key, isPath));
     Addr tag = extractTag(key, isPath); // high bits are folded or thrown awary here
 
     auto it = set.find(tag);
@@ -276,7 +276,7 @@ MemDepPredictor::find(MemPredTable &table, Addr key, bool isPath)
 MemPredCell*
 MemDepPredictor::allocate(MemPredTable &table, Addr key, bool isPath)
 {
-    MemPredSet &set = table[extractIndex(key, isPath)];
+    MemPredSet &set = table.at(extractIndex(key, isPath));
     unsigned assoc = isPath ? PathTableAssoc : PCTableAssoc;
     auto tag = extractTag(key, isPath);
     assert(!set.count(tag));
@@ -311,6 +311,7 @@ MemDepPredictor::clear()
 void MemDepPredictor::commitStore(Addr eff_addr, InstSeqNum sn, const BasePointer &position) {
     SSBFCell *cell = tssbf.find(eff_addr);
     if (!cell) {
+        DPRINTF(NoSQPred, "Allocating new entry\n");
         cell = tssbf.allocate(eff_addr);
     }
     cell->lastStore = sn;
@@ -328,6 +329,7 @@ InstSeqNum MemDepPredictor::lookupAddr(Addr eff_addr) {
 }
 
 void MemDepPredictor::commitLoad(Addr eff_addr, InstSeqNum sn, BasePointer &position) {
+    DPRINTF(NoSQPred, "eff_addr: 0x%lx, debug: %p\n", eff_addr, debug);
     SSBFCell *cell = tssbf.find(eff_addr);
     if (!cell) {
         DPRINTF(NoSQPred, "When committing load producing store is not found\n");
@@ -342,6 +344,7 @@ MemDepPredictor::execStore(Addr eff_addr, uint8_t size, InstSeqNum sn, BasePoint
     eff_addr = shiftAddr(eff_addr);
     auto cell = tssbf.find(eff_addr);
     if (!cell) {
+        DPRINTF(NoSQPred, "Allocating new entry\n");
         cell = tssbf.allocate(eff_addr);
     }
 
@@ -383,18 +386,18 @@ Addr TSSBF::extractTag(Addr key) const {
 }
 
 SSBFCell *TSSBF::find(Addr key) {
-    auto &set = table[extractIndex(key)];
+    auto &set = table.at(extractIndex(key));
     auto tag = extractTag(key);
     auto it = set.find(tag);
     if (it != set.end()) {
-        return nullptr;
-    } else {
         return &it->second;
+    } else {
+        return nullptr;
     }
 }
 
 SSBFCell *TSSBF::allocate(Addr key) {
-    auto &set = table[extractIndex(key)];
+    auto &set = table.at(extractIndex(key));
     auto tag = extractTag(key);
     assert (set.count(tag) == 0);
 

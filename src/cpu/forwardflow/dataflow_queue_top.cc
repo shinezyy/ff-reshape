@@ -756,9 +756,9 @@ template<class Impl>
 bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
 {
     DPRINTF(DQWake, "Writeback Load[%lu]\n", inst->seqNum);
-    assert(!inst->loadVerified);
 
-    if (inst->bypassOp || (inst->loadVerifying && inst->execCount == 2)) {
+    if (!inst->loadVerified &&
+            (inst->bypassOp || (inst->loadVerifying && inst->execCount == 2))) {
         bool violation = checkViolation(inst);
         if (violation) {
             DPRINTF(NoSQSMB, "violation detected!\n");

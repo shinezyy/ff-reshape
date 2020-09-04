@@ -99,6 +99,7 @@ WKPointer::operator=(const DQPointer &dqPointer)
     val = dqPointer.val;
 
     isLocal = dqPointer.isLocal;
+    wkType = WKType::WKOp;
 }
 
 WKPointer::WKPointer(const TermedPointer &pointer)
@@ -112,6 +113,31 @@ void WKPointer::operator=(const TermedPointer &pointer)
 
     wkType = WKType::WKOp;
     hasVal = false;
+}
+
+WKPointer::WKPointer(const WKPointer &pointer)
+{
+    operator=(pointer);
+}
+
+WKPointer &WKPointer::operator=(const WKPointer &pointer)
+{
+    TermedPointer::operator=(pointer);
+
+    hasVal = pointer.hasVal;
+    val = pointer.val;
+
+    reshapeOp = pointer.reshapeOp;
+    ssrDelay = pointer.ssrDelay;
+    fwLevel = pointer.fwLevel;
+
+    queueTime = pointer.queueTime;
+    pendingTime = pointer.pendingTime;
+
+    isLocal = pointer.isLocal;
+    wkType = pointer.wkType;
+
+    return *this;
 }
 
 void TermedPointer::operator=(const TermedPointer &pointer)
