@@ -292,7 +292,12 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             }
         } else if (ptr.wkType == WKPointer::WKLdReExec) {
             assert(inst->isLoad());
-            if (!inst->loadVerified) {
+            if (!inst->bypassOp && (inst->numBusyOps() || !inst->memOpFulfilled())) {
+                DPRINTF(DQWake, "Now load inst [%llu] is tail and we dont need to "
+                                "verify it\n", inst->seqNum);
+                inst->loadVerified = true;
+
+            } else if (!inst->loadVerified) {
                 DPRINTF(DQWake, "Will verify load inst [%llu]\n", inst->seqNum);
                 handle_wakeup = true;
                 inst->loadVerifying = true;

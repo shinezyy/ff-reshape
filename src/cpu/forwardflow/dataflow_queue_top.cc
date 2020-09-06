@@ -141,11 +141,6 @@ DQTop<Impl>::reExecTailLoad()
         DPRINTF(NoSQSMB, "Head inst is not load!\n");
         return false;
     }
-    if (getTail()->numBusyOps()) {
-        DPRINTF(NoSQSMB, "Head load is not ready!\n");
-        // todo: there is a chance to skip verifying: such a load will execute after becoming head
-        return false;
-    }
 
     WKPointer wk = WKPointer(getTail()->dqPosition);
     DPRINTF(DQ, "Scheduling tail load inst " ptrfmt "\n", extptr(wk));
