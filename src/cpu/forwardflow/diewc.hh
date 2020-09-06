@@ -501,7 +501,8 @@ public:
     void setFanoutPred(FanoutPred *fanoutPred1);
 
     void tryResetRef();
-private:
+
+  private:
     const unsigned commitTraceInterval;
     unsigned commitCounter;
 
@@ -530,6 +531,13 @@ private:
     void tryVerifyTailLoad();
 
     void setUpLoad(DynInstPtr &inst);
+
+    InstSeqNum lastCompletedStoreSN{};
+
+  public:
+    void setStoreCompleted(InstSeqNum sn);
+
+    InstSeqNum getLastCompletedStoreSN() {return lastCompletedStoreSN;}
 
 };
 

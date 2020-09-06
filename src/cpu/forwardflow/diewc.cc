@@ -2654,11 +2654,16 @@ FFDIEWC<Impl>::setUpLoad(DynInstPtr &inst)
         inst->seqNVul = inst->seqNum - hist->distPair.snDistance;
         // touch tssbf!
     } else {
-        if (getTailInst()) {
-            inst->seqNVul = getTailInst()->seqNum;
-        } else {
-            inst->seqNVul = 0;
-        }
+        inst->seqNVul = getLastCompletedStoreSN();
+    }
+}
+
+template<class Impl>
+void
+FFDIEWC<Impl>::setStoreCompleted(InstSeqNum sn)
+{
+    if (sn > lastCompletedStoreSN) {
+        lastCompletedStoreSN = sn;
     }
 }
 
