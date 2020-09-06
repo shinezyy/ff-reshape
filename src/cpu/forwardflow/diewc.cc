@@ -186,10 +186,13 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
         if (skip_verify) {
             DPRINTF(NoSQSMB, "Skip verifying load [%lu]\n", tail->seqNum);
             tail->loadVerified = true;
+            verifiedTailLoad = tail->seqNum;
         } else {
-            dq.reExecTailLoad();
+            if (dq.reExecTailLoad()) {
+                verifiedTailLoad = tail->seqNum;
+                // only mark it when re exec pointer is sent
+            }
         }
-        verifiedTailLoad = tail->seqNum;
     }
 }
 
@@ -782,7 +785,7 @@ FFDIEWC<Impl>::
     Fault inst_fault = head_inst->getFault();
 
     // Stores mark themselves as completed.
-    if (!head_inst->isStore() && inst_fault == NoFault) {
+    if (head_inst->isStore() && inst_fault == NoFault) {
         head_inst->setCompleted();
 
         mDepPred->commitStore(head_inst->physEffAddrLow,
@@ -2484,7 +2487,7 @@ void FFDIEWC<Impl>::resetOldestFw()
 {
     // todo: use it @ no fw pointers in flight
     oldestForwarded = dq.getHeadPtr();  // set it to the youngest inst
-    DPRINTF(FFCommit, "ReSetting oldest forwarded to %d\n", oldestForwarded);
+    DPRINTF(FFCommit, "Resetting oldest forwarded to %d\n", oldestForwarded);
 }
 
 template<class Impl>
@@ -2637,7 +2640,7 @@ FFDIEWC<Impl>::tryResetRef()
 {
     if (dq.numInFlightFw() == 0) {
         resetOldestFw();
-    } else if (Debug::DQV2) {
+    } else if (Debug::DQV2 || Debug::FFCommit) {
         dq.dumpFwQSize();
     }
 }

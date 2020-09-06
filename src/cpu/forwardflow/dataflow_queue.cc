@@ -991,7 +991,8 @@ void DataflowQueues<Impl>::dumpQueues()
 template<class Impl>
 void DataflowQueues<Impl>::dumpFwQSize()
 {
-    DPRINTF(DQV2 || Debug::RSProbe1, "fw queue in flight = %i, cannot reset oldestRef\n", numPendingFwPointers);
+    DPRINTF(DQV2 || Debug::RSProbe1 || Debug::FFCommit,
+            "fw queue in flight = %i, cannot reset oldestRef\n", numPendingFwPointers);
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
             DPRINTFR(DQV2 || Debug::RSProbe1, "fw queue %i.%i size: %llu\n",

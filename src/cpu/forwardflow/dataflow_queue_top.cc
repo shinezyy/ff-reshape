@@ -130,20 +130,28 @@ void DQTop<Impl>::scheduleNonSpec()
 }
 
 template<class Impl>
-void DQTop<Impl>::reExecTailLoad()
+bool
+DQTop<Impl>::reExecTailLoad()
 {
     if (!getTail()) {
         DPRINTF(FFSquash, "Ignore scheduling attempt to squashing inst\n");
-        return;
+        return false;
     }
     if (!getTail()->isLoad()) {
         DPRINTF(NoSQSMB, "Head inst is not load!\n");
-        return;
+        return false;
     }
+    if (getTail()->numBusyOps()) {
+        DPRINTF(NoSQSMB, "Head load is not ready!\n");
+        // todo: there is a chance to skip verifying: such a load will execute after becoming head
+        return false;
+    }
+
     WKPointer wk = WKPointer(getTail()->dqPosition);
     DPRINTF(DQ, "Scheduling tail load inst " ptrfmt "\n", extptr(wk));
     wk.wkType = WKPointer::WKLdReExec;
     centralizedExtraWakeup(wk);
+    return true;
 }
 
 

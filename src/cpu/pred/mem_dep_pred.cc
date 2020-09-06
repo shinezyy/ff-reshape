@@ -314,6 +314,8 @@ void MemDepPredictor::commitStore(Addr eff_addr, InstSeqNum sn, const BasePointe
         DPRINTF(NoSQPred, "Allocating new entry\n");
         cell = tssbf.allocate(eff_addr);
     }
+    DPRINTF(NoSQPred, "Setting 0x%lx last store SN to %lu\n",
+            eff_addr, sn);
     cell->lastStore = sn;
     cell->lastStorePosition = position;
     cell->predecessorPosition = position;
@@ -348,6 +350,8 @@ MemDepPredictor::execStore(Addr eff_addr, uint8_t size, InstSeqNum sn, BasePoint
         cell = tssbf.allocate(eff_addr);
     }
 
+    DPRINTF(NoSQPred, "Setting 0x%lx last store SN to %lu\n",
+            eff_addr, sn);
     cell->lastStore = sn;
     cell->size = size;
 }

@@ -40,9 +40,7 @@ public:
 
 #ifdef __CLION_CODING__
     template<class Impl>
-    class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {
-    };
-
+    class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {};
     using DynInstPtr = FullInst<Impl>*;
 
     using XFFCPU = FFCPU<Impl>;

@@ -22,7 +22,7 @@
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
 
-#ifdef zcoding
+#ifdef __CLION_CODING__
 #include "cpu/forwardflow/dataflow_queue.hh"
 #include "cpu/forwardflow/dataflow_queue_bank.hh"
 #include "cpu/forwardflow/dyn_inst.hh"
@@ -45,10 +45,13 @@ public:
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
     typedef typename Impl::CPUPol::LSQ LSQ;
 
-#ifdef zcoding
+#ifdef __CLION_CODING__
     typedef DataflowQueues<Impl> DataflowQueues;
     typedef DataflowQueueBank<Impl> DataflowQueueBank;
-    typedef BaseO3DynInst<Impl>* DynInstPtr;
+
+    template<class Impl>
+    class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {};
+    using DynInstPtr = FullInst<Impl>*;
 #else
     typedef typename Impl::CPUPol::DataflowQueues DataflowQueues;
     typedef typename Impl::CPUPol::DataflowQueueBank DataflowQueueBank;
@@ -84,7 +87,7 @@ public:
 
     void scheduleNonSpec();
 
-    void reExecTailLoad();
+    bool reExecTailLoad();
 
     void centralizedExtraWakeup(const WKPointer &wk);
 
