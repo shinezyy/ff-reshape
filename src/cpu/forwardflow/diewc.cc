@@ -173,10 +173,13 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
             }
         } else {
             DPRINTF(NoSQSMB, "Load [%lu] is predicted to not bypass\n", tail->seqNum);
+            // ssn == 0 means its entry might be evicted
             if (tail->physEffAddrHigh) {
-                skip_verify = (low_ssn <= nvul) && (high_ssn <= nvul);
+                skip_verify = ssn > 0 && low_ssn <= nvul && high_ssn <= nvul;
+                // skip_verify = low_ssn <= nvul && high_ssn <= nvul;
             } else {
-                skip_verify = ssn <= nvul;
+                skip_verify = ssn > 0 && ssn <= nvul;
+                // skip_verify = ssn <= nvul;
             }
         }
 

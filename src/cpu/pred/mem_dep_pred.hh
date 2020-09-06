@@ -68,8 +68,8 @@ struct SSBFCell
 template <class Container>
 void checkAndRandEvict(Container &set, unsigned randRange)
 {
-    DPRINTF(NoSQPred, "reach 9\n");
     if (set.size() >= randRange) { // eviction
+        DPRINTF(NoSQPred, "Doing Eviction\n");
         unsigned evicted = random_mt.random<unsigned>(0, randRange - 1);
         auto it = set.begin(), e = set.end();
         while (evicted) {
@@ -78,6 +78,7 @@ void checkAndRandEvict(Container &set, unsigned randRange)
             evicted--;
         }
         assert(it != e);
+        DPRINTF(NoSQPred, "Evicting key: %lu\n", it->first);
         set.erase(it);
     }
 }
