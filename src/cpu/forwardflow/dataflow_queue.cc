@@ -550,7 +550,7 @@ DataflowQueues<Impl>::markFwPointers(
     }
 
     if (inst) {
-        if (inst->isStore() && op == memBypassOp) {
+        if (inst->isStore() && !inst->isRVAmoStoreHalf() && op == memBypassOp) {
             DPRINTF(FFDisp || Debug::DQWake,
                     "Storing pointer to dest field of store\n");
             pointers[0] = pair.payload;

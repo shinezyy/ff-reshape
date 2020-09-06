@@ -129,14 +129,21 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
     // Check any barriers and the dependence predictor for any
     // producing memrefs/stores.
     InstSeqNum producing_barrier = 0;
+    auto is_rv_amo_store = inst->isRVAmoStoreHalf();
     if (inst->isLoad() && loadBarrier.valid) {
         DPRINTF(MemDepUnit, "Load barrier [sn:%lli] in flight\n",
                 loadBarrier.SN);
         producing_barrier = loadBarrier.SN;
     } else if (inst->isStore() && storeBarrier.valid) {
+        producing_barrier = storeBarrier.SN;
         DPRINTF(MemDepUnit, "Store barrier [sn:%lli] in flight\n",
                 storeBarrier.SN);
-        producing_barrier = storeBarrier.SN;
+        if (is_rv_amo_store) {
+            DPRINTF(MemDepUnit, "But Atomic X store depends on Atomic X load,"
+                                "so there's no need to chain dependency\n",
+                    storeBarrier.SN);
+        }
+
     } else {
         DPRINTF(MemDepUnit, "No barrier found\n");
     }
@@ -168,26 +175,32 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
     } else {
         // Otherwise make the instruction dependent on the store/barrier.
         DPRINTF(MemDepUnit, "Adding to dependency list; "
-                "inst PC %s is dependent on [sn:%lli].\n",
+                            "inst PC %s is dependent on [sn:%lli].\n",
                 inst->pcState(), producing_barrier);
 
         if (!barrier_entry->positionInvalid) {
-
-            inst->hasOrderDep = true;
-
-            // Clear the bit saying this instruction can issue.
-            inst->clearCanIssue();
 
             auto position = inst->dqPosition;
             inst->bypassOp = memBypassOp;
             position.op = memBypassOp;
 
-            pair.dest = barrier_entry->latestPosition;
-            pair.payload = position;
+            if (!is_rv_amo_store) {
+                inst->hasOrderDep = true;
+                // Clear the bit saying this instruction can issue.
+                inst->clearCanIssue();
 
+                pair.dest = barrier_entry->latestPosition;
+                pair.payload = position;
+                DPRINTF(NoSQSMB, "Creating a valid SMB pair:" ptrfmt "->" ptrfmt "\n",
+                        extptr(pair.dest), extptr(pair.payload));
+            } else {
+                DPRINTF(NoSQSMB, "Dont insert dep for Atomic X store\n");
+            }
+
+            // for non atomic store, this is a spare entry for barrier dep;
+            // for atomic store, this op of atomic store depends on producing atomic load,
+            // and point next memory access that depends on the barrier
             barrier_entry->latestPosition = position;
-            DPRINTF(NoSQSMB, "Creating a valid SMB pair:" ptrfmt "->" ptrfmt "\n",
-                    extptr(pair.dest), extptr(pair.payload));
 
         } else {
             inst->hasOrderDep = false;

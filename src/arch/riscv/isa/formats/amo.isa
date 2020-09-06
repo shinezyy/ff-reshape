@@ -367,7 +367,7 @@ def format AtomicMemOp(load_code, store_code, ea_code, load_flags=[],
         + AtomicMemOpLoadInitiateAcc.subst(load_iop) \
         + AtomicMemOpLoadCompleteAcc.subst(load_iop)
 
-    store_inst_flags = makeList(inst_flags) + ["IsMemRef", "IsStore"]
+    store_inst_flags = makeList(inst_flags) + ["IsMemRef", "IsStore", "IsRVAmoStoreHalf"]
     store_iop = InstObjParams(name, Name, 'AtomicMemOpMicro',
         {'ea_code': ea_code, 'code': store_code, 'op_name': 'Store'},
         store_inst_flags)

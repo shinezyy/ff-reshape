@@ -59,16 +59,17 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
         }
     }
 
-    for (unsigned phy_op = 1; phy_op < Impl::MaxOps; phy_op++) {
-        auto &indirect_index = inst->indirectRegIndices.at(phy_op);
-        if (indirect_index.size() > 0) {
-            DPRINTF(Reshape, "Before randomization, phy op %i point to src reg %i\n",
-                    phy_op, indirect_index.front());
-        }
-    }
 
     if (decoupleOpPosition) {
         randomizeOp(inst);
+    }
+
+    for (unsigned phy_op = 1; phy_op < Impl::MaxOps; phy_op++) {
+        auto &indirect_index = inst->indirectRegIndices.at(phy_op);
+        if (indirect_index.size() > 0) {
+            DPRINTF(Rename, "After randomization, phy op %i point to src reg %i\n",
+                    phy_op, indirect_index.front());
+        }
     }
 
     int num_src_ops = 0, num_busy_ops = 0;
@@ -295,6 +296,9 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 
         auto receiver = inst->dqPosition;
         receiver.op = memBypassOp;
+
+        DPRINTF(NoSQSMB, "Creating SMB pair:" ptrfmt "->" ptrfmt "\n",
+                extptr(predecessor_pointer), extptr(receiver));
 
         // TODO: update in pair consuming, especially for store
         pairs.emplace_back(predecessor_pointer, receiver);

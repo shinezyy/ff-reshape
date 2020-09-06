@@ -8,10 +8,14 @@
 #include <deque>
 #include <unordered_map>
 
+#ifdef __CLION_CODING__
+#include "cpu/ff_base_dyn_inst.hh"
+#include "cpu/forwardflow/dyn_inst.hh"
+
+#endif
+
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/dq_pointer.hh"
-
-//#include "cpu/forwardflow/dyn_inst.hh"
 #include "cpu/func_unit.hh"
 #include "cpu/timebuf.hh"
 #include "params/FFFUPool.hh"
@@ -73,11 +77,18 @@ struct SingleFUWrapper {
 template<class Impl>
 class FUWrapper {
 public:
+#ifdef __CLION_CODING__
+    template<class Impl>
+    class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {
+    };
 
-#ifdef __JETBRAINS_IDE__
-    using DynInstPtr = BaseO3DynInst<Impl>*;
+    using DynInstPtr = FullInst<Impl>*;
+
+    using DQTop = DQTop<Impl>;
 #else
+    typedef typename Impl::DynInst DynInst;
     typedef typename Impl::DynInstPtr DynInstPtr;
+    typedef typename Impl::CPUPol::DQTop DQTop;
 #endif
 
     typedef typename Impl::CPUPol::LSQ LSQ;

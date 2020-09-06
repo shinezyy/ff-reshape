@@ -91,11 +91,13 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
         } else if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder())) {
             DPRINTFR(FUW, "to wake up " ptrfmt "\n", extptr(dest));
             to_wake[DestPtr] = dest;
+
             if (inst->isMemBarrier() || inst->isWriteBarrier()) {
                 DPRINTFR(FUW, "without value because of it's barrier\n");
                 to_wake[DestPtr].wkType = WKPointer::WKType::WKOrder;
                 to_wake[DestPtr].hasVal = false;
-            } else if (inst->isStore()) {
+
+            } else if (inst->isStore() && !inst->isRVAmoStoreHalf()) {
                 DPRINTFR(FUW, "with value because of it's store\n");
                 to_wake[DestPtr].hasVal = true;
                 to_wake[DestPtr].val.i = inst->readIntRegOperand(nullptr, 1);

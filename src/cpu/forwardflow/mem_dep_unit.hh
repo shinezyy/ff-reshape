@@ -48,6 +48,15 @@
 #include <set>
 #include <unordered_map>
 
+#ifdef __CLION_CODING__
+#include "cpu/ff_base_dyn_inst.hh"
+#include "cpu/forwardflow/dataflow_queue_top.hh"
+#include "cpu/forwardflow/dyn_inst.hh"
+#include "cpu/forwardflow/lsq.hh"
+
+#endif
+
+
 #include "base/statistics.hh"
 #include "cpu/forwardflow/dq_pointer.hh"
 #include "cpu/inst_seq.hh"
@@ -84,8 +93,21 @@ class MemDepUnit
     std::string _name;
 
   public:
+
+#ifdef __CLION_CODING__
+    template<class Impl>
+    class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {
+    };
+
+    using DynInstPtr = FullInst<Impl>*;
+
+    using InstructionQueue = DQTop<Impl>;
+#else
     typedef typename Impl::DynInstPtr DynInstPtr;
+
     typedef typename Impl::CPUPol::DQTop InstructionQueue;
+#endif
+
 
     /** Empty constructor. Must call init() prior to using in this case. */
     MemDepUnit();
