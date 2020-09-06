@@ -1611,6 +1611,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
         SSBFCell *cell = mDepPred->tssbf.find(inst->physEffAddrLow);
         if (inst->bypassOp) {
             // false positive
+            DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu]", inst->seqNum);
             mDepPred->update(inst->physEffAddrLow, false,
                              0, // dont care
                              0, // dont care
@@ -1619,13 +1620,20 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
 
         } else {
             // false negative
-            mDepPred->update(inst->physEffAddrLow, true,
+            if (cell) {
+                DPRINTF(NoSQPred, "Marking mem dep:" ptrfmt "->" ptrfmt "\n",
+                        extptr(cell->predecessorPosition), extptr(inst->dqPosition));
+                mDepPred->update(inst->physEffAddrLow, true,
 
-                             inst->seqNum - cell->lastStore, //sn dist
-                             dq.c.computeDist(inst->dqPosition, cell->predecessorPosition),
+                                 inst->seqNum - cell->lastStore, //sn dist
+                                 dq.c.computeDist(inst->dqPosition, cell->predecessorPosition),
+                        // pointer dist to last predecessor
 
-                             // pointer dist to last predecessor
-                             inst->memPredHistory);
+                                 inst->memPredHistory);
+            } else {
+                DPRINTF(NoSQPred, "Producing TSSBF entry has been evicted,"
+                                  " we have to give up recording\n");
+            }
         }
     }
 }
