@@ -477,6 +477,10 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                 DPRINTF(DQWake || Debug::NoSQSMB, "Load Re-exec does not generate fw pointer\n");
                 optr.valid = false;
 
+            } else if (ptr.wkType == WKPointer::WKMem) {
+                DPRINTF(DQWake || Debug::NoSQSMB, "Mem Replay does not generate fw pointer\n");
+                optr.valid = false;
+
             } else {
                 if (op == 0) {
                     outputPointers[0].valid = false; // dest register should never be forwarded
@@ -489,7 +493,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
 
                         optr.hasVal = true;
                         if (op == 0 && inst->destReforward) {
-                            DPRINTF(DQWake, "Although its wakeup ptr to dest,"
+                            DPRINTF(DQWake, "Although it's wakeup ptr to dest,"
                                         " it is still forwarded because of destReforward flag\n");
                             optr.val = inst->getDestValue();
                         } else {

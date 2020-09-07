@@ -2663,6 +2663,7 @@ void
 FFDIEWC<Impl>::setStoreCompleted(InstSeqNum sn)
 {
     if (sn > lastCompletedStoreSN) {
+        // todo: check why it is 0?
         lastCompletedStoreSN = sn;
     }
 }
