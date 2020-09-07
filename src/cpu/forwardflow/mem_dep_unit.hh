@@ -277,7 +277,7 @@ class MemDepUnit
     int id;
 
   private:
-    void checkAndSquashBarrier(BarrierInfo &info);
+    void checkAndSquashBarrier(BarrierInfo &info, InstSeqNum squash_sn);
 };
 
 }

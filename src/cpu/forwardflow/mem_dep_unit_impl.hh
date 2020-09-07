@@ -300,7 +300,21 @@ MemDepUnit<MemDepPred, Impl>::squash(const InstSeqNum &squashed_num,
             }
         }
     }
-    checkAndSquashBarrier(loadBarrier);
+    checkAndSquashBarrier(loadBarrier, squashed_num);
+    checkAndSquashBarrier(storeBarrier, squashed_num);
+
+    auto it = barrierTable.begin(), e = barrierTable.end();
+    while (it != e) {
+        if (it->first > squashed_num) {
+            it = barrierTable.erase(it);
+        } else {
+            it++;
+        }
+    }
+
+    DPRINTF(MemDepUnit, "barrier table size: %lu, "
+                        "to replay size: %lu\n",
+                        barrierTable.size(), instsToReplay.size());
 }
 
 
@@ -314,11 +328,21 @@ MemDepUnit<MemDepPred, Impl>::moveToReady(DynInstPtr &woken_inst)
 }
 
 template<class MemDepPred, class Impl>
-void MemDepUnit<MemDepPred, Impl>::checkAndSquashBarrier(BarrierInfo &barrier) {
+void MemDepUnit<MemDepPred, Impl>::checkAndSquashBarrier(BarrierInfo &barrier, InstSeqNum squash_sn)
+{
     if (barrier.valid) {
-        MemDepEntryPtr entry = barrierTable[barrier.SN];
-        if (entry->latestPosition.op != 0) {
-            entry->positionInvalid = true;
+        auto it = barrierTable.find(barrier.SN);
+        if (it != barrierTable.end()) {
+            if (barrier.SN > squash_sn) {
+                barrierTable.erase(it);
+            } else {
+                if (it->second->latestPosition.op != 0) {
+                    it->second->positionInvalid = true;
+                }
+            }
+        }
+        if (barrier.SN > squash_sn) {
+            barrier.valid = false;
         }
     }
 }
