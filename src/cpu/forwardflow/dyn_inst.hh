@@ -428,6 +428,9 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     bool orderFulfilled();
 
     int bypassOp{0};
+    bool dependOnBarrier{false};
+
+    bool isNormalBypass() { return bypassOp && !dependOnBarrier;}
 
     FFRegValue bypassVal;
 

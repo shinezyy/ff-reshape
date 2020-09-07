@@ -292,7 +292,9 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             }
         } else if (ptr.wkType == WKPointer::WKLdReExec) {
             assert(inst->isLoad());
-            if (!inst->bypassOp && (inst->numBusyOps() || !inst->memOpFulfilled())) {
+            bool mem_acc_not_issued = inst->numBusyOps() || !inst->memOpFulfilled() || !inst->fuGranted;
+            bool not_normal_bypass = !inst->bypassOp || (inst->bypassOp && inst->dependOnBarrier);
+            if (not_normal_bypass && mem_acc_not_issued) {
                 DPRINTF(DQWake, "Now load inst [%llu] is tail and we dont need to "
                                 "verify it\n", inst->seqNum);
                 inst->loadVerified = true;
@@ -523,7 +525,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                     }
                 }
 
-                if (inst->bypassOp && (inst->bypassOp == op) && inst->pointers[0].valid) {
+                if (inst->isNormalBypass() && (inst->bypassOp == op) && inst->pointers[0].valid) {
                     auto wk_ptr = WKPointer(inst->pointers[0]);
                     wk_ptr.hasVal = true;
                     wk_ptr.val = ptr.val;

@@ -769,7 +769,7 @@ bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
         }
     }
 
-    bool not_verifying = !inst->bypassOp && // if bypassOp writebackLoad must be verifying
+    bool not_verifying = !inst->isNormalBypass() && // if bypassOp writebackLoad must be verifying
             inst->execCount == 1; // ==0: impossible; ==2: verifying
 
     if (inst->pointers[0].valid && not_verifying) {

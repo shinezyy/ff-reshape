@@ -81,7 +81,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
     to_wake[DestPtr].valid = false;
 
     if (dest.valid) {
-        if (inst->isLoad() && inst->bypassOp) {
+        if (inst->isLoad() && inst->isNormalBypass()) {
             DPRINTFR(FUW, "Skip to wake up " ptrfmt ", (already been bypassed)\n",
                     extptr(dest));
             // to_wake[DestPtr] = dest;

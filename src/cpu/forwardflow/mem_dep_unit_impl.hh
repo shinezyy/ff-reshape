@@ -182,6 +182,7 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
 
             auto position = inst->dqPosition;
             inst->bypassOp = memBypassOp;
+            inst->dependOnBarrier = true;
             position.op = memBypassOp;
 
             if (!is_rv_amo_store) {
