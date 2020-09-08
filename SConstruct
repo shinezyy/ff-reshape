@@ -353,7 +353,11 @@ if main['GCC'] or main['CLANG']:
                          '-Wno-sign-compare', '-Wno-unused-parameter',
                          ])
     # We compile using C++17 for structure binding
-    main.Append(CXXFLAGS=['-std=c++17', '-Wno-register',])
+    main.Append(CXXFLAGS=['-std=c++17', '-Wno-register',
+        '-Wno-deprecated-copy',
+        '-Wno-address-of-packed-member',
+        '-Wno-array-bounds',
+        ])
     if sys.platform.startswith('freebsd'):
         main.Append(CCFLAGS=['-I/usr/local/include'])
         main.Append(CXXFLAGS=['-I/usr/local/include'])
