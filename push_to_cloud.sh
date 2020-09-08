@@ -2,7 +2,7 @@
 while true;
 do
     date '+%Y.%m.%d_%H:%M:%S'
-    pull_source_scripts$2 tokyo2 ~/projects/omegaflow;
+    push_source_scripts$2 tokyo2x ~/projects/omegaflow;
     if [ $1 -eq 0 ];
     then
         break
