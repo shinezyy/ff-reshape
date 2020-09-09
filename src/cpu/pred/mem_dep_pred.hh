@@ -96,6 +96,8 @@ class TSSBF: public SimObject
     const unsigned IndexBits;
     const uint64_t IndexMask;
 
+    const unsigned addrShamt{3};
+
     using SSBFSet = std::map<Addr, SSBFCell>;
     using SSBFTable = std::vector<SSBFSet>;
 

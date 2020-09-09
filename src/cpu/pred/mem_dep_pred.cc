@@ -382,10 +382,12 @@ TSSBF::TSSBF(const Params *p)
 }
 
 Addr TSSBF::extractIndex(Addr key) const {
+    key = key >> addrShamt;
     return key & IndexMask;
 }
 
 Addr TSSBF::extractTag(Addr key) const {
+    key = key >> addrShamt;
     return (key >> IndexBits) & TagMask;
 }
 

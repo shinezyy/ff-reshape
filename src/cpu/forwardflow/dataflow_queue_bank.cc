@@ -236,8 +236,14 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         auto &inst = instArray[ptr.index];
 
-        DPRINTF(DQWake||Debug::RSProbe1, "Pointer" ptrfmt "working on inst[%llu]\n",
+        DPRINTF(DQWake||Debug::RSProbe1, "Pointer" ptrfmt "working on inst[%llu]",
                 extptr(ptr), inst->seqNum);
+
+        if (!ptr.hasVal) {
+            DPRINTFR(DQWake, "\n");
+        } else {
+            DPRINTFR(DQWake, "with value: %ld (%lu)\n", ptr.val.i, ptr.val.i);
+        }
 
         if (inst->dqPosition.term != ptr.term) {
             DPRINTF(DQWake, "Term not match on WK: ptr: %d, inst: %d\n",

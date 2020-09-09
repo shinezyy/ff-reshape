@@ -1217,6 +1217,9 @@ LSQUnit<Impl>::completeStore(int store_idx)
         iewStage->updateLSQNextCycle = true;
     }
 
+    iewStage->setStoreCompleted(storeQueue[store_idx].inst->seqNum);
+
+
     DPRINTF(LSQUnit, "Completing store [sn:%lli], idx:%i, store head "
             "idx:%i\n",
             storeQueue[store_idx].inst->seqNum, store_idx, storeHead);
