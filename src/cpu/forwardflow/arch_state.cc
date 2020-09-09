@@ -286,6 +286,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             predecessor_position += dq->c.dqSize;
         }
         inst->bypassOp = memBypassOp;
+        inst->hasOrderDep = true;
+        // inst->hasOp[memBypassOp] = true;
 
         auto predecessor_pointer = dq->c.uint2Pointer(predecessor_position);
         if (inst->memPredHistory->predecessorIsLoad) {
@@ -293,6 +295,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
         } else {
             predecessor_pointer.op = 0;
         }
+        DPRINTF(NoSQPred, "Inst[%lu] is predicted to bypass from" ptrfmt " with dist %u\n",
+                extptr(predecessor_pointer), inst->memPredHistory->distPair.dqDistance);
 
         auto receiver = inst->dqPosition;
         receiver.op = memBypassOp;

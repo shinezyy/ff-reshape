@@ -501,7 +501,7 @@ struct DQGroupTS {
     bool instValids[Impl::MaxBanks * nOpGroups];
     DynInstPtr insts[Impl::MaxBanks * nOpGroups];
 
-    DQPointer pointers[Impl::MaxBanks * Impl::MaxOps];
+    WKPointer pointers[Impl::MaxBanks * Impl::MaxOps];
 };
 template<class Impl>
 struct DQTopTS {

@@ -66,6 +66,7 @@ struct WKPointer: public TermedPointer{
         WKMem, // wakeup mem blocked dependency
         WKOrder, // wakeup store to load dependency
         WKMisc, // wakeup non-speculative, barrier, etc.
+        WKBypass, // bypassing value on the path like store->load->load
         WKLdReExec // wakeup non-speculative, barrier, etc.
     };
     WKType wkType;

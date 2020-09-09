@@ -36,7 +36,7 @@ DataflowQueueBank<Impl>::DataflowQueueBank(
           localWKPointers(nOps),
           anyPending(false),
           inputPointers(nOps),
-          outputPointers(nOps, nullDQPointer),
+          outputPointers(nOps, WKPointer(nullDQPointer)),
           tail(0),
           readyQueueSize(params->readyQueueSize),
           prematureFwPointers(depth)
@@ -308,6 +308,12 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 DPRINTF(DQWake, "Inst [%llu] has already been verified\n", inst->seqNum);
             }
 
+        } else if (ptr.wkType == WKPointer::WKBypass && inst->isNormalBypass()) {
+            assert(op == memBypassOp);
+            inst->opReady[op] = true;
+            inst->bypassVal = ptr.val;
+            handle_wakeup = true;
+
         } else { //  if (ptr.wkType == WKPointer::WKOp)
             // NOTE: With NoSQ, WKOp might carry memory response!
             handle_wakeup = true;
@@ -326,52 +332,52 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                         inst->setSrcValue(i, v);
                     }
                     SRAMWriteValue++;
-                } else { // bypass op
+                } else {
+                    // todo:
                     assert(inst->bypassOp);
+                    assert(!inst->isNormalBypass());
                     inst->bypassVal = ptr.val;
                     inst->orderDepReady = true;
-
                 }
-
             }
             DPRINTF(DQWake||Debug::RSProbe1,
                     "Mark op[%d] of inst [%llu] ready\n", op, inst->seqNum);
         }
 
         if (handle_wakeup) {
-            if (nearlyWakeup[ptr.index]) {
+            if (nearlyWakeup[ptr.index] && !inst->isNormalBypass()) {
                 assert(inst->numBusyOps() == 0);
                 DPRINTF(DQWake || Debug::ObExec, "inst [%llu]: %s is ready to waken up\n",
                         inst->seqNum, inst->staticInst->disassemble(inst->instAddr()));
-                if (true) { // no reshape now
-                    wakeup_count++;
-                    if (inst->readyTick == 0)  {
-                        inst->readyTick = curTick();
-                    }
-                    if (!first) {
-                        if (ptr.wkType != WKPointer::WKOp || ptr.isFwExtra) {
-                            inst->wkDelayedCycle = std::max((int) 0, ((int) ptr.queueTime) - 1);
-                        } else {
-                            inst->wkDelayedCycle = ptr.queueTime;
-                        }
-                        dq->countCycles(inst, &ptr);
-                        DPRINTF(DQWake||Debug::RSProbe1,
-                                "inst [%llu] is the gifted one in this bank\n",
-                                inst->seqNum);
-                        first = inst;
-                        first_index = ptr.index;
-                        if (anyPending) {
-                            DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
-                                    ptr.bank, ptr.index, ptr.op);
-                            ptr.valid = false;
-                        }
-                    } else {
-                        DPRINTF(DQWake||Debug::RSProbe1,
-                                "inst [%llu] has no luck in this bank\n", inst->seqNum);
-                        need_pending_ptr[op] = true;
-                        inst->readyInBankDelay += 1;
-                    }
+
+                wakeup_count++;
+                if (inst->readyTick == 0)  {
+                    inst->readyTick = curTick();
                 }
+                if (!first) {
+                    if (ptr.wkType != WKPointer::WKOp || ptr.isFwExtra) {
+                        inst->wkDelayedCycle = std::max((int) 0, ((int) ptr.queueTime) - 1);
+                    } else {
+                        inst->wkDelayedCycle = ptr.queueTime;
+                    }
+                    dq->countCycles(inst, &ptr);
+                    DPRINTF(DQWake||Debug::RSProbe1,
+                            "inst [%llu] is the gifted one in this bank\n",
+                            inst->seqNum);
+                    first = inst;
+                    first_index = ptr.index;
+                    if (anyPending) {
+                        DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
+                                ptr.bank, ptr.index, ptr.op);
+                        ptr.valid = false;
+                    }
+                } else {
+                    DPRINTF(DQWake||Debug::RSProbe1,
+                            "inst [%llu] has no luck in this bank\n", inst->seqNum);
+                    need_pending_ptr[op] = true;
+                    inst->readyInBankDelay += 1;
+                }
+
             } else {
                 unsigned busy_count = inst->numBusyOps();
                 RegReadNbusy++;
@@ -440,7 +446,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 }
 
 template<class Impl>
-std::vector<DQPointer>
+std::vector<WKPointer>
 DataflowQueueBank<Impl>::readPointersFromBank()
 {
     DPRINTF(DQWake, "Reading pointers from banks\n");
@@ -506,6 +512,12 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                         if (op == 0 && optr.valid && inst->destReforward) {
                             inst->destReforward = false;
                         }
+
+                        if (ptr.wkType == WKPointer::WKBypass) {
+                            assert(op == memBypassOp);
+                            optr.wkType = WKPointer::WKBypass;
+                        }
+
                         if (grab_from_local_fw && ptr.isLocal) {
                             ptr.isLocal = false;
                             DPRINTF(DQWake, "Pointer (%i) (%i %i) (%i) isLocal <- false\n",

@@ -187,11 +187,14 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
             DPRINTF(NoSQSMB, "Skip verifying load [%lu]\n", tail->seqNum);
             tail->loadVerified = true;
             verifiedTailLoad = tail->seqNum;
-        } else {
+        } else if (!ldstQueue.numStoresToWB(DummyTid)){
             if (dq.reExecTailLoad()) {
                 verifiedTailLoad = tail->seqNum;
                 // only mark it when re exec pointer is sent
             }
+        } else {
+            DPRINTF(NoSQSMB, "Cannot verify load [%lu] yet, because of pending wb store\n",
+                    tail->seqNum);
         }
     }
 }

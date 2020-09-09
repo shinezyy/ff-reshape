@@ -90,7 +90,7 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
         mp_history->pcBypass = cell->conf.read() > 0;
 
         DPRINTF(NoSQPred, "For load @ 0x%x, "
-                "pc predictor predict %i with confi: 0x%i "
+                "pc predictor predict %i with confi: %i "
                 "to storeDistance %u\n",
                 load_pc, mp_history->pcBypass, cell->conf.read(),
                 cell->distPair.snDistance);

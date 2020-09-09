@@ -1277,7 +1277,7 @@ DataflowQueues<Impl>::readPointersFromLastCycleToWakeQueues()
                 DPRINTF(DQWake||Debug::RSProbe2,
                         "Push WakePtr" ptrfmt "to wakequeue[%u]\n",
                         extptr(ptr), b);
-                pushToWakeQueue(b * nOps + op, WKPointer(ptr));
+                pushToWakeQueue(b * nOps + op, ptr);
                 numPendingWakeups++;
                 DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
                 if (wakeQueues[b * nOps + op].size() > maxQueueDepth) {
@@ -1575,11 +1575,11 @@ void DataflowQueues<Impl>::pickInterGroupPointers()
     DPRINTF(DQWake, "Checking inter-group pointers in time buffer\n");
     // from normal queue
     for (unsigned i = 0; i < c->nBanks * c->nOps; i++) {
-        DQPointer &p = toNextCycle->pointers[i];
+        auto &p = toNextCycle->pointers[i];
         if (p.valid && p.group != groupID) {
             DPRINTF(DQWake,
                     "Move" ptrfmt "to next group buffer and invalidate it\n", extptr(p));
-            put2OutBuffer(WKPointer(p));
+            put2OutBuffer(p);
             p.valid = false;
         }
     }
@@ -1745,7 +1745,7 @@ void DataflowQueues<Impl>:: writeFwPointersToNextCycle()
 {
     // todo: write forward pointers from bank to time buffer!
     for (unsigned b = 0; b < nBanks; b++) {
-        std::vector<DQPointer> forward_ptrs = dqs[b]->readPointersFromBank();
+        std::vector<WKPointer> forward_ptrs = dqs[b]->readPointersFromBank();
 
         if (NarrowXBarWakeup && NarrowLocalForward) {
             for (unsigned op = 0; op < nOps; op++) {
@@ -1901,6 +1901,9 @@ void DataflowQueues<Impl>::selectPointersFromWakeQueues()
                         OrderPackets++;
 
                     } else if (ptr.wkType == WKPointer::WKLdReExec) {
+                        // pass
+
+                    } else if (ptr.wkType == WKPointer::WKBypass) {
                         // pass
 
                     } else {

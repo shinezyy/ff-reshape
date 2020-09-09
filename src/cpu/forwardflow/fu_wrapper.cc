@@ -97,10 +97,12 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
                 to_wake[DestPtr].wkType = WKPointer::WKType::WKOrder;
                 to_wake[DestPtr].hasVal = false;
 
-            } else if (inst->isStore() && !inst->isRVAmoStoreHalf()) {
+            } else if (inst->isNormalStore()) {
                 DPRINTFR(FUW, "with value because of it's store\n");
+                // passing store value to predicted consumer
                 to_wake[DestPtr].hasVal = true;
                 to_wake[DestPtr].val.i = inst->readIntRegOperand(nullptr, 1);
+                to_wake[DestPtr].wkType = WKPointer::WKType::WKBypass;
             }
 
         } else {

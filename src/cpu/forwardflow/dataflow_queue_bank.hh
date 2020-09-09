@@ -82,7 +82,7 @@ private:
     // output forward pointers
     // init according to nops
 
-    std::vector<DQPointer> outputPointers;
+    std::vector<WKPointer> outputPointers;
 
     unsigned tail;
 
@@ -104,7 +104,7 @@ public:
 
     DynInstPtr wakeupInstsFromBank();
 
-    std::vector<DQPointer> readPointersFromBank();
+    std::vector<WKPointer> readPointersFromBank();
 
     DynInstPtr readInstsFromBank(const BasePointer &pointer) const;
 
