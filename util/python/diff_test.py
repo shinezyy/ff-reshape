@@ -5,7 +5,7 @@ assert len(sys.argv) == 3
 
 golden = []
 test = []
-pattern = re.compile('@\d+ Committing \d+ instruction with sn:(\d+) PC:\((.+=>.+)\)\.\(0=>1\),' +
+pattern = re.compile('\d+ VCommitting \d+ instruction with sn:(\d+) PC:\((.+=>.+)\)\.\(0=>1\),' +
         ' with wb value: (.+), with v_addr: (.+)')
 
 def match_and_append(p, line):
@@ -20,9 +20,13 @@ with open(sys.argv[1]) as f, open(sys.argv[2]) as golden_f:
     count = 0
     for lt, lg in zip(f, golden_f):
         count += 1
+        if count % 10000 == 0:
+            print(count)
+
         mt = match_and_append(pattern, lt)
         mg = match_and_append(pattern, lg)
         if mt is None and mg is None:
+            print('.')
             continue
         elif mt is None or mg is None:
             print(f"Difference found in line {count}, one is None!")
@@ -39,6 +43,4 @@ with open(sys.argv[1]) as f, open(sys.argv[2]) as golden_f:
                 print("test:", lt, "gold:", lg, "addr:", addrg)
                 break
 
-        if count % 10000 == 0:
-            print(count)
 
