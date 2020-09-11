@@ -194,7 +194,7 @@ public:
 
     void regStats();
 
-private:
+  private:
 
     unsigned extraWKPtr;
 
@@ -207,7 +207,6 @@ private:
 
     const unsigned maxQueueDepth;
 
-
     unsigned numPendingWakeups;
     unsigned numPendingWakeupMax;
     const unsigned PendingWakeupThreshold;
@@ -217,8 +216,14 @@ private:
     unsigned numPendingFwPointerMax;
     const unsigned PendingFwPointerThreshold;
 
+  public:
     bool wakeupQueueClogging() const;
     bool fwPointerQueueClogging() const;
+
+    unsigned numInFlightWk() const;
+    unsigned numInFlightFw() const;
+
+  private:
 
 //    std::vector<FFRegValue> regFile;
 
@@ -266,8 +271,6 @@ public:
     void setCPU(O3CPU *_cpu) {cpu = _cpu;};
 
     void tryFastCleanup();
-
-    unsigned numInFlightFw();
 
     DynInstPtr findBySeq(InstSeqNum seq);
 

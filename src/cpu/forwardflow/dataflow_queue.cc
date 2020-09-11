@@ -857,7 +857,8 @@ void DataflowQueues<Impl>::tryFastCleanup()
 }
 
 template<class Impl>
-unsigned DataflowQueues<Impl>::numInFlightFw()
+unsigned
+DataflowQueues<Impl>::numInFlightFw() const
 {
     return numPendingFwPointers;
 }
@@ -1971,6 +1972,12 @@ void DataflowQueues<Impl>::selectPointersFromWakeQueues()
     if (Debug::QClog) {
         dumpQueues();
     }
+}
+
+template<class Impl>
+unsigned DataflowQueues<Impl>::numInFlightWk() const
+{
+    return numPendingWakeups;
 }
 
 } // namespace

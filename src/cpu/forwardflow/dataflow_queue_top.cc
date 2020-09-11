@@ -142,11 +142,23 @@ DQTop<Impl>::reExecTailLoad()
         return false;
     }
 
-    WKPointer wk = WKPointer(getTail()->dqPosition);
-    DPRINTF(DQ, "Scheduling tail load inst " ptrfmt "\n", extptr(wk));
-    wk.wkType = WKPointer::WKLdReExec;
-    centralizedExtraWakeup(wk);
-    return true;
+    if (!getTail()->orderFulfilled()) {
+        if (!numInFlightWk()) {
+            WKPointer wk = WKPointer(getTail()->dqPosition);
+            DPRINTF(DQ, "Mark tail load inst as order dep ready" ptrfmt "\n", extptr(wk));
+            wk.wkType = WKPointer::WKOrder;
+            centralizedExtraWakeup(wk);
+
+        }
+        return false;
+
+    } else {
+        WKPointer wk = WKPointer(getTail()->dqPosition);
+        DPRINTF(DQ, "Scheduling tail load inst " ptrfmt "\n", extptr(wk));
+        wk.wkType = WKPointer::WKLdReExec;
+        centralizedExtraWakeup(wk);
+        return true;
+    }
 }
 
 
@@ -1131,6 +1143,19 @@ template<class Impl>
 unsigned DQTop<Impl>::incIndex(unsigned u)
 {
     return (u+1) % dispatchWidth;
+}
+
+template<class Impl>
+unsigned DQTop<Impl>::numInFlightWk() const
+{
+    unsigned sum = 0;
+    for (unsigned g = 0 ; g < c.nGroups; g++) {
+        auto &group = dqGroups[g];
+        sum += group->numInFlightWk();
+        sum += interGroupBuffer[g].size();
+        sum += pseudoCenterWKPointerBuffer[g].size();
+    }
+    return sum;
 }
 
 

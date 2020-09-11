@@ -327,7 +327,10 @@ public:
     Stats::Scalar RegWriteCenterPairBuf;
     Stats::Scalar RegWriteCenterWKBuf;
     Stats::Scalar RegWriteInterGroupWKBuf;
+
+    unsigned numInFlightWk() const;
 };
+
 
 }
 
