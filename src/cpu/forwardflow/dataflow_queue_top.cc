@@ -732,43 +732,9 @@ void DQTop<Impl>::cacheUnblocked()
 }
 
 template<class Impl>
-bool DQTop<Impl>::checkViolation(DynInstPtr &inst) {
-    assert(inst->isLoad());
-    if (inst->bypassOp) {
-        // compare bypassed value against dest
-        if (inst->bypassVal.i != inst->getDestValue().i) {
-            return true;
-        } else {
-            inst->loadVerified = true;
-        }
-    } else {
-        // compare old dest against new dest
-        inst->loadVerifying = false;
-        if (inst->speculativeLoadValue.i != inst->getDestValue().i) {
-            return true;
-        } else {
-            inst->loadVerified = true;
-        }
-    }
-    DPRINTF(NoSQSMB, "No violation detected, mark inst as verified\n");
-    return false;
-}
-
-
-template<class Impl>
 bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
 {
     DPRINTF(DQWake, "Writeback Load[%lu]\n", inst->seqNum);
-
-    if (!inst->loadVerified &&
-            (inst->bypassOp || (inst->loadVerifying && inst->execCount == 2))) {
-        bool violation = checkViolation(inst);
-        if (violation) {
-            DPRINTF(NoSQSMB, "violation detected!\n");
-            return true;
-        }
-    }
-
     bool not_verifying = !inst->isNormalBypass() && // if bypassOp writebackLoad must be verifying
             inst->execCount == 1; // ==0: impossible; ==2: verifying
 

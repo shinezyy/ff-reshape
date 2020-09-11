@@ -285,27 +285,29 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
         if (predecessor_position < 0) {
             predecessor_position += dq->c.dqSize;
         }
-        inst->bypassOp = memBypassOp;
-        inst->hasOrderDep = true;
-        // inst->hasOp[memBypassOp] = true;
-
         auto predecessor_pointer = dq->c.uint2Pointer(predecessor_position);
-        if (inst->memPredHistory->predecessorIsLoad) {
-            predecessor_pointer.op = memBypassOp; // hard-coded which is reserved for load
-        } else {
-            predecessor_pointer.op = 0;
-        }
         DPRINTF(NoSQPred, "Inst[%lu] is predicted to bypass from" ptrfmt " with dist %u\n",
+                inst->seqNum,
                 extptr(predecessor_pointer), inst->memPredHistory->distPair.dqDistance);
 
-        auto receiver = inst->dqPosition;
-        receiver.op = memBypassOp;
+        if (dq->validPosition(predecessor_position)) {
+            inst->bypassOp = memBypassOp;
+            inst->hasOrderDep = true;
 
-        DPRINTF(NoSQSMB, "Creating SMB pair:" ptrfmt "->" ptrfmt "\n",
-                extptr(predecessor_pointer), extptr(receiver));
+            predecessor_pointer.op = memBypassOp; // hard-coded which is reserved for load
 
-        // TODO: update in pair consuming, especially for store
-        pairs.emplace_back(predecessor_pointer, receiver);
+            auto receiver = inst->dqPosition;
+            receiver.op = memBypassOp;
+
+            DPRINTF(NoSQSMB, "Creating SMB pair:" ptrfmt "->" ptrfmt "\n",
+                    extptr(predecessor_pointer), extptr(receiver));
+
+            // TODO: update in pair consuming, especially for store
+            pairs.emplace_back(predecessor_pointer, receiver);
+            pairs.back().isBypass = true;
+        } else {
+            DPRINTF(NoSQSMB, "However, producer is not at a valid position (squashed)\n");
+        }
     }
 
     DPRINTF(Rename, "Rename produces %lu pairs\n", pairs.size());
@@ -665,7 +667,9 @@ template<class Impl>
 void
 ArchState<Impl>::randomizeOp(DynInstPtr &inst)
 {
-    if (inst->isLoad() || inst->isStore()) {
+    if (inst->isNormalStore()) {
+        // no randomization for store
+    } else if (inst->isLoad()) {
         // the last position is reserved for Store->L->L chaining
         std::shuffle(std::begin(inst->indirectRegIndices) + 1,
                      std::end(inst->indirectRegIndices) - 1, gen);

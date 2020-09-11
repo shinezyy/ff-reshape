@@ -200,8 +200,6 @@ public:
 
     bool writebackLoad(DynInstPtr &inst);
 
-    bool checkViolation(DynInstPtr &inst);
-
     void completeMemInst(DynInstPtr &inst);
 
     // Drain, Switch, Initiation

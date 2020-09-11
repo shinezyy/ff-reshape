@@ -318,6 +318,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             assert(op == memBypassOp);
             inst->opReady[op] = true;
             inst->bypassVal = ptr.val;
+            inst->orderDepReady = true;
             handle_wakeup = true;
 
         } else { //  if (ptr.wkType == WKPointer::WKOp)
@@ -519,7 +520,8 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                             inst->destReforward = false;
                         }
 
-                        if (ptr.wkType == WKPointer::WKBypass) {
+                        if (ptr.wkType == WKPointer::WKBypass ||
+                                (inst->isLoad() && op == memBypassOp)) {
                             assert(op == memBypassOp);
                             optr.wkType = WKPointer::WKBypass;
                         }

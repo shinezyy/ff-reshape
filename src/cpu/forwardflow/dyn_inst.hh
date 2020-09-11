@@ -415,16 +415,16 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
     std::array<bool, 4> srcTakenWithInst;
 
-    bool hasMemDep;
-    bool memDepReady;
+    bool hasMemDep{};
+    bool memDepReady{};
     bool memOpFulfilled();
 
-    bool hasMiscDep;
-    bool miscDepReady;
+    bool hasMiscDep{};
+    bool miscDepReady{};
     bool miscOpFulfilled();
 
-    bool hasOrderDep;
-    bool orderDepReady;
+    bool hasOrderDep{};
+    bool orderDepReady{};
     bool orderFulfilled();
 
     int bypassOp{0};

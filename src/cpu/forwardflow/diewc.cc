@@ -867,10 +867,10 @@ FFDIEWC<Impl>::
         if (head_inst->physEffAddrHigh) {
             // pass yet
         }
-        mDepPred->update(head_inst->instAddr(),
-                     head_inst->shouldForward,
-                     head_inst->shouldForwFrom, 0,
-                     head_inst->memPredHistory);
+//        mDepPred->update(head_inst->instAddr(),
+//                     head_inst->shouldForward,
+//                     head_inst->shouldForwFrom, 0,
+//                     head_inst->memPredHistory);
     }
 
     if (FullSystem) {
@@ -1608,17 +1608,27 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
     // assert(inst->sfuWrapper);
     // inst->sfuWrapper->markWb();
     archState.postExecInst(inst);
-    auto violation = dq.writebackLoad(inst);
+
+    bool violation = false;
+    if (!inst->loadVerified &&
+        (inst->bypassOp || (inst->loadVerifying && inst->execCount == 2))) {
+        violation = checkViolation(inst);
+        if (violation) {
+            DPRINTF(NoSQSMB, "violation detected!\n");
+        }
+    }
+
+
     if (violation) {
         fetchRedirect = true;
         ++memOrderViolationEvents;
-        squashDueToFPBypass(inst);
+        squashDueToMemMissPred(inst);
 
         SSBFCell *cell = mDepPred->tssbf.find(inst->physEffAddrLow);
-        if (inst->bypassOp) {
+        if (inst->isNormalBypass()) {
             // false positive
-            DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu]", inst->seqNum);
-            mDepPred->update(inst->physEffAddrLow, false,
+            DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu]\n", inst->seqNum);
+            mDepPred->update(inst->instAddr(), false,
                              0, // dont care
                              0, // dont care
                              inst->memPredHistory
@@ -1629,7 +1639,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
             if (cell) {
                 DPRINTF(NoSQPred, "Marking mem dep:" ptrfmt "->" ptrfmt "\n",
                         extptr(cell->predecessorPosition), extptr(inst->dqPosition));
-                mDepPred->update(inst->physEffAddrLow, true,
+                mDepPred->update(inst->instAddr(), true,
 
                                  inst->seqNum - cell->lastStore, //sn dist
                                  dq.c.computeDist(inst->dqPosition, cell->predecessorPosition),
@@ -1641,6 +1651,8 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                                   " we have to give up recording\n");
             }
         }
+    } else {
+        dq.writebackLoad(inst);
     }
 }
 
@@ -2029,6 +2041,14 @@ void FFDIEWC<Impl>::regStats()
         .desc("largeFanoutInsts");
     fanoutMispredRate = (falseNegativeLF + falsePositiveLF) / totalFanoutPredictions;
 
+    falseNegativeBypass
+            .name(name() + ".falseNegativeBypass")
+            .desc("falseNegativeBypass");
+    falsePositiveBypass
+            .name(name() + ".falsePositiveBypass")
+            .desc("falsePositiveBypass");
+
+
     firstLevelFw
         .name(name() + ".firstLevelFw")
         .desc("firstLevelFw");
@@ -2279,50 +2299,15 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
             } else {
                 predictedNotTakenIncorrect++;
             }
-        } else if (ldstQueue.violation(DummyTid)) { // todo: switched to check from value comparison
-            assert(inst->isMemRef());
-            // If there was an ordering violation, then get the
-            // DynInst that caused the violation.  Note that this
-            // clears the violation signal.
-            DynInstPtr violator;
-            violator = ldstQueue.getMemDepViolator(DummyTid);
-
-            DPRINTF(IEW, "LDSTQ detected a violation. Violator PC: %s "
-                         "[sn:%lli], inst PC: %s [sn:%lli]. Addr is: %#x.\n",
-                    violator->pcState(), violator->seqNum,
-                    inst->pcState(), inst->seqNum, inst->physEffAddrLow);
-
-            fetchRedirect = true;
-
-            // Squash.
-            squashDueToMemOrder(inst, violator);
-
-            ++memOrderViolationEvents;
         }
     } else {
         DPRINTF(FFSquash, "Will not check for squash because condition not satisified\n");
-        // Reset any state associated with redirects that will not
-        // be used.
-        if (ldstQueue.violation(DummyTid)) {
-            assert(inst->isMemRef());
-
-            DynInstPtr violator = ldstQueue.getMemDepViolator(DummyTid);
-
-            DPRINTF(IEW, "LDSTQ detected a violation.  Violator PC: "
-                         "%s, inst PC: %s.  Addr is: %#x.\n",
-                    violator->pcState(), inst->pcState(),
-                    inst->physEffAddrLow);
-            DPRINTF(IEW, "Violation will not be handled because "
-                         "already squashing\n");
-
-            ++memOrderViolationEvents;
-        }
     }
 }
 
 template<class Impl>
 void
-FFDIEWC<Impl>::squashDueToFPBypass(DynInstPtr &violator)
+FFDIEWC<Impl>::squashDueToMemMissPred(DynInstPtr &violator)
 {
     DPRINTF(DIEWC, "Memory violation, squashing violator and younger "
                  "insts, PC: %s [sn:%i].\n", violator->pcState(), violator->seqNum);
@@ -2344,68 +2329,6 @@ FFDIEWC<Impl>::squashDueToFPBypass(DynInstPtr &violator)
              toCheckpoint = violator->instAddr() - 4;
              DPRINTF(FFSquash, "Hint to checkpoint on pc: 0x%llx next time"
                      " in case mem violation\n", toCheckpoint);
-
-        } else {
-            toNextCycle->diewc2diewc.squash = true;
-
-            toNextCycle->diewc2diewc.doneSeqNum = youngest_cpted_inst_seq;
-            toNextCycle->diewc2diewc.squashedSeqNum = youngest_cpted_inst_seq;
-            DynInstPtr innocent_victim = dq.findBySeq(youngest_cpted_inst_seq);
-            toNextCycle->diewc2diewc.squashedPointer = innocent_victim->dqPosition;
-
-            TheISA::PCState npc;
-            if (innocent_victim->isControl() && !innocent_victim->isExecuted() ) {
-                npc = innocent_victim->predPC;
-            } else {
-                npc = innocent_victim->pcState();
-                TheISA::advancePC(npc, innocent_victim->staticInst);
-            }
-            toNextCycle->diewc2diewc.pc = npc;
-            DPRINTF(IEW, "Will replay after inst[%llu].\n", innocent_victim->seqNum);
-            DPRINTF(IEW, "toNextCycle PC: %s.\n", npc);
-            toNextCycle->diewc2diewc.mispredictInst = nullptr;
-
-            // Must include the memory violator in the squash.
-            // todo: note that this is not true in forward flow
-            toNextCycle->diewc2diewc.includeSquashInst = false;
-
-            wroteToTimeBuffer = true;
-        }
-        toNextCycle->diewc2diewc.memViolation = true;
-    }
-}
-template<class Impl>
-void
-FFDIEWC<Impl>::squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator)
-{
-    DPRINTF(DIEWC, "Memory violation, squashing violator and younger "
-                 "insts, PC: %s [sn:%i].\n", violator->pcState(), violator->seqNum);
-    // Need to include inst->seqNum in the following comparison to cover the
-    // corner case when a branch misprediction and a memory violation for the
-    // same instruction (e.g. load PC) are detected in the same cycle.  In this
-    // case the memory violator should take precedence over the branch
-    // misprediction because it requires the violator itself to be included in
-    // the squash.
-    if ((!toNextCycle->diewc2diewc.squash ||
-        violator->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum)
-            //more primary than that found in this cyle
-        && (!fromLastCycle->diewc2diewc.squash ||
-        violator->seqNum <= fromLastCycle->diewc2diewc.squashedSeqNum)
-        //more primary than that found in last cyle
-        ) {
-
-        if (victim->instAddr() != toCheckpoint) {
-            cptHint = false;
-        }
-
-        InstSeqNum youngest_cpted_inst_seq = archState.getYoungestCPTBefore(violator->seqNum);
-
-        if (!youngest_cpted_inst_seq) {
-            squashAll();
-            cptHint = true;
-            toCheckpoint = victim->instAddr();
-            DPRINTF(FFSquash, "Hint to checkpoint on pc: 0x%llx next time"
-                    " in case mem violation\n", toCheckpoint);
 
         } else {
             toNextCycle->diewc2diewc.squash = true;
@@ -2669,6 +2592,32 @@ FFDIEWC<Impl>::setStoreCompleted(InstSeqNum sn)
         // todo: check why it is 0?
         lastCompletedStoreSN = sn;
     }
+}
+
+template<class Impl>
+bool FFDIEWC<Impl>::checkViolation(FFDIEWC::DynInstPtr &inst)
+{
+    assert(inst->isLoad());
+    if (inst->bypassOp) {
+        // compare bypassed value against dest
+        if (inst->bypassVal.i != inst->getDestValue().i) {
+            falsePositiveBypass++;
+            return true;
+        } else {
+            inst->loadVerified = true;
+        }
+    } else {
+        // compare old dest against new dest
+        inst->loadVerifying = false;
+        if (inst->speculativeLoadValue.i != inst->getDestValue().i) {
+            falseNegativeBypass++;
+            return true;
+        } else {
+            inst->loadVerified = true;
+        }
+    }
+    DPRINTF(NoSQSMB, "No violation detected, mark inst as verified\n");
+    return false;
 }
 
 }

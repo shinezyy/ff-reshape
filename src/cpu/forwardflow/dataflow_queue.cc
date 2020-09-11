@@ -21,6 +21,7 @@
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FUW.hh"
+#include "debug/NoSQPred.hh"
 #include "debug/ObExec.hh"
 #include "debug/ObFU.hh"
 #include "debug/QClog.hh"
@@ -476,7 +477,10 @@ DataflowQueues<Impl>::markFwPointers(
         std::array<DQPointer, 4> &pointers, PointerPair &pair, DynInstPtr &inst)
 {
     unsigned op = pair.dest.op;
-    if (pointers[op].valid) {
+    if (pair.isBypass && inst && !inst->isLoad() && !inst->isStore()) {
+        DPRINTF(NoSQPred, "Bypassing from non-load inst, ignore it\n");
+
+    } else if (pointers[op].valid) {
         SRAMWritePointer++;
         DPRINTF(FFSquash, "Overriding previous (squashed) sibling:(%d %d) (%d)\n",
                 pointers[op].bank, pointers[op].index, pointers[op].op);
@@ -505,20 +509,35 @@ DataflowQueues<Impl>::markFwPointers(
                inst->bypassOp && (op == 0 || op == memBypassOp) &&
                inst->orderFulfilled()) {
         DPRINTF(DQWake, "which is a bypassing load and "
-                " has already been waken up! op[%i] ready: %i\n",
+                        " has already been waken up! op[%i] ready: %i\n",
                 inst->bypassOp, inst->opReady[inst->bypassOp]);
         auto wk_ptr = WKPointer(pair.payload);
-        wk_ptr.isFwExtra = true;
-        wk_ptr.hasVal = true;
-        wk_ptr.val = inst->bypassVal;
+        if (inst->isNormalBypass()) {
+            wk_ptr.hasVal = true;
+            wk_ptr.wkType = WKPointer::WKBypass;
+            wk_ptr.val = inst->bypassVal;
+        }
         extraWakeup(wk_ptr);
+
+    } else if (inst && inst->isNormalStore() &&
+            op == memBypassOp && inst->fuGranted) {
+        // now we do not use opReady because this is only a patch for when pair arrives after exec.
+        // when we advance the condition of waking up consumers, we must switch to it.
+        DPRINTF(DQWake, "which is a producing store and "
+                        " has already been executed!\n");
+        assert(inst->opReady[2]); // 2 is src reg of store
+        auto wk_ptr = WKPointer(pair.payload);
+        wk_ptr.hasVal = true;
+        wk_ptr.wkType = WKPointer::WKBypass;
+        wk_ptr.val.i = inst->readIntRegOperand(nullptr, 1); // 2 is src reg of store
+        extraWakeup(wk_ptr);
+
 
     } else if (inst && inst->opReady[op]) {
         DPRINTF(DQWake, "which has already been waken up! op[%i] ready: %i\n",
                 op, inst->opReady[op]);
 
         auto wk_ptr = WKPointer(pair.payload);
-        wk_ptr.isFwExtra = true;
         wk_ptr.hasVal = true;
         if (inst->isForwarder()) {
             wk_ptr.val = inst->getOpValue(inst->forwardOp);
@@ -528,6 +547,9 @@ DataflowQueues<Impl>::markFwPointers(
             } else {
                 wk_ptr.val = inst->getOpValue(op);
             }
+        }
+        if (pair.isBypass) {
+            wk_ptr.wkType = WKPointer::WKBypass;
         }
         extraWakeup(wk_ptr);
 
@@ -550,14 +572,17 @@ DataflowQueues<Impl>::markFwPointers(
     }
 
     if (inst) {
-        if (inst->isStore() && !inst->isRVAmoStoreHalf() && op == memBypassOp) {
+        if (pair.isBypass && inst && !inst->isLoad() && !inst->isStore()) {
+            DPRINTF(NoSQPred, "Bypassing from non-load inst, ignore it\n");
+
+        } else  if (inst->isNormalStore() && pair.isBypass) {
             DPRINTF(FFDisp || Debug::DQWake,
                     "Storing pointer to dest field of store\n");
             pointers[0] = pair.payload;
-        } else {
+        } else  {
             pointers[op] = pair.payload;
         }
-        if (inst->isLoad() && op == memBypassOp) {
+        if (inst->isLoad() && pair.isBypass) {
             inst->bypassOp = memBypassOp;
         }
     }

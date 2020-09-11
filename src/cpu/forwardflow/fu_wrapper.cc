@@ -98,6 +98,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
                 to_wake[DestPtr].hasVal = false;
 
             } else if (inst->isNormalStore()) {
+                // todo: advance waking up successor as soon as the value reg available
                 DPRINTFR(FUW, "with value because of it's store\n");
                 // passing store value to predicted consumer
                 to_wake[DestPtr].hasVal = true;
@@ -126,7 +127,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
                     extptr(dest));
         }
     } else {
-        DPRINTFR(FUW, "with not ISA defined dest\n");
+        DPRINTFR(FUW, "with no ISA-defined dest\n");
     }
 
     // store wakeup info

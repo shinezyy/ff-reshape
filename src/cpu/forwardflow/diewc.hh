@@ -470,15 +470,16 @@ public:
     Stats::Scalar headReadyExecDelayTicks;
     Stats::Scalar headReadyNotExec;
 
+    Stats::Scalar falseNegativeBypass;
+    Stats::Scalar falsePositiveBypass;
+
     ArchState *getArchState() {return &archState;}
 
     DQTop *getDQ() {return &dq;}
 
     void executeInst(DynInstPtr &inst);
 
-    void squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator);
-
-    void squashDueToFPBypass(DynInstPtr &violator);
+    void squashDueToMemMissPred(DynInstPtr &violator);
 
 private:
     void sendBackwardInfo();
@@ -538,6 +539,10 @@ public:
     void setStoreCompleted(InstSeqNum sn);
 
     InstSeqNum getLastCompletedStoreSN() {return lastCompletedStoreSN;}
+
+  private:
+
+    bool checkViolation(DynInstPtr &inst);
 
 };
 

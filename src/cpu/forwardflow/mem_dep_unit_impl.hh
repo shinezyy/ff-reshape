@@ -170,7 +170,6 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
     if (!barrier_entry) {
         DPRINTF(MemDepUnit, "No dependency for inst PC "
                 "%s [sn:%lli].\n", inst->pcState(), inst->seqNum);
-        inst->hasOrderDep = false;
 
     } else {
         // Otherwise make the instruction dependent on the store/barrier.
@@ -204,7 +203,6 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
             barrier_entry->latestPosition = position;
 
         } else {
-            inst->hasOrderDep = false;
             DPRINTF(NoSQSMB, "Store @ " ptrfmt " is found to be invalidated!\n",
                     extptr(barrier_entry->latestPosition));
         }

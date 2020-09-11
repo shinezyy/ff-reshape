@@ -102,10 +102,12 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
     }
 
     DPRINTF(NoSQPred, "For load @ 0x%x, "
-            "overall: bypass: %i, pc: %i, path: 0x%lx, path sensitive: %i, store dist: %i\n",
+            "overall: bypass: %i, pc: %i, path: 0x%lx, path sensitive: %i, store dist: %i, dq dist: %i\n",
             load_pc,
             mp_history->bypass, mp_history->pcBypass, mp_history->pathBypass,
-            mp_history->pathSensitive, mp_history->distPair.snDistance);
+            mp_history->pathSensitive, mp_history->distPair.snDistance,
+            mp_history->distPair.dqDistance
+            );
 
     mp_history->path = path;
     return std::make_pair(mp_history->bypass, mp_history->distPair);
@@ -146,13 +148,14 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
 
         // if (!hist->pcBypass) {
         if (true) {
-            DPRINTF(NoSQPred, "Inc conf in pc table with dist: %i, ", sn_dist);
+            DPRINTF(NoSQPred, "Inc conf in pc table with sn dist: %i, dq dist: %i\n",
+                    sn_dist, dq_dist);
             increment(pcTable, load_pc, {sn_dist, dq_dist}, false);
         }
         // if (!hist->pathBypass) {
         if (true) {
-            DPRINTF(NoSQPred, "Inc conf in path table with dist: %i, path: 0x%lx, ",
-                    sn_dist, hist->path);
+            DPRINTF(NoSQPred, "Inc conf in path table with sn dist: %i, dq dist: %i, path: 0x%lx\n",
+                    sn_dist, dq_dist, hist->path);
             increment(pathTable, genPathKey(load_pc, hist->path),
                       {sn_dist, dq_dist}, false);
         }
