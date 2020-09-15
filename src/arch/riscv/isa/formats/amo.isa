@@ -358,7 +358,7 @@ def format AtomicMemOp(load_code, store_code, ea_code, load_flags=[],
     decode_block = BasicDecode.subst(macro_iop)
     exec_output = ''
 
-    load_inst_flags = makeList(inst_flags) + ["IsMemRef", "IsLoad"]
+    load_inst_flags = makeList(inst_flags) + ["IsMemRef", "IsLoad", "IsRVAmoLoadHalf"]
     load_iop = InstObjParams(name, Name, 'AtomicMemOpMicro',
         {'ea_code': ea_code, 'code': load_code, 'op_name': 'Load'},
         load_inst_flags)

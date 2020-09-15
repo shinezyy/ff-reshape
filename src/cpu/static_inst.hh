@@ -145,6 +145,7 @@ class StaticInst : public RefCounted, public StaticInstFlags
     bool isStore()        const { return flags[IsStore]; }
     bool isAtomic()       const { return flags[IsAtomic]; }
     bool isRVAmoStoreHalf()         const { return flags[IsRVAmoStoreHalf]; }
+    bool isRVAmoLoadHalf()         const { return flags[IsRVAmoLoadHalf]; }
     bool isStoreConditional()       const { return flags[IsStoreConditional]; }
     bool isInstPrefetch() const { return flags[IsInstPrefetch]; }
     bool isDataPrefetch() const { return flags[IsDataPrefetch]; }

@@ -162,6 +162,10 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
         if (tail->seqNum == bypassCanceled) {
             skip_verify = false;
 
+        } else if (tail->isRVAmoLoadHalf()) {
+            // AMO load is not verifiable
+            skip_verify = true;
+
         } else if (tail->memPredHistory->bypass) {
             DPRINTF(NoSQSMB, "Load [%lu] is predicted to bypass\n", tail->seqNum);
             if (tail->physEffAddrHigh) {
@@ -186,6 +190,7 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
             DPRINTF(NoSQSMB, "Skip verifying load [%lu]\n", tail->seqNum);
             tail->loadVerified = true;
             verifiedTailLoad = tail->seqNum;
+
         } else if (!ldstQueue.numStoresToWB(DummyTid)){
             auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(bypassCanceled);
             if (sent_reexec) {
@@ -1613,6 +1618,9 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
     // inst->sfuWrapper->markWb();
     archState.postExecInst(inst);
 
+    DPRINTF(NoSQSMB, "Inst[%lu] wb count: %i dest value: %lu\n",
+            inst->seqNum, inst->wbCount, inst->getDestValue().i);
+
     bool violation = false;
     if (!inst->loadVerified &&
         (inst->bypassOp || (inst->loadVerifying && inst->wbCount == 2))) {
@@ -2602,7 +2610,7 @@ template<class Impl>
 bool FFDIEWC<Impl>::checkViolation(FFDIEWC::DynInstPtr &inst)
 {
     assert(inst->isLoad());
-    if (inst->bypassOp) {
+    if (inst->isNormalBypass()) {
         // compare bypassed value against dest
         if (inst->bypassVal.i != inst->getDestValue().i) {
             falsePositiveBypass++;
@@ -2614,6 +2622,8 @@ bool FFDIEWC<Impl>::checkViolation(FFDIEWC::DynInstPtr &inst)
         // compare old dest against new dest
         inst->loadVerifying = false;
         if (inst->speculativeLoadValue.i != inst->getDestValue().i) {
+            DPRINTF(NoSQSMB, "Saved speculative value: %lu, newly loaded value: %lu\n",
+                    inst->speculativeLoadValue.i, inst->getDestValue().i);
             falseNegativeBypass++;
             return true;
         } else {
