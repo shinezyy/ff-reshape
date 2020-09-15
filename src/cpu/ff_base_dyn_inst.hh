@@ -276,7 +276,8 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool notAnInst() const { return instFlags[NotAnInst]; }
     void setNotAnInst() { instFlags[NotAnInst] = true; }
 
-    uint8_t execCount{};
+    uint8_t wbCount{};
+    uint8_t loadIssueCount{};
 
     ////////////////////////////////////////////
     //
@@ -739,7 +740,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Sets this instruction as executed. */
     void setExecuted() {
         status.set(Executed);
-        execCount++;
+        wbCount++;
     }
 
     /** Returns whether or not this instruction has executed. */
@@ -957,6 +958,9 @@ BaseDynInst<Impl>::initiateMemRead(Addr addr, unsigned size,
                 reqToVerify = std::make_shared<Request>(*req);
             }
             fault = cpu->read(req, sreqLow, sreqHigh, lqIdx);
+            translationStarted(false);
+            translationCompleted(false);
+            loadIssueCount++;
         } else {
             // Commit will have to clean up whatever happened.  Set this
             // instruction as executed.
@@ -1060,10 +1064,10 @@ BaseDynInst<Impl>::initiateTranslation(const RequestPtr &req,
             fault = NoFault;
 
             // Save memory requests.
+            savedReq = state->mainReq;
             savedSreqLow = state->sreqLow;
             savedSreqHigh = state->sreqHigh;
         }
-        savedReq = state->mainReq;
     } else {
         WholeTranslationState *state =
             new WholeTranslationState(req, sreqLow, sreqHigh, NULL, res, mode);
@@ -1085,10 +1089,10 @@ BaseDynInst<Impl>::initiateTranslation(const RequestPtr &req,
             fault = NoFault;
 
             // Save memory requests.
+            savedReq = state->mainReq;
             savedSreqLow = state->sreqLow;
             savedSreqHigh = state->sreqHigh;
         }
-        savedReq = state->mainReq;
     }
 }
 

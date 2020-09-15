@@ -188,7 +188,7 @@ class MemDepUnit
             } else {
                 latestPosition.valid = false;
             }
-#ifdef DEBUG
+#ifdef Nothing
             ++memdep_count;
 
             DPRINTF(MemDepUnit, "Memory dependency entry created.  "
@@ -202,7 +202,7 @@ class MemDepUnit
             for (int i = 0; i < dependInsts.size(); ++i) {
                 dependInsts[i] = NULL;
             }
-#ifdef DEBUG
+#ifdef Nothing
             --memdep_count;
 
             DPRINTF(MemDepUnit, "Memory dependency entry deleted.  "
@@ -236,7 +236,7 @@ class MemDepUnit
         TermedPointer latestPosition;
 
         /** For debugging. */
-#ifdef DEBUG
+#ifdef Nothing
         static int memdep_count;
         static int memdep_insert;
         static int memdep_erase;

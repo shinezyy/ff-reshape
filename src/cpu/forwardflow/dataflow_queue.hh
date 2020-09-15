@@ -445,6 +445,8 @@ public:
     Stats::Scalar CombSelNet;
 
     Stats::Scalar SRAMWritePointer;
+
+    void checkSanity() const;
 };
 
 }

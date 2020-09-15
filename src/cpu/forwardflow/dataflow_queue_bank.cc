@@ -118,6 +118,10 @@ DataflowQueueBank<Impl>::tryWakeTail()
         DPRINTF(DQWake, "Tail[%d] is null, skip\n", tail);
         return nullptr;
     }
+    if (tail_inst->isNormalBypass()) {
+        DPRINTF(DQWake, "Tail[%d] is normal bypassing, skip\n", tail);
+        return nullptr;
+    }
 
     if (tail_inst->inReadyQueue || tail_inst->fuGranted ||
         (tail_inst->isForwarder() && tail_inst->isExecuted())) {
@@ -162,6 +166,12 @@ DataflowQueueBank<Impl>::tryWakeDirect()
         readyQueue.pop_front();
         return nullptr;
     }
+
+    if (inst->isNormalBypass()) {
+        DPRINTF(DQWake, "Tail[%d] is normal bypassing, skip\n", tail);
+        return nullptr;
+    }
+
     if (inst->inReadyQueue || inst->fuGranted || (inst->isForwarder() && inst->isExecuted())) {
         DPRINTF(DQWake, "Inst at [%d] has been granted, skip\n", tail);
         readyQueue.pop_front();
@@ -296,6 +306,11 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 DPRINTF(DQWake, "But ignore it because inst [%llu] has already been granted\n",
                         inst->seqNum);
             }
+            if (inst->isLoad() && inst->isNormalBypass()) {
+                DPRINTF(DQWake, "Bypassing for inst [%llu] is canceled\n", inst->seqNum);
+                inst->bypassOp = 0;
+            }
+
         } else if (ptr.wkType == WKPointer::WKLdReExec) {
             assert(inst->isLoad());
             bool mem_acc_not_issued = inst->numBusyOps() || !inst->memOpFulfilled() || !inst->fuGranted;
@@ -352,37 +367,51 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         }
 
         if (handle_wakeup) {
-            if (nearlyWakeup[ptr.index] && !inst->isNormalBypass()) {
-                assert(inst->numBusyOps() == 0);
-                DPRINTF(DQWake || Debug::ObExec, "inst [%llu]: %s is ready to waken up\n",
-                        inst->seqNum, inst->staticInst->disassemble(inst->instAddr()));
+            if (nearlyWakeup[ptr.index]) {
+                if (!inst->isNormalBypass() || ptr.wkType == WKPointer::WKLdReExec) {
+                    assert(inst->numBusyOps() == 0);
+                    DPRINTF(DQWake || Debug::ObExec, "inst [%llu]: %s is ready to waken up\n",
+                            inst->seqNum, inst->staticInst->disassemble(inst->instAddr()));
 
-                wakeup_count++;
-                if (inst->readyTick == 0)  {
-                    inst->readyTick = curTick();
-                }
-                if (!first) {
-                    if (ptr.wkType != WKPointer::WKOp || ptr.isFwExtra) {
-                        inst->wkDelayedCycle = std::max((int) 0, ((int) ptr.queueTime) - 1);
+                    if (ptr.wkType == WKPointer::WKLdReExec) {
+                        DPRINTF(DQWake || Debug::ObExec || Debug::NoSQSMB,
+                                "Waking up inst [%llu](normal bypassing) to verify it\n",
+                                inst->seqNum);
+                    }
+
+                    wakeup_count++;
+                    if (inst->readyTick == 0) {
+                        inst->readyTick = curTick();
+                    }
+                    if (!first) {
+                        if (ptr.wkType != WKPointer::WKOp || ptr.isFwExtra) {
+                            inst->wkDelayedCycle = std::max((int) 0, ((int) ptr.queueTime) - 1);
+                        } else {
+                            inst->wkDelayedCycle = ptr.queueTime;
+                        }
+                        dq->countCycles(inst, &ptr);
+
+                        DPRINTF(DQWake || Debug::RSProbe1,
+                                "inst [%llu] is the gifted one in this bank\n",
+                                inst->seqNum);
+                        first = inst;
+                        first_index = ptr.index;
+                        if (anyPending) {
+                            DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
+                                    ptr.bank, ptr.index, ptr.op);
+                            ptr.valid = false;
+                        }
                     } else {
-                        inst->wkDelayedCycle = ptr.queueTime;
+                        DPRINTF(DQWake || Debug::RSProbe1,
+                                "inst [%llu] has no luck in this bank\n", inst->seqNum);
+                        need_pending_ptr[op] = true;
+                        inst->readyInBankDelay += 1;
                     }
-                    dq->countCycles(inst, &ptr);
-                    DPRINTF(DQWake||Debug::RSProbe1,
-                            "inst [%llu] is the gifted one in this bank\n",
-                            inst->seqNum);
-                    first = inst;
-                    first_index = ptr.index;
-                    if (anyPending) {
-                        DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
-                                ptr.bank, ptr.index, ptr.op);
-                        ptr.valid = false;
-                    }
+
                 } else {
-                    DPRINTF(DQWake||Debug::RSProbe1,
-                            "inst [%llu] has no luck in this bank\n", inst->seqNum);
-                    need_pending_ptr[op] = true;
-                    inst->readyInBankDelay += 1;
+                    DPRINTF(DQWake || Debug::ObExec || Debug::NoSQSMB,
+                            "Skip waking up inst [%llu]: normal bypassing\n",
+                            inst->seqNum);
                 }
 
             } else {
@@ -520,9 +549,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                             inst->destReforward = false;
                         }
 
-                        if (ptr.wkType == WKPointer::WKBypass ||
-                                (inst->isLoad() && op == memBypassOp)) {
-                            assert(op == memBypassOp);
+                        if (inst->isLoad() && op == memBypassOp) {
                             optr.wkType = WKPointer::WKBypass;
                         }
 
@@ -665,9 +692,9 @@ DataflowQueueBank<Impl>::writeInstsToBank(
 
         ptr.valid = false;
     }
-    if (inst->isLoad() && inst->pointers[memBypassOp].valid) {
-        inst->bypassOp = memBypassOp;
-    }
+//    if (inst->isLoad() && inst->pointers[memBypassOp].valid) {
+//        inst->bypassOp = memBypassOp;
+//    }
 
     SRAMWriteInst++;
     SRAMWriteValue += nOps;

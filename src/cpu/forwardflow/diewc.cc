@@ -51,27 +51,22 @@ void FFDIEWC<Impl>::tick() {
 
     // todo read allocated instructions from allocation stage
     // part receive
-//    DPRINTF(DIEWC, "tick reach 0\n");
     readInsts();
-//    DPRINTF(DIEWC, "tick reach 1\n");
+
     checkSignalsAndUpdate();
-//    DPRINTF(DIEWC, "tick reach 2\n");
     // todo insert these insts into LSQ until full
     // if no LSQ entry allocated for an LD/ST inst, it and further insts should not be insert into DQ (block)
 
-//    DPRINTF(DIEWC, "tick reach 4\n");
 
     // todo: remember to advance
     //  - issue to execution queue
     //  - commit queue
     //  - timebuffers inside DQ
     advanceQueues();
-//    DPRINTF(DIEWC, "tick reach 5\n");
 
     // todo: DQ tick
     // part DQ tick: should not read values from part bring value part route pointer in the same cycle
     dq.tick();
-//    DPRINTF(DIEWC, "tick reach 6\n");
 //
     // TODO: it writes center buffer
     ldstQueue.writebackStores();
@@ -92,7 +87,6 @@ void FFDIEWC<Impl>::tick() {
     // part bring value
     tryDispatch();
 
-    //    DPRINTF(DIEWC, "tick reach 3\n");
     // todo: forward pointers should be calculated
     //  - source operand forward pointer (if any sibling)
     //  - dest operand forward pointer
@@ -150,6 +144,7 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
     auto tail = getTailInst();
     if (tail && tail->isLoad() && tail->seqNum != verifiedTailLoad) {
         InstSeqNum nvul = tail->seqNVul;
+        DPRINTF(NoSQSMB, "Last verified load is %lu\n", verifiedTailLoad);
         DPRINTF(NoSQSMB, "NVul of load [%lu] is %lu\n", tail->seqNum, nvul);
         bool skip_verify;
         InstSeqNum low_ssn = 0, high_ssn = 0, ssn = 0;
@@ -164,13 +159,17 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
                     "with last store SN: %lu\n", tail->seqNum, ssn);
         }
 
-        if (tail->memPredHistory->bypass) {
+        if (tail->seqNum == bypassCanceled) {
+            skip_verify = false;
+
+        } else if (tail->memPredHistory->bypass) {
             DPRINTF(NoSQSMB, "Load [%lu] is predicted to bypass\n", tail->seqNum);
             if (tail->physEffAddrHigh) {
                 skip_verify = (low_ssn == nvul) && (high_ssn == nvul);
             } else {
                 skip_verify = ssn == nvul;
             }
+
         } else {
             DPRINTF(NoSQSMB, "Load [%lu] is predicted to not bypass\n", tail->seqNum);
             // ssn == 0 means its entry might be evicted
@@ -188,9 +187,20 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
             tail->loadVerified = true;
             verifiedTailLoad = tail->seqNum;
         } else if (!ldstQueue.numStoresToWB(DummyTid)){
-            if (dq.reExecTailLoad()) {
+            auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(bypassCanceled);
+            if (sent_reexec) {
                 verifiedTailLoad = tail->seqNum;
-                // only mark it when re exec pointer is sent
+            }
+            if (canceled_bypassing && tail->memPredHistory) {
+                DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu], "
+                                  "because it does not received the bypassing pointer"
+                                  " even after it becomes DQ tail\n", tail->seqNum);
+                mDepPred->update(tail->instAddr(), false,
+                                 0, // dont care
+                                 0, // dont care
+                                 tail->memPredHistory // will be deleted
+                );
+
             }
         } else {
             DPRINTF(NoSQSMB, "Cannot verify load [%lu] yet, because of pending wb store\n",
@@ -265,7 +275,7 @@ void FFDIEWC<Impl>::readInsts() {
 template<class Impl>
 void FFDIEWC<Impl>::dispatch() {
 
-//    DPRINTF(DIEWC, "dispatch reach 0\n");
+
     InstQueue &to_dispatch = dispatchStatus == Unblocking ?
             skidBuffer : insts_from_allocation;
     unsigned num_insts_to_disp = to_dispatch.size();
@@ -273,10 +283,9 @@ void FFDIEWC<Impl>::dispatch() {
     bool normally_add_to_dq = false;
     unsigned dispatched = 0;
 
-//    DPRINTF(DIEWC, "dispatch reach 1\n");
+
     for (; dispatched < num_insts_to_disp &&
            dispatched < dispatchWidth && !to_dispatch.empty();) {
-//        DPRINTF(DIEWC, "dispatch reach 2\n");
         inst = to_dispatch.front();
         assert(inst);
 
@@ -301,7 +310,6 @@ void FFDIEWC<Impl>::dispatch() {
             continue;
         }
 
-//        DPRINTF(DIEWC, "dispatch reach 3\n");
         if (dq.isFull() || dq.hasTooManyPendingInsts() || dq.isSwitching()) {
             DPRINTF(DIEWC, "block because DQ is full or is switching\n");
             block();
@@ -310,7 +318,6 @@ void FFDIEWC<Impl>::dispatch() {
             break;
         }
 
-//        DPRINTF(DIEWC, "dispatch reach 4\n");
         if ((inst->isLoad() && ldstQueue.lqFull()) ||
             (inst->isStore() && ldstQueue.sqFull())) {
             if (inst->isLoad()) {
@@ -407,7 +414,6 @@ void FFDIEWC<Impl>::dispatch() {
             normally_add_to_dq = true;
         }
 
-//        DPRINTF(DIEWC, "dispatch reach 6\n");
         if (normally_add_to_dq && inst->isNonSpeculative()) {
             inst->setCanCommit();
 
@@ -448,7 +454,6 @@ void FFDIEWC<Impl>::dispatch() {
             dq.maintainOldestUsed();
         }
 
-//        DPRINTF(DIEWC, "dispatch reach 8\n");
         if (!to_dispatch.front()->isForwarder()) {
             toAllocation->diewcInfo.dispatched++;
         }
@@ -503,7 +508,6 @@ void FFDIEWC<Impl>::dispatch() {
     }
     // archState.dumpMaps();
 
-//    DPRINTF(DIEWC, "dispatch reach 8\n");
     if (!to_dispatch.empty()) {
         DPRINTF(DIEWC || Debug::FFDisp, "DIEWC blocked because instructions are not used up\n");
         block();
@@ -1611,7 +1615,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
 
     bool violation = false;
     if (!inst->loadVerified &&
-        (inst->bypassOp || (inst->loadVerifying && inst->execCount == 2))) {
+        (inst->bypassOp || (inst->loadVerifying && inst->wbCount == 2))) {
         violation = checkViolation(inst);
         if (violation) {
             DPRINTF(NoSQSMB, "violation detected!\n");

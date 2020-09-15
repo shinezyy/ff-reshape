@@ -113,6 +113,10 @@ BaseDynInst<Impl>::initVars()
     // Initialize the fault to be NoFault.
     fault = NoFault;
 
+    savedReq = nullptr;
+    savedSreqHigh = nullptr;
+    savedSreqLow = nullptr;
+
 #ifndef NDEBUG
     ++cpu->instcount;
 

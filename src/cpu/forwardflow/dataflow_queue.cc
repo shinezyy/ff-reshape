@@ -514,7 +514,9 @@ DataflowQueues<Impl>::markFwPointers(
         auto wk_ptr = WKPointer(pair.payload);
         if (inst->isNormalBypass()) {
             wk_ptr.hasVal = true;
-            wk_ptr.wkType = WKPointer::WKBypass;
+            if (pair.isBypass) {
+                wk_ptr.wkType = WKPointer::WKBypass;
+            }
             wk_ptr.val = inst->bypassVal;
         }
         extraWakeup(wk_ptr);
@@ -582,9 +584,9 @@ DataflowQueues<Impl>::markFwPointers(
         } else  {
             pointers[op] = pair.payload;
         }
-        if (inst->isLoad() && pair.isBypass) {
-            inst->bypassOp = memBypassOp;
-        }
+//        if (inst->isLoad() && pair.isBypass) {
+//            inst->bypassOp = memBypassOp;
+//        }
     }
 }
 
@@ -1978,6 +1980,12 @@ template<class Impl>
 unsigned DataflowQueues<Impl>::numInFlightWk() const
 {
     return numPendingWakeups;
+}
+
+template<class Impl>
+void DataflowQueues<Impl>::checkSanity() const
+{
+    bankFUXBar.checkSanity();
 }
 
 } // namespace

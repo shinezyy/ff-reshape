@@ -161,6 +161,7 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
         }
     }
     delete hist;
+    hist = nullptr;
 }
 
 void
@@ -220,6 +221,7 @@ void
 MemDepPredictor::squash(MemPredHistory* &hist)
 {
     delete hist;
+    hist = nullptr;
 }
 
 void

@@ -13,6 +13,13 @@
 #include <unordered_map>
 #include <vector>
 
+#ifdef __CLION_CODING__
+#include "cpu/forwardflow/dataflow_queue.hh"
+#include "cpu/forwardflow/dataflow_queue_bank.hh"
+#include "cpu/forwardflow/dyn_inst.hh"
+
+#endif
+
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/crossbar.hh"
 #include "cpu/forwardflow/crossbar_dedi_dest.hh"
@@ -21,12 +28,6 @@
 #include "cpu/forwardflow/network.hh"
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
-
-#ifdef __CLION_CODING__
-#include "cpu/forwardflow/dataflow_queue.hh"
-#include "cpu/forwardflow/dataflow_queue_bank.hh"
-#include "cpu/forwardflow/dyn_inst.hh"
-#endif
 
 struct DerivFFCPUParams;
 
@@ -87,7 +88,8 @@ public:
 
     void scheduleNonSpec();
 
-    bool reExecTailLoad();
+    // 1: sent reexec pointer; 2: canceling bypassing
+    std::pair<bool, bool> reExecTailLoad(InstSeqNum &canceledSeq);
 
     void centralizedExtraWakeup(const WKPointer &wk);
 
@@ -329,6 +331,8 @@ public:
     Stats::Scalar RegWriteInterGroupWKBuf;
 
     unsigned numInFlightWk() const;
+
+    void checkSanity() const;
 };
 
 

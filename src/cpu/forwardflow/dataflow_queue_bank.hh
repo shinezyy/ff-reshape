@@ -12,7 +12,6 @@
 #include <vector>
 
 #ifdef __CLION_CODING__
-#include "cpu/ff_base_dyn_inst.hh"
 #include "cpu/forwardflow/dataflow_queue.hh"
 #include "cpu/forwardflow/dataflow_queue_top.hh"
 #include "cpu/forwardflow/dyn_inst.hh"

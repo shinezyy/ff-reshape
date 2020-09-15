@@ -528,6 +528,7 @@ public:
     MemDepPredictor *mDepPred;
 
     InstSeqNum verifiedTailLoad{0};
+    InstSeqNum bypassCanceled{0};
 
     void tryVerifyTailLoad();
 

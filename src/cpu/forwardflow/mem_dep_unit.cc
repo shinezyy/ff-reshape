@@ -32,16 +32,16 @@
 #include "cpu/forwardflow/mem_dep_unit_impl.hh"
 #include "cpu/forwardflow/store_set.hh"
 
-#ifdef DEBUG
+#ifdef Nothing
 template <>
 int
-MemDepUnit<StoreSet, FFCPUImpl>::MemDepEntry::memdep_count = 0;
+FF::MemDepUnit<StoreSet, FFCPUImpl>::MemDepEntry::memdep_count = 0;
 template <>
 int
-MemDepUnit<StoreSet, FFCPUImpl>::MemDepEntry::memdep_insert = 0;
+FF::MemDepUnit<StoreSet, FFCPUImpl>::MemDepEntry::memdep_insert = 0;
 template <>
 int
-MemDepUnit<StoreSet, FFCPUImpl>::MemDepEntry::memdep_erase = 0;
+FF::MemDepUnit<StoreSet, FFCPUImpl>::MemDepEntry::memdep_erase = 0;
 #endif
 
 // Force instantation of memory dependency unit using store sets and
