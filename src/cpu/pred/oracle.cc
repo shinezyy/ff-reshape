@@ -47,11 +47,13 @@ OracleBP::OracleBP(const OracleBPParams *params)
             instShiftAmt);
     state.commit_bid = -1;
     state.front_bid = -1;
+    reset();
 }
 
 void
 OracleBP::reset()
 {
+    frontPointer = orderedOracleEntries.begin();
 }
 
 void
@@ -100,7 +102,9 @@ OracleBP::update(ThreadID tid, Addr branch_addr, bool taken, void *bp_history,
 
         assert(history_state->front_bid + 1 == orderedOracleEntries.back().branchID);
 
+        assert(!orderedOracleEntries.empty());
         orderedOracleEntries.pop_back();
+        frontPointer = orderedOracleEntries.begin();
 
         DPRINTF(OracleBP, "Oracle table size: %lu.\n", orderedOracleEntries.size());
 
