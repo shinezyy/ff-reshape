@@ -343,7 +343,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             if (op != 0) {
                 assert(inst->indirectRegIndices.at(op).size() ||
                         op == inst->bypassOp);
-                assert(ptr.hasVal);
+                assert(ptr.hasVal || (inst->bypassOp && !inst->isNormalBypass()));
 
                 if (inst->indirectRegIndices.at(op).size()) {
                     FFRegValue v = ptr.val;
@@ -358,7 +358,6 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                     // todo:
                     assert(inst->bypassOp);
                     assert(!inst->isNormalBypass());
-                    inst->bypassVal = ptr.val;
                     inst->orderDepReady = true;
                 }
             }

@@ -490,12 +490,36 @@ DataflowQueues<Impl>::markFwPointers(
             auto wk_ptr = WKPointer(pair.payload);
             wk_ptr.isFwExtra = true;
             wk_ptr.hasVal = true;
-            if (op == 0) {
+
+            if (pair.isBypass &&
+                !(inst->isNormalStore() && op == memBypassOp) &&
+                !(inst->isLoad() && inst->isNormalBypass())) {
+
+                DPRINTF(NoSQPred, "Bypassing from non-store and non-bypassing insts, ignore it\n");
+
+            } else if (inst->isNormalStore() && op == memBypassOp) {
+                wk_ptr.val.i = inst->readIntRegOperand(nullptr, 1); // 1 is src reg of store
+                wk_ptr.wkType = WKPointer::WKBypass;
+                assert(pair.isBypass);
+                extraWakeup(wk_ptr);
+
+            } else if (inst->isLoad() && inst->isNormalBypass() && (op == 0 || op == memBypassOp)) {
+                wk_ptr.val = inst->bypassVal;
+                if (op == memBypassOp) {
+                    wk_ptr.wkType = WKPointer::WKBypass;
+                    assert(pair.isBypass);
+                }
+                extraWakeup(wk_ptr);
+
+            } else if (op == 0) {
                 wk_ptr.val = inst->getDestValue();
+                extraWakeup(wk_ptr);
+
             } else {
                 wk_ptr.val = inst->getOpValue(op);
+                extraWakeup(wk_ptr);
             }
-            extraWakeup(wk_ptr);
+
             if (op == 0) {
                 inst->destReforward = false;
             }
@@ -512,14 +536,21 @@ DataflowQueues<Impl>::markFwPointers(
                         " has already been waken up! op[%i] ready: %i\n",
                 inst->bypassOp, inst->opReady[inst->bypassOp]);
         auto wk_ptr = WKPointer(pair.payload);
+        // todo: when op == 0 and inst is not normal bypass, there is a bug
         if (inst->isNormalBypass()) {
             wk_ptr.hasVal = true;
             if (pair.isBypass) {
                 wk_ptr.wkType = WKPointer::WKBypass;
             }
             wk_ptr.val = inst->bypassVal;
+            extraWakeup(wk_ptr);
+
+        } else if (op == 0) {
+            // must wait the loaded value
+
+        } else {
+            extraWakeup(wk_ptr);
         }
-        extraWakeup(wk_ptr);
 
     } else if (inst && inst->isNormalStore() &&
             op == memBypassOp && inst->fuGranted) {
@@ -531,7 +562,7 @@ DataflowQueues<Impl>::markFwPointers(
         auto wk_ptr = WKPointer(pair.payload);
         wk_ptr.hasVal = true;
         wk_ptr.wkType = WKPointer::WKBypass;
-        wk_ptr.val.i = inst->readIntRegOperand(nullptr, 1); // 2 is src reg of store
+        wk_ptr.val.i = inst->readIntRegOperand(nullptr, 1); // 1 is src reg of store
         extraWakeup(wk_ptr);
 
 
