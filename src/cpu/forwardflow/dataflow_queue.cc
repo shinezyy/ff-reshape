@@ -498,7 +498,7 @@ DataflowQueues<Impl>::markFwPointers(
                 DPRINTF(NoSQPred, "Bypassing from non-store and non-bypassing insts, ignore it\n");
 
             } else if (inst->isNormalStore() && op == memBypassOp) {
-                wk_ptr.val.i = inst->readIntRegOperand(nullptr, 1); // 1 is src reg of store
+                wk_ptr.val.i = inst->readStoreValue();
                 wk_ptr.wkType = WKPointer::WKBypass;
                 assert(pair.isBypass);
                 extraWakeup(wk_ptr);
@@ -558,13 +558,11 @@ DataflowQueues<Impl>::markFwPointers(
         // when we advance the condition of waking up consumers, we must switch to it.
         DPRINTF(DQWake, "which is a producing store and "
                         " has already been executed!\n");
-        assert(inst->opReady[2]); // 2 is src reg of store
         auto wk_ptr = WKPointer(pair.payload);
         wk_ptr.hasVal = true;
         wk_ptr.wkType = WKPointer::WKBypass;
-        wk_ptr.val.i = inst->readIntRegOperand(nullptr, 1); // 1 is src reg of store
+        wk_ptr.val.i = inst->readStoreValue();
         extraWakeup(wk_ptr);
-
 
     } else if (inst && inst->opReady[op]) {
         DPRINTF(DQWake, "which has already been waken up! op[%i] ready: %i\n",
