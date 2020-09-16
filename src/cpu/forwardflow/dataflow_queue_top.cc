@@ -123,7 +123,7 @@ void DQTop<Impl>::scheduleNonSpec()
     }
     WKPointer wk = WKPointer(getTail()->dqPosition);
     auto p = c.uint2Pointer(tail);
-    DPRINTF(DQ, "Scheduling non spec inst @ (%i %i)\n", p.bank, p.index);
+    DPRINTF(DQ || Debug::DQWake, "Scheduling non spec inst @ (%i %i)\n", p.bank, p.index);
     wk.wkType = WKPointer::WKMisc;
     centralizedExtraWakeup(wk);
 }
@@ -332,6 +332,7 @@ bool DQTop<Impl>::validPosition(unsigned u) const
     }
 }
 
+
 template<class Impl>
 std::pair<bool, PointerPair>
 DQTop<Impl>::insertBarrier(DynInstPtr &inst)
@@ -345,7 +346,7 @@ std::pair<bool, PointerPair>
 DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
 {
     bool non_spec = false;
-    if (inst->isStoreConditional()) {
+    if (inst->isStoreConditional() || inst->isLoadReserved()) {
         memDepUnit.insertNonSpec(inst);
         non_spec = true;
     }
@@ -357,7 +358,7 @@ DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
 
 template<class Impl>
 std::pair<bool, PointerPair>
-DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
+DQTop<Impl>::insert(DynInstPtr &inst, bool non_spec)
 {
     // TODO: this is centralized now; Decentralize it with buffers
     // todo: send to allocated DQ position
@@ -396,7 +397,7 @@ DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 
     PointerPair pair;
     pair.dest.valid = false;
-    if (inst->isMemRef() && !nonSpec) {
+    if (inst->isMemRef() && !non_spec) {
         pair = memDepUnit.insert(inst);
     }
 

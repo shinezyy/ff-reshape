@@ -115,4 +115,5 @@ class StaticInstFlags(Enum):
         'IsRVAmoStoreHalf',
         'IsRVAmoLoadHalf',
         'IsForwarder',
+        'IsLoadReserved',
         ]

@@ -162,8 +162,8 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
         if (tail->seqNum == bypassCanceled) {
             skip_verify = false;
 
-        } else if (tail->isRVAmoLoadHalf()) {
-            // AMO load is not verifiable
+        } else if (tail->isRVAmoLoadHalf() || tail->isLoadReserved()) {
+            // AMO load and LR are not verifiable
             skip_verify = true;
 
         } else if (tail->memPredHistory->bypass) {
@@ -346,39 +346,49 @@ void FFDIEWC<Impl>::dispatch() {
         inst->dqPosition.term = dq.getHeadTerm();
 
         bool jumped = false;
+        PointerPair pair;
+        pair.dest.valid = false;
+        pair.isBypass = false;
+
         DPRINTF(DIEWC||Debug::RSProbe1, "Dispatching inst[%llu] %s PC: %s\n",
                 inst->seqNum, inst->staticInst->disassemble(inst->instAddr()),
                 inst->pcState());
         if (inst->isLoad()) {
             ldstQueue.insertLoad(inst);
             ++dispaLoads;
-            normally_add_to_dq = true;
+
             DPRINTF(DIEWC, "backward disp to LQ inc by inst[%d], "
                            "to LQ = %d\n",
                     inst->seqNum, toAllocation->diewcInfo.dispatchedToLQ);
             toAllocation->diewcInfo.dispatchedToLQ++;
 
-            setUpLoad(inst);
+            if (inst->isLoadReserved()) {
+                DPRINTF(DIEWC, "Load reserved: %s\n",
+                        inst->staticInst->disassemble(inst->instAddr()));
+                inst->setCanCommit();
+
+                std::tie(jumped, pair) = dq.insertNonSpec(inst);
+                setupPointerLink(inst, jumped, pair);
+
+                normally_add_to_dq = false;
+
+            } else {
+                normally_add_to_dq = true;
+                setUpLoad(inst);
+            }
 
         } else if (inst->isStore()) {
             ldstQueue.insertStore(inst);
             ++dispStores;
+
             if (inst->isStoreConditional()) {
                 DPRINTF(DIEWC, "Store cond: %s\n",
                         inst->staticInst->disassemble(inst->instAddr()));
-//                panic("There should not be store conditional in Risc-V\n");
+
                 inst->setCanCommit();
 
-                insertPointerPairs(archState.recordAndUpdateMap(inst));
-
-                auto [jumped, pair] = dq.insertNonSpec(inst);
-                if (pair.dest.valid) {
-                    DPRINTF(NoSQSMB, "NoSQ SMB bypass " ptrfmt " to " ptrfmt "\n",
-                            extptr(pair.dest), extptr(pair.payload));
-                    insertPointerPair(pair);
-                } else {
-                    DPRINTF(NoSQSMB, "SMB Pair is invalid\n");
-                }
+                std::tie(jumped, pair) = dq.insertNonSpec(inst);
+                setupPointerLink(inst, jumped, pair);
 
                 normally_add_to_dq = false;
 
@@ -391,19 +401,8 @@ void FFDIEWC<Impl>::dispatch() {
             DPRINTF(DIEWC, "Mem barrier: %s\n",
                     inst->staticInst->disassemble(inst->instAddr()));
             inst->setCanCommit();
-
-            // get who is the oldest consumer
-            insertPointerPairs(archState.recordAndUpdateMap(inst));
-
-            auto [jumped, pair] = dq.insertBarrier(inst);
-            if (pair.dest.valid) {
-                DPRINTF(NoSQSMB, "NoSQ SMB bypass " ptrfmt " to " ptrfmt "\n",
-                        extptr(pair.dest), extptr(pair.payload));
-                insertPointerPair(pair);
-            } else {
-                DPRINTF(NoSQSMB, "SMB Pair is invalid\n");
-            }
-
+            std::tie(jumped, pair) = dq.insertBarrier(inst);
+            setupPointerLink(inst, jumped, pair);
 
             normally_add_to_dq = false;
 
@@ -422,32 +421,17 @@ void FFDIEWC<Impl>::dispatch() {
         if (normally_add_to_dq && inst->isNonSpeculative()) {
             inst->setCanCommit();
 
-            insertPointerPairs(archState.recordAndUpdateMap(inst));
+            std::tie(jumped, pair) = dq.insertNonSpec(inst);
+            setupPointerLink(inst, jumped, pair);
 
-            auto [jumped, pair] = dq.insertNonSpec(inst);
-            if (pair.dest.valid) {
-                DPRINTF(NoSQSMB, "NoSQ SMB bypass " ptrfmt " to " ptrfmt "\n",
-                        extptr(pair.dest), extptr(pair.payload));
-                insertPointerPair(pair);
-            } else {
-                DPRINTF(NoSQSMB, "SMB Pair is invalid\n");
-            }
 
             ++dispNonSpecInsts;
             normally_add_to_dq = false;
         }
 
         if (normally_add_to_dq) {
-            insertPointerPairs(archState.recordAndUpdateMap(inst));
-            auto [jumped, pair] = dq.insert(inst, false);
-
-            if (pair.dest.valid) {
-                DPRINTF(NoSQSMB, "NoSQ SMB bypass " ptrfmt " to " ptrfmt "\n",
-                        extptr(pair.dest), extptr(pair.payload));
-                insertPointerPair(pair);
-            } else {
-                DPRINTF(NoSQSMB, "SMB Pair is invalid\n");
-            }
+            std::tie(jumped, pair) = dq.insert(inst, false);
+            setupPointerLink(inst, jumped, pair);
 
             youngestSeqNum = inst->seqNum;
         }
@@ -522,6 +506,34 @@ void FFDIEWC<Impl>::dispatch() {
     if (dispatchStatus == Idle && dispatched) {
         dispatchStatus = Running;
         updatedQueues = true;
+    }
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::setupPointerLink(FFDIEWC::DynInstPtr &inst, bool jumped, const PointerPair &pair)
+{
+    auto pairs = archState.recordAndUpdateMap(inst);
+
+    if (pair.dest.valid) {
+        DPRINTF(NoSQSMB, "Found barrier dep:" ptrfmt " to " ptrfmt "\n",
+                extptr(pair.dest), extptr(pair.payload));
+
+        if (pairs.size()) {
+            const auto &last_pair = pairs.back();
+
+            if (last_pair.isBypass) {
+                DPRINTF(NoSQSMB, "SMB pair:" ptrfmt " to " ptrfmt "is overridden\n",
+                        extptr(last_pair.dest), extptr(last_pair.payload));
+                pairs.pop_back();
+            }
+        }
+
+        insertPointerPairs(pairs);
+
+        insertPointerPair(pair);
+    } else {
+        DPRINTF(NoSQSMB, "Barrier pair is invalid\n");
+        insertPointerPairs(pairs);
     }
 }
 
@@ -694,9 +706,10 @@ FFDIEWC<Impl>::
         // think are possible.
         // In FF, we keeps to read from the DQ, so speculative instructions
         // can also reach here before executed
-        if (head_inst->isNonSpeculative() || head_inst->isStoreConditional()
-               || head_inst->isMemBarrier() || head_inst->isWriteBarrier() ||
-               (head_inst->isLoad() && head_inst->strictlyOrdered())) {
+        if (head_inst->isNonSpeculative() || head_inst->isLoadReserved() ||
+            head_inst->isStoreConditional() ||
+            head_inst->isMemBarrier() || head_inst->isWriteBarrier() ||
+            (head_inst->isLoad() && head_inst->strictlyOrdered())) {
 
             DPRINTF(Commit || Debug::FFCommit, "Encountered a barrier or non-speculative "
                     "instruction [sn:%lli] at the head of the ROB, PC %s.\n",

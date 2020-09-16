@@ -505,6 +505,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool isStore()        const { return staticInst->isStore(); }
     bool isRVAmoStoreHalf()        const { return staticInst->isRVAmoStoreHalf(); }
     bool isRVAmoLoadHalf()        const { return staticInst->isRVAmoLoadHalf(); }
+    bool isLoadReserved()        const { return staticInst->isLoadReserved(); }
     bool isAtomic()       const { return staticInst->isAtomic(); }
     bool isStoreConditional() const
     { return staticInst->isStoreConditional(); }

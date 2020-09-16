@@ -10,6 +10,7 @@
 
 #ifdef __CLION_CODING__
 #include "cpu/ff_base_dyn_inst.hh"
+#include "cpu/forwardflow/arch_state.hh"
 #include "cpu/forwardflow/dataflow_queue_top.hh"
 #include "cpu/forwardflow/dyn_inst.hh"
 #include "cpu/forwardflow/lsq.hh"
@@ -46,12 +47,14 @@ public:
     using XFFCPU = FFCPU<Impl>;
     using XLSQ = LSQ<Impl>;
     using DQTop = DQTop<Impl>;
+    using ArchState = ArchState<Impl>;
 #else
     typedef typename Impl::DynInst DynInst;
     typedef typename Impl::DynInstPtr DynInstPtr;
     typedef typename Impl::O3CPU XFFCPU;
     typedef typename CPUPol::LSQ XLSQ;
     typedef typename CPUPol::DQTop DQTop;
+    typedef typename CPUPol::ArchState ArchState;
 #endif
 
 
@@ -59,7 +62,6 @@ public:
     typedef typename CPUPol::TimeStruct TimeStruct;
     typedef typename CPUPol::FetchStruct FetchStruct;
     typedef typename CPUPol::FFAllocationStruct AllocationStruct;
-    typedef typename CPUPol::ArchState ArchState;
     typedef typename CPUPol::FUWrapper FUWrapper;
 
     typedef O3ThreadState<Impl> Thread;
@@ -545,6 +547,7 @@ public:
 
     bool checkViolation(DynInstPtr &inst);
 
+    void setupPointerLink(DynInstPtr &inst, bool jumped, const PointerPair &pair);
 };
 
 

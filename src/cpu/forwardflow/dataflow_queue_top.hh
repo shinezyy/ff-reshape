@@ -17,6 +17,7 @@
 #include "cpu/forwardflow/dataflow_queue.hh"
 #include "cpu/forwardflow/dataflow_queue_bank.hh"
 #include "cpu/forwardflow/dyn_inst.hh"
+#include "cpu/forwardflow/mem_dep_unit.hh"
 
 #endif
 
@@ -39,8 +40,6 @@ class DQTop
 public:
     // typedec:
 
-    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
-
     typedef typename Impl::CPUPol::DIEWC DIEWC;
     typedef typename Impl::CPUPol::DQStruct DQTopTS;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
@@ -49,6 +48,7 @@ public:
 #ifdef __CLION_CODING__
     typedef DataflowQueues<Impl> DataflowQueues;
     typedef DataflowQueueBank<Impl> DataflowQueueBank;
+    typedef MemDepUnit<StoreSet, Impl> MemDepUnit;
 
     template<class Impl>
     class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {};
@@ -57,6 +57,8 @@ public:
     typedef typename Impl::CPUPol::DataflowQueues DataflowQueues;
     typedef typename Impl::CPUPol::DataflowQueueBank DataflowQueueBank;
     typedef typename Impl::DynInstPtr DynInstPtr;
+    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
+
 #endif
 
 public:
@@ -144,11 +146,12 @@ public:
     void alignTails();
 
     // dispatch
+
     std::pair<bool, PointerPair> insertBarrier(DynInstPtr &inst);
 
     std::pair<bool, PointerPair> insertNonSpec(DynInstPtr &inst);
 
-    std::pair<bool, PointerPair> insert(DynInstPtr &inst, bool nonSpec);
+    std::pair<bool, PointerPair> insert(DynInstPtr &inst, bool non_spec);
 
     void insertForwardPointer(PointerPair pair);
 
