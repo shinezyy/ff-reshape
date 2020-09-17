@@ -140,15 +140,21 @@ DQTop<Impl>::reExecTailLoad(InstSeqNum &canceled_seq)
     } else if (!inst->isLoad()) {
         DPRINTF(NoSQSMB, "Head inst is not load!\n");
 
-    } else if (!inst->orderFulfilled()) {
-        if (!numInFlightWk() && inst->seqNum > canceled_seq) {
-            // TODO: mark misprediction
-            WKPointer wk = WKPointer(getTail()->dqPosition);
-            DPRINTF(DQ || Debug::NoSQSMB, "Mark tail load inst as order dep ready" ptrfmt "\n", extptr(wk));
-            wk.wkType = WKPointer::WKOrder;
-            centralizedExtraWakeup(wk);
-            bypass_canceled = true;
-            canceled_seq = inst->seqNum;
+    } else if (inst->numBusyOps()) {
+        if (!inst->orderFulfilled()) {
+            if (!numInFlightWk() && inst->seqNum > canceled_seq) {
+                // TODO: mark misprediction
+                WKPointer wk = WKPointer(getTail()->dqPosition);
+                DPRINTF(DQ || Debug::NoSQSMB, "Mark tail load inst as order dep ready" ptrfmt "\n", extptr(wk));
+                wk.wkType = WKPointer::WKOrder;
+                centralizedExtraWakeup(wk);
+                bypass_canceled = true;
+                canceled_seq = inst->seqNum;
+            }
+        } else {
+            // wait non-order deps ready
+            DPRINTF(DQ || Debug::NoSQSMB,
+                    "Waiting for non-order deps of tail inst to become ready\n");
         }
 
     } else {

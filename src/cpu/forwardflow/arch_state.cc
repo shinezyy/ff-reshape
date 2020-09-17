@@ -184,6 +184,7 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             num_busy_ops++;
 
             BasePointer parent_ptr = parentMap[src_reg];
+            auto renamed_ptr = renameMap[src_reg];
 
             DPRINTF(Rename, "Looking up %s arch reg %i, got pointer" ptrfmt "\n",
                     src_reg.className(), src_reg.index(), extptr(parent_ptr));
@@ -194,7 +195,6 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
                         "Rename src reg(%i) to" ptrfmt "\n", i, extptr(parent_ptr));
             }
 
-            auto renamed_ptr = renameMap[src_reg];
             bool predecessor_is_forwarder = false;
             DynInstPtr predecessor = dq->readInst(renamed_ptr);
             if (predecessor && !predecessor->isSquashed() && predecessor->isForwarder()) {

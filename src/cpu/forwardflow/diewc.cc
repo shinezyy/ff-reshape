@@ -1636,7 +1636,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
 
     bool violation = false;
     if (!inst->loadVerified &&
-        (inst->bypassOp || (inst->loadVerifying && inst->wbCount == 2))) {
+        (inst->isNormalBypass() || (inst->loadVerifying && inst->wbCount == 2))) {
         violation = checkViolation(inst);
         if (violation) {
             DPRINTF(NoSQSMB, "violation detected!\n");
