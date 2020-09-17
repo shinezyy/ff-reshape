@@ -667,7 +667,9 @@ template<class Impl>
 void
 ArchState<Impl>::randomizeOp(DynInstPtr &inst)
 {
-    if (inst->isNormalStore()) {
+    if (inst->isNormalStore() ||
+        inst->isRVAmoLoadHalf() || inst->isRVAmoStoreHalf() ||
+        inst->isLoadReserved() || inst->isStoreConditional()) {
         // no randomization for store
     } else if (inst->isLoad()) {
         // the last position is reserved for Store->L->L chaining

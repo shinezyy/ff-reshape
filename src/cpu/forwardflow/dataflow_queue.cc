@@ -477,7 +477,9 @@ DataflowQueues<Impl>::markFwPointers(
         std::array<DQPointer, 4> &pointers, PointerPair &pair, DynInstPtr &inst)
 {
     unsigned op = pair.dest.op;
-    if (pair.isBypass && inst && !inst->isLoad() && !inst->isStore()) {
+    if (pair.isBypass && inst &&
+            !(inst->isNormalStore() && op == memBypassOp) &&
+            !(inst->isLoad() && inst->isNormalBypass()) ) {
         DPRINTF(NoSQPred, "Bypassing from non-load inst, ignore it\n");
 
     } else if (pointers[op].valid) {
