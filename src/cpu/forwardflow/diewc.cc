@@ -190,6 +190,7 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
             DPRINTF(NoSQSMB, "Skip verifying load [%lu]\n", tail->seqNum);
             tail->loadVerified = true;
             verifiedTailLoad = tail->seqNum;
+            tail->setCanCommit();
 
         } else if (!ldstQueue.numStoresToWB(DummyTid)){
             auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(bypassCanceled);
