@@ -488,7 +488,8 @@ DataflowQueues<Impl>::markFwPointers(
         DPRINTF(FFSquash, "Overriding previous (squashed) sibling:(%d %d) (%d)\n",
                 pointers[op].bank, pointers[op].index, pointers[op].op);
 
-        if (inst && (inst->isExecuted() || inst->opReady[op] ||
+        if (inst && (inst->isExecuted() ||
+                inst->opReady[op] ||
                 (inst->isLoad() && inst->isNormalBypass() && inst->orderFulfilled() && op == memBypassOp))) {
 
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
@@ -503,10 +504,14 @@ DataflowQueues<Impl>::markFwPointers(
                 DPRINTF(NoSQPred, "Bypassing from non-store and non-bypassing insts, ignore it\n");
 
             } else if (inst->isNormalStore() && op == memBypassOp) {
-                wk_ptr.val.i = inst->readStoreValue();
-                wk_ptr.wkType = WKPointer::WKBypass;
-                assert(pair.isBypass);
-                extraWakeup(wk_ptr);
+                if (inst->fuGranted) {
+                    wk_ptr.val.i = inst->readStoreValue();
+                    wk_ptr.wkType = WKPointer::WKBypass;
+                    assert(pair.isBypass);
+                    extraWakeup(wk_ptr);
+                } else {
+                    // leave it to wake up with inst is executed
+                }
 
             } else if (inst->isLoad() && inst->isNormalBypass() && (op == 0 || op == memBypassOp)) {
                 wk_ptr.val = inst->bypassVal;
