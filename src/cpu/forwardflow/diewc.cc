@@ -527,6 +527,7 @@ void FFDIEWC<Impl>::setupPointerLink(FFDIEWC::DynInstPtr &inst, bool jumped, con
                 pairs.pop_back();
             }
         }
+        inst->seqNVul = getLastCompletedStoreSN(); // change NVul
 
         insertPointerPairs(pairs);
 

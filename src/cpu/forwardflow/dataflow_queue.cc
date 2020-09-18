@@ -22,6 +22,7 @@
 #include "debug/FFSquash.hh"
 #include "debug/FUW.hh"
 #include "debug/NoSQPred.hh"
+#include "debug/NoSQSMB.hh"
 #include "debug/ObExec.hh"
 #include "debug/ObFU.hh"
 #include "debug/QClog.hh"
@@ -480,14 +481,16 @@ DataflowQueues<Impl>::markFwPointers(
     if (pair.isBypass && inst &&
             !(inst->isNormalStore() && op == memBypassOp) &&
             !(inst->isLoad() && inst->isNormalBypass()) ) {
-        DPRINTF(NoSQPred, "Bypassing from non-load inst, ignore it\n");
+        DPRINTF(NoSQPred, "Bypassing from non-store and non-bypassing insts, ignore it\n");
 
     } else if (pointers[op].valid) {
         SRAMWritePointer++;
         DPRINTF(FFSquash, "Overriding previous (squashed) sibling:(%d %d) (%d)\n",
                 pointers[op].bank, pointers[op].index, pointers[op].op);
 
-        if (inst && (inst->isExecuted() || inst->opReady[op])) {
+        if (inst && (inst->isExecuted() || inst->opReady[op] ||
+                (inst->isLoad() && inst->isNormalBypass() && inst->orderFulfilled() && op == memBypassOp))) {
+
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
             auto wk_ptr = WKPointer(pair.payload);
             wk_ptr.isFwExtra = true;
@@ -549,6 +552,18 @@ DataflowQueues<Impl>::markFwPointers(
 
         } else if (op == 0) {
             // must wait the loaded value
+            if (inst->fuGranted) {
+                if (inst->wbCount > 0) {
+                    DPRINTF(DQWake || Debug::NoSQSMB, "Wake up consumer because producer written back\n");
+                    wk_ptr.hasVal = true;
+                    wk_ptr.val = inst->getDestValue();
+                    extraWakeup(wk_ptr);
+                } else {
+                    DPRINTF(DQWake || Debug::NoSQSMB, "Mark producer to reforward to consumer because"
+                                               "producer is being executed\n");
+                    inst->destReforward = true;
+                }
+            }
 
         } else {
             extraWakeup(wk_ptr);
@@ -605,8 +620,10 @@ DataflowQueues<Impl>::markFwPointers(
     }
 
     if (inst) {
-        if (pair.isBypass && inst && !inst->isLoad() && !inst->isStore()) {
-            DPRINTF(NoSQPred, "Bypassing from non-load inst, ignore it\n");
+        if (pair.isBypass && inst &&
+            !(inst->isNormalStore() && op == memBypassOp) &&
+            !(inst->isLoad() && inst->isNormalBypass())) {
+            DPRINTF(NoSQPred, "Bypassing from non-store and non-bypassing insts, ignore it\n");
 
         } else  if (inst->isNormalStore() && pair.isBypass) {
             DPRINTF(FFDisp || Debug::DQWake,
