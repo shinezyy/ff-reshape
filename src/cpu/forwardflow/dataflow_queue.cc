@@ -917,7 +917,11 @@ template<class Impl>
 unsigned
 DataflowQueues<Impl>::numInFlightFw() const
 {
-    return numPendingFwPointers;
+    unsigned wrapper_pending = 0;
+    for (auto &fuw: fuWrappers) {
+        wrapper_pending += fuw.wbQueue.size() * 2;
+    }
+    return numPendingFwPointers + wrapper_pending;
 }
 
 template<class Impl>
@@ -2001,8 +2005,8 @@ void DataflowQueues<Impl>::selectPointersFromWakeQueues()
                         if (wakeQueues[pkt->source].size() == numPendingWakeupMax) {
                             numPendingWakeupMax--;
                         }
-                        DPRINTF(DQWake || RSProbe2, "Pop WakePtr (%i %i) (%i)from wakequeue[%u]\n",
-                                ptr.bank, ptr.index, ptr.op, pkt->source);
+                        DPRINTF(DQWake || RSProbe2, "Pop WakePtr" ptrfmt "from wakequeue[%u]\n",
+                                extptr(ptr), pkt->source);
                         wakeQueues[pkt->source].pop_front();
                         numPendingWakeups--;
                         wk_pkt_passed++;
