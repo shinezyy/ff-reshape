@@ -745,6 +745,11 @@ class BaseDynInst : public ExecContext, public RefCounted
         wbCount++;
     }
 
+    void setExecutedPure()
+    {
+        status.set(Executed);
+    }
+
     /** Returns whether or not this instruction has executed. */
     bool isExecuted() const { return status[Executed]; }
 

@@ -117,13 +117,14 @@ void DQTop<Impl>::replayMemInst(DynInstPtr &inst)
 template<class Impl>
 void DQTop<Impl>::scheduleNonSpec()
 {
-    if (!getTail()) {
+    auto tail_inst = getTail();
+    if (!tail_inst) {
         DPRINTF(FFSquash, "Ignore scheduling attempt to squashing inst\n");
         return;
     }
-    WKPointer wk = WKPointer(getTail()->dqPosition);
-    auto p = c.uint2Pointer(tail);
-    DPRINTF(DQ || Debug::DQWake, "Scheduling non spec inst @ (%i %i)\n", p.bank, p.index);
+    WKPointer wk = WKPointer(tail_inst->dqPosition);
+    DPRINTF(DQ || Debug::DQWake, "Scheduling non spec inst[%lu] @ " ptrfmt "\n",
+            tail_inst->seqNum, extptr(wk));
     wk.wkType = WKPointer::WKMisc;
     centralizedExtraWakeup(wk);
 }

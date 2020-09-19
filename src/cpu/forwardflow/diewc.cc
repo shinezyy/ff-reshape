@@ -114,19 +114,25 @@ void FFDIEWC<Impl>::tick() {
 #define tbuf fromLastCycle->diewc2diewc
 
     if (tbuf.nonSpecSeqNum != 0) {
-        if (tbuf.strictlyOrdered) {
+        if (tbuf.nonSpecSeqNum <= scheduledNonSpec) {
+            DPRINTF(DIEWC, "Cannot schedule nonSpec %lu because %lu has been scheduled!\n",
+                    tbuf.nonSpecSeqNum > scheduledNonSpec);
+
+        } else if (tbuf.strictlyOrdered) {
             DPRINTF(DIEWC, "Recv strictlyOrdered non spec\n");
             // TODO: it writes center buffer
             dq.replayMemInst(tbuf.strictlyOrderedLoad);
             tbuf.strictlyOrderedLoad->setAtCommit();
+
         } else {
-            DPRINTF(DIEWC, "Recv other non spec\n");
+            DPRINTF(DIEWC, "Recv other non spec than strictly orderded\n");
             if (!dq.getTail()) {
                 DPRINTF(FFSquash, "Ignore scheduling attempt to squashed inst\n");
             } else {
                 assert(tbuf.nonSpecSeqNum == dq.getTail()->seqNum);
                 // TODO: it writes center buffer
                 dq.scheduleNonSpec();
+                scheduledNonSpec = tbuf.nonSpecSeqNum;
             }
         }
     }
@@ -141,7 +147,7 @@ void FFDIEWC<Impl>::tick() {
 
 template<class Impl>
 void FFDIEWC<Impl>::tryVerifyTailLoad() {
-    auto tail = getTailInst();
+    DynInstPtr tail = getTailInst();
     if (tail && tail->isLoad() && tail->seqNum != verifiedTailLoad) {
         InstSeqNum nvul = tail->seqNVul;
         DPRINTF(NoSQSMB, "Last verified load is %lu\n", verifiedTailLoad);
@@ -168,10 +174,15 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
 
         } else if (tail->memPredHistory->bypass) {
             DPRINTF(NoSQSMB, "Load [%lu] is predicted to bypass\n", tail->seqNum);
-            if (tail->physEffAddrHigh) {
-                skip_verify = (low_ssn == nvul) && (high_ssn == nvul);
+            if (tail->orderFulfilled()) {
+                if (tail->physEffAddrHigh) {
+                    skip_verify = (low_ssn == nvul) && (high_ssn == nvul);
+                } else {
+                    skip_verify = ssn == nvul;
+                }
             } else {
-                skip_verify = ssn == nvul;
+                skip_verify = false;
+                DPRINTF(NoSQSMB, "But has not received bypass value\n");
             }
 
         } else {
@@ -191,6 +202,14 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
             tail->loadVerified = true;
             verifiedTailLoad = tail->seqNum;
             tail->setCanCommit();
+            if (tail->isLoad() &&
+                tail->isNormalBypass() &&
+                !(tail->isRVAmoLoadHalf() || tail->isLoadReserved()) ) {
+
+                tail->setExecutedPure();
+                tail->receivedDest = true;
+                tail->setIntRegOperand(tail->staticInst.get(), 0, tail->bypassVal.i);
+            }
 
         } else if (!ldstQueue.numStoresToWB(DummyTid)){
             auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(bypassCanceled);
@@ -790,7 +809,7 @@ FFDIEWC<Impl>::
 
     if (head_inst->numDestRegs() && !head_inst->receivedDest) {
         DPRINTF(FFCommit, "Instruction[%lu] has not obtained its value from "
-                "interconnect network", head_inst->seqNum);
+                "interconnect network\n", head_inst->seqNum);
         return false;
     }
 

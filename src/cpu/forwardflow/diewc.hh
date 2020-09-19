@@ -532,6 +532,8 @@ public:
     InstSeqNum verifiedTailLoad{0};
     InstSeqNum bypassCanceled{0};
 
+    InstSeqNum scheduledNonSpec{0};
+
     void tryVerifyTailLoad();
 
     void setUpLoad(DynInstPtr &inst);
