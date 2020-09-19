@@ -740,10 +740,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     void clearIssued() { status.reset(Issued); }
 
     /** Sets this instruction as executed. */
-    void setExecuted() {
-        status.set(Executed);
-        wbCount++;
-    }
+    void setExecuted();
 
     void setExecutedPure()
     {

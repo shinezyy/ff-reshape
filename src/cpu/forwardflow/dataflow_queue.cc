@@ -490,7 +490,9 @@ DataflowQueues<Impl>::markFwPointers(
 
         if (inst && (inst->isExecuted() ||
                 inst->opReady[op] ||
-                (inst->isLoad() && inst->isNormalBypass() && inst->orderFulfilled() && op == memBypassOp))) {
+                (inst->isLoad() && inst->isNormalBypass() &&
+                 inst->orderFulfilled() &&
+                 (op == memBypassOp || op == 0) ))) {
 
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
             auto wk_ptr = WKPointer(pair.payload);

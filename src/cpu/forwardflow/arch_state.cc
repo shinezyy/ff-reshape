@@ -22,7 +22,7 @@ namespace FF
 using namespace std;
 
 template<class Impl>
-std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
+std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 {
     unsigned num_src_regs = inst->numSrcRegs();
 
@@ -35,6 +35,8 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
     invalid_pair.dest.valid = false;
 
     CombRename++;
+
+    bool bypass_canceled = false;
 
     for (unsigned src_idx = 0; src_idx < num_src_regs; src_idx++) {
         unsigned identical = 0;
@@ -307,11 +309,12 @@ std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
             pairs.back().isBypass = true;
         } else {
             DPRINTF(NoSQSMB, "However, producer is not at a valid position (squashed)\n");
+            bypass_canceled = true;
         }
     }
 
     DPRINTF(Rename, "Rename produces %lu pairs\n", pairs.size());
-    return pairs;
+    return std::make_pair(bypass_canceled, pairs);
 }
 
 template<class Impl>

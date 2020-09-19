@@ -114,7 +114,7 @@ public:
     void postExecInst(DynInstPtr &inst);
 
     // todo: update map to tell its parent or sibling where to forward
-    std::list<PointerPair> recordAndUpdateMap(DynInstPtr &inst);
+    std::pair<bool, std::list<PointerPair>> recordAndUpdateMap(DynInstPtr &inst);
 
 //    void clearCounters();
 //

@@ -532,9 +532,9 @@ void FFDIEWC<Impl>::dispatch() {
 template<class Impl>
 void FFDIEWC<Impl>::setupPointerLink(FFDIEWC::DynInstPtr &inst, bool jumped, const PointerPair &pair)
 {
-    auto pairs = archState.recordAndUpdateMap(inst);
+    auto [bypass_canceled, pairs] = archState.recordAndUpdateMap(inst);
 
-    if (pair.dest.valid) {
+    if (pair.dest.valid) { // found barrier
         DPRINTF(NoSQSMB, "Found barrier dep:" ptrfmt " to " ptrfmt "\n",
                 extptr(pair.dest), extptr(pair.payload));
 
@@ -552,6 +552,16 @@ void FFDIEWC<Impl>::setupPointerLink(FFDIEWC::DynInstPtr &inst, bool jumped, con
         insertPointerPairs(pairs);
 
         insertPointerPair(pair);
+
+    } else if (bypass_canceled) {
+
+        insertPointerPairs(pairs);
+
+        DPRINTF(NoSQSMB, "Override NVul because producer is invalid\n");
+        inst->seqNVul = getLastCompletedStoreSN(); // change NVul
+        // override prediction
+        inst->memPredHistory->bypass = false;
+
     } else {
         DPRINTF(NoSQSMB, "Barrier pair is invalid\n");
         insertPointerPairs(pairs);
