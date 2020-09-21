@@ -161,8 +161,8 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
             high_ssn = mDepPred->lookupAddr(tail->physEffAddrHigh);
         } else {
             ssn = mDepPred->lookupAddr(tail->physEffAddrLow);
-            DPRINTF(NoSQSMB, "Load [%lu] consists of only one access,"
-                    "with last store SN: %lu\n", tail->seqNum, ssn);
+            DPRINTF(NoSQSMB, "Load [%lu] @ addr:0x%x consists of only one access,"
+                    "with last store SN: %lu\n", tail->seqNum, ssn, tail->physEffAddrLow);
         }
 
         if (tail->seqNum == bypassCanceled) {

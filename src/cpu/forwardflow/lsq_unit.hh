@@ -63,6 +63,7 @@
 #include "debug/FFLSQ.hh"
 #include "debug/LSQUnit.hh"
 #include "debug/NoSQPred.hh"
+#include "debug/NoSQSMB.hh"
 #include "mem/packet.hh"
 #include "mem/port.hh"
 
@@ -576,6 +577,12 @@ LSQUnit<Impl>::read(const RequestPtr &req,
     assert(load_inst);
 
     assert(!load_inst->isExecuted() || load_inst->loadVerifying);
+
+    if (load_inst->isNormalBypass() && !load_inst->loadVerifying) {
+        DPRINTF(NoSQSMB, "Skip mem read for bypassing load [sn:%lli]\n",
+                load_inst->seqNum);
+        return NoFault;
+    }
 
     // Make sure this isn't a strictly ordered load
     // A bit of a hackish way to get strictly ordered accesses to work

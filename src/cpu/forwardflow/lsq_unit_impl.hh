@@ -668,8 +668,11 @@ LSQUnit<Impl>::executeLoad(DynInstPtr &inst)
         iewStage->activityThisCycle();
     } else {
         assert(inst->effAddrValid());
+
         int load_idx = inst->lqIdx;
-        incrLdIdx(load_idx);
+        if (!inst->wbCount) {
+            incrLdIdx(load_idx);
+        }
 
         if (checkLoads)
             return checkViolations(load_idx, inst);

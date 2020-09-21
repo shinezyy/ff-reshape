@@ -367,50 +367,55 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
 
         if (handle_wakeup) {
             if (nearlyWakeup[ptr.index]) {
-                if (!inst->isNormalBypass() || ptr.wkType == WKPointer::WKLdReExec) {
-                    assert(inst->numBusyOps() == 0);
-                    DPRINTF(DQWake || Debug::ObExec, "inst [%llu]: %s is ready to waken up\n",
-                            inst->seqNum, inst->staticInst->disassemble(inst->instAddr()));
+                // assertion
+                assert(inst->numBusyOps() == 0);
 
-                    if (ptr.wkType == WKPointer::WKLdReExec) {
-                        DPRINTF(DQWake || Debug::ObExec || Debug::NoSQSMB,
-                                "Waking up inst [%llu](normal bypassing) to verify it\n",
-                                inst->seqNum);
-                    }
+                // action
+                wakeup_count++;
 
-                    wakeup_count++;
-                    if (inst->readyTick == 0) {
-                        inst->readyTick = curTick();
-                    }
-                    if (!first) {
-                        if (ptr.wkType != WKPointer::WKOp || ptr.isFwExtra) {
-                            inst->wkDelayedCycle = std::max((int) 0, ((int) ptr.queueTime) - 1);
-                        } else {
-                            inst->wkDelayedCycle = ptr.queueTime;
-                        }
-                        dq->countCycles(inst, &ptr);
-
-                        DPRINTF(DQWake || Debug::RSProbe1,
-                                "inst [%llu] is the gifted one in this bank\n",
-                                inst->seqNum);
-                        first = inst;
-                        first_index = ptr.index;
-                        if (anyPending) {
-                            DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
-                                    ptr.bank, ptr.index, ptr.op);
-                            ptr.valid = false;
-                        }
-                    } else {
-                        DPRINTF(DQWake || Debug::RSProbe1,
-                                "inst [%llu] has no luck in this bank\n", inst->seqNum);
-                        need_pending_ptr[op] = true;
-                        inst->readyInBankDelay += 1;
-                    }
-
-                } else {
+                // log
+                DPRINTF(DQWake || Debug::ObExec, "inst [%llu]: %s is ready to waken up\n",
+                        inst->seqNum, inst->staticInst->disassemble(inst->instAddr()));
+                if (ptr.wkType == WKPointer::WKLdReExec) {
                     DPRINTF(DQWake || Debug::ObExec || Debug::NoSQSMB,
-                            "Skip waking up inst [%llu]: normal bypassing\n",
+                            "Waking up inst [%llu](normal bypassing) to verify it\n",
                             inst->seqNum);
+                }
+
+                if (inst->readyTick == 0) {
+                    inst->readyTick = curTick();
+                }
+                if (!first) {
+                    first = inst;
+                    first_index = ptr.index;
+
+                    // counting
+                    if (ptr.wkType != WKPointer::WKOp || ptr.isFwExtra) {
+                        inst->wkDelayedCycle = std::max((int) 0, ((int) ptr.queueTime) - 1);
+                    } else {
+                        inst->wkDelayedCycle = ptr.queueTime;
+                    }
+                    dq->countCycles(inst, &ptr);
+
+                    // log
+                    DPRINTF(DQWake || Debug::RSProbe1,
+                            "inst [%llu] is the gifted one in this bank\n",
+                            inst->seqNum);
+
+                    if (anyPending) {
+                        DPRINTF(DQWake, "Cleared pending pointer (%i %i) (%i)\n",
+                                ptr.bank, ptr.index, ptr.op);
+                        ptr.valid = false;
+                    }
+                } else {
+                    need_pending_ptr[op] = true;
+
+                    // counting
+                    inst->readyInBankDelay += 1;
+
+                    // log
+                    DPRINTF(DQWake || Debug::RSProbe1,
+                            "inst [%llu] has no luck in this bank\n", inst->seqNum);
                 }
 
             } else {
