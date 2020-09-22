@@ -276,6 +276,10 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             continue;
         }
 
+
+        DPRINTF(NoSQSMB, "ptr.wkType == WKPointer::WKBypass: %i, inst->isNormalBypass(): %i\n",
+                ptr.wkType == WKPointer::WKBypass, inst->isNormalBypass());
+
         bool handle_wakeup = false;
 
         if (ptr.wkType == WKPointer::WKMisc) {

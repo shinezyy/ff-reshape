@@ -527,7 +527,7 @@ DataflowQueues<Impl>::markFwPointers(
                 wk_ptr.val = inst->getDestValue();
                 extraWakeup(wk_ptr);
 
-            } else {
+            } else if (!(inst->isNormalStore() && pair.isBypass)) {
                 wk_ptr.val = inst->getOpValue(op);
                 extraWakeup(wk_ptr);
             }
@@ -588,7 +588,8 @@ DataflowQueues<Impl>::markFwPointers(
         wk_ptr.val.i = inst->readStoreValue();
         extraWakeup(wk_ptr);
 
-    } else if (inst && inst->opReady[op]) {
+    } else if (inst && inst->opReady[op] &&
+               !(inst->isNormalStore() && pair.isBypass)) {
         DPRINTF(DQWake, "which has already been waken up! op[%i] ready: %i\n",
                 op, inst->opReady[op]);
 

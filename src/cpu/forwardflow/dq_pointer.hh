@@ -104,15 +104,17 @@ struct WKPointer: public TermedPointer{
 
 struct PointerPair{
     bool isBypass;
+    bool isBarrier;
     TermedPointer dest;
     TermedPointer payload;
     PointerPair() {
         isBypass = false;
+        isBarrier = false;
         dest.valid = false;
         payload.valid = false;
     };
     PointerPair(const TermedPointer &d, const TermedPointer &p)
-    : isBypass(false), dest(d), payload(p)
+    : isBypass(false), isBarrier(false), dest(d), payload(p)
     {}
 };
 
