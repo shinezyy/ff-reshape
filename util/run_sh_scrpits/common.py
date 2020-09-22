@@ -3,6 +3,7 @@ import sh
 from os.path import join as pjoin
 import os.path as osp
 import local_config as lc
+import argparse
 
 
 def avoid_repeated(func, outdir, func_id=None, binary=None, *args, **kwargs):
@@ -131,8 +132,8 @@ class G5Config:
                     ]
             if self.panic_tick is not None:
                 self.options += [
-                        '--debug-start={}'.format   (self.panic_tick - 20000 * 500),
-                        '--debug-end={}'.format     (self.panic_tick + 20000 * 500),
+                        '--debug-start={}'.format   (self.panic_tick - 2000 * 500),
+                        '--debug-end={}'.format     (self.panic_tick + 2000 * 500),
                         ]
 
         self.options += [
@@ -256,6 +257,34 @@ class G5Config:
 
 def run_wrapper(g5: G5Config):
     g5.check_and_run()
+
+
+def get_debug_options():
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-i', '--inst-trace',
+            action='store_true')
+
+    parser.add_argument('-d', '--debug',
+            action='store_true')
+
+    parser.add_argument('-t', '--debug-tick',
+            type=int,
+            action='store')
+
+    parser.add_argument('-b', '--benchmark',
+            type=str,
+            action='store')
+
+    parser.add_argument('--ti',
+            type=int,
+            action='store',
+            default=9)
+
+    args = parser.parse_args()
+
+    return args
 
 
 stats_base_dir = lc.stats_base_dir
