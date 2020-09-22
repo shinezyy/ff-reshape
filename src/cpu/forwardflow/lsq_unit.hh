@@ -804,22 +804,22 @@ LSQUnit<Impl>::write(const RequestPtr &req,
 
     // Split stores can only occur in ISAs with unaligned memory accesses.  If
     // a store request has been split, sreqLow and sreqHigh will be non-null.
-    if (TheISA::HasUnalignedMemAcc && sreqLow) {
-        storeQueue[store_idx].isSplit = true;
-        mDepPred->execStore(
-                sreqLow->getPaddr(), sreqLow->getSize(),
-                storeQueue[store_idx].inst->seqNum,
-                storeQueue[store_idx].inst->dqPosition);
-        mDepPred->execStore(
-                sreqHigh->getPaddr(), sreqHigh->getSize(),
-                storeQueue[store_idx].inst->seqNum,
-                storeQueue[store_idx].inst->dqPosition);
-    } else {
-        mDepPred->execStore(
-                req->getPaddr(), req->getSize(),
-                storeQueue[store_idx].inst->seqNum,
-                storeQueue[store_idx].inst->dqPosition);
-    }
+    // if (TheISA::HasUnalignedMemAcc && sreqLow) {
+    //     storeQueue[store_idx].isSplit = true;
+    //     mDepPred->execStore(
+    //             sreqLow->getPaddr(), sreqLow->getSize(),
+    //             storeQueue[store_idx].inst->seqNum,
+    //             storeQueue[store_idx].inst->dqPosition);
+    //     mDepPred->execStore(
+    //             sreqHigh->getPaddr(), sreqHigh->getSize(),
+    //             storeQueue[store_idx].inst->seqNum,
+    //             storeQueue[store_idx].inst->dqPosition);
+    // } else {
+    //     mDepPred->execStore(
+    //             req->getPaddr(), req->getSize(),
+    //             storeQueue[store_idx].inst->seqNum,
+    //             storeQueue[store_idx].inst->dqPosition);
+    // }
 
     if (!(req->getFlags() & Request::CACHE_BLOCK_ZERO) && \
         !req->isCacheMaintenance())

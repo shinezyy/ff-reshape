@@ -4,6 +4,7 @@
 
 #include "base/intmath.hh"
 #include "debug/NoSQPred.hh"
+#include "debug/NoSQSMB.hh"
 
 MemDepPredictor::MemDepPredictor(const Params *params)
     : SimObject(params),
@@ -14,23 +15,23 @@ MemDepPredictor::MemDepPredictor(const Params *params)
     PCTableAssoc(params->PCTableAssoc),
     PCTableDepth(PCTableSize/PCTableAssoc),
     PCTableIndexBits(ceilLog2(PCTableDepth)),
-    PCTableIndexMask((1 << (PCTableIndexBits + pcShamt)) - 1),
+    PCTableIndexMask(((uint64_t)1 << (PCTableIndexBits + pcShamt)) - 1),
 
     PathTableSize(params->PathTableSize),
     PathTableAssoc(params->PathTableAssoc),
     PathTableDepth(PathTableSize/PathTableAssoc),
     PathTableIndexBits(ceilLog2(PathTableDepth)),
-    PathTableIndexMask((1 << (PathTableIndexBits + pcShamt)) - 1),
+    PathTableIndexMask(((uint64_t)1 << (PathTableIndexBits + pcShamt)) - 1),
 
     DistanceBits(params->DistanceBits),
     ShamtBits(params->ShamtBits),
     StoreSizeBits(params->StoreSizeBits),
     ConfidenceBits(params->ConfidenceBits),
     TagBits(params->TagBits),
-    TagMask((1 << TagBits) - 1),
+    TagMask(((uint64_t)1 << TagBits) - 1),
 
     HistoryLen(params->HistoryLen),
-    PathMask((1 << HistoryLen) - 1),
+    PathMask(((uint64_t)1 << HistoryLen) - 1),
 
     BranchPathLen(params->BranchPathLen),
     CallPathLen(params->CallPathLen),
@@ -314,6 +315,7 @@ MemDepPredictor::clear()
 }
 
 void MemDepPredictor::commitStore(Addr eff_addr, InstSeqNum sn, const BasePointer &position) {
+    eff_addr = shiftAddr(eff_addr);
     SSBFCell *cell = tssbf.find(eff_addr);
     if (!cell) {
         DPRINTF(NoSQPred, "Allocating new entry\n");
@@ -324,6 +326,7 @@ void MemDepPredictor::commitStore(Addr eff_addr, InstSeqNum sn, const BasePointe
     cell->lastStore = sn;
     cell->lastStorePosition = position;
     cell->predecessorPosition = position;
+    cell->offset = eff_addr & tssbf.offsetMask;
 }
 
 InstSeqNum MemDepPredictor::lookupAddr(Addr eff_addr) {
@@ -345,26 +348,39 @@ void MemDepPredictor::commitLoad(Addr eff_addr, InstSeqNum sn, BasePointer &posi
     }
 }
 
-void
-MemDepPredictor::execStore(Addr eff_addr, uint8_t size, InstSeqNum sn, BasePointer &position)
-{
-    eff_addr = shiftAddr(eff_addr);
-    auto cell = tssbf.find(eff_addr);
-    if (!cell) {
-        DPRINTF(NoSQPred, "Allocating new entry\n");
-        cell = tssbf.allocate(eff_addr);
-    }
-
-    DPRINTF(NoSQPred, "Setting 0x%lx last store SN to %lu\n",
-            eff_addr, sn);
-    cell->lastStore = sn;
-    cell->size = size;
-}
-
 Addr
 MemDepPredictor::shiftAddr(Addr addr)
 {
     return addr;
+}
+
+bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_addr_low,
+                                Addr eff_addr_high, uint8_t size, InstSeqNum nvul)
+{
+    // forward for split access is not supported
+    if (eff_addr_high) {
+        DPRINTF(NoSQSMB, "Do not support to bypass split access\n");
+        return false;
+    }
+
+    bool skip_verify = false;
+    SSBFCell *cell = tssbf.find(eff_addr_low);
+    if (!cell) {
+        // conservatively return cannot skip
+        DPRINTF(NoSQSMB, "Cannot skip because SSBF entry not found\n");
+        return false;
+    }
+
+    unsigned offset = eff_addr_low & tssbf.offsetMask;
+    DPRINTF(NoSQSMB, "NVul of load [%lu] is %lu\n", load_sn, nvul);
+    DPRINTF(NoSQSMB, "last store @ 0x%lx is %lu\n", eff_addr_low, cell->lastStore);
+    if (pred_bypass) {
+        skip_verify = cell->lastStore == nvul && cell->offset == offset && cell->size == size;
+    } else {
+        skip_verify = cell->lastStore > 0 && cell->lastStore <= nvul;
+    }
+
+    return skip_verify;
 }
 
 MemDepPredictor *MemDepPredictorParams::create()
@@ -375,12 +391,12 @@ MemDepPredictor *MemDepPredictorParams::create()
 TSSBF::TSSBF(const Params *p)
         : SimObject(p),
           TagBits(p->TSSBFTagBits),
-          TagMask((1 << TagBits) - 1),
+          TagMask((((uint64_t)1) << TagBits) - 1),
           Size(p->TSSBFSize),
           Assoc(p->TSSBFAssoc),
           Depth(Size/Assoc),
           IndexBits(ceilLog2(Depth)),
-          IndexMask((1 << IndexBits) - 1),
+          IndexMask((((uint64_t)1) << IndexBits) - 1),
           table(Depth)
 {
 
@@ -397,6 +413,10 @@ Addr TSSBF::extractTag(Addr key) const {
 }
 
 SSBFCell *TSSBF::find(Addr key) {
+    // log
+    DPRINTF(NoSQPred, "Looking up addr 0x%lx with hash index %lu, tag: %lx\n",
+            key, extractIndex(key), extractTag(key));
+
     auto &set = table.at(extractIndex(key));
     auto tag = extractTag(key);
     auto it = set.find(tag);
@@ -408,6 +428,10 @@ SSBFCell *TSSBF::find(Addr key) {
 }
 
 SSBFCell *TSSBF::allocate(Addr key) {
+    // log
+    DPRINTF(NoSQPred, "Allocating addr 0x%lx at hash index %lu, tag: %lx\n",
+            key, extractIndex(key), extractTag(key));
+
     auto &set = table.at(extractIndex(key));
     auto tag = extractTag(key);
     assert (set.count(tag) == 0);

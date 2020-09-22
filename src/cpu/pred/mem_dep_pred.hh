@@ -61,6 +61,7 @@ struct SSBFCell
     using SSN = InstSeqNum;
     SSN lastStore{};
     uint8_t size;
+    uint8_t offset;
     BasePointer lastStorePosition;
     BasePointer predecessorPosition;
 };
@@ -96,7 +97,10 @@ class TSSBF: public SimObject
     const unsigned IndexBits;
     const uint64_t IndexMask;
 
+  public:
     const unsigned addrShamt{3};
+    const unsigned offsetMask{0x7};
+  private:
 
     using SSBFSet = std::map<Addr, SSBFCell>;
     using SSBFTable = std::vector<SSBFSet>;
@@ -196,11 +200,12 @@ class MemDepPredictor: public SimObject
 
     void clear();
 
-    void execStore(Addr eff_addr, uint8_t size, InstSeqNum sn, BasePointer &position);
-
     void commitStore(Addr eff_addr, InstSeqNum sn, const BasePointer &position);
 
     InstSeqNum lookupAddr(Addr eff_addr);
+
+    bool checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_addr_low,
+                   Addr eff_addr_high, uint8_t size, InstSeqNum nvul);
 
     void commitLoad(Addr eff_addr, InstSeqNum sn, BasePointer &position);
 

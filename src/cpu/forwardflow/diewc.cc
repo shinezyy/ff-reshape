@@ -149,21 +149,8 @@ template<class Impl>
 void FFDIEWC<Impl>::tryVerifyTailLoad() {
     DynInstPtr tail = getTailInst();
     if (tail && tail->isLoad() && tail->seqNum != verifiedTailLoad) {
-        InstSeqNum nvul = tail->seqNVul;
         DPRINTF(NoSQSMB, "Last verified load is %lu\n", verifiedTailLoad);
-        DPRINTF(NoSQSMB, "NVul of load [%lu] is %lu\n", tail->seqNum, nvul);
         bool skip_verify;
-        InstSeqNum low_ssn = 0, high_ssn = 0, ssn = 0;
-
-        if (tail->physEffAddrHigh) { // split
-            DPRINTF(NoSQSMB, "Load [%lu] is split\n", tail->seqNum);
-            low_ssn = mDepPred->lookupAddr(tail->physEffAddrLow);
-            high_ssn = mDepPred->lookupAddr(tail->physEffAddrHigh);
-        } else {
-            ssn = mDepPred->lookupAddr(tail->physEffAddrLow);
-            DPRINTF(NoSQSMB, "Load [%lu] @ addr:0x%x consists of only one access,"
-                    "with last store SN: %lu\n", tail->seqNum, ssn, tail->physEffAddrLow);
-        }
 
         if (tail->seqNum == bypassCanceled) {
             skip_verify = false;
@@ -172,29 +159,11 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
             // AMO load and LR are not verifiable
             skip_verify = true;
 
-        } else if (tail->memPredHistory->bypass) {
-            DPRINTF(NoSQSMB, "Load [%lu] is predicted to bypass\n", tail->seqNum);
-            if (tail->orderFulfilled()) {
-                if (tail->physEffAddrHigh) {
-                    skip_verify = (low_ssn == nvul) && (high_ssn == nvul);
-                } else {
-                    skip_verify = ssn == nvul;
-                }
-            } else {
-                skip_verify = false;
-                DPRINTF(NoSQSMB, "But has not received bypass value\n");
-            }
-
         } else {
-            DPRINTF(NoSQSMB, "Load [%lu] is predicted to not bypass\n", tail->seqNum);
-            // ssn == 0 means its entry might be evicted
-            if (tail->physEffAddrHigh) {
-                skip_verify = ssn > 0 && low_ssn <= nvul && high_ssn <= nvul;
-                // skip_verify = low_ssn <= nvul && high_ssn <= nvul;
-            } else {
-                skip_verify = ssn > 0 && ssn <= nvul;
-                // skip_verify = ssn <= nvul;
-            }
+            skip_verify = mDepPred->checkAddr(tail->seqNum,
+                                              tail->memPredHistory->bypass,
+                                              tail->physEffAddrLow, tail->physEffAddrHigh,
+                                              tail->effSize, tail->seqNVul);
         }
 
         if (skip_verify) {
