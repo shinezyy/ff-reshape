@@ -917,11 +917,7 @@ template<class Impl>
 unsigned
 DataflowQueues<Impl>::numInFlightFw() const
 {
-    unsigned wrapper_pending = 0;
-    for (auto &fuw: fuWrappers) {
-        wrapper_pending += fuw.wbQueue.size() * 2;
-    }
-    return numPendingFwPointers + wrapper_pending;
+    return numPendingFwPointers;
 }
 
 template<class Impl>
@@ -2038,7 +2034,11 @@ void DataflowQueues<Impl>::selectPointersFromWakeQueues()
 template<class Impl>
 unsigned DataflowQueues<Impl>::numInFlightWk() const
 {
-    return numPendingWakeups;
+    unsigned wrapper_pending = 0;
+    for (auto &fuw: fuWrappers) {
+        wrapper_pending += fuw.wbQueue.size() * 2;
+    }
+    return numPendingWakeups + wrapper_pending;
 }
 
 template<class Impl>
