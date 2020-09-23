@@ -113,11 +113,15 @@ class TSSBF: public SimObject
 
     SSBFCell *find(Addr key);
 
+    InstSeqNum findYoungestInSet(Addr key);
+
     SSBFCell *allocate(Addr key);
 
   private:
     Addr extractIndex(Addr key) const;
     Addr extractTag(Addr key) const;
+
+    void checkAndRandEvictOldest(SSBFSet &set);
 };
 
 class MemDepPredictor: public SimObject

@@ -483,6 +483,8 @@ public:
     Stats::Scalar reExecutedLoads;
     Stats::Formula loadReExecRate;
 
+    Stats::Scalar verificationSkipped;
+    Stats::Formula verifSkipRate;
 
     ArchState *getArchState() {return &archState;}
 

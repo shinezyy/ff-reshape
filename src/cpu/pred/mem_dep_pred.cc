@@ -365,19 +365,36 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
 
     bool skip_verify = false;
     SSBFCell *cell = tssbf.find(eff_addr_low);
-    if (!cell) {
-        // conservatively return cannot skip
-        DPRINTF(NoSQSMB, "Cannot skip because SSBF entry not found\n");
-        return false;
-    }
 
     unsigned offset = eff_addr_low & tssbf.offsetMask;
-    DPRINTF(NoSQSMB, "NVul of load [%lu] is %lu\n", load_sn, nvul);
-    DPRINTF(NoSQSMB, "last store @ 0x%lx is %lu\n", eff_addr_low, cell->lastStore);
+    DPRINTF(NoSQSMB, "NVul of load [%lu] is %lu, pred bypass: %i\n", load_sn, nvul, pred_bypass);
     if (pred_bypass) {
-        skip_verify = cell->lastStore == nvul && cell->offset == offset && cell->size == size;
+        if (!cell) {
+            skip_verify = false;
+            // log
+            DPRINTF(NoSQSMB, "Cannot skip because SSBF entry not found\n");
+
+        } else {
+            DPRINTF(NoSQSMB, "last store @ 0x%lx is %lu\n", eff_addr_low, cell->lastStore);
+            skip_verify = cell->lastStore == nvul && cell->offset == offset && cell->size == size;
+            // log
+            DPRINTF(NoSQSMB, "recorded offset: %u, offset: %u,"
+                             "recorded size: %u, size: %u\n",
+                    cell->offset, offset, cell->size, size);
+        }
     } else {
-        skip_verify = cell->lastStore > 0 && cell->lastStore <= nvul;
+        if (!cell) {
+            InstSeqNum set_youngest = tssbf.findYoungestInSet(eff_addr_low);
+            skip_verify = set_youngest > 0 && set_youngest <= nvul;
+            // log
+            DPRINTF(NoSQSMB, "Skip verification because youngest (%lu) in this set is older than nvul(%lu)\n",
+                    set_youngest, nvul);
+        } else {
+            // log
+            DPRINTF(NoSQSMB, "last store @ 0x%lx is %lu\n", eff_addr_low, cell->lastStore);
+
+            skip_verify = cell->lastStore > 0 && cell->lastStore <= nvul;
+        }
     }
 
     return skip_verify;
@@ -436,7 +453,7 @@ SSBFCell *TSSBF::allocate(Addr key) {
     auto tag = extractTag(key);
     assert (set.count(tag) == 0);
 
-    checkAndRandEvict(set, Assoc);
+    checkAndRandEvictOldest(set);
 
     auto pair = set.emplace(tag, SSBFCell());
 
@@ -444,6 +461,41 @@ SSBFCell *TSSBF::allocate(Addr key) {
     assert(set.size() <= Assoc);
 
     return &(pair.first->second);
+}
+
+void TSSBF::checkAndRandEvictOldest(TSSBF::SSBFSet &set)
+{
+    if (set.size() >= Assoc) {
+        DPRINTF(NoSQPred, "Doing Eviction\n");
+        auto it = set.begin(), oldest = set.begin(), e = set.end();
+        while (it != e) {
+            if (it->second.lastStore < oldest->second.lastStore) {
+                oldest = it;
+            }
+            it++;
+        }
+        DPRINTF(NoSQPred, "Evicting key: %lu\n", it->first);
+        set.erase(oldest);
+    }
+}
+
+InstSeqNum TSSBF::findYoungestInSet(Addr key)
+{
+    DPRINTF(NoSQPred, "Looking up addr 0x%lx with hash index %lu, tag: %lx\n",
+            key, extractIndex(key), extractTag(key));
+
+    auto &set = table.at(extractIndex(key));
+    auto tag = extractTag(key);
+    auto non_exist = set.find(tag);
+    assert (non_exist == set.end());
+
+    InstSeqNum youngest = 0;
+    for (const auto &it: set) {
+        if (it.second.lastStore > youngest) {
+            youngest = it.second.lastStore;
+        }
+    }
+    return youngest;
 }
 
 

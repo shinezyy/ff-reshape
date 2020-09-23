@@ -180,10 +180,15 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
                 tail->setIntRegOperand(tail->staticInst.get(), 0, tail->bypassVal.i);
             }
 
+            // stats
+            verificationSkipped++;
+
         } else if (!ldstQueue.numStoresToWB(DummyTid)){
             auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(bypassCanceled);
             if (sent_reexec) {
                 verifiedTailLoad = tail->seqNum;
+
+                // stats
                 reExecutedLoads++;
             }
             if (canceled_bypassing && tail->memPredHistory) {
@@ -2102,6 +2107,14 @@ void FFDIEWC<Impl>::regStats()
             .name(name() + ".loadReExecRate")
             .desc("loadReExecRate");
     loadReExecRate = reExecutedLoads / statComLoads;
+
+    verificationSkipped
+            .name(name() + ".verificationSkipped")
+            .desc("verificationSkipped");
+    verifSkipRate
+            .name(name() + ".verifSkipRate")
+            .desc("verifSkipRate");
+    verifSkipRate = verificationSkipped / statComLoads;
 
     firstLevelFw
         .name(name() + ".firstLevelFw")
