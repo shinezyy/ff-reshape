@@ -472,8 +472,17 @@ public:
     Stats::Scalar headReadyExecDelayTicks;
     Stats::Scalar headReadyNotExec;
 
-    Stats::Scalar falseNegativeBypass;
-    Stats::Scalar falsePositiveBypass;
+    Stats::Scalar TNBypass;
+    Stats::Scalar TPBypass;
+    Stats::Scalar FNBypass;
+    Stats::Scalar FPBypass;
+    Stats::Scalar FPCanceledBypass;
+    Stats::Scalar FPSquashedBypass;
+    Stats::Formula loadSquashRate;
+
+    Stats::Scalar reExecutedLoads;
+    Stats::Formula loadReExecRate;
+
 
     ArchState *getArchState() {return &archState;}
 

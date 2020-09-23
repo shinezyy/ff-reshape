@@ -184,11 +184,14 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
             auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(bypassCanceled);
             if (sent_reexec) {
                 verifiedTailLoad = tail->seqNum;
+                reExecutedLoads++;
             }
             if (canceled_bypassing && tail->memPredHistory) {
                 DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu], "
                                   "because it does not received the bypassing pointer"
                                   " even after it becomes DQ tail\n", tail->seqNum);
+                FPBypass++;
+                FPCanceledBypass++;
                 mDepPred->update(tail->instAddr(), false,
                                  0, // dont care
                                  0, // dont care
@@ -889,10 +892,6 @@ FFDIEWC<Impl>::
         if (head_inst->physEffAddrHigh) {
             // pass yet
         }
-//        mDepPred->update(head_inst->instAddr(),
-//                     head_inst->shouldForward,
-//                     head_inst->shouldForwFrom, 0,
-//                     head_inst->memPredHistory);
     }
 
     if (FullSystem) {
@@ -1536,6 +1535,11 @@ void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
 
         if (inst->isLoad()) {
             statComLoads++;
+            if (inst->isNormalBypass()) {
+                TPBypass++;
+            } else {
+                TNBypass++;
+            }
         }
     }
 
@@ -2066,13 +2070,38 @@ void FFDIEWC<Impl>::regStats()
         .desc("largeFanoutInsts");
     fanoutMispredRate = (falseNegativeLF + falsePositiveLF) / totalFanoutPredictions;
 
-    falseNegativeBypass
+    TNBypass
+            .name(name() + ".trueNegativeBypass")
+            .desc("trueNegativeBypass");
+    TPBypass
+            .name(name() + ".truePositiveBypass")
+            .desc("truePositiveBypass");
+    FNBypass
             .name(name() + ".falseNegativeBypass")
             .desc("falseNegativeBypass");
-    falsePositiveBypass
+    FPBypass
             .name(name() + ".falsePositiveBypass")
             .desc("falsePositiveBypass");
+    FPCanceledBypass
+            .name(name() + ".FPCanceledBypass")
+            .desc("FPCanceledBypass");
+    FPSquashedBypass
+            .name(name() + ".FPSquashedBypass")
+            .desc("FPSquashedBypass");
 
+    loadSquashRate
+            .name(name() + ".loadSquashRate")
+            .desc("loadSquashRate");
+    loadSquashRate = (FPSquashedBypass + FNBypass) / statComLoads;
+
+    reExecutedLoads
+            .name(name() + ".reExecutedLoads")
+            .desc("reExecutedLoads");
+
+    loadReExecRate
+            .name(name() + ".loadReExecRate")
+            .desc("loadReExecRate");
+    loadReExecRate = reExecutedLoads / statComLoads;
 
     firstLevelFw
         .name(name() + ".firstLevelFw")
@@ -2626,7 +2655,8 @@ bool FFDIEWC<Impl>::checkViolation(FFDIEWC::DynInstPtr &inst)
     if (inst->isNormalBypass()) {
         // compare bypassed value against dest
         if (inst->bypassVal.i != inst->getDestValue().i) {
-            falsePositiveBypass++;
+            FPBypass++;
+            FPSquashedBypass++;
             return true;
         } else {
             inst->loadVerified = true;
@@ -2637,7 +2667,7 @@ bool FFDIEWC<Impl>::checkViolation(FFDIEWC::DynInstPtr &inst)
         if (inst->speculativeLoadValue.i != inst->getDestValue().i) {
             DPRINTF(NoSQSMB, "Saved speculative value: %lu, newly loaded value: %lu\n",
                     inst->speculativeLoadValue.i, inst->getDestValue().i);
-            falseNegativeBypass++;
+            FNBypass++;
             return true;
         } else {
             inst->loadVerified = true;
