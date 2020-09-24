@@ -124,6 +124,28 @@ class TSSBF: public SimObject
     void checkAndRandEvictOldest(SSBFSet &set);
 };
 
+class SimpleSSBF: public SimObject
+{
+  private:
+    const unsigned Size;
+    const unsigned IndexBits;
+    const Addr IndexMask;
+
+    std::vector<InstSeqNum> SSBFTable;
+
+    unsigned hash(Addr key);
+
+  public:
+    const unsigned addrShamt{3};
+
+    typedef MemDepPredictorParams Params;
+    explicit SimpleSSBF(const Params *p);
+
+  public:
+    InstSeqNum &find(Addr key);
+
+};
+
 class MemDepPredictor: public SimObject
 {
   public:
@@ -185,6 +207,8 @@ class MemDepPredictor: public SimObject
 
   public:
     TSSBF tssbf;
+
+    SimpleSSBF sssbf;
 
     std::pair<bool, DistancePair> predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist);
 

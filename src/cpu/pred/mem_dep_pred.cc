@@ -37,7 +37,8 @@ MemDepPredictor::MemDepPredictor(const Params *params)
     CallPathLen(params->CallPathLen),
     pcTable(PCTableDepth),
     pathTable(PathTableDepth),
-    tssbf(params)
+    tssbf(params),
+    sssbf(params)
 {
 }
 
@@ -327,6 +328,10 @@ void MemDepPredictor::commitStore(Addr eff_addr, InstSeqNum sn, const BasePointe
     cell->lastStorePosition = position;
     cell->predecessorPosition = position;
     cell->offset = eff_addr & tssbf.offsetMask;
+
+    InstSeqNum &sssbf_entry = sssbf.find(eff_addr);
+    assert(sn > sssbf_entry);
+    sssbf_entry = sn;
 }
 
 InstSeqNum MemDepPredictor::lookupAddr(Addr eff_addr) {
@@ -385,17 +390,19 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
     } else {
         if (!cell) {
             InstSeqNum set_youngest = tssbf.findYoungestInSet(eff_addr_low);
-            skip_verify = set_youngest > 0 && set_youngest <= nvul;
+            InstSeqNum sssbf_youngest = sssbf.find(eff_addr_low);
+            skip_verify = (set_youngest > 0 && set_youngest <= nvul) ||
+                    sssbf_youngest <= nvul;
 
             // log
             if (skip_verify) {
-                DPRINTF(NoSQSMB, "Skip verification because youngest (%lu)"
+                DPRINTF(NoSQSMB, "Skip verification because either tssbf youngest (%lu) or sssbf youngest (%lu)"
                                  " in this set is older than nvul(%lu)\n",
-                        set_youngest, nvul);
+                        set_youngest, sssbf_youngest, nvul);
             } else {
-                DPRINTF(NoSQSMB, "Cannot Skip verification because youngest (%lu)"
-                                 " in this set is younger than nvul(%lu)\n",
-                        set_youngest, nvul);
+                DPRINTF(NoSQSMB, "Cannot Skip verification because tssbf youngest (%lu) and sssbf youngest (%lu)"
+                                 " in this set are younger than nvul(%lu)\n",
+                        set_youngest, sssbf_youngest, nvul);
             }
         } else {
             skip_verify = cell->lastStore > 0 && cell->lastStore <= nvul;
@@ -426,7 +433,6 @@ TSSBF::TSSBF(const Params *p)
           IndexMask((((uint64_t)1) << IndexBits) - 1),
           table(Depth)
 {
-
 }
 
 Addr TSSBF::extractIndex(Addr key) const {
@@ -509,3 +515,24 @@ InstSeqNum TSSBF::findYoungestInSet(Addr key)
 }
 
 
+SimpleSSBF::SimpleSSBF(const Params *p)
+        : SimObject(p),
+          Size(p->TSSBFSize),
+          IndexBits(ceilLog2(p->TSSBFSize)),
+          IndexMask((((uint64_t)1) << IndexBits) - 1),
+          SSBFTable(Size, 0)
+{
+}
+
+unsigned SimpleSSBF::hash(Addr key)
+{
+    return (key & IndexMask) ^ ((key >> IndexBits) & IndexMask) ^
+           ((key >> IndexBits*2) & IndexMask);
+}
+
+InstSeqNum & SimpleSSBF::find(Addr key)
+{
+    auto index = hash(key);
+    assert(index < SSBFTable.size());
+    return SSBFTable[index];
+}
