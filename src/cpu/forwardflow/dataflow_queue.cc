@@ -559,7 +559,7 @@ DataflowQueues<Impl>::markFwPointers(
 
         } else if (op == 0) {
             // must wait the loaded value
-            if (inst->fuGranted) {
+            if (inst->fuGranted || inst->loadVerifying || inst->wbCount > 0) {
                 if (inst->wbCount > 0) {
                     DPRINTF(DQWake || Debug::NoSQSMB, "Wake up consumer because producer written back\n");
                     wk_ptr.hasVal = true;
