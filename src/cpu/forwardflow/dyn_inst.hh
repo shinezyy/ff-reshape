@@ -525,7 +525,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
     FFRegValue speculativeLoadValue{0};
 
-    InstSeqNum seqNVul;
+    InstSeqNum seqNVul{0};
 
     uint64_t readStoreValue();
 };

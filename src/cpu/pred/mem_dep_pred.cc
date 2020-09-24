@@ -386,14 +386,24 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
         if (!cell) {
             InstSeqNum set_youngest = tssbf.findYoungestInSet(eff_addr_low);
             skip_verify = set_youngest > 0 && set_youngest <= nvul;
-            // log
-            DPRINTF(NoSQSMB, "Skip verification because youngest (%lu) in this set is older than nvul(%lu)\n",
-                    set_youngest, nvul);
-        } else {
-            // log
-            DPRINTF(NoSQSMB, "last store @ 0x%lx is %lu\n", eff_addr_low, cell->lastStore);
 
+            // log
+            if (skip_verify) {
+                DPRINTF(NoSQSMB, "Skip verification because youngest (%lu)"
+                                 " in this set is older than nvul(%lu)\n",
+                        set_youngest, nvul);
+            } else {
+                DPRINTF(NoSQSMB, "Cannot Skip verification because youngest (%lu)"
+                                 " in this set is younger than nvul(%lu)\n",
+                        set_youngest, nvul);
+            }
+        } else {
             skip_verify = cell->lastStore > 0 && cell->lastStore <= nvul;
+
+            // log
+            DPRINTF(NoSQSMB, "%s with last store @ 0x%lx is %lu\n",
+                    skip_verify ? "Skip" : "Dont Skip",
+                    eff_addr_low, cell->lastStore);
         }
     }
 

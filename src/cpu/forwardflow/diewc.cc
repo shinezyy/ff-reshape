@@ -524,8 +524,6 @@ void FFDIEWC<Impl>::setupPointerLink(FFDIEWC::DynInstPtr &inst, bool jumped, con
                 pairs.pop_back();
             }
         }
-        inst->seqNVul = getLastCompletedStoreSN(); // change NVul
-
         insertPointerPairs(pairs);
 
         insertPointerPair(pair);
@@ -535,7 +533,7 @@ void FFDIEWC<Impl>::setupPointerLink(FFDIEWC::DynInstPtr &inst, bool jumped, con
         insertPointerPairs(pairs);
 
         DPRINTF(NoSQSMB, "Override NVul because producer is invalid\n");
-        inst->seqNVul = getLastCompletedStoreSN(); // change NVul
+
         // override prediction
         inst->memPredHistory->bypass = false;
 
@@ -2238,7 +2236,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
                 DPRINTF(IEW || Debug::FFExec, "Execute: Delayed translation, deferring "
                              "load.\n");
                 dq.deferMemInst(inst); // todo ???
-                return;;
+                return;
             }
 
             if (inst->isDataPrefetch() || inst->isInstPrefetch()) {
@@ -2646,8 +2644,6 @@ FFDIEWC<Impl>::setUpLoad(DynInstPtr &inst)
     if (hist->bypass) {
         inst->seqNVul = inst->seqNum - hist->distPair.snDistance;
         // touch tssbf!
-    } else {
-        inst->seqNVul = getLastCompletedStoreSN();
     }
 }
 

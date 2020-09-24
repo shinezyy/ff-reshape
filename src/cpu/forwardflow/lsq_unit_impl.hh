@@ -669,6 +669,10 @@ LSQUnit<Impl>::executeLoad(DynInstPtr &inst)
     } else {
         assert(inst->effAddrValid());
 
+        if (!inst->isNormalBypass()) {
+            inst->seqNVul = iewStage->getLastCompletedStoreSN();
+        }
+
         int load_idx = inst->lqIdx;
         if (!inst->wbCount) {
             incrLdIdx(load_idx);
