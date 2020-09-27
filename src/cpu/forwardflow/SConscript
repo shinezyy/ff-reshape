@@ -125,6 +125,7 @@ if 'FFCPU' in env['CPU_MODELS']:
 
     DebugFlag('NoSQPred')
     DebugFlag('NoSQSMB')
+    DebugFlag('NoSQHash')
 
     CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',

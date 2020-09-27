@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "base/intmath.hh"
+#include "debug/NoSQHash.hh"
 #include "debug/NoSQPred.hh"
 #include "debug/NoSQSMB.hh"
 
@@ -328,10 +329,12 @@ void MemDepPredictor::commitStore(Addr eff_addr, InstSeqNum sn, const BasePointe
     cell->lastStorePosition = position;
     cell->predecessorPosition = position;
     cell->offset = eff_addr & tssbf.offsetMask;
+    tssbf.touch(eff_addr);
 
     InstSeqNum &sssbf_entry = sssbf.find(eff_addr);
     assert(sn > sssbf_entry);
     sssbf_entry = sn;
+    sssbf.touch(eff_addr);
 }
 
 InstSeqNum MemDepPredictor::lookupAddr(Addr eff_addr) {
@@ -403,6 +406,8 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
                 DPRINTF(NoSQSMB, "Cannot Skip verification because tssbf youngest (%lu) and sssbf youngest (%lu)"
                                  " in this set are younger than nvul(%lu)\n",
                         set_youngest, sssbf_youngest, nvul);
+                tssbf.dump();
+                sssbf.dump();
             }
         } else {
             skip_verify = cell->lastStore > 0 && cell->lastStore <= nvul;
@@ -415,6 +420,24 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
     }
 
     return skip_verify;
+}
+
+void MemDepPredictor::touchSSBF(Addr eff_addr, InstSeqNum ssn)
+{
+    auto cell = tssbf.find(eff_addr);
+    if (!cell) {
+        cell = tssbf.allocate(eff_addr);
+        cell->lastStore = ssn;
+        cell->size = 0;
+    }
+}
+
+void MemDepPredictor::completeStore(Addr eff_addr, InstSeqNum ssn)
+{
+    auto cell = tssbf.find(eff_addr);
+    if (cell && cell->lastStore < ssn) {
+        cell->lastStore = ssn;
+    }
 }
 
 MemDepPredictor *MemDepPredictorParams::create()
@@ -431,7 +454,8 @@ TSSBF::TSSBF(const Params *p)
           Depth(Size/Assoc),
           IndexBits(ceilLog2(Depth)),
           IndexMask((((uint64_t)1) << IndexBits) - 1),
-          table(Depth)
+          table(Depth),
+          tableAccCount(Depth, 0)
 {
 }
 
@@ -497,7 +521,7 @@ void TSSBF::checkAndRandEvictOldest(TSSBF::SSBFSet &set)
 
 InstSeqNum TSSBF::findYoungestInSet(Addr key)
 {
-    DPRINTF(NoSQPred, "Looking up addr 0x%lx with hash index %lu, tag: %lx\n",
+    DPRINTF(NoSQPred, "Looking up addr 0x%lx with hash index 0x%lx, tag: %lx\n",
             key, extractIndex(key), extractTag(key));
 
     auto &set = table.at(extractIndex(key));
@@ -514,13 +538,28 @@ InstSeqNum TSSBF::findYoungestInSet(Addr key)
     return youngest;
 }
 
+void TSSBF::touch(Addr key)
+{
+    auto index = extractIndex(key);
+    tableAccCount[index]++;
+}
+
+void TSSBF::dump()
+{
+    DPRINTFR(NoSQHash, "Tagged SSBF:\n");
+    for (unsigned i = 0; i < tableAccCount.size(); i++) {
+        DPRINTFR(NoSQHash, "0x%x: %lu\n", i, tableAccCount[i]);
+    }
+}
+
 
 SimpleSSBF::SimpleSSBF(const Params *p)
         : SimObject(p),
           Size(p->TSSBFSize),
           IndexBits(ceilLog2(p->TSSBFSize)),
           IndexMask((((uint64_t)1) << IndexBits) - 1),
-          SSBFTable(Size, 0)
+          SSBFTable(Size, 0),
+          tableAccCount(Size, 0)
 {
 }
 
@@ -532,7 +571,23 @@ unsigned SimpleSSBF::hash(Addr key)
 
 InstSeqNum & SimpleSSBF::find(Addr key)
 {
+    DPRINTF(NoSQPred, "Looking up addr 0x%lx with hash index 0x%lx\n",
+            key, hash(key));
     auto index = hash(key);
     assert(index < SSBFTable.size());
     return SSBFTable[index];
+}
+
+void SimpleSSBF::touch(Addr key)
+{
+    auto index = hash(key);
+    tableAccCount[index]++;
+}
+
+void SimpleSSBF::dump()
+{
+    DPRINTFR(NoSQHash, "Untagged SSBF:\n");
+    for (unsigned i = 0; i < tableAccCount.size(); i++) {
+        DPRINTFR(NoSQHash, "0x%x: %lu\n", i, tableAccCount[i]);
+    }
 }

@@ -107,6 +107,8 @@ class TSSBF: public SimObject
 
     SSBFTable table;
 
+    std::vector<unsigned long> tableAccCount;
+
   public:
     typedef MemDepPredictorParams Params;
     explicit TSSBF(const Params *p);
@@ -116,6 +118,10 @@ class TSSBF: public SimObject
     InstSeqNum findYoungestInSet(Addr key);
 
     SSBFCell *allocate(Addr key);
+
+    void touch(Addr key);
+
+    void dump();
 
   private:
     Addr extractIndex(Addr key) const;
@@ -133,6 +139,8 @@ class SimpleSSBF: public SimObject
 
     std::vector<InstSeqNum> SSBFTable;
 
+    std::vector<unsigned long> tableAccCount;
+
     unsigned hash(Addr key);
 
   public:
@@ -144,6 +152,9 @@ class SimpleSSBF: public SimObject
   public:
     InstSeqNum &find(Addr key);
 
+    void touch(Addr key);
+
+    void dump();
 };
 
 class MemDepPredictor: public SimObject
@@ -156,6 +167,10 @@ class MemDepPredictor: public SimObject
     const std::string _name;
 
     const std::string name() const override {return _name;}
+
+    void touchSSBF(Addr eff_addr, InstSeqNum ssn);
+
+    void completeStore(Addr eff_addr, InstSeqNum ssn);
 
   private:
     const unsigned pcShamt{2};

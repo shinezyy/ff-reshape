@@ -50,6 +50,7 @@
 #include "cpu/inst_seq.hh"
 #include "debug/Activity.hh"
 #include "debug/Decode.hh"
+#include "debug/NoSQPred.hh"
 #include "debug/O3PipeView.hh"
 #include "params/DerivFFCPU.hh"
 #include "sim/full_system.hh"
@@ -697,6 +698,7 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
 
         if (inst->isLoad()) {
             inst->storeSeq = storeSeq;
+            DPRINTF(NoSQPred, "Predicting for inst[%lu]\n", inst->seqNum);
             mDepPred->predict(inst->instAddr(), inst->memPredHistory);
         }
 

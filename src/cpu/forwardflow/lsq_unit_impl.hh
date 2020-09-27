@@ -671,6 +671,9 @@ LSQUnit<Impl>::executeLoad(DynInstPtr &inst)
 
         if (!inst->isNormalBypass()) {
             inst->seqNVul = iewStage->getLastCompletedStoreSN();
+            // touch the TSSBF here?
+            iewStage->touchSSBF(inst->physEffAddrLow, inst->seqNVul);
+            DPRINTF(NoSQPred, "Setting Nvul (%lu) for inst[%lu]\n", inst->seqNVul, inst->seqNum);
         }
 
         int load_idx = inst->lqIdx;
@@ -1214,7 +1217,13 @@ LSQUnit<Impl>::completeStore(int store_idx)
         iewStage->updateLSQNextCycle = true;
     }
 
-    iewStage->setStoreCompleted(storeQueue[store_idx].inst->seqNum);
+    auto inst = storeQueue[store_idx].inst;
+    iewStage->setStoreCompleted(inst->seqNum, inst->physEffAddrLow);
+    DPRINTF(NoSQPred, "Completing Store %lu addr: 0x%lx, size: %u\n",
+            inst->seqNum, inst->physEffAddrLow, inst->effSize);
+    if (inst->physEffAddrHigh) {
+        iewStage->setStoreCompleted(inst->seqNum, inst->physEffAddrHigh);
+    }
 
 
     DPRINTF(LSQUnit, "Completing store [sn:%lli], idx:%i, store head "

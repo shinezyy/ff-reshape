@@ -481,6 +481,8 @@ public:
     Stats::Formula loadSquashRate;
 
     Stats::Scalar reExecutedLoads;
+    Stats::Scalar reExecutedBypass;
+    Stats::Scalar reExecutedNonBypass;
     Stats::Formula loadReExecRate;
 
     Stats::Scalar verificationSkipped;
@@ -552,10 +554,11 @@ public:
     InstSeqNum lastCompletedStoreSN{};
 
   public:
-    void setStoreCompleted(InstSeqNum sn);
+    void setStoreCompleted(InstSeqNum sn, Addr eff_addr);
 
     InstSeqNum getLastCompletedStoreSN() {return lastCompletedStoreSN;}
 
+    void touchSSBF(Addr eff_addr, InstSeqNum ssn);
   private:
 
     bool checkViolation(DynInstPtr &inst);

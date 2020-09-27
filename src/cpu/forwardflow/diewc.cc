@@ -148,7 +148,8 @@ void FFDIEWC<Impl>::tick() {
 template<class Impl>
 void FFDIEWC<Impl>::tryVerifyTailLoad() {
     DynInstPtr tail = getTailInst();
-    if (tail && tail->isLoad() && tail->seqNum != verifiedTailLoad) {
+    if (tail && tail->isLoad() && tail->seqNum != verifiedTailLoad &&
+        (tail->isNormalBypass() || tail->effAddrValid())) {
         DPRINTF(NoSQSMB, "Last verified load is %lu\n", verifiedTailLoad);
         bool skip_verify;
 
@@ -184,12 +185,19 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
             verificationSkipped++;
 
         } else if (!ldstQueue.numStoresToWB(DummyTid)){
+            DPRINTF(NoSQSMB, "Did not skip verifying load [%lu] @ 0x%lx size: %u\n",
+                    tail->seqNum, tail->physEffAddrLow, tail->effSize);
             auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(bypassCanceled);
             if (sent_reexec) {
                 verifiedTailLoad = tail->seqNum;
 
                 // stats
                 reExecutedLoads++;
+                if (tail->isNormalBypass()) {
+                    reExecutedBypass++;
+                } else {
+                    reExecutedNonBypass++;
+                }
             }
             if (canceled_bypassing && tail->memPredHistory) {
                 DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu], "
@@ -2101,6 +2109,14 @@ void FFDIEWC<Impl>::regStats()
             .name(name() + ".reExecutedLoads")
             .desc("reExecutedLoads");
 
+    reExecutedBypass
+            .name(name() + ".reExecutedBypass")
+            .desc("reExecutedBypass");
+
+    reExecutedNonBypass
+            .name(name() + ".reExecutedNonBypass")
+            .desc("reExecutedNonBypass");
+
     loadReExecRate
             .name(name() + ".loadReExecRate")
             .desc("loadReExecRate");
@@ -2649,12 +2665,13 @@ FFDIEWC<Impl>::setUpLoad(DynInstPtr &inst)
 
 template<class Impl>
 void
-FFDIEWC<Impl>::setStoreCompleted(InstSeqNum sn)
+FFDIEWC<Impl>::setStoreCompleted(InstSeqNum sn, Addr eff_addr)
 {
     if (sn > lastCompletedStoreSN) {
-        // todo: check why it is 0?
         lastCompletedStoreSN = sn;
     }
+
+    mDepPred->completeStore(eff_addr, sn);
 }
 
 template<class Impl>
@@ -2684,6 +2701,12 @@ bool FFDIEWC<Impl>::checkViolation(FFDIEWC::DynInstPtr &inst)
     }
     DPRINTF(NoSQSMB, "No violation detected, mark inst as verified\n");
     return false;
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::touchSSBF(Addr eff_addr, InstSeqNum ssn)
+{
+    mDepPred->touchSSBF(eff_addr, ssn);
 }
 
 }
