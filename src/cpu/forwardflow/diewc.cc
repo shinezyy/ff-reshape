@@ -167,6 +167,7 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
                                               tail->effSize, tail->seqNVul);
         }
 
+        // action:
         if (skip_verify) {
             DPRINTF(NoSQSMB, "Skip verifying load [%lu]\n", tail->seqNum);
             tail->loadVerified = true;
@@ -827,11 +828,11 @@ FFDIEWC<Impl>::
     if (head_inst->isStore() && inst_fault == NoFault) {
         head_inst->setCompleted();
 
-        mDepPred->commitStore(head_inst->physEffAddrLow,
+        mDepPred->commitStore(head_inst->physEffAddrLow, head_inst->effSize,
                               head_inst->seqNum, head_inst->dqPosition);
 
         if (head_inst->physEffAddrHigh) {
-            mDepPred->commitStore(head_inst->physEffAddrHigh,
+            mDepPred->commitStore(head_inst->physEffAddrHigh, head_inst->effSize,
                                   head_inst->seqNum, head_inst->dqPosition);
         }
     }
@@ -1663,36 +1664,41 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
         fetchRedirect = true;
         ++memOrderViolationEvents;
         squashDueToMemMissPred(inst);
-
-        SSBFCell *cell = mDepPred->tssbf.find(inst->physEffAddrLow);
-        if (inst->isNormalBypass()) {
-            // false positive
-            DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu]\n", inst->seqNum);
-            mDepPred->update(inst->instAddr(), false,
-                             0, // dont care
-                             0, // dont care
-                             inst->memPredHistory
-            );
-
-        } else {
-            // false negative
-            if (cell) {
-                DPRINTF(NoSQPred, "Marking mem dep:" ptrfmt "->" ptrfmt "\n",
-                        extptr(cell->predecessorPosition), extptr(inst->dqPosition));
-                mDepPred->update(inst->instAddr(), true,
-
-                                 inst->seqNum - cell->lastStore, //sn dist
-                                 dq.c.computeDist(inst->dqPosition, cell->predecessorPosition),
-                        // pointer dist to last predecessor
-
-                                 inst->memPredHistory);
-            } else {
-                DPRINTF(NoSQPred, "Producing TSSBF entry has been evicted,"
-                                  " we have to give up recording\n");
-            }
-        }
     } else {
         dq.writebackLoad(inst);
+    }
+
+    SSBFCell *cell = mDepPred->tssbf.find(inst->physEffAddrLow);
+
+    if (violation && inst->isNormalBypass() && inst->memPredHistory) {
+        // false positive
+        DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu]\n", inst->seqNum);
+        mDepPred->update(inst->instAddr(), false,
+                         0, // dont care
+                         0, // dont care
+                         inst->memPredHistory
+        );
+    } else if (inst->wbCount == 2 && cell && !inst->isNormalBypass() && inst->memPredHistory) {
+
+        auto sn_dist = inst->seqNum - cell->lastStore;
+        auto dq_dist = dq.c.computeDist(inst->dqPosition, cell->predecessorPosition);
+
+        if (sn_dist == dq_dist * 100) {
+            DPRINTF(NoSQPred, "Marking mem dep:" ptrfmt "->" ptrfmt " %s\n",
+                    extptr(cell->predecessorPosition), extptr(inst->dqPosition),
+                    violation ? "" : "for silent violation");
+            mDepPred->update(inst->instAddr(), true,
+                             sn_dist,
+                             dq_dist,
+                             inst->memPredHistory);
+        } else {
+            DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
+                              "%lu -> %lu with dq dist: %u\n", cell->lastStore, inst->seqNum, dq_dist);
+        }
+
+    } else if (violation && !cell) {
+        DPRINTF(NoSQPred, "Producing TSSBF entry has been evicted,"
+                          " we have to give up recording\n");
     }
 }
 

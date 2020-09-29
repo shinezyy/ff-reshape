@@ -703,7 +703,7 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
         }
 
         if (inst->isCondCtrl() || inst->isCall()) {
-            mDepPred->recordPath(inst->instAddr(), inst->isCall());
+            mDepPred->recordPath(inst->instAddr(), inst->isCall(), inst->readPredTaken());
         }
 
         // This current instruction is valid, so add it into the decode

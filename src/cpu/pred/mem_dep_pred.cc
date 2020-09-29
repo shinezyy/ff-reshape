@@ -228,12 +228,14 @@ MemDepPredictor::squash(MemPredHistory* &hist)
 }
 
 void
-MemDepPredictor::recordPath(Addr control_pc, bool isCall)
+MemDepPredictor::recordPath(Addr control_pc, bool is_call, bool pred_taken)
 {
-    unsigned shamt = isCall ? callShamt : branchShamt;
-    unsigned mask = isCall ?
-        ((1 << callShamt) - 1) : ((1 << branchShamt) - 1);
-    controlPath = (controlPath << shamt) | ((control_pc >> pcShamt) & mask);
+    if (is_call) {
+        unsigned mask = ((uint64_t)1 << callShamt) - 1;
+        controlPath = (controlPath << callShamt) | ((control_pc >> pcShamt) & mask);
+    } else {
+        controlPath = (controlPath << (unsigned) 1) | pred_taken;
+    }
 }
 
 Addr
@@ -316,19 +318,23 @@ MemDepPredictor::clear()
     controlPath = 0;
 }
 
-void MemDepPredictor::commitStore(Addr eff_addr, InstSeqNum sn, const BasePointer &position) {
+void MemDepPredictor::commitStore(Addr eff_addr, uint8_t eff_size,
+                                  InstSeqNum sn, const BasePointer &position) {
     eff_addr = shiftAddr(eff_addr);
     SSBFCell *cell = tssbf.find(eff_addr);
     if (!cell) {
         DPRINTF(NoSQPred, "Allocating new entry\n");
         cell = tssbf.allocate(eff_addr);
     }
-    DPRINTF(NoSQPred, "Setting 0x%lx last store SN to %lu\n",
-            eff_addr, sn);
     cell->lastStore = sn;
     cell->lastStorePosition = position;
     cell->predecessorPosition = position;
     cell->offset = eff_addr & tssbf.offsetMask;
+    cell->size = eff_size;
+
+    DPRINTF(NoSQPred, "Setting 0x%lx last store SN to %lu with size: %u, offset: %u\n",
+            eff_addr, sn, eff_size, cell->offset);
+
     tssbf.touch(eff_addr);
 
     InstSeqNum &sssbf_entry = sssbf.find(eff_addr);

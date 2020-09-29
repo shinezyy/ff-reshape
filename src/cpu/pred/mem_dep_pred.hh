@@ -229,11 +229,11 @@ class MemDepPredictor: public SimObject
 
     std::pair<bool, DistancePair> predict(Addr load_pc, MemPredHistory *&hist);
 
-    void recordPath(Addr control_pc, bool isCall);
+    void recordPath(Addr control_pc, bool is_call, bool pred_taken);
 
     const unsigned callShamt{2};
     const unsigned branchShamt{1};
-    unsigned controlPath{};
+    uint64_t controlPath{};
 
     void update(Addr load_pc, bool should_bypass,
                 unsigned sn_dist, unsigned dq_dist,
@@ -243,7 +243,8 @@ class MemDepPredictor: public SimObject
 
     void clear();
 
-    void commitStore(Addr eff_addr, InstSeqNum sn, const BasePointer &position);
+    void commitStore(Addr eff_addr, uint8_t eff_size,
+                     InstSeqNum sn, const BasePointer &position);
 
     InstSeqNum lookupAddr(Addr eff_addr);
 
