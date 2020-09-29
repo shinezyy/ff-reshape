@@ -52,7 +52,7 @@ struct MemPredHistory
 
     bool predecessorIsLoad;
 
-    using FoldedPC = unsigned;
+    using FoldedPC = uint64_t ;
     FoldedPC path;
 };
 
@@ -208,7 +208,7 @@ class MemDepPredictor: public SimObject
         WrongSource
     };
 
-    using FoldedPC = unsigned;
+    using FoldedPC = uint64_t;
 
     using MemPredSet = std::map<Addr, MemPredCell>;
 
@@ -233,7 +233,7 @@ class MemDepPredictor: public SimObject
 
     const unsigned callShamt{2};
     const unsigned branchShamt{1};
-    uint64_t controlPath{};
+    FoldedPC controlPath{};
 
     void update(Addr load_pc, bool should_bypass,
                 unsigned sn_dist, unsigned dq_dist,
