@@ -1678,6 +1678,8 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                          0, // dont care
                          inst->memPredHistory
         );
+        mDepPred->dumpTopMisprediction();
+
     } else if (inst->wbCount == 2 && cell && !inst->isNormalBypass() && inst->memPredHistory) {
 
         auto sn_dist = inst->seqNum - cell->lastStore;

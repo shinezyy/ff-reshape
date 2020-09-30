@@ -3,6 +3,7 @@
 
 
 #include <map>
+#include <unordered_map>
 #include <vector>
 
 #include "base/random.hh"
@@ -157,6 +158,29 @@ class SimpleSSBF: public SimObject
     void dump();
 };
 
+class MisPredTable
+{
+    const unsigned size{200};
+
+    struct MisPredPair {
+        Addr pc;
+        uint64_t count;
+        uint64_t fpCount;
+        uint64_t fnCount;
+    };
+
+    std::list<MisPredPair> misPredRank;
+
+    using RankIt = std::list<MisPredPair>::iterator;
+
+    std::unordered_map<Addr, RankIt> misPredTable;
+
+  public:
+    void dump() const;
+
+    void record(Addr pc, bool fn);
+};
+
 class MemDepPredictor: public SimObject
 {
   public:
@@ -274,6 +298,11 @@ class MemDepPredictor: public SimObject
     FoldedPC getPath() const;
 
     Addr shiftAddr(Addr addr);
+
+    MisPredTable misPredTable;
+
+  public:
+    void dumpTopMisprediction() const;
 };
 
 #endif // __MEM_DEP_PRED_HH__

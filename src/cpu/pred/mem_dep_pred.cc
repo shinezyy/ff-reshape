@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "base/intmath.hh"
+#include "base/random.hh"
 #include "debug/NoSQHash.hh"
 #include "debug/NoSQPred.hh"
 #include "debug/NoSQSMB.hh"
@@ -129,6 +130,7 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
 
     } else if (pred_bypass && !should_bypass) {
         DPRINTF(NoSQPred, "For load @ 0x%x, mispredicted, should not bypass\n", load_pc);
+        misPredTable.record(load_pc, false);
 
         if (hist->pcBypass) {
             DPRINTF(NoSQPred, "Dec conf in pc table, ");
@@ -143,6 +145,7 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
 
     } else {
         if (pred_bypass != should_bypass) {
+            misPredTable.record(load_pc, true);
             DPRINTF(NoSQPred, "For load @ 0x%x, mispredicted, should bypass!\n", load_pc);
         } else {
             DPRINTF(NoSQPred, "For load @ 0x%x, correctly predicted bypassing\n",
@@ -446,6 +449,13 @@ void MemDepPredictor::completeStore(Addr eff_addr, InstSeqNum ssn)
     }
 }
 
+void MemDepPredictor::dumpTopMisprediction() const
+{
+    if (Debug::NoSQPred) {
+        misPredTable.dump();
+    }
+}
+
 MemDepPredictor *MemDepPredictorParams::create()
 {
     return new MemDepPredictor(this);
@@ -595,5 +605,64 @@ void SimpleSSBF::dump()
     DPRINTFR(NoSQHash, "Untagged SSBF:\n");
     for (unsigned i = 0; i < tableAccCount.size(); i++) {
         DPRINTFR(NoSQHash, "0x%x: %lu\n", i, tableAccCount[i]);
+    }
+}
+
+void MisPredTable::dump() const
+{
+    DPRINTFR(NoSQPred, "Mis pred table dump:\n");
+    for (const auto &e: misPredRank) {
+        DPRINTFR(NoSQPred, "PC: 0x%x, count: %lu, fp: %lu, fn: %lu\n",
+                 e.pc, e.count, e.fpCount, e.fnCount);
+    }
+}
+
+void MisPredTable::record(Addr pc, bool fn)
+{
+    bool found = misPredTable.count(pc);
+    if (!found) {
+        misPredRank.push_back({pc, 0, 0, 0});
+    }
+    auto it = found ? misPredTable[pc] : --misPredRank.end();
+    if (!found) {
+        misPredTable[pc] = it;
+    }
+    it->count++;
+    if (fn) {
+        it->fnCount++;
+    } else {
+        it->fpCount++;
+    }
+
+    if (it != misPredRank.begin()) {
+        DPRINTFR(NoSQPred, "%s reach 1\n", __func__);
+        auto new_position = std::prev(it);
+        DPRINTFR(NoSQPred, "%s reach 2\n", __func__);
+        while (new_position != misPredRank.begin() && new_position->count <= it->count) {
+            new_position--;
+        }
+        DPRINTFR(NoSQPred, "%s reach 3\n", __func__);
+        if (new_position != misPredRank.begin()) {
+            new_position++;
+        }
+        if (new_position != it) {
+            DPRINTFR(NoSQPred, "%s reach 4\n", __func__);
+            misPredRank.splice(new_position, misPredRank, it, std::next(it));
+            DPRINTFR(NoSQPred, "%s reach 5\n", __func__);
+        }
+    }
+
+    if (misPredRank.size() > size) {
+        auto to_evict = random_mt.random<int>(1, size/2);
+        // random choose one to evict
+
+        auto it_evict = misPredRank.end();
+        DPRINTFR(NoSQPred, "%s reach 6\n", __func__);
+        while (to_evict--) {
+            it_evict--;
+        }
+        DPRINTFR(NoSQPred, "%s reach 7\n", __func__);
+        misPredTable.erase(it_evict->pc);
+        misPredRank.erase(it_evict);
     }
 }
