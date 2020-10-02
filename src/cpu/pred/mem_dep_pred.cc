@@ -70,10 +70,11 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
 
         // DPRINTF(NoSQPred, "Found Cell@: %p with path: 0x%lx, index: 0x%lx\n",
         //         cell, path, path_index);
-        DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, "
+        DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, @ index: %u "
                 "path predictor predict %i with confi: %i "
                 "to storeDistance %u\n",
-                load_pc, path, mp_history->pathBypass, cell->conf.read(),
+                load_pc, path, path_index,
+                mp_history->pathBypass, cell->conf.read(),
                 cell->distPair.snDistance);
 
     } else {
@@ -93,10 +94,11 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
         }
         mp_history->pcBypass = cell->conf.read() > 0;
 
-        DPRINTF(NoSQPred, "For load @ 0x%x, "
+        DPRINTF(NoSQPred, "For load @ 0x%x, @ index: %u "
                 "pc predictor predict %i with confi: %i "
                 "to storeDistance %u\n",
-                load_pc, mp_history->pcBypass, cell->conf.read(),
+                load_pc, pc_index,
+                mp_history->pcBypass, cell->conf.read(),
                 cell->distPair.snDistance);
     } else {
         if (!mp_history->pathSensitive) {
@@ -132,16 +134,13 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
         DPRINTF(NoSQPred, "For load @ 0x%x, mispredicted, should not bypass\n", load_pc);
         misPredTable.record(load_pc, false);
 
-        if (hist->pcBypass) {
-            DPRINTF(NoSQPred, "Dec conf in pc table, ");
-            decrement(pcTable, load_pc, true, false);
-        }
-        if (hist->pathBypass) {
-            auto path_index = genPathKey(load_pc, hist->path);
-            DPRINTF(NoSQPred, "Dec conf in path table with path: 0x%lx, ",
-                    hist->path);
-            decrement(pathTable, path_index, true, true);
-        }
+        DPRINTF(NoSQPred, "Dec conf in pc table, ");
+        decrement(pcTable, load_pc, true, false);
+
+        auto path_index = genPathKey(load_pc, hist->path);
+        DPRINTF(NoSQPred, "Dec conf in path table with path: 0x%lx, ",
+                hist->path);
+        decrement(pathTable, path_index, true, true);
 
     } else {
         if (pred_bypass != should_bypass) {
@@ -152,19 +151,14 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
                     load_pc);
         }
 
-        // if (!hist->pcBypass) {
-        if (true) {
-            DPRINTF(NoSQPred, "Inc conf in pc table with sn dist: %i, dq dist: %i\n",
-                    sn_dist, dq_dist);
-            increment(pcTable, load_pc, {sn_dist, dq_dist}, false);
-        }
-        // if (!hist->pathBypass) {
-        if (true) {
-            DPRINTF(NoSQPred, "Inc conf in path table with sn dist: %i, dq dist: %i, path: 0x%lx\n",
-                    sn_dist, dq_dist, hist->path);
-            increment(pathTable, genPathKey(load_pc, hist->path),
-                      {sn_dist, dq_dist}, false);
-        }
+        DPRINTF(NoSQPred, "Inc conf in pc table @ index: %u with sn dist: %i, dq dist: %i\n",
+                load_pc, sn_dist, dq_dist);
+        increment(pcTable, load_pc, {sn_dist, dq_dist}, false);
+
+        auto key = genPathKey(load_pc, hist->path);
+        DPRINTF(NoSQPred, "Inc conf in path table @ index: %u with sn dist: %i, dq dist: %i, path: 0x%lx\n",
+                key, sn_dist, dq_dist, hist->path);
+        increment(pathTable, key, {sn_dist, dq_dist}, false);
     }
     delete hist;
     hist = nullptr;
@@ -234,8 +228,8 @@ void
 MemDepPredictor::recordPath(Addr control_pc, bool is_call, bool pred_taken)
 {
     if (is_call) {
-        unsigned mask = ((uint64_t)1 << callShamt) - 1;
-        controlPath = (controlPath << callShamt) | ((control_pc >> pcShamt) & mask);
+        // unsigned mask = ((uint64_t)1 << callShamt) - 1;
+        // controlPath = (controlPath << callShamt) | ((control_pc >> pcShamt) & mask);
     } else {
         controlPath = (controlPath << (unsigned) 1) | pred_taken;
     }
@@ -244,7 +238,7 @@ MemDepPredictor::recordPath(Addr control_pc, bool is_call, bool pred_taken)
 Addr
 MemDepPredictor::genPathKey(Addr pc, FoldedPC path) const
 {
-    return pc ^ (path & PathMask);
+    return pc ^ ((path & PathMask) << pcShamt);
 }
 
 Addr
@@ -258,7 +252,7 @@ Addr
 MemDepPredictor::extractTag(Addr key, bool isPath)
 {
     unsigned shamt = isPath ? PathTableIndexBits : PCTableIndexBits;
-    shamt += 2;
+    shamt += pcShamt;
     return (key >> shamt) & TagMask;
 }
 
@@ -635,20 +629,15 @@ void MisPredTable::record(Addr pc, bool fn)
     }
 
     if (it != misPredRank.begin()) {
-        DPRINTFR(NoSQPred, "%s reach 1\n", __func__);
         auto new_position = std::prev(it);
-        DPRINTFR(NoSQPred, "%s reach 2\n", __func__);
         while (new_position != misPredRank.begin() && new_position->count <= it->count) {
             new_position--;
         }
-        DPRINTFR(NoSQPred, "%s reach 3\n", __func__);
         if (new_position != misPredRank.begin()) {
             new_position++;
         }
         if (new_position != it) {
-            DPRINTFR(NoSQPred, "%s reach 4\n", __func__);
             misPredRank.splice(new_position, misPredRank, it, std::next(it));
-            DPRINTFR(NoSQPred, "%s reach 5\n", __func__);
         }
     }
 
@@ -657,11 +646,9 @@ void MisPredTable::record(Addr pc, bool fn)
         // random choose one to evict
 
         auto it_evict = misPredRank.end();
-        DPRINTFR(NoSQPred, "%s reach 6\n", __func__);
         while (to_evict--) {
             it_evict--;
         }
-        DPRINTFR(NoSQPred, "%s reach 7\n", __func__);
         misPredTable.erase(it_evict->pc);
         misPredRank.erase(it_evict);
     }
