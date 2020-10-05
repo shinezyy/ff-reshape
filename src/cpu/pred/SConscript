@@ -53,6 +53,7 @@ Source('naive_bayes.cc')
 Source('zperceptron.cc')
 Source('snn.cc')
 Source('oracle.cc')
+Source('yags.cc')
 
 DebugFlag('FreeList')
 DebugFlag('Branch')

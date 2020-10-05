@@ -222,3 +222,13 @@ class OracleBP(BranchPredictor):
 
     checkAddr = Param.Bool(True, "check addr of branch inst before return")
     outcomePath = Param.String('None', 'The branch outcome file')
+
+class Yags(BranchPredictor):
+    type = 'Yags'
+    cxx_class = 'YagsBP'
+    cxx_header = "cpu/pred/yags.hh"
+
+    globalPredictorSize = Param.Unsigned(8192/2, "Size of global predictor")
+    globalCtrBits = Param.Unsigned(2, "Bits per counter")
+    choicePredictorSize = Param.Unsigned(8192/2, "Size of choice predictor")
+    choiceCtrBits = Param.Unsigned(2, "Bits of choice counters")
