@@ -78,10 +78,6 @@ enum {
     centerPairBufferSize = 16 * 4
 };
 
-enum {
-    memBypassOp = 3
-};
-
 extern ThreadID DummyTid;
 
 /** Physical register ID.
@@ -501,7 +497,7 @@ struct DQGroupTS {
     bool instValids[Impl::MaxBanks * nOpGroups];
     DynInstPtr insts[Impl::MaxBanks * nOpGroups];
 
-    WKPointer pointers[Impl::MaxBanks * Impl::MaxOps];
+    DQPointer pointers[Impl::MaxBanks * Impl::MaxOps];
 };
 template<class Impl>
 struct DQTopTS {

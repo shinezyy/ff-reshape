@@ -50,7 +50,6 @@
 #include "cpu/inst_seq.hh"
 #include "debug/Activity.hh"
 #include "debug/Decode.hh"
-#include "debug/NoSQPred.hh"
 #include "debug/O3PipeView.hh"
 #include "params/DerivFFCPU.hh"
 #include "sim/full_system.hh"
@@ -69,8 +68,7 @@ DefaultDecode<Impl>::DefaultDecode(O3CPU *_cpu, DerivFFCPUParams *params)
       commitToDecodeDelay(params->commitToDecodeDelay),
       fetchToDecodeDelay(params->fetchToDecodeDelay),
       decodeWidth(params->decodeWidth),
-      numThreads(params->numThreads),
-      mDepPred(params->mDepPred)
+      numThreads(params->numThreads)
 {
     if (decodeWidth > Impl::MaxWidth)
         fatal("decodeWidth (%d) is larger than compiled limit (%d),\n"
@@ -690,20 +688,6 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
         // too much for function correctness.
         if (inst->numSrcRegs() == 0) {
             inst->setCanIssue();
-        }
-
-        if (inst->isStore()) {
-            inst->storeSeq = storeSeq++;
-        }
-
-        if (inst->isLoad()) {
-            inst->storeSeq = storeSeq;
-            DPRINTF(NoSQPred, "Predicting for inst[%lu]\n", inst->seqNum);
-            mDepPred->predict(inst->instAddr(), inst->memPredHistory);
-        }
-
-        if (inst->isCondCtrl() || inst->isCall()) {
-            mDepPred->recordPath(inst->instAddr(), inst->isCall(), inst->readPredTaken());
         }
 
         // This current instruction is valid, so add it into the decode

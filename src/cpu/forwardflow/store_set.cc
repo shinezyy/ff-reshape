@@ -113,12 +113,6 @@ StoreSet::init(uint64_t clear_period, int _SSIT_size, int _LFST_size)
     memOpsPred = 0;
 }
 
-void
-StoreSet::fpBypass(Addr load_PC)
-{
-    int load_index = calcIndex(load_PC);
-    validSSIT[load_index] = false;
-}
 
 void
 StoreSet::violation(Addr store_PC, Addr load_PC)

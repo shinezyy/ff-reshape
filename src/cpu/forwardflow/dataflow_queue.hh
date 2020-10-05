@@ -11,16 +11,6 @@
 #include <unordered_map>
 #include <vector>
 
-#ifdef __CLION_CODING__
-#include "cpu/ff_base_dyn_inst.hh"
-#include "cpu/forwardflow/dataflow_queue_bank.hh"
-#include "cpu/forwardflow/dataflow_queue_top.hh"
-#include "cpu/forwardflow/diewc.hh"
-#include "cpu/forwardflow/dyn_inst.hh"
-#include "cpu/forwardflow/lsq.hh"
-
-#endif
-
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/crossbar.hh"
 #include "cpu/forwardflow/crossbar_dedi_dest.hh"
@@ -30,6 +20,13 @@
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
 
+//#define zcoding
+
+#ifdef zcoding
+//#include "cpu/forwardflow/dataflow_queue_top.hh"
+#include "cpu/forwardflow/dyn_inst.hh"
+
+#endif
 
 struct DerivFFCPUParams;
 
@@ -43,34 +40,24 @@ class DataflowQueues
 //    const WKPointer nullWKPointer;
 
 public:
-    typedef typename Impl::CPUPol CPUPol;
-
-#ifdef __CLION_CODING__
-    template<class Impl>
-    class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {
-    };
-
-    using DynInstPtr = FullInst<Impl>*;
-
-    using O3CPU = FFCPU<Impl>;
-    using LSQ = LSQ<Impl>;
-    using DQTop = DQTop<Impl>;
-    using DIEWC = FFDIEWC<Impl>;
-    using XDataflowQueueBank = DataflowQueueBank<Impl>;
-#else
-    typedef typename Impl::DynInst DynInst;
-    typedef typename Impl::DynInstPtr DynInstPtr;
     typedef typename Impl::O3CPU O3CPU;
-    typedef typename CPUPol::LSQ LSQ;
-    typedef typename CPUPol::DQTop DQTop;
-    typedef typename Impl::CPUPol::DIEWC DIEWC;
-    typedef typename Impl::CPUPol::DataflowQueueBank XDataflowQueueBank;
+
+#ifdef zcoding
+    using DynInstPtr = BaseO3DynInst<Impl>*;
+#else
+    typedef typename Impl::DynInstPtr DynInstPtr;
 #endif
 
+    typedef typename Impl::CPUPol::DQTop DQTop;
+    typedef typename Impl::CPUPol::DIEWC DIEWC;
     typedef typename Impl::CPUPol::DQTopTS DQTopTs;
     typedef typename Impl::CPUPol::DQGroupTS DQGroupTs;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
+    typedef typename Impl::CPUPol::LSQ LSQ;
 
+    typedef typename Impl::CPUPol::DataflowQueueBank XDataflowQueueBank;
+//    using XDataflowQueueBank = DataflowQueueBank<Impl>;
+//
     typedef typename Impl::CPUPol::ReadyInstsQueue XReadyInstsQueue;
 
     unsigned writes, reads;
@@ -162,7 +149,7 @@ public:
 
 public:
 
-    std::unordered_map<BasePointer, FFRegValue> committedValues;
+    std::unordered_map<DQPointer, FFRegValue> committedValues;
 
     std::list<DynInstPtr> getBankHeads();
 
@@ -194,7 +181,7 @@ public:
 
     void regStats();
 
-  private:
+private:
 
     unsigned extraWKPtr;
 
@@ -207,6 +194,7 @@ public:
 
     const unsigned maxQueueDepth;
 
+
     unsigned numPendingWakeups;
     unsigned numPendingWakeupMax;
     const unsigned PendingWakeupThreshold;
@@ -216,14 +204,8 @@ public:
     unsigned numPendingFwPointerMax;
     const unsigned PendingFwPointerThreshold;
 
-  public:
     bool wakeupQueueClogging() const;
     bool fwPointerQueueClogging() const;
-
-    unsigned numInFlightWk() const;
-    unsigned numInFlightFw() const;
-
-  private:
 
 //    std::vector<FFRegValue> regFile;
 
@@ -241,10 +223,8 @@ public:
 
     DIEWC *diewc;
 
-public:
     void extraWakeup(const WKPointer &wk);
 
-private:
     void dumpQueues();
 
     void setWakeupPointersFromFUs();
@@ -272,6 +252,14 @@ public:
 
     void tryFastCleanup();
 
+    unsigned numInFlightFw();
+
+    void writebackLoad(DynInstPtr &inst);
+
+    void wakeMemRelated(DynInstPtr &inst);
+
+    void completeMemInst(DynInstPtr &inst);
+
     DynInstPtr findBySeq(InstSeqNum seq);
 
     bool queuesEmpty();
@@ -287,7 +275,7 @@ private:
 public:
     void dumpFwQSize();
 
-    DynInstPtr readInst(const BasePointer &p) const;
+    DynInstPtr readInst(const DQPointer &p) const;
 
     Stats::Vector readyWaitTime;
 
@@ -445,8 +433,6 @@ public:
     Stats::Scalar CombSelNet;
 
     Stats::Scalar SRAMWritePointer;
-
-    void checkSanity() const;
 };
 
 }

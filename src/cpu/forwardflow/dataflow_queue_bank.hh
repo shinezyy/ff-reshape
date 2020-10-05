@@ -11,12 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
-#ifdef __CLION_CODING__
-#include "cpu/forwardflow/dataflow_queue.hh"
-#include "cpu/forwardflow/dataflow_queue_top.hh"
-#include "cpu/forwardflow/dyn_inst.hh"
-
-#endif
+#include <params/DerivFFCPU.hh>
 
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/crossbar.hh"
@@ -25,32 +20,25 @@
 #include "cpu/forwardflow/network.hh"
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
-#include "params/DerivFFCPU.hh"
 
 namespace FF {
 template<class Impl>
 class DataflowQueueBank {
 
-    typedef typename Impl::CPUPol CPUPolicy;
-
 public:
-#ifdef __CLION_CODING__
-    typedef DataflowQueues<Impl> DQ;
-    typedef DQTop<Impl> DQTop;
-
-    template<class Impl>
-    class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {};
-    using DynInstPtr = FullInst<Impl>*;
-
-#else
-    typedef typename Impl::CPUPol::DataflowQueues DQ;
-    typedef typename CPUPolicy::DQTop DQTop;
     typedef typename Impl::DynInstPtr DynInstPtr;
-#endif
+//    using DynInstPtr = BaseO3DynInst<Impl>*;
+
+    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
+
+    typedef typename Impl::CPUPol CPUPolicy;
 
     typedef typename Impl::CPUPol::ReadyInstsQueue XReadyInstsQueue;
 
+    typedef typename CPUPolicy::DQTop DQTop;
+
 private:
+    typedef typename CPUPolicy::DataflowQueues DQ;
 
     DQ *dq;
 
@@ -81,13 +69,13 @@ private:
     // output forward pointers
     // init according to nops
 
-    std::vector<WKPointer> outputPointers;
+    std::vector<DQPointer> outputPointers;
 
     unsigned tail;
 
     unsigned readyQueueSize;
 
-    std::deque<BasePointer> readyQueue;
+    std::deque<DQPointer> readyQueue;
 
 public:
     void advanceTail();
@@ -103,13 +91,13 @@ public:
 
     DynInstPtr wakeupInstsFromBank();
 
-    std::vector<WKPointer> readPointersFromBank();
+    std::vector<DQPointer> readPointersFromBank();
 
-    DynInstPtr readInstsFromBank(const BasePointer &pointer) const;
+    DynInstPtr readInstsFromBank(DQPointer pointer) const;
 
-    void writeInstsToBank(const BasePointer &pointer, DynInstPtr &inst);
+    void writeInstsToBank(DQPointer pointer, DynInstPtr &inst);
 
-    void checkReadiness(BasePointer pointer);
+    void checkReadiness(DQPointer pointer);
 
     DynInstPtr findInst(InstSeqNum) const;
 
@@ -131,7 +119,7 @@ public:
 
     void clear(bool markSquashed);
 
-    void erase(BasePointer p, bool markSquashed);
+    void erase(DQPointer p, bool markSquashed);
 
     void cycleStart();
 
@@ -154,7 +142,7 @@ public:
 
     bool hasTooManyPendingInsts();
 
-    void squashReady(const BasePointer &squash_from);
+    void squashReady(const DQPointer &squash_from);
 
     bool servedForwarder;
 

@@ -31,8 +31,6 @@ public:
     CrossBar(uint32_t size);
 
     const std::string name() {return "CrossBarSwitch";};
-
-    void checkSanity() const;
 };
 
 template<class T>
@@ -52,7 +50,7 @@ CrossBar<T>::select(std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null,
     assert(inputs.size() == size);
 
     for (uint32_t i: prioList) {
-        const auto &pkt = inputs.at(i);
+        const auto &pkt = inputs[i];
         if (pkt && pkt->valid) {
             assert(outputs.size() > pkt->dest);
             if (!outputs[pkt->dest]->valid) {
@@ -60,14 +58,13 @@ CrossBar<T>::select(std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null,
                 outputs[pkt->dest] = inputs[i];
             } else {
                 DPRINTF(CrossBar, "Reject pkt[%i] req to [%i], conflict by [%i]\n",
-                        i, pkt->dest, outputs[pkt->dest]->source);
+                        i, pkt->dest, outputs[i]->source);
             }
         }
     }
 
-//    prioList.push_back(prioList.front());
-//    prioList.pop_front();
-    prioList.splice(prioList.end(), prioList, prioList.begin());
+    prioList.push_back(prioList.front());
+    prioList.pop_front();
     return outputs;
 }
 
@@ -78,18 +75,6 @@ std::vector<DQPacket<T>*>
 CrossBar<T>::select(std::vector<DQPacket<T>*> &inputs, DQPacket<T> *null)
 {
     return select(inputs, null, inputs.size());
-}
-
-template<class T>
-void
-CrossBar<T>::checkSanity() const
-{
-    for (auto &i: prioList) {
-        DPRINTFR(CrossBar, "i: %i, address: %p\n", i, &i);
-    }
-    for (uint32_t i: prioList) {
-        assert(i < size);
-    }
 }
 
 }

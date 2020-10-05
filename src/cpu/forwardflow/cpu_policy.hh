@@ -47,7 +47,6 @@
 #include "cpu/forwardflow/lsq_unit.hh"
 #include "cpu/forwardflow/mem_dep_unit.hh"
 #include "cpu/forwardflow/store_set.hh"
-#include "cpu/pred/mem_dep_pred.hh"
 #include "ready_inst_queue.hh"
 
 /**
@@ -65,11 +64,7 @@ template<class Impl>
 struct FFSimpleCPUPolicy
 {
     /** Typedef for the memory dependence unit. */
-
-    // store set:
     typedef FF::MemDepUnit<FF::StoreSet, Impl> MemDepUnit;
-    // NoSQ pred:
-    // typedef FF::MemDepUnit<MemDepPredictor, Impl> MemDepUnit;
     /** Typedef for the LSQ. */
     typedef FF::LSQ<Impl> LSQ;
     /** Typedef for the thread-specific LSQ units. */

@@ -12,7 +12,6 @@
 #include "debug/FFCommit.hh"
 #include "debug/FFDisp.hh"
 #include "debug/FFSquash.hh"
-#include "debug/NoSQSMB.hh"
 #include "debug/RSProbe1.hh"
 #include "params/DerivFFCPU.hh"
 #include "params/FFFUPool.hh"
@@ -106,6 +105,7 @@ void DQTop<Impl>::tick()
     DPRINTF(DQ, "Size of blockedMemInsts: %llu, size of retryMemInsts: %llu\n",
             blockedMemInsts.size(), retryMemInsts.size());
 
+
 }
 
 template<class Impl>
@@ -117,57 +117,16 @@ void DQTop<Impl>::replayMemInst(DynInstPtr &inst)
 template<class Impl>
 void DQTop<Impl>::scheduleNonSpec()
 {
-    auto tail_inst = getTail();
-    if (!tail_inst) {
+    if (!getTail()) {
         DPRINTF(FFSquash, "Ignore scheduling attempt to squashing inst\n");
         return;
     }
-    WKPointer wk = WKPointer(tail_inst->dqPosition);
-    DPRINTF(DQ || Debug::DQWake, "Scheduling non spec inst[%lu] @ " ptrfmt "\n",
-            tail_inst->seqNum, extptr(wk));
+    WKPointer wk = WKPointer(getTail()->dqPosition);
+    auto p = c.uint2Pointer(tail);
+    DPRINTF(DQ, "Scheduling non spec inst @ (%i %i)\n", p.bank, p.index);
     wk.wkType = WKPointer::WKMisc;
     centralizedExtraWakeup(wk);
 }
-
-template<class Impl>
-std::pair<bool, bool>
-DQTop<Impl>::reExecTailLoad(InstSeqNum &canceled_seq)
-{
-    auto inst = getTail();
-    bool re_executed = false, bypass_canceled = false;
-    if (!inst) {
-        DPRINTF(FFSquash || Debug::NoSQSMB, "Ignore scheduling attempt to squashing inst\n");
-
-    } else if (!inst->isLoad()) {
-        DPRINTF(NoSQSMB, "Head inst is not load!\n");
-
-    } else if (inst->numBusyOps()) {
-        if (!inst->orderFulfilled()) {
-            if (!numInFlightWk() && inst->seqNum > canceled_seq) {
-                // TODO: mark misprediction
-                WKPointer wk = WKPointer(getTail()->dqPosition);
-                DPRINTF(DQ || Debug::NoSQSMB, "Mark tail load inst as order dep ready" ptrfmt "\n", extptr(wk));
-                wk.wkType = WKPointer::WKOrder;
-                centralizedExtraWakeup(wk);
-                bypass_canceled = true;
-                canceled_seq = inst->seqNum;
-            }
-        } else {
-            // wait non-order deps ready
-            DPRINTF(DQ || Debug::NoSQSMB,
-                    "Waiting for non-order deps of tail inst to become ready\n");
-        }
-
-    } else {
-        WKPointer wk = WKPointer(getTail()->dqPosition);
-        DPRINTF(DQ || Debug::NoSQSMB, "Scheduling tail load inst[%lu] " ptrfmt "\n", inst->seqNum, extptr(wk));
-        wk.wkType = WKPointer::WKLdReExec;
-        centralizedExtraWakeup(wk);
-        re_executed = true;
-    }
-    return std::make_pair(re_executed, bypass_canceled);
-}
-
 
 template<class Impl>
 void DQTop<Impl>::centralizedExtraWakeup(const WKPointer &wk)
@@ -339,21 +298,18 @@ bool DQTop<Impl>::validPosition(unsigned u) const
     }
 }
 
-
 template<class Impl>
-std::pair<bool, PointerPair>
-DQTop<Impl>::insertBarrier(DynInstPtr &inst)
+bool DQTop<Impl>::insertBarrier(DynInstPtr &inst)
 {
     memDepUnit.insertBarrier(inst);
     return insertNonSpec(inst);
 }
 
 template<class Impl>
-std::pair<bool, PointerPair>
-DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
+bool DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
 {
     bool non_spec = false;
-    if (inst->isStoreConditional() || inst->isLoadReserved()) {
+    if (inst->isStoreConditional()) {
         memDepUnit.insertNonSpec(inst);
         non_spec = true;
     }
@@ -364,8 +320,7 @@ DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
 }
 
 template<class Impl>
-std::pair<bool, PointerPair>
-DQTop<Impl>::insert(DynInstPtr &inst, bool non_spec)
+bool DQTop<Impl>::insert(DynInstPtr &inst, bool nonSpec)
 {
     // TODO: this is centralized now; Decentralize it with buffers
     // todo: send to allocated DQ position
@@ -373,7 +328,7 @@ DQTop<Impl>::insert(DynInstPtr &inst, bool non_spec)
 
     bool jumped = false;
 
-    TermedPointer allocated = inst->dqPosition;
+    DQPointer allocated = inst->dqPosition;
 
     // this is for checking; we do not need to decentralize it
     DPRINTF(DQWake || Debug::DQGDisp,
@@ -402,13 +357,11 @@ DQTop<Impl>::insert(DynInstPtr &inst, bool non_spec)
     // we don't need to add to dependents or producers here,
     //  which is maintained in DIEWC by archState
 
-    PointerPair pair;
-    pair.dest.valid = false;
-    if (inst->isMemRef() && !non_spec) {
-        pair = memDepUnit.insert(inst);
+    if (inst->isMemRef() && !nonSpec) {
+        memDepUnit.insert(inst);
     }
 
-    return std::make_pair(jumped, pair);
+    return jumped;
 }
 
 template<class Impl>
@@ -539,7 +492,7 @@ void DQTop<Impl>::tryFastCleanup()
 }
 
 template<class Impl>
-void DQTop<Impl>::squash(BasePointer p, bool all, bool including)
+void DQTop<Impl>::squash(DQPointer p, bool all, bool including)
 {
     centerInstBuffer.clear();
 
@@ -752,13 +705,13 @@ void DQTop<Impl>::cacheUnblocked()
 }
 
 template<class Impl>
-bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
+void DQTop<Impl>::writebackLoad(DynInstPtr &inst)
 {
+    //    DPRINTF(DQWake, "Original ptr: (%i) (%i %i) (%i)\n",
+    //            inst->pointers[0].valid, inst->pointers[0].bank,
+    //            inst->pointers[0].index, inst->pointers[0].op);
     DPRINTF(DQWake, "Writeback Load[%lu]\n", inst->seqNum);
-    bool not_verifying = !inst->isNormalBypass() && // if bypassOp writebackLoad must be verifying
-            inst->wbCount == 1; // ==0: impossible; ==2: verifying
-
-    if (inst->pointers[0].valid && not_verifying) {
+    if (inst->pointers[0].valid) {
         WKPointer wk(inst->pointers[0]);
         DPRINTF(DQWake,
                 "Sending pointer to consumer" ptrfmt
@@ -778,7 +731,14 @@ bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
         inst->opReady[0] = true;
         completeMemInst(inst);
     }
-    return false;
+}
+
+template<class Impl>
+void DQTop<Impl>::wakeMemRelated(DynInstPtr &inst)
+{
+    if (inst->isMemRef()) {
+        memDepUnit.wakeDependents(inst);
+    }
 }
 
 template<class Impl>
@@ -788,10 +748,17 @@ void DQTop<Impl>::completeMemInst(DynInstPtr &inst)
     if (inst->isMemRef()) {
         // complateMemInst
         inst->memOpDone(true);
+        memDepUnit.completed(inst);
 
     } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
         memDepUnit.completeBarrier(inst);
     }
+}
+
+template<class Impl>
+void DQTop<Impl>::violation(DynInstPtr store, DynInstPtr violator)
+{
+    memDepUnit.violation(store, violator);
 }
 
 template<class Impl>
@@ -897,8 +864,6 @@ void DQTop<Impl>::distributeInstsToGroup()
             DPRINTF(DQGDisp,
                     "Null inst found in centerInstBuffer\n");
         } else {
-            assert(inst);
-            assert(dispatchingGroup);
             if (inst->dqPosition.group != dispatchingGroup->getGroupID()) {
                 schedSwitchDispatchingGroup(inst);
                 DPRINTF(DQGDisp, "Switch dispatching group, break this cycle\n");
@@ -995,7 +960,7 @@ DQTop<Impl>::getHead() const
 
 template<class Impl>
 typename Impl::DynInstPtr
-DQTop<Impl>::readInst(const BasePointer &p) const
+DQTop<Impl>::readInst(const DQPointer &p) const
 {
     auto group = dqGroups[p.group];
     const auto &inst = group->readInst(p);
@@ -1032,6 +997,22 @@ bool DQTop<Impl>::notifyHalfSquash(InstSeqNum new_seq, Addr new_pc)
     return true;
 }
 
+template<class Impl>
+typename Impl::DynInstPtr
+DQTop<Impl>::checkAndGetParent(const DQPointer &parent, const DQPointer &child) const
+{
+    assert(child.valid);
+    assert(parent.valid);
+    assert(readInst(child));
+
+    unsigned pu = c.pointer2uint(parent);
+
+    if (!validPosition(pu)) return nullptr;
+
+    if (!logicallyLT(pu, c.pointer2uint(child))) return nullptr;
+
+    return readInst(parent);
+}
 
 template<class Impl>
 void DQTop<Impl>::alignTails()
@@ -1054,18 +1035,12 @@ void DQTop<Impl>::addReadyMemInst(DynInstPtr inst, bool isOrderDep)
     }
     DPRINTF(DQWake, "Replaying mem inst[%llu]\n", inst->seqNum);
     WKPointer wk(inst->dqPosition);
-    if (isOrderDep) { // default to True
-        // pass
-        // if (inst->isLoad()) {
-        // } else {
-        //     wk.wkType = WKPointer::WKOrder;
-        //     centralizedExtraWakeup(wk);
-        // }
-
+    if (isOrderDep) {
+        wk.wkType = WKPointer::WKOrder;
     } else {
         wk.wkType = WKPointer::WKMem;
-        centralizedExtraWakeup(wk);
     }
+    centralizedExtraWakeup(wk);
 }
 
 template<class Impl>
@@ -1154,37 +1129,6 @@ unsigned DQTop<Impl>::incIndex(unsigned u)
 {
     return (u+1) % dispatchWidth;
 }
-
-template<class Impl>
-unsigned DQTop<Impl>::numInFlightWk() const
-{
-    unsigned sum = 0;
-    for (unsigned g = 0 ; g < c.nGroups; g++) {
-        auto &group = dqGroups[g];
-        sum += group->numInFlightWk();
-        sum += interGroupBuffer[g].size();
-        sum += pseudoCenterWKPointerBuffer[g].size();
-    }
-    return sum;
-}
-
-template<class Impl>
-void DQTop<Impl>::checkSanity() const
-{
-    return;
-    auto it = centerInstBuffer.begin();
-    while (it != centerInstBuffer.end()) {
-        assert(*it);
-        auto inst = *it;
-        DPRINTF(NoSQSMB, "cib: inst: %p\n", inst.get());
-        DPRINTF(NoSQSMB, "location:" ptrfmt "\n", extptr(inst->dqPosition));
-        it++;
-    }
-    for (auto group: dqGroups) {
-        group->checkSanity();
-    }
-}
-
 
 }
 

@@ -56,14 +56,10 @@
 #include "arch/mmapped_ipr.hh"
 #include "arch/riscv/faults.hh"
 #include "config/the_isa.hh"
-#include "cpu/forwardflow/dataflow_queue_common.hh"
 #include "cpu/inst_seq.hh"
-#include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/timebuf.hh"
 #include "debug/FFLSQ.hh"
 #include "debug/LSQUnit.hh"
-#include "debug/NoSQPred.hh"
-#include "debug/NoSQSMB.hh"
 #include "mem/packet.hh"
 #include "mem/port.hh"
 
@@ -555,15 +551,6 @@ class LSQUnit {
 
     /** Returns whether or not the LSQ unit is stalled. */
     bool isStalled()  { return stalled; }
-
-    void setDQCommon(DQCommon *c) {dqc = c;}
-
-    void setMemDepPred(MemDepPredictor *m) {mDepPred = m;}
-
-  private:
-    DQCommon *dqc;
-
-    MemDepPredictor *mDepPred;
 };
 
 template <class Impl>
@@ -576,13 +563,7 @@ LSQUnit<Impl>::read(const RequestPtr &req,
 
     assert(load_inst);
 
-    assert(!load_inst->isExecuted() || load_inst->loadVerifying);
-
-    if (load_inst->isNormalBypass() && !load_inst->loadVerifying) {
-        DPRINTF(NoSQSMB, "Skip mem read for bypassing load [sn:%lli]\n",
-                load_inst->seqNum);
-        return NoFault;
-    }
+    assert(!load_inst->isExecuted());
 
     // Make sure this isn't a strictly ordered load
     // A bit of a hackish way to get strictly ordered accesses to work
@@ -602,6 +583,8 @@ LSQUnit<Impl>::read(const RequestPtr &req,
 
     // Check the SQ for any previous stores that might lead to forwarding
     int store_idx = load_inst->sqIdx;
+
+    int store_size = 0;
 
     DPRINTF(LSQUnit, "Read called, load idx: %i, store idx: %i, "
             "storeHead: %i addr: %#x%s\n",
@@ -657,8 +640,126 @@ LSQUnit<Impl>::read(const RequestPtr &req,
         return NoFault;
     }
 
-    // we do not perform store-to-load bypassing in LSQ when using NoSQ
+    while (store_idx != -1) {
+        // End once we've reached the top of the LSQ
+        if (store_idx == storeWBIdx) {
+            break;
+        }
 
+        // Move the index to one younger
+        if (--store_idx < 0)
+            store_idx += SQEntries;
+
+        assert(storeQueue[store_idx].inst);
+
+        store_size = storeQueue[store_idx].size;
+
+        if (!store_size || storeQueue[store_idx].inst->strictlyOrdered() ||
+            (storeQueue[store_idx].req &&
+             storeQueue[store_idx].req->isCacheMaintenance())) {
+            // Cache maintenance instructions go down via the store
+            // path but they carry no data and they shouldn't be
+            // considered for forwarding
+            continue;
+        }
+
+        assert(storeQueue[store_idx].inst->effAddrValid());
+
+        // Check if the store data is within the lower and upper bounds of
+        // addresses that the request needs.
+        bool store_has_lower_limit =
+            req->getVaddr() >= storeQueue[store_idx].inst->effAddr;
+        bool store_has_upper_limit =
+            (req->getVaddr() + req->getSize()) <=
+            (storeQueue[store_idx].inst->effAddr + store_size);
+        bool lower_load_has_store_part =
+            req->getVaddr() < (storeQueue[store_idx].inst->effAddr +
+                           store_size);
+        bool upper_load_has_store_part =
+            (req->getVaddr() + req->getSize()) >
+            storeQueue[store_idx].inst->effAddr;
+
+        // If the store's data has all of the data needed and the load isn't
+        // LLSC, we can forward.
+        if (store_has_lower_limit && store_has_upper_limit && !req->isLLSC()) {
+            // Get shift amount for offset into the store's data.
+            int shift_amt = req->getVaddr() - storeQueue[store_idx].inst->effAddr;
+
+            // Allocate memory if this is the first time a load is issued.
+            if (!load_inst->memData) {
+                load_inst->memData = new uint8_t[req->getSize()];
+            }
+            if (storeQueue[store_idx].isAllZeros)
+                memset(load_inst->memData, 0, req->getSize());
+            else
+                memcpy(load_inst->memData,
+                    storeQueue[store_idx].data + shift_amt, req->getSize());
+
+            DPRINTF(LSQUnit, "Forwarding from store idx %i to load to "
+                    "addr %#x\n", store_idx, req->getVaddr());
+
+            PacketPtr data_pkt = new Packet(req, MemCmd::ReadReq);
+            data_pkt->dataStatic(load_inst->memData);
+
+            WritebackEvent *wb = new WritebackEvent(load_inst, data_pkt, this);
+
+            // We'll say this has a 1 cycle load-store forwarding latency
+            // for now.
+            // @todo: Need to make this a parameter.
+            cpu->schedule(wb, curTick());
+
+            ++lsqForwLoads;
+            return NoFault;
+        } else if (
+                (!req->isLLSC() &&
+                 ((store_has_lower_limit && lower_load_has_store_part) ||
+                  (store_has_upper_limit && upper_load_has_store_part) ||
+                  (lower_load_has_store_part && upper_load_has_store_part))) ||
+                (req->isLLSC() &&
+                 ((store_has_lower_limit || upper_load_has_store_part) &&
+                  (store_has_upper_limit || lower_load_has_store_part)))) {
+            // This is the partial store-load forwarding case where a store
+            // has only part of the load's data and the load isn't LLSC or
+            // the load is LLSC and the store has all or part of the load's
+            // data
+
+            // If it's already been written back, then don't worry about
+            // stalling on it.
+            if (storeQueue[store_idx].completed) {
+                panic("Should not check one of these");
+                continue;
+            }
+
+            // Must stall load and force it to retry, so long as it's the oldest
+            // load that needs to do so.
+            if (!stalled ||
+                (stalled &&
+                 load_inst->seqNum <
+                 loadQueue[stallingLoadIdx]->seqNum)) {
+                stalled = true;
+                stallingStoreIsn = storeQueue[store_idx].inst->seqNum;
+                stallingLoadIdx = load_idx;
+                DPRINTF(LSQUnit, "Set stalling Store to [%llu], stalled load to [%llu]\n",
+                        stallingStoreIsn, load_inst->seqNum);
+            }
+
+            // Tell IQ/mem dep unit that this instruction will need to be
+            // rescheduled eventually
+            iewStage->rescheduleMemInst(load_inst, false, true); // is false positive
+            load_inst->clearIssued();
+            ++lsqRescheduledLoads;
+
+            // Do not generate a writeback event as this instruction is not
+            // complete.
+            DPRINTF(LSQUnit, "Load-store forwarding mis-match. "
+                    "Store idx %i to load addr %#x\n",
+                    store_idx, req->getVaddr());
+
+            return NoFault;
+        }
+    }
+
+    // If there's no forwarding case, then go access memory
     DPRINTF(LSQUnit, "Doing memory access for inst [sn:%lli] PC %s\n",
             load_inst->seqNum, load_inst->pcState());
 
@@ -684,11 +785,6 @@ LSQUnit<Impl>::read(const RequestPtr &req,
     if (!TheISA::HasUnalignedMemAcc || !sreqLow) {
         // Point the first packet at the main data packet.
         fst_data_pkt = data_pkt;
-
-//        mDepPred->execLoad(
-//                req->getPaddr(), req->getSize(),
-//                storeQueue[store_idx].inst->seqNum,
-//                storeQueue[store_idx].inst->dqPosition);
     } else {
         // Create the split packets.
         fst_data_pkt = Packet::createRead(sreqLow);
@@ -703,15 +799,6 @@ LSQUnit<Impl>::read(const RequestPtr &req,
         state->isSplit = true;
         state->outstanding = 2;
         state->mainPkt = data_pkt;
-
-//        mDepPred->execLoad(
-//                sreqLow->getPaddr(), sreqLow->getSize(),
-//                storeQueue[store_idx].inst->seqNum,
-//                storeQueue[store_idx].inst->dqPosition);
-//        mDepPred->execLoad(
-//                sreqHigh->getPaddr(), sreqHigh->getSize(),
-//                storeQueue[store_idx].inst->seqNum,
-//                storeQueue[store_idx].inst->dqPosition);
     }
 
     // For now, load throughput is constrained by the number of
@@ -804,22 +891,9 @@ LSQUnit<Impl>::write(const RequestPtr &req,
 
     // Split stores can only occur in ISAs with unaligned memory accesses.  If
     // a store request has been split, sreqLow and sreqHigh will be non-null.
-    // if (TheISA::HasUnalignedMemAcc && sreqLow) {
-    //     storeQueue[store_idx].isSplit = true;
-    //     mDepPred->execStore(
-    //             sreqLow->getPaddr(), sreqLow->getSize(),
-    //             storeQueue[store_idx].inst->seqNum,
-    //             storeQueue[store_idx].inst->dqPosition);
-    //     mDepPred->execStore(
-    //             sreqHigh->getPaddr(), sreqHigh->getSize(),
-    //             storeQueue[store_idx].inst->seqNum,
-    //             storeQueue[store_idx].inst->dqPosition);
-    // } else {
-    //     mDepPred->execStore(
-    //             req->getPaddr(), req->getSize(),
-    //             storeQueue[store_idx].inst->seqNum,
-    //             storeQueue[store_idx].inst->dqPosition);
-    // }
+    if (TheISA::HasUnalignedMemAcc && sreqLow) {
+        storeQueue[store_idx].isSplit = true;
+    }
 
     if (!(req->getFlags() & Request::CACHE_BLOCK_ZERO) && \
         !req->isCacheMaintenance())

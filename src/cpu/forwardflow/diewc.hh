@@ -8,21 +8,13 @@
 #include <queue>
 #include <tuple>
 
-#ifdef __CLION_CODING__
-#include "cpu/ff_base_dyn_inst.hh"
-#include "cpu/forwardflow/arch_state.hh"
-#include "cpu/forwardflow/dataflow_queue_top.hh"
-#include "cpu/forwardflow/dyn_inst.hh"
-#include "cpu/forwardflow/lsq.hh"
-
-#endif
-
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
 #include "cpu/fanout_pred.hh"
 #include "cpu/forwardflow/comm.hh"
+//#include "cpu/forwardflow/dataflow_queue.hh"
+//#include "cpu/forwardflow/lsq.hh"
 #include "cpu/forwardflow/thread_state.hh"
-#include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/timebuf.hh"
 
 struct DerivFFCPUParams;
@@ -34,34 +26,23 @@ class FFDIEWC //dispatch, issue, execution, writeback, commit
 {
 
 public:
+    typedef typename Impl::DynInstPtr DynInstPtr;
+    typedef typename Impl::DynInst DynInst;
+//    using DynInstPtr = BaseO3DynInst<Impl>*;
     //Typedefs from Impl
-
-
     typedef typename Impl::CPUPol CPUPol;
 
-#ifdef __CLION_CODING__
-    template<class Impl>
-    class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {};
-    using DynInstPtr = FullInst<Impl>*;
-
-    using XFFCPU = FFCPU<Impl>;
-    using XLSQ = LSQ<Impl>;
-    using DQTop = DQTop<Impl>;
-    using ArchState = ArchState<Impl>;
-#else
-    typedef typename Impl::DynInst DynInst;
-    typedef typename Impl::DynInstPtr DynInstPtr;
     typedef typename Impl::O3CPU XFFCPU;
+//    using XFFCPU = FFCPU<Impl>;
     typedef typename CPUPol::LSQ XLSQ;
+//    using XLSQ = LSQ<Impl>;
     typedef typename CPUPol::DQTop DQTop;
-    typedef typename CPUPol::ArchState ArchState;
-#endif
-
 
 //    typedef typename CPUPol::DIEWC2DIEWC DIEWC2DIEWC;
     typedef typename CPUPol::TimeStruct TimeStruct;
     typedef typename CPUPol::FetchStruct FetchStruct;
     typedef typename CPUPol::FFAllocationStruct AllocationStruct;
+    typedef typename CPUPol::ArchState ArchState;
     typedef typename CPUPol::FUWrapper FUWrapper;
 
     typedef O3ThreadState<Impl> Thread;
@@ -391,8 +372,6 @@ private:
 
     void insertPointerPairs(const std::list<PointerPair>&);
 
-    void insertPointerPair(const PointerPair&);
-
     void squashDueToBranch(DynInstPtr &ffdiewc);
 
     std::list <ThreadID> *activeThreads;
@@ -472,29 +451,13 @@ public:
     Stats::Scalar headReadyExecDelayTicks;
     Stats::Scalar headReadyNotExec;
 
-    Stats::Scalar TNBypass;
-    Stats::Scalar TPBypass;
-    Stats::Scalar FNBypass;
-    Stats::Scalar FPBypass;
-    Stats::Scalar FPCanceledBypass;
-    Stats::Scalar FPSquashedBypass;
-    Stats::Formula loadSquashRate;
-
-    Stats::Scalar reExecutedLoads;
-    Stats::Scalar reExecutedBypass;
-    Stats::Scalar reExecutedNonBypass;
-    Stats::Formula loadReExecRate;
-
-    Stats::Scalar verificationSkipped;
-    Stats::Formula verifSkipRate;
-
     ArchState *getArchState() {return &archState;}
 
     DQTop *getDQ() {return &dq;}
 
     void executeInst(DynInstPtr &inst);
 
-    void squashDueToMemMissPred(DynInstPtr &violator);
+    void squashDueToMemOrder(DynInstPtr &victim, DynInstPtr &violator);
 
 private:
     void sendBackwardInfo();
@@ -502,7 +465,7 @@ private:
     unsigned oldestForwarded;
 
 public:
-    void setOldestFw(BasePointer _ptr);
+    void setOldestFw(DQPointer _ptr);
 
     void resetOldestFw();
 
@@ -517,8 +480,7 @@ public:
     void setFanoutPred(FanoutPred *fanoutPred1);
 
     void tryResetRef();
-
-  private:
+private:
     const unsigned commitTraceInterval;
     unsigned commitCounter;
 
@@ -539,31 +501,6 @@ public:
     uint64_t commitAll{};
 
     InstSeqNum youngestExecuted{};
-
-    MemDepPredictor *mDepPred;
-
-    InstSeqNum verifiedTailLoad{0};
-    InstSeqNum bypassCanceled{0};
-
-    InstSeqNum scheduledNonSpec{0};
-
-    void tryVerifyTailLoad();
-
-    void setUpLoad(DynInstPtr &inst);
-
-    InstSeqNum lastCompletedStoreSN{};
-
-  public:
-    void setStoreCompleted(InstSeqNum sn, Addr eff_addr);
-
-    InstSeqNum getLastCompletedStoreSN() {return lastCompletedStoreSN;}
-
-    void touchSSBF(Addr eff_addr, InstSeqNum ssn);
-  private:
-
-    bool checkViolation(DynInstPtr &inst);
-
-    void setupPointerLink(DynInstPtr &inst, bool jumped, const PointerPair &pair);
 };
 
 

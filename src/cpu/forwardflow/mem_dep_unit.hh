@@ -48,17 +48,7 @@
 #include <set>
 #include <unordered_map>
 
-#ifdef __CLION_CODING__
-#include "cpu/ff_base_dyn_inst.hh"
-#include "cpu/forwardflow/dataflow_queue_top.hh"
-#include "cpu/forwardflow/dyn_inst.hh"
-#include "cpu/forwardflow/lsq.hh"
-
-#endif
-
-
 #include "base/statistics.hh"
-#include "cpu/forwardflow/dq_pointer.hh"
 #include "cpu/inst_seq.hh"
 #include "debug/MemDepUnit.hh"
 
@@ -93,21 +83,8 @@ class MemDepUnit
     std::string _name;
 
   public:
-
-#ifdef __CLION_CODING__
-    template<class Impl>
-    class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {
-    };
-
-    using DynInstPtr = FullInst<Impl>*;
-
-    using InstructionQueue = DQTop<Impl>;
-#else
     typedef typename Impl::DynInstPtr DynInstPtr;
-
     typedef typename Impl::CPUPol::DQTop InstructionQueue;
-#endif
-
 
     /** Empty constructor. Must call init() prior to using in this case. */
     MemDepUnit();
@@ -140,7 +117,7 @@ class MemDepUnit
     void setIQ(InstructionQueue *iq_ptr);
 
     /** Inserts a memory instruction. */
-    PointerPair insert(DynInstPtr &inst);
+    void insert(DynInstPtr &inst);
 
     /** Inserts a non-speculative memory instruction. */
     void insertNonSpec(DynInstPtr &inst);
@@ -148,6 +125,11 @@ class MemDepUnit
     /** Inserts a barrier instruction. */
     void insertBarrier(DynInstPtr &barr_inst);
 
+    /** Indicate that an instruction has its registers ready. */
+    void regsReady(DynInstPtr &inst);
+
+    /** Indicate that a non-speculative instruction is ready. */
+    void nonSpecInstReady(DynInstPtr &inst);
 
     /** Reschedules an instruction to be re-executed. */
     void reschedule(DynInstPtr &inst);
@@ -157,13 +139,28 @@ class MemDepUnit
      */
     void replay();
 
+    /** Completes a memory instruction. */
+    void completed(DynInstPtr &inst);
+
     /** Completes a barrier instruction. */
     void completeBarrier(DynInstPtr &inst);
+
+    /** Wakes any dependents of a memory instruction. */
+    void wakeDependents(DynInstPtr &inst);
 
     /** Squashes all instructions up until a given sequence number for a
      *  specific thread.
      */
     void squash(const InstSeqNum &squashed_num, ThreadID tid);
+
+    /** Indicates an ordering violation between a store and a younger load. */
+    void violation(DynInstPtr &store_inst, DynInstPtr &violating_load);
+
+    /** Issues the given instruction */
+    void issue(DynInstPtr &inst);
+
+    /** Debugging function to dump the lists of instructions. */
+    void dumpLists();
 
   private:
     typedef typename std::list<DynInstPtr>::iterator ListIt;
@@ -183,12 +180,7 @@ class MemDepUnit
             : inst(new_inst), regsReady(false), memDepReady(false),
               completed(false), squashed(false)
         {
-            if (inst->isStore() || inst->isMemBarrier() || inst->isWriteBarrier()) {
-                latestPosition = new_inst->dqPosition;
-            } else {
-                latestPosition.valid = false;
-            }
-#ifdef Nothing
+#ifdef DEBUG
             ++memdep_count;
 
             DPRINTF(MemDepUnit, "Memory dependency entry created.  "
@@ -202,7 +194,7 @@ class MemDepUnit
             for (int i = 0; i < dependInsts.size(); ++i) {
                 dependInsts[i] = NULL;
             }
-#ifdef Nothing
+#ifdef DEBUG
             --memdep_count;
 
             DPRINTF(MemDepUnit, "Memory dependency entry deleted.  "
@@ -231,28 +223,29 @@ class MemDepUnit
         /** If the instruction is squashed. */
         bool squashed;
 
-        bool positionInvalid{false};
-
-        TermedPointer latestPosition;
-
         /** For debugging. */
-#ifdef Nothing
+#ifdef DEBUG
         static int memdep_count;
         static int memdep_insert;
         static int memdep_erase;
 #endif
     };
 
+    /** Finds the memory dependence entry in the hash map. */
+    inline MemDepEntryPtr &findInHash(const DynInstPtr &inst);
+
     /** Moves an entry to the ready list. */
-    inline void moveToReady(DynInstPtr &ready_inst_entry);
+    inline void moveToReady(MemDepEntryPtr &ready_inst_entry);
 
     typedef std::unordered_map<InstSeqNum, MemDepEntryPtr, SNHash> MemDepHash;
 
     typedef typename MemDepHash::iterator MemDepHashIt;
 
-    MemDepHash barrierTable;
+    /** A hash map of all memory dependence entries. */
+    MemDepHash memDepHash;
 
     /** A list of all instructions in the memory dependence unit. */
+    std::list<DynInstPtr> instList[Impl::MaxThreads];
 
     /** A list of all instructions that are going to be replayed. */
     std::list<DynInstPtr> instsToReplay;
@@ -262,13 +255,16 @@ class MemDepUnit
      *  this unit what instruction the newly added instruction is dependent
      *  upon.
      */
-    struct BarrierInfo {
-        bool valid;
-        InstSeqNum SN;
-        DQPointer position;
-    };
+    MemDepPred depPred;
 
-    BarrierInfo loadBarrier, storeBarrier;
+    /** Is there an outstanding load barrier that loads must wait on. */
+    bool loadBarrier;
+    /** The sequence number of the load barrier. */
+    InstSeqNum loadBarrierSN;
+    /** Is there an outstanding store barrier that loads must wait on. */
+    bool storeBarrier;
+    /** The sequence number of the store barrier. */
+    InstSeqNum storeBarrierSN;
 
     /** Pointer to the IQ. */
     InstructionQueue *iqPtr;
@@ -276,8 +272,14 @@ class MemDepUnit
     /** The thread id of this memory dependence unit. */
     int id;
 
-  private:
-    void checkAndSquashBarrier(BarrierInfo &info, InstSeqNum squash_sn);
+    /** Stat for number of inserted loads. */
+    Stats::Scalar insertedLoads;
+    /** Stat for number of inserted stores. */
+    Stats::Scalar insertedStores;
+    /** Stat for number of conflicting loads that had to wait for a store. */
+    Stats::Scalar conflictingLoads;
+    /** Stat for number of conflicting stores that had to wait for a store. */
+    Stats::Scalar conflictingStores;
 };
 
 }

@@ -34,7 +34,6 @@ if env['TARGET_ISA'] == 'null':
     Return()
 
 SimObject('BranchPredictor.py')
-SimObject('MemDepPredictor.py')
 
 DebugFlag('Indirect')
 Source('bpred_unit.cc')
@@ -54,7 +53,6 @@ Source('naive_bayes.cc')
 Source('zperceptron.cc')
 Source('snn.cc')
 Source('oracle.cc')
-Source('mem_dep_pred.cc')
 
 DebugFlag('FreeList')
 DebugFlag('Branch')

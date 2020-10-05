@@ -8,14 +8,10 @@
 #include <deque>
 #include <unordered_map>
 
-#ifdef __CLION_CODING__
-#include "cpu/ff_base_dyn_inst.hh"
-#include "cpu/forwardflow/dyn_inst.hh"
-
-#endif
-
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/dq_pointer.hh"
+
+//#include "cpu/forwardflow/dyn_inst.hh"
 #include "cpu/func_unit.hh"
 #include "cpu/timebuf.hh"
 #include "params/FFFUPool.hh"
@@ -41,8 +37,8 @@ struct SingleFUWrapper {
     struct SFUTimeReg {
         bool hasPendingInst;
         InstSeqNum seq;
-        std::array<WKPointer, 2> oneCyclePointer;
-        std::array<WKPointer, 2> longLatencyPointer;
+        std::array<DQPointer, 2> oneCyclePointer;
+        std::array<DQPointer, 2> longLatencyPointer;
         unsigned cycleLeft;
     };
     SFUTimeReg timeReg;
@@ -50,13 +46,13 @@ struct SingleFUWrapper {
     SFUTimeReg *fromLastCycle;
 
     InstSeqNum seq;
-    std::array<WKPointer, 2> oneCyclePointer;
-    std::array<WKPointer, 2> longLatencyPointer;
+    std::array<DQPointer, 2> oneCyclePointer;
+    std::array<DQPointer, 2> longLatencyPointer;
     unsigned cycleLeft;  // for long latency
 
     struct PipelineStruct {
         bool valid;
-        std::array<WKPointer, 2> pointer;
+        std::array<DQPointer, 2> pointer;
         InstSeqNum seq;
     };
 
@@ -77,19 +73,9 @@ struct SingleFUWrapper {
 template<class Impl>
 class FUWrapper {
 public:
-#ifdef __CLION_CODING__
-    template<class Impl>
-    class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {
-    };
 
-    using DynInstPtr = FullInst<Impl>*;
-
-    using DQTop = DQTop<Impl>;
-#else
-    typedef typename Impl::DynInst DynInst;
+//    using DynInstPtr = BaseO3DynInst<Impl>*;
     typedef typename Impl::DynInstPtr DynInstPtr;
-    typedef typename Impl::CPUPol::DQTop DQTop;
-#endif
 
     typedef typename Impl::CPUPol::LSQ LSQ;
 
@@ -135,13 +121,13 @@ public:
 
     void startCycle();
 
-    using WBPair = std::array<WKPointer, 2>;
+    using WBPair = std::array<DQPointer, 2>;
 
     struct WBInfo {
         WBPair wbPair;
         InstSeqNum seq;
 
-        WKPointer& operator [] (int index) {
+        DQPointer& operator [] (int index) {
             return wbPair[index];
         }
 
@@ -219,7 +205,7 @@ public:
 
 private:
 
-    WKPointer inv;
+    DQPointer inv;
     unsigned numFU;
 
     bool active;

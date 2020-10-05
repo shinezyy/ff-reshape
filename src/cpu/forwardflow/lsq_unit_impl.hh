@@ -58,8 +58,6 @@
 #include "debug/FFSquash.hh"
 #include "debug/IEW.hh"
 #include "debug/LSQUnit.hh"
-#include "debug/NoSQPred.hh"
-#include "debug/NoSQSMB.hh"
 #include "debug/O3PipeView.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
@@ -602,15 +600,6 @@ LSQUnit<Impl>::checkViolations(int load_idx, DynInstPtr &inst)
                         inst->seqNum, ld_inst->seqNum, ld_eff_addr1);
                 memDepViolator = ld_inst;
 
-                ld_inst->shouldForward = true;
-                ld_inst->shouldForwFrom =
-                    dqc->computeDist(ld_inst->dqPosition, inst->dqPosition);
-
-                DPRINTF(NoSQPred, "Load [%lu] should have forwarded from"
-                        " store [%lu] with SSN: %lu\n",
-                        ld_inst->seqNum,
-                        inst->seqNum, inst->storeSeq);
-
                 ++lsqMemOrderViolation;
 
                 return std::make_shared<GenericISA::M5PanicFault>(
@@ -668,18 +657,8 @@ LSQUnit<Impl>::executeLoad(DynInstPtr &inst)
         iewStage->activityThisCycle();
     } else {
         assert(inst->effAddrValid());
-
-        if (!inst->isNormalBypass()) {
-            inst->seqNVul = iewStage->getLastCompletedStoreSN();
-            // touch the TSSBF here?
-            iewStage->touchSSBF(inst->physEffAddrLow, inst->seqNVul);
-            DPRINTF(NoSQPred, "Setting Nvul (%lu) for inst[%lu]\n", inst->seqNVul, inst->seqNum);
-        }
-
         int load_idx = inst->lqIdx;
-        if (!inst->wbCount) {
-            incrLdIdx(load_idx);
-        }
+        incrLdIdx(load_idx);
 
         if (checkLoads)
             return checkViolations(load_idx, inst);
@@ -1160,15 +1139,10 @@ LSQUnit<Impl>::writeback(DynInstPtr &inst, PacketPtr pkt)
         return;
     }
 
-    if (inst->wbCount < 2) {
+    if (!inst->isExecuted()) {
         inst->setExecuted();
 
         if (inst->fault == NoFault) {
-            // backup speculative value
-            if (inst->wbCount == 2) {
-                inst->speculativeLoadValue.i = inst->getDestValue().i;
-                DPRINTF(NoSQSMB, "Saving speculative value %lu\n", inst->speculativeLoadValue.i);
-            }
             // Complete access to copy data to proper place.
             inst->completeAcc(pkt);
         } else {
@@ -1216,15 +1190,6 @@ LSQUnit<Impl>::completeStore(int store_idx)
 
         iewStage->updateLSQNextCycle = true;
     }
-
-    auto inst = storeQueue[store_idx].inst;
-    iewStage->setStoreCompleted(inst->seqNum, inst->physEffAddrLow);
-    DPRINTF(NoSQPred, "Completing Store %lu addr: 0x%lx, size: %u\n",
-            inst->seqNum, inst->physEffAddrLow, inst->effSize);
-    if (inst->physEffAddrHigh) {
-        iewStage->setStoreCompleted(inst->seqNum, inst->physEffAddrHigh);
-    }
-
 
     DPRINTF(LSQUnit, "Completing store [sn:%lli], idx:%i, store head "
             "idx:%i\n",

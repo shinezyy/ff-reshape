@@ -46,7 +46,6 @@
 #include <queue>
 
 #include "base/statistics.hh"
-#include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/timebuf.hh"
 
 struct DerivFFCPUParams;
@@ -319,11 +318,6 @@ class DefaultDecode
     Stats::Scalar decodeDecodedInsts;
     /** Stat for total number of squashed instructions. */
     Stats::Scalar decodeSquashedInsts;
-
-  private:
-    MemDepPredictor *mDepPred;
-
-    uint64_t storeSeq{};
 };
 
 }

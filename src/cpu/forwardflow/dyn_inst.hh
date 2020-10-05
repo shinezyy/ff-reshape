@@ -53,7 +53,6 @@
 #include "cpu/forwardflow/cpu.hh"
 #include "cpu/forwardflow/isa_specific.hh"
 #include "cpu/inst_seq.hh"
-#include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/reg_class.hh"
 #include "debug/FFExec.hh"
 #include "debug/FFReg.hh"
@@ -395,15 +394,10 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     }
 #endif
 
-  public:
+public:
     std::array<DQPointer, 4> pointers;
 
     std::array<bool, 4> hasOp;
-
-    unsigned findSpareSourceOp();
-
-    BasePointer findSpareSourcePointer();
-
     std::array<bool, 4> opReady;
     bool opFulfilled(unsigned);
 
@@ -415,28 +409,19 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
     std::array<bool, 4> srcTakenWithInst;
 
-    bool hasMemDep{};
-    bool memDepReady{};
+    bool hasMemDep;
+    bool memDepReady;
     bool memOpFulfilled();
 
-    bool hasMiscDep{};
-    bool miscDepReady{};
+    bool hasMiscDep;
+    bool miscDepReady;
     bool miscOpFulfilled();
 
-    bool hasOrderDep{};
-    bool orderDepReady{};
+    bool hasOrderDep;
+    bool orderDepReady;
     bool orderFulfilled();
 
-    int bypassOp{0};
-    bool dependOnBarrier{false};
-
-    bool isNormalBypass() { return bypassOp && !dependOnBarrier;}
-
-    bool isNormalStore() { return this->isStore() && !this->isRVAmoStoreHalf();}
-
-    FFRegValue bypassVal;
-
-    TermedPointer dqPosition;
+    DQPointer dqPosition;
 
     FFRegValue getDestValue();
 
@@ -507,27 +492,11 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     unsigned opLat{};
 
     bool receivedDest;
-  private:
+private:
     FFRegValue destValue;
 
     std::array<FFRegValue, 3> srcValues;
 
-  public:
-    uint64_t storeSeq{};
-
-    bool shouldForward{};
-    unsigned shouldForwFrom{};
-
-    MemPredHistory *memPredHistory;
-
-    bool loadVerified{false};
-    bool loadVerifying{false};
-
-    FFRegValue speculativeLoadValue{0};
-
-    InstSeqNum seqNVul{0};
-
-    uint64_t readStoreValue();
 };
 
 }

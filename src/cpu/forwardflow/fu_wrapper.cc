@@ -76,38 +76,16 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
 
     DQPointer &dest = inst->pointers[0];
 
-    std::array<WKPointer, 2> to_wake;
+    std::array<DQPointer, 2> to_wake;
     to_wake[SrcPtr].valid = false;
     to_wake[DestPtr].valid = false;
 
     if (dest.valid) {
-        if (inst->isLoad() && inst->isNormalBypass()) {
-            DPRINTFR(FUW, "Skip to wake up " ptrfmt ", (already been bypassed)\n",
-                    extptr(dest));
-            // to_wake[DestPtr] = dest;
-            // to_wake[DestPtr].hasVal = true;
-            // to_wake[DestPtr].val = inst->bypassVal;
-
-        } else if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder())) {
+        if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder())) {
             DPRINTFR(FUW, "to wake up " ptrfmt "\n", extptr(dest));
             to_wake[DestPtr] = dest;
-
-            if (inst->isMemBarrier() || inst->isWriteBarrier()) {
-                DPRINTFR(FUW, "without value because of it's barrier\n");
-                to_wake[DestPtr].wkType = WKPointer::WKType::WKOrder;
-                to_wake[DestPtr].hasVal = false;
-
-            } else if (inst->isNormalStore()) {
-                // todo: advance waking up successor as soon as the value reg available
-                DPRINTFR(FUW, "with value because of it's store\n");
-                // passing store value to predicted consumer
-                to_wake[DestPtr].hasVal = true;
-                to_wake[DestPtr].val.i = inst->readStoreValue();
-                to_wake[DestPtr].wkType = WKPointer::WKType::WKBypass;
-            }
-
         } else {
-            DPRINTFR(FUW, "(let loads/SC/forwarder) forget to wake up " ptrfmt "\n",
+            DPRINTFR(FUW, "(let loads/SC/forwarder forget) to wake up " ptrfmt "\n",
                      extptr(dest));
         }
     }
@@ -127,7 +105,7 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
                     extptr(dest));
         }
     } else {
-        DPRINTFR(FUW, "with no ISA-defined dest\n");
+        DPRINTFR(FUW, "but wake up nobody\n");
     }
 
     // store wakeup info
@@ -216,8 +194,8 @@ void FUWrapper<Impl>::setWakeupPostExec()
     }
 
     if (Debug::FUW) {
-        const auto &src = toWakeup[SrcPtr];
-        const auto &dest = toWakeup[DestPtr];
+        const DQPointer &src = toWakeup[SrcPtr];
+        const DQPointer &dest = toWakeup[DestPtr];
         if (src.valid) {
             DPRINTF(FUW, "To wakeup source: " ptrfmt "\n",
                     extptr(src));
@@ -554,7 +532,7 @@ SingleFUWrapper::init(
         bool pipe, bool single_cycle, bool long_lat,
         unsigned _latency, unsigned max_pipe_lat, unsigned _op)
 {
-    WKPointer inv;
+    DQPointer inv;
     inv.valid = false;
 
     seq = 0;

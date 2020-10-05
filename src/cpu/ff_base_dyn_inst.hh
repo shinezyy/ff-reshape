@@ -255,12 +255,12 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Physical register index of the destination registers of this
      *  instruction.
      */
-    std::array<BasePointer, TheISA::MaxInstDestRegs> _destRegIdx;
+    std::array<DQPointer, TheISA::MaxInstDestRegs> _destRegIdx;
 
     /** Physical register index of the source registers of this
      *  instruction.
      */
-    std::array<BasePointer, TheISA::MaxInstSrcRegs> _srcInstPointer;
+    std::array<DQPointer, TheISA::MaxInstSrcRegs> _srcInstPointer;
 
   public:
     /** Records changes to result? */
@@ -276,8 +276,6 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool notAnInst() const { return instFlags[NotAnInst]; }
     void setNotAnInst() { instFlags[NotAnInst] = true; }
 
-    uint8_t wbCount{};
-    uint8_t loadIssueCount{};
 
     ////////////////////////////////////////////
     //
@@ -387,16 +385,16 @@ class BaseDynInst : public ExecContext, public RefCounted
      *  has/will produce that logical register's result.
      *  @todo: add in whether or not the source register is ready.
      */
-    void renameSrcReg(int idx, BasePointer renamed_src)
+    void renameSrcReg(int idx, DQPointer renamed_src)
     {
         _srcInstPointer[idx] = renamed_src;
     }
-    BasePointer getSrcPointer(int idx)
+    DQPointer getSrcPointer(int idx)
     {
         return _srcInstPointer[idx];
     }
 
-    void trackSrcInst(int idx, BasePointer ptr)
+    void trackSrcInst(int idx, DQPointer ptr)
     {
 
     }
@@ -503,9 +501,6 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool isMemRef()       const { return staticInst->isMemRef(); }
     bool isLoad()         const { return staticInst->isLoad(); }
     bool isStore()        const { return staticInst->isStore(); }
-    bool isRVAmoStoreHalf()        const { return staticInst->isRVAmoStoreHalf(); }
-    bool isRVAmoLoadHalf()        const { return staticInst->isRVAmoLoadHalf(); }
-    bool isLoadReserved()        const { return staticInst->isLoadReserved(); }
     bool isAtomic()       const { return staticInst->isAtomic(); }
     bool isStoreConditional() const
     { return staticInst->isStoreConditional(); }
@@ -740,12 +735,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     void clearIssued() { status.reset(Issued); }
 
     /** Sets this instruction as executed. */
-    void setExecuted();
-
-    void setExecutedPure()
-    {
-        status.set(Executed);
-    }
+    void setExecuted() { status.set(Executed); }
 
     /** Returns whether or not this instruction has executed. */
     bool isExecuted() const { return status[Executed]; }
@@ -962,9 +952,6 @@ BaseDynInst<Impl>::initiateMemRead(Addr addr, unsigned size,
                 reqToVerify = std::make_shared<Request>(*req);
             }
             fault = cpu->read(req, sreqLow, sreqHigh, lqIdx);
-            translationStarted(false);
-            translationCompleted(false);
-            loadIssueCount++;
         } else {
             // Commit will have to clean up whatever happened.  Set this
             // instruction as executed.

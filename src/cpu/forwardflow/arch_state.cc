@@ -4,12 +4,10 @@
 #include "cpu/forwardflow/arch_state.hh"
 
 #include "base/trace.hh"
-#include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/thread_context.hh"
 #include "debug/FFCommit.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FanoutPred.hh"
-#include "debug/NoSQSMB.hh"
 #include "debug/RSProbe1.hh"
 #include "debug/ReadyHint.hh"
 #include "debug/Rename.hh"
@@ -22,7 +20,7 @@ namespace FF
 using namespace std;
 
 template<class Impl>
-std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
+std::list<PointerPair> ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
 {
     unsigned num_src_regs = inst->numSrcRegs();
 
@@ -35,8 +33,6 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
     invalid_pair.dest.valid = false;
 
     CombRename++;
-
-    bool bypass_canceled = false;
 
     for (unsigned src_idx = 0; src_idx < num_src_regs; src_idx++) {
         unsigned identical = 0;
@@ -61,17 +57,16 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
         }
     }
 
-
-    if (decoupleOpPosition) {
-        randomizeOp(inst);
-    }
-
     for (unsigned phy_op = 1; phy_op < Impl::MaxOps; phy_op++) {
         auto &indirect_index = inst->indirectRegIndices.at(phy_op);
         if (indirect_index.size() > 0) {
-            DPRINTF(Rename, "After randomization, phy op %i point to src reg %i\n",
+            DPRINTF(Reshape, "Before randomization, phy op %i point to src reg %i\n",
                     phy_op, indirect_index.front());
         }
+    }
+
+    if (decoupleOpPosition) {
+        randomizeOp(inst);
     }
 
     int num_src_ops = 0, num_busy_ops = 0;
@@ -166,6 +161,10 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
             inst->opReady[phy_op] = true;
             pairs.push_back(invalid_pair);
 
+            DQPointer parent_ptr = parentMap[src_reg];
+
+            countChild(parent_ptr, inst);
+
             DPRINTF(Rename||Debug::RSProbe1,
                     "Inst[%llu] read reg[%s %d] fortunately from hint RF",
                     inst->seqNum, src_reg.className(), src_reg.index());
@@ -185,11 +184,12 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
             }
             num_busy_ops++;
 
-            BasePointer parent_ptr = parentMap[src_reg];
-            auto renamed_ptr = renameMap[src_reg];
+            DQPointer parent_ptr = parentMap[src_reg];
 
             DPRINTF(Rename, "Looking up %s arch reg %i, got pointer" ptrfmt "\n",
                     src_reg.className(), src_reg.index(), extptr(parent_ptr));
+
+            countChild(parent_ptr, inst);
 
             for (const auto i: indirect_indices) {
                 inst->renameSrcReg(i, parent_ptr);
@@ -197,6 +197,7 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
                         "Rename src reg(%i) to" ptrfmt "\n", i, extptr(parent_ptr));
             }
 
+            auto renamed_ptr = renameMap[src_reg];
             bool predecessor_is_forwarder = false;
             DynInstPtr predecessor = dq->readInst(renamed_ptr);
             if (predecessor && !predecessor->isSquashed() && predecessor->isForwarder()) {
@@ -208,7 +209,7 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
             auto &old = renameMap[src_reg];
             auto dest = inst->dqPosition;
             dest.op = phy_op;
-            pairs.emplace_back(old, dest);
+            pairs.push_back({old, dest});
 
             RegReadMap++;
             if (!predecessor_is_forwarder || old.op == 3) {
@@ -232,7 +233,6 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
             }
         }
     }
-
     numBusyOperands[num_src_ops] += num_busy_ops;
     numDispInsts[num_src_ops]++;
 
@@ -281,44 +281,8 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
 //        diewc->cptHint = false;
     }
 
-    if (inst->isLoad() &&
-        !inst->isLoadReserved() &&
-        !inst->isRVAmoLoadHalf() &&
-        inst->memPredHistory->bypass) { // NoSQ
-
-        int ld_position = dq->c.pointer2uint(inst->dqPosition);
-        int predecessor_position = ld_position - (int) inst->memPredHistory->distPair.dqDistance; // predicted
-        if (predecessor_position < 0) {
-            predecessor_position += dq->c.dqSize;
-        }
-        auto predecessor_pointer = dq->c.uint2Pointer(predecessor_position);
-        DPRINTF(NoSQPred, "Inst[%lu] is predicted to bypass from" ptrfmt " with dist %u\n",
-                inst->seqNum,
-                extptr(predecessor_pointer), inst->memPredHistory->distPair.dqDistance);
-
-        if (dq->validPosition(predecessor_position)) {
-            inst->bypassOp = memBypassOp;
-            inst->hasOrderDep = true;
-
-            predecessor_pointer.op = memBypassOp; // hard-coded which is reserved for load
-
-            auto receiver = inst->dqPosition;
-            receiver.op = memBypassOp;
-
-            DPRINTF(NoSQSMB, "Creating SMB pair:" ptrfmt "->" ptrfmt "\n",
-                    extptr(predecessor_pointer), extptr(receiver));
-
-            // TODO: update in pair consuming, especially for store
-            pairs.emplace_back(predecessor_pointer, receiver);
-            pairs.back().isBypass = true;
-        } else {
-            DPRINTF(NoSQSMB, "However, producer is not at a valid position (squashed)\n");
-            bypass_canceled = true;
-        }
-    }
-
     DPRINTF(Rename, "Rename produces %lu pairs\n", pairs.size());
-    return std::make_pair(bypass_canceled, pairs);
+    return pairs;
 }
 
 template<class Impl>
@@ -642,7 +606,7 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
             continue; // do not need to forward anymore
         }
 
-        BasePointer renamed_ptr = renameMap[src_reg];
+        DQPointer renamed_ptr = renameMap[src_reg];
         DynInstPtr predecessor = dq->readInst(renamed_ptr); // sibling or parent
         if (!predecessor || predecessor->isSquashed()) {
             DPRINTF(Reshape, "Skip squashed\n");
@@ -674,18 +638,8 @@ template<class Impl>
 void
 ArchState<Impl>::randomizeOp(DynInstPtr &inst)
 {
-    if (inst->isNormalStore() ||
-        inst->isRVAmoLoadHalf() || inst->isRVAmoStoreHalf() ||
-        inst->isLoadReserved() || inst->isStoreConditional()) {
-        // no randomization for store
-    } else if (inst->isLoad()) {
-        // the last position is reserved for Store->L->L chaining
-        std::shuffle(std::begin(inst->indirectRegIndices) + 1,
-                     std::end(inst->indirectRegIndices) - 1, gen);
-    } else {
-        std::shuffle(std::begin(inst->indirectRegIndices) + 1,
-                     std::end(inst->indirectRegIndices), gen);
-    }
+    std::shuffle(std::begin(inst->indirectRegIndices) + 1,
+            std::end(inst->indirectRegIndices), gen);
 }
 
 template<class Impl>

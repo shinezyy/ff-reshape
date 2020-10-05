@@ -12,6 +12,7 @@ namespace FF
 
 boost::dynamic_bitset<> DQCommon::uint2Bits(unsigned from)
 {
+    DPRINTF(DQGOF, "addrWidth: %u, dqSize: %u\n", addrWidth, dqSize);
     auto res = boost::dynamic_bitset<>(addrWidth);
     for (unsigned i = 0; i < addrWidth; i++, from >>= 1) {
         res[i] = from & 1;
@@ -29,11 +30,15 @@ DQPointer DQCommon::uint2Pointer(unsigned u) const
 
 }
 
-unsigned DQCommon::pointer2uint(const BasePointer &ptr) const
+unsigned DQCommon::pointer2uint(const DQPointer &ptr) const
 {
     return ptr.group * groupSize + ptr.bank + ptr.index * nBanks;
 }
 
+unsigned DQCommon::pointer2uint(const WKPointer &ptr) const
+{
+    return ptr.group * groupSize + ptr.bank + ptr.index * nBanks;
+}
 
 DQCommon::DQCommon(DerivFFCPUParams *params)
         :
@@ -56,15 +61,5 @@ void DQCommon::notImplemented()
     panic("Not implemented!\n");
 }
 
-unsigned
-DQCommon::computeDist(const BasePointer &y, const BasePointer &o)
-{
-    unsigned yu = pointer2uint(y);
-    unsigned ou = pointer2uint(o);
-    if (ou > yu) {
-        yu += dqSize;
-    }
-    return yu - ou;
-}
 
 }

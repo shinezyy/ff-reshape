@@ -395,43 +395,6 @@ BaseO3DynInst<Impl>::forwardOpReady()
     return opReady[forwardOp];
 }
 
-template<class Impl>
-unsigned
-BaseO3DynInst<Impl>::findSpareSourceOp()
-{
-    for (unsigned i = 1; i < 4; i++) {
-        if (!hasOp[i]) {
-            return i;
-        }
-    }
-    return 0;
-}
-
-template<class Impl>
-BasePointer
-BaseO3DynInst<Impl>::findSpareSourcePointer()
-{
-    auto pointer = dqPosition;
-    pointer.op = findSpareSourceOp();
-    return pointer;
-}
-
-template<class Impl>
-uint64_t
-BaseO3DynInst<Impl>::readStoreValue()
-{
-    assert(isNormalStore());
-    uint64_t v;
-    if (opReady[2]) {// 2 is src reg of store
-        v = readIntRegOperand(nullptr, 1); // 1 is src reg of store
-    } else {
-        assert(opReady[1]);
-        assert(indirectRegIndices.at(1).size() == 2); // identical register
-        v = readIntRegOperand(nullptr, 0); // 0 is both base and src reg of store
-    }
-    return v;
-}
-
 }
 
 #endif//__CPU_FF_DYN_INST_IMPL_HH__

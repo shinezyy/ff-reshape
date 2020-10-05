@@ -55,7 +55,6 @@
 #include "cpu/ff_base_dyn_inst.hh"
 #include "debug/DynInst.hh"
 #include "debug/IQ.hh"
-#include "debug/NoSQSMB.hh"
 #include "mem/request.hh"
 #include "sim/faults.hh"
 
@@ -113,10 +112,6 @@ BaseDynInst<Impl>::initVars()
 
     // Initialize the fault to be NoFault.
     fault = NoFault;
-
-    savedReq = nullptr;
-    savedSreqHigh = nullptr;
-    savedSreqLow = nullptr;
 
 #ifndef NDEBUG
     ++cpu->instcount;
@@ -263,15 +258,6 @@ BaseDynInst<Impl>::setSquashed()
          delete this;
      }
  }
-
-template<class Impl>
-void BaseDynInst<Impl>::setExecuted()
-{
-    DPRINTF(NoSQSMB, "Inc wbcount of inst[%llu] from %d to %d\n",
-            seqNum, wbCount, wbCount + 1);
-    status.set(Executed);
-    wbCount++;
-}
 
 }
 

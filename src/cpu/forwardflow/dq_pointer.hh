@@ -10,33 +10,16 @@
 
 #include "base/types.hh"
 
-struct BasePointer {
-    bool valid{};
-    unsigned group{};
-    unsigned bank{};
-    unsigned index{};
-    unsigned op{};
-
-    bool operator==(const BasePointer& that) const {
-        return group == that.group &&
-               bank == that.bank &&
-               index == that.index &&
-               op == that.op;
-    }
-
-};
-
-struct TermedPointer: public BasePointer {
-    int term{-1};
-
-    void operator = (const TermedPointer &pointer);
-};
-
 struct WKPointer;
 
-struct DQPointer: public TermedPointer{
+struct DQPointer{
+    bool valid;
+    unsigned group;
+    unsigned bank;
+    unsigned index;
+    unsigned op;
 
-    bool hasVal{false};
+    bool hasVal;
     FFRegValue val;
 
     int reshapeOp{-1};
@@ -52,24 +35,34 @@ struct DQPointer: public TermedPointer{
 
     DQPointer(bool, unsigned, unsigned, unsigned, unsigned, int);
 
-    void operator = (const TermedPointer &dqPointer);
-
     explicit DQPointer(const WKPointer&);
+
+    int term{-1};
 
     bool isLocal{false};
 
+    bool operator==(const DQPointer& that) const {
+        return group == that.group &&
+            bank == that.bank &&
+            index == that.index &&
+            op == that.op;
+    }
+
 };
 
-struct WKPointer: public TermedPointer{
+struct WKPointer{
+    bool valid{};
     enum WKType {
         WKOp, // wakeup operands
         WKMem, // wakeup mem blocked dependency
         WKOrder, // wakeup store to load dependency
-        WKMisc, // wakeup non-speculative, barrier, etc.
-        WKBypass, // bypassing value on the path like store->load->load
-        WKLdReExec // wakeup non-speculative, barrier, etc.
+        WKMisc // wakeup non-speculative, barrier, etc.
     };
     WKType wkType;
+    unsigned group{};
+    unsigned bank{};
+    unsigned index{};
+    unsigned op{};
 
     bool hasVal;
     FFRegValue val;
@@ -81,18 +74,11 @@ struct WKPointer: public TermedPointer{
     unsigned queueTime{};
     unsigned pendingTime{};
 
+    int term{-1};
 
     WKPointer() = default;;
 
-    void operator = (const TermedPointer &dqPointer);
-    explicit WKPointer(const TermedPointer &pointer);
-
-
-    void operator = (const DQPointer &dqPointer);
     explicit WKPointer(const DQPointer &dqPointer);
-
-    WKPointer &operator = (const WKPointer &pointer);
-    WKPointer(const WKPointer &pointer);
 
     // explicit WKPointer(DQPointer &&dqPointer);
 
@@ -103,27 +89,16 @@ struct WKPointer: public TermedPointer{
 
 
 struct PointerPair{
-    bool isBypass;
-    bool isBarrier;
-    TermedPointer dest;
-    TermedPointer payload;
-    PointerPair() {
-        isBypass = false;
-        isBarrier = false;
-        dest.valid = false;
-        payload.valid = false;
-    };
-    PointerPair(const TermedPointer &d, const TermedPointer &p)
-    : isBypass(false), isBarrier(false), dest(d), payload(p)
-    {}
+    DQPointer dest;
+    DQPointer payload;
 };
 
 namespace std
 {
 template<>
-struct hash<BasePointer>
+struct hash<DQPointer>
 {
-    size_t operator()(const BasePointer& ptr) const
+    size_t operator()(const DQPointer& ptr) const
     {
         const size_t g = ptr.group << 16; // no more that 2^16 entry in a group
         const size_t i = ptr.index << 5; // 32 bank max

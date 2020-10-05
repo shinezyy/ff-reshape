@@ -112,8 +112,5 @@ class StaticInstFlags(Enum):
                             # a macroop
         'IsDspOp',
         'IsSquashAfter',     # Squash all uncommitted state after executed
-        'IsRVAmoStoreHalf',
-        'IsRVAmoLoadHalf',
         'IsForwarder',
-        'IsLoadReserved',
         ]

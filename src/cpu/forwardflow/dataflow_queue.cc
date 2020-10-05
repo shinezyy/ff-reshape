@@ -21,8 +21,6 @@
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
 #include "debug/FUW.hh"
-#include "debug/NoSQPred.hh"
-#include "debug/NoSQSMB.hh"
 #include "debug/ObExec.hh"
 #include "debug/ObFU.hh"
 #include "debug/QClog.hh"
@@ -478,60 +476,23 @@ DataflowQueues<Impl>::markFwPointers(
         std::array<DQPointer, 4> &pointers, PointerPair &pair, DynInstPtr &inst)
 {
     unsigned op = pair.dest.op;
-    if (pair.isBypass && inst &&
-            !(inst->isNormalStore() && op == memBypassOp) &&
-            !(inst->isLoad() && inst->isNormalBypass()) ) {
-        DPRINTF(NoSQPred, "Bypassing from non-store and non-bypassing insts, ignore it\n");
-
-    } else if (pointers[op].valid) {
+    if (pointers[op].valid) {
         SRAMWritePointer++;
         DPRINTF(FFSquash, "Overriding previous (squashed) sibling:(%d %d) (%d)\n",
                 pointers[op].bank, pointers[op].index, pointers[op].op);
 
-        if (inst && (inst->isExecuted() ||
-                inst->opReady[op] ||
-                (inst->isLoad() && inst->isNormalBypass() &&
-                 inst->orderFulfilled() &&
-                 (op == memBypassOp || op == 0) ))) {
-
+        if (inst && (inst->isExecuted() || (!inst->isForwarder() && inst->opReady[op]) ||
+                    (inst->isForwarder() && inst->forwardOpReady()))) {
             DPRINTF(FFSquash, "And extra wakeup new sibling\n");
             auto wk_ptr = WKPointer(pair.payload);
             wk_ptr.isFwExtra = true;
             wk_ptr.hasVal = true;
-
-            if (pair.isBypass &&
-                !(inst->isNormalStore() && op == memBypassOp) &&
-                !(inst->isLoad() && inst->isNormalBypass())) {
-
-                DPRINTF(NoSQPred, "Bypassing from non-store and non-bypassing insts, ignore it\n");
-
-            } else if (inst->isNormalStore() && op == memBypassOp) {
-                if (inst->fuGranted) {
-                    wk_ptr.val.i = inst->readStoreValue();
-                    wk_ptr.wkType = WKPointer::WKBypass;
-                    assert(pair.isBypass);
-                    extraWakeup(wk_ptr);
-                } else {
-                    // leave it to wake up with inst is executed
-                }
-
-            } else if (inst->isLoad() && inst->isNormalBypass() && (op == 0 || op == memBypassOp)) {
-                wk_ptr.val = inst->bypassVal;
-                if (op == memBypassOp) {
-                    wk_ptr.wkType = WKPointer::WKBypass;
-                    assert(pair.isBypass);
-                }
-                extraWakeup(wk_ptr);
-
-            } else if (op == 0) {
+            if (op == 0) {
                 wk_ptr.val = inst->getDestValue();
-                extraWakeup(wk_ptr);
-
-            } else if (!(inst->isNormalStore() && pair.isBypass)) {
+            } else {
                 wk_ptr.val = inst->getOpValue(op);
-                extraWakeup(wk_ptr);
             }
-
+            extraWakeup(wk_ptr);
             if (op == 0) {
                 inst->destReforward = false;
             }
@@ -540,60 +501,16 @@ DataflowQueues<Impl>::markFwPointers(
             DPRINTF(FFSquash, "And mark it to wakeup new child\n");
             inst->destReforward = true;
         }
-
-    } else if (inst && inst->isLoad() &&
-               inst->bypassOp && (op == 0 || op == memBypassOp) &&
-               inst->orderFulfilled()) {
-        DPRINTF(DQWake, "which is a bypassing load and "
-                        " has already been waken up! op[%i] ready: %i\n",
-                inst->bypassOp, inst->opReady[inst->bypassOp]);
-        auto wk_ptr = WKPointer(pair.payload);
-        // todo: when op == 0 and inst is not normal bypass, there is a bug
-        if (inst->isNormalBypass()) {
-            wk_ptr.hasVal = true;
-            if (pair.isBypass) {
-                wk_ptr.wkType = WKPointer::WKBypass;
-            }
-            wk_ptr.val = inst->bypassVal;
-            extraWakeup(wk_ptr);
-
-        } else if (op == 0) {
-            // must wait the loaded value
-            if (inst->fuGranted || inst->loadVerifying || inst->wbCount > 0) {
-                if (inst->wbCount > 0) {
-                    DPRINTF(DQWake || Debug::NoSQSMB, "Wake up consumer because producer written back\n");
-                    wk_ptr.hasVal = true;
-                    wk_ptr.val = inst->getDestValue();
-                    extraWakeup(wk_ptr);
-                } else {
-                    DPRINTF(DQWake || Debug::NoSQSMB, "Mark producer to reforward to consumer because"
-                                               "producer is being executed\n");
-                    inst->destReforward = true;
-                }
-            }
-
-        } else {
-            extraWakeup(wk_ptr);
-        }
-
-    } else if (inst && inst->isNormalStore() &&
-            op == memBypassOp && inst->fuGranted) {
-        // now we do not use opReady because this is only a patch for when pair arrives after exec.
-        // when we advance the condition of waking up consumers, we must switch to it.
-        DPRINTF(DQWake, "which is a producing store and "
-                        " has already been executed!\n");
-        auto wk_ptr = WKPointer(pair.payload);
-        wk_ptr.hasVal = true;
-        wk_ptr.wkType = WKPointer::WKBypass;
-        wk_ptr.val.i = inst->readStoreValue();
-        extraWakeup(wk_ptr);
-
-    } else if (inst && inst->opReady[op] &&
-               !(inst->isNormalStore() && pair.isBypass)) {
+    } else if (inst && ( (!inst->isForwarder() && inst->opReady[op]) ||
+                (inst->isForwarder() && inst->forwardOpReady()))) {
         DPRINTF(DQWake, "which has already been waken up! op[%i] ready: %i\n",
                 op, inst->opReady[op]);
-
+        if (inst->isForwarder()) {
+            DPRINTF(DQWake, "fw op(%i) ready: %i\n",
+                    inst->forwardOp, inst->forwardOpReady());
+        }
         auto wk_ptr = WKPointer(pair.payload);
+        wk_ptr.isFwExtra = true;
         wk_ptr.hasVal = true;
         if (inst->isForwarder()) {
             wk_ptr.val = inst->getOpValue(inst->forwardOp);
@@ -604,16 +521,13 @@ DataflowQueues<Impl>::markFwPointers(
                 wk_ptr.val = inst->getOpValue(op);
             }
         }
-        if (pair.isBypass) {
-            wk_ptr.wkType = WKPointer::WKBypass;
-        }
         extraWakeup(wk_ptr);
 
     } else if (inst && (op == 0 && inst->fuGranted && !inst->opReady[op])) {
         DPRINTF(FFSquash, "And mark it to new coming child\n");
         inst->destReforward = true;
     }
-
+    pointers[op] = pair.payload;
     if (pair.dest.valid) {
         if (inst) {
             DPRINTF(FFDisp || Debug::DQWake, "Pair arrives at inst[%lu] "
@@ -625,24 +539,6 @@ DataflowQueues<Impl>::markFwPointers(
         DPRINTFR(FFDisp || Debug::DQWake,
                 "and let it forward its value to" ptrfmt "\n",
                 extptr(pair.payload));
-    }
-
-    if (inst) {
-        if (pair.isBypass && inst &&
-            !(inst->isNormalStore() && op == memBypassOp) &&
-            !(inst->isLoad() && inst->isNormalBypass())) {
-            DPRINTF(NoSQPred, "Bypassing from non-store and non-bypassing insts, ignore it\n");
-
-        } else  if (inst->isNormalStore() && pair.isBypass) {
-            DPRINTF(FFDisp || Debug::DQWake,
-                    "Storing pointer to dest field of store\n");
-            pointers[0] = pair.payload;
-        } else  {
-            pointers[op] = pair.payload;
-        }
-//        if (inst->isLoad() && pair.isBypass) {
-//            inst->bypassOp = memBypassOp;
-//        }
     }
 }
 
@@ -787,8 +683,8 @@ void DataflowQueues<Impl>::readWakeQueueHeads()
                 QueueReadTxBuf++;
                 const WKPointer &ptr = q.front();
                 DPRINTF(DQWake||Debug::RSProbe1,
-                        "WKQ[%i] Found valid wakePtr:" ptrfmt "\n",
-                        i, extptr(ptr));
+                        "WKQ[%i] Found valid wakePtr:(%i) (%i %i) (%i)\n",
+                        i, ptr.valid, ptr.bank, ptr.index, ptr.op);
                 wk_pkt.valid = ptr.valid;
                 wk_pkt.payload = ptr;
                 unsigned d = ptr.bank * nOps + ptr.op;
@@ -915,8 +811,7 @@ void DataflowQueues<Impl>::tryFastCleanup()
 }
 
 template<class Impl>
-unsigned
-DataflowQueues<Impl>::numInFlightFw() const
+unsigned DataflowQueues<Impl>::numInFlightFw()
 {
     return numPendingFwPointers;
 }
@@ -1004,6 +899,12 @@ void DataflowQueues<Impl>::digestPairs()
 }
 
 template<class Impl>
+void DataflowQueues<Impl>::writebackLoad(DynInstPtr &inst)
+{
+
+}
+
+template<class Impl>
 void DataflowQueues<Impl>::extraWakeup(const WKPointer &wk)
 {
     auto q = allocateWakeQ();
@@ -1075,8 +976,7 @@ void DataflowQueues<Impl>::dumpQueues()
 template<class Impl>
 void DataflowQueues<Impl>::dumpFwQSize()
 {
-    DPRINTF(DQV2 || Debug::RSProbe1 || Debug::FFCommit,
-            "fw queue in flight = %i, cannot reset oldestRef\n", numPendingFwPointers);
+    DPRINTF(DQV2 || Debug::RSProbe1, "fw queue in flight = %i, cannot reset oldestRef\n", numPendingFwPointers);
     for (unsigned b = 0; b < nBanks; b++) {
         for (unsigned op = 0; op < nOps; op++) {
             DPRINTFR(DQV2 || Debug::RSProbe1, "fw queue %i.%i size: %llu\n",
@@ -1243,7 +1143,7 @@ void DataflowQueues<Impl>::processFWQueueFull()
 
 template<class Impl>
 typename DataflowQueues<Impl>::DynInstPtr
-DataflowQueues<Impl>::readInst(const BasePointer &p) const
+DataflowQueues<Impl>::readInst(const DQPointer &p) const
 {
     const XDataflowQueueBank *bank = dqs[p.bank];
     const auto &inst = bank->readInstsFromBank(p);
@@ -1361,7 +1261,7 @@ DataflowQueues<Impl>::readPointersFromLastCycleToWakeQueues()
                 DPRINTF(DQWake||Debug::RSProbe2,
                         "Push WakePtr" ptrfmt "to wakequeue[%u]\n",
                         extptr(ptr), b);
-                pushToWakeQueue(b * nOps + op, ptr);
+                pushToWakeQueue(b * nOps + op, WKPointer(ptr));
                 numPendingWakeups++;
                 DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
                 if (wakeQueues[b * nOps + op].size() > maxQueueDepth) {
@@ -1659,11 +1559,11 @@ void DataflowQueues<Impl>::pickInterGroupPointers()
     DPRINTF(DQWake, "Checking inter-group pointers in time buffer\n");
     // from normal queue
     for (unsigned i = 0; i < c->nBanks * c->nOps; i++) {
-        auto &p = toNextCycle->pointers[i];
+        DQPointer &p = toNextCycle->pointers[i];
         if (p.valid && p.group != groupID) {
             DPRINTF(DQWake,
                     "Move" ptrfmt "to next group buffer and invalidate it\n", extptr(p));
-            put2OutBuffer(p);
+            put2OutBuffer(WKPointer(p));
             p.valid = false;
         }
     }
@@ -1690,8 +1590,8 @@ template<class Impl>
 void DataflowQueues<Impl>::setWakeupPointersFromFUs()
 {
     for (unsigned b = 0; b < nBanks; b++) {
-        const WKPointer &src = fuWrappers[b].toWakeup[SrcPtr];
-        const WKPointer &dest = fuWrappers[b].toWakeup[DestPtr];
+        const DQPointer &src = fuWrappers[b].toWakeup[SrcPtr];
+        const DQPointer &dest = fuWrappers[b].toWakeup[DestPtr];
 
         int q1 = -1, q2 = -1;
         if (dest.valid) {
@@ -1700,11 +1600,11 @@ void DataflowQueues<Impl>::setWakeupPointersFromFUs()
                     "Got wakeup pointer to" ptrfmt ", val %i: %lu, pushed to wakeQueue[%i]\n",
                     extptr(dest), dest.hasVal, dest.val.i, q1);
             if (dest.group == groupID) {
-                pushToWakeQueue(q1, dest);
+                pushToWakeQueue(q1, WKPointer(dest));
                 numPendingWakeups++;
                 DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
             } else {
-                put2OutBuffer(dest);
+                put2OutBuffer(WKPointer(dest));
                 DPRINTF(DQWake, "Move to inter-group buffer\n");
             }
 
@@ -1715,7 +1615,7 @@ void DataflowQueues<Impl>::setWakeupPointersFromFUs()
             DPRINTF(DQWake || Debug::RSProbe2,
                     "Got inverse wakeup pointer to" ptrfmt ", pushed to wakeQueue[%i]\n",
                     extptr(src), q2);
-            pushToWakeQueue(q2, src);
+            pushToWakeQueue(q2, WKPointer(src));
             numPendingWakeups++;
             DPRINTF(DQWake, "After push, numPendingWakeups = %u\n", numPendingWakeups);
 
@@ -1829,7 +1729,7 @@ void DataflowQueues<Impl>:: writeFwPointersToNextCycle()
 {
     // todo: write forward pointers from bank to time buffer!
     for (unsigned b = 0; b < nBanks; b++) {
-        std::vector<WKPointer> forward_ptrs = dqs[b]->readPointersFromBank();
+        std::vector<DQPointer> forward_ptrs = dqs[b]->readPointersFromBank();
 
         if (NarrowXBarWakeup && NarrowLocalForward) {
             for (unsigned op = 0; op < nOps; op++) {
@@ -1890,8 +1790,6 @@ void DataflowQueues<Impl>::wakeupInsts()
                 ready_insts_queue->insertEmpirically(inst);
             }
         }
-
-        ready_insts_queue->dump();
 
         DynInstPtr md_group = ready_insts_queue->getInst(OpGroups::MultDiv);
         DynInstPtr fp_add_group = ready_insts_queue->getInst(OpGroups::FPAdd);
@@ -1984,12 +1882,6 @@ void DataflowQueues<Impl>::selectPointersFromWakeQueues()
                     } else if (ptr.wkType == WKPointer::WKOrder) {
                         OrderPackets++;
 
-                    } else if (ptr.wkType == WKPointer::WKLdReExec) {
-                        // pass
-
-                    } else if (ptr.wkType == WKPointer::WKBypass) {
-                        // pass
-
                     } else {
                         assert(ptr.wkType == WKPointer::WKMisc);
                         MiscPackets++;
@@ -2002,8 +1894,8 @@ void DataflowQueues<Impl>::selectPointersFromWakeQueues()
                         if (wakeQueues[pkt->source].size() == numPendingWakeupMax) {
                             numPendingWakeupMax--;
                         }
-                        DPRINTF(DQWake || RSProbe2, "Pop WakePtr" ptrfmt "from wakequeue[%u]\n",
-                                extptr(ptr), pkt->source);
+                        DPRINTF(DQWake || RSProbe2, "Pop WakePtr (%i %i) (%i)from wakequeue[%u]\n",
+                                ptr.bank, ptr.index, ptr.op, pkt->source);
                         wakeQueues[pkt->source].pop_front();
                         numPendingWakeups--;
                         wk_pkt_passed++;
@@ -2030,22 +1922,6 @@ void DataflowQueues<Impl>::selectPointersFromWakeQueues()
     if (Debug::QClog) {
         dumpQueues();
     }
-}
-
-template<class Impl>
-unsigned DataflowQueues<Impl>::numInFlightWk() const
-{
-    unsigned wrapper_pending = 0;
-    for (auto &fuw: fuWrappers) {
-        wrapper_pending += fuw.wbQueue.size() * 2;
-    }
-    return numPendingWakeups + wrapper_pending;
-}
-
-template<class Impl>
-void DataflowQueues<Impl>::checkSanity() const
-{
-    bankFUXBar.checkSanity();
 }
 
 } // namespace

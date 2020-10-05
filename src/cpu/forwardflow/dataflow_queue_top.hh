@@ -13,14 +13,6 @@
 #include <unordered_map>
 #include <vector>
 
-#ifdef __CLION_CODING__
-#include "cpu/forwardflow/dataflow_queue.hh"
-#include "cpu/forwardflow/dataflow_queue_bank.hh"
-#include "cpu/forwardflow/dyn_inst.hh"
-#include "cpu/forwardflow/mem_dep_unit.hh"
-
-#endif
-
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/crossbar.hh"
 #include "cpu/forwardflow/crossbar_dedi_dest.hh"
@@ -29,6 +21,13 @@
 #include "cpu/forwardflow/network.hh"
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
+
+#ifdef zcoding
+#include "cpu/forwardflow/dataflow_queue.hh"
+#include "cpu/forwardflow/dataflow_queue_bank.hh"
+#include "cpu/forwardflow/dyn_inst.hh"
+
+#endif
 
 struct DerivFFCPUParams;
 
@@ -40,25 +39,21 @@ class DQTop
 public:
     // typedec:
 
+    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
+
     typedef typename Impl::CPUPol::DIEWC DIEWC;
     typedef typename Impl::CPUPol::DQStruct DQTopTS;
     typedef typename Impl::CPUPol::FUWrapper FUWrapper;
     typedef typename Impl::CPUPol::LSQ LSQ;
 
-#ifdef __CLION_CODING__
+#ifdef zcoding
     typedef DataflowQueues<Impl> DataflowQueues;
     typedef DataflowQueueBank<Impl> DataflowQueueBank;
-    typedef MemDepUnit<StoreSet, Impl> MemDepUnit;
-
-    template<class Impl>
-    class FullInst: public BaseDynInst<Impl>, public BaseO3DynInst<Impl> {};
-    using DynInstPtr = FullInst<Impl>*;
+    typedef BaseO3DynInst<Impl>* DynInstPtr;
 #else
     typedef typename Impl::CPUPol::DataflowQueues DataflowQueues;
     typedef typename Impl::CPUPol::DataflowQueueBank DataflowQueueBank;
     typedef typename Impl::DynInstPtr DynInstPtr;
-    typedef typename Impl::CPUPol::MemDepUnit MemDepUnit;
-
 #endif
 
 public:
@@ -77,7 +72,7 @@ public:
 
     std::list<DynInstPtr> retryMemInsts;
 
-    std::unordered_map<BasePointer, FFRegValue> committedValues;
+    std::unordered_map<DQPointer, FFRegValue> committedValues;
 
     explicit DQTop(DerivFFCPUParams *params);
 
@@ -89,9 +84,6 @@ public:
     void replayMemInst(DynInstPtr &inst);
 
     void scheduleNonSpec();
-
-    // 1: sent reexec pointer; 2: canceling bypassing
-    std::pair<bool, bool> reExecTailLoad(InstSeqNum &canceledSeq);
 
     void centralizedExtraWakeup(const WKPointer &wk);
 
@@ -115,7 +107,9 @@ public:
 
     DynInstPtr getHead() const;
 
-    DynInstPtr readInst(const BasePointer &p) const;
+    DynInstPtr readInst(const DQPointer &p) const;
+
+    DynInstPtr checkAndGetParent(const DQPointer &parent, const DQPointer &child) const;
 
     unsigned int head;
 
@@ -146,12 +140,11 @@ public:
     void alignTails();
 
     // dispatch
+    bool insertBarrier(DynInstPtr &inst);
 
-    std::pair<bool, PointerPair> insertBarrier(DynInstPtr &inst);
+    bool insertNonSpec(DynInstPtr &inst);
 
-    std::pair<bool, PointerPair> insertNonSpec(DynInstPtr &inst);
-
-    std::pair<bool, PointerPair> insert(DynInstPtr &inst, bool non_spec);
+    bool insert(DynInstPtr &inst, bool nonSpec);
 
     void insertForwardPointer(PointerPair pair);
 
@@ -171,7 +164,7 @@ public:
 
     void tryFastCleanup();
 
-    void squash(BasePointer p, bool all, bool including);
+    void squash(DQPointer p, bool all, bool including);
 
     bool queuesEmpty();
 
@@ -203,9 +196,13 @@ public:
 
     void cacheUnblocked();
 
-    bool writebackLoad(DynInstPtr &inst);
+    void writebackLoad(DynInstPtr &inst);
+
+    void wakeMemRelated(DynInstPtr &inst);
 
     void completeMemInst(DynInstPtr &inst);
+
+    void violation(DynInstPtr store, DynInstPtr violator);
 
     // Drain, Switch, Initiation
     void takeOverFrom();
@@ -332,12 +329,7 @@ public:
     Stats::Scalar RegWriteCenterPairBuf;
     Stats::Scalar RegWriteCenterWKBuf;
     Stats::Scalar RegWriteInterGroupWKBuf;
-
-    unsigned numInFlightWk() const;
-
-    void checkSanity() const;
 };
-
 
 }
 
