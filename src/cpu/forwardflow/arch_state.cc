@@ -281,7 +281,11 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
 //        diewc->cptHint = false;
     }
 
-    if (inst->isLoad() && !inst->isLoadReserved() && inst->memPredHistory->bypass) { // NoSQ
+    if (inst->isLoad() &&
+        !inst->isLoadReserved() &&
+        !inst->isRVAmoLoadHalf() &&
+        inst->memPredHistory->bypass) { // NoSQ
+
         int ld_position = dq->c.pointer2uint(inst->dqPosition);
         int predecessor_position = ld_position - (int) inst->memPredHistory->distPair.dqDistance; // predicted
         if (predecessor_position < 0) {
