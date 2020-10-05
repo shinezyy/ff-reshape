@@ -450,6 +450,36 @@ void MemDepPredictor::dumpTopMisprediction() const
     }
 }
 
+void MemDepPredictor::checkSilentViolation(
+        InstSeqNum load_sn, Addr load_pc, Addr load_addr, uint8_t load_size,
+        SSBFCell *last_store_cell,
+        unsigned int sn_dist, unsigned int dq_dist,
+        MemPredHistory *&hist)
+{
+    if (sn_dist != dq_dist * 100) {
+        DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
+                          "%lu -> %lu with dq dist: %u\n", last_store_cell->lastStore, load_sn, dq_dist);
+        return;
+    }
+
+    Addr store_start = (load_pc & ~(tssbf.offsetMask)) | last_store_cell->offset;
+    Addr store_end = store_start + last_store_cell->size - 1;
+
+    Addr load_start = load_addr;
+    Addr load_end = load_addr + load_size - 1;
+
+    if (store_end < load_start || load_end < store_start) {
+        DPRINTF(NoSQPred, "Store and load are not intersected: store: 0x%lx with size %u, "
+                          "load: 0x%lx with size %u\n",
+                          store_start, last_store_cell->size,
+                          load_start, load_size);
+        return;
+    }
+
+    update(load_pc, true, sn_dist, dq_dist, hist);
+
+}
+
 MemDepPredictor *MemDepPredictorParams::create()
 {
     return new MemDepPredictor(this);

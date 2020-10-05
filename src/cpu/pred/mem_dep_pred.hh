@@ -100,7 +100,7 @@ class TSSBF: public SimObject
 
   public:
     const unsigned addrShamt{3};
-    const unsigned offsetMask{0x7};
+    const Addr offsetMask{0x7};
   private:
 
     using SSBFSet = std::map<Addr, SSBFCell>;
@@ -258,6 +258,12 @@ class MemDepPredictor: public SimObject
     const unsigned callShamt{2};
     const unsigned branchShamt{1};
     FoldedPC controlPath{};
+
+    void checkSilentViolation(
+            InstSeqNum load_sn, Addr load_pc, Addr load_addr, uint8_t load_size,
+            SSBFCell *last_store_cell,
+            unsigned sn_dist, unsigned dq_dist,
+            MemPredHistory *&hist);
 
     void update(Addr load_pc, bool should_bypass,
                 unsigned sn_dist, unsigned dq_dist,

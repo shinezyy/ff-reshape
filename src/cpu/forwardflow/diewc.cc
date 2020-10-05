@@ -6,6 +6,7 @@
 #include "arch/utility.hh"
 #include "cpu/forwardflow/arch_state.hh"
 #include "cpu/forwardflow/store_set.hh"
+#include "debug/ASMCommit.hh"
 #include "debug/Commit.hh"
 #include "debug/CommitObserve.hh"
 #include "debug/CommitRate.hh"
@@ -914,6 +915,8 @@ FFDIEWC<Impl>::
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
 
     if (commitCounter >= commitTraceInterval && !head_inst->isForwarder()) {
+        DPRINTF(ASMCommit, "Inst[%lu]: %s\n",
+                 head_inst->seqNum, head_inst->staticInst->disassemble(head_inst->instAddr()));
         DPRINTFR(ValueCommit, "%lu VCommitting %lu instruction with sn:%lu PC:",
                 curTick(), commitAll, head_inst->seqNum);
         if (Debug::ValueCommit) {
@@ -1685,17 +1688,21 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
         auto sn_dist = inst->seqNum - cell->lastStore;
         auto dq_dist = dq.c.computeDist(inst->dqPosition, cell->predecessorPosition);
 
-        if (sn_dist == dq_dist * 100) {
-            DPRINTF(NoSQPred, "Marking mem dep:" ptrfmt "->" ptrfmt " %s\n",
-                    extptr(cell->predecessorPosition), extptr(inst->dqPosition),
-                    violation ? "" : "for silent violation");
-            mDepPred->update(inst->instAddr(), true,
-                             sn_dist,
-                             dq_dist,
-                             inst->memPredHistory);
+        DPRINTF(NoSQPred, "Checking mem dep:" ptrfmt "->" ptrfmt " %s\n",
+                extptr(cell->predecessorPosition), extptr(inst->dqPosition),
+                violation ? "" : "for silent violation");
+        if (!violation) {
+            mDepPred->checkSilentViolation(
+                    inst->seqNum,
+                    inst->instAddr(), inst->physEffAddrLow, inst->effSize,
+                    cell,
+                    sn_dist, dq_dist,
+                    inst->memPredHistory);
         } else {
-            DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
-                              "%lu -> %lu with dq dist: %u\n", cell->lastStore, inst->seqNum, dq_dist);
+            mDepPred->update(
+                    inst->instAddr(), true,
+                    sn_dist, dq_dist,
+                    inst->memPredHistory);
         }
 
     } else if (violation && !cell) {
