@@ -212,7 +212,7 @@ class DerivFFCPU(BaseCPU):
 
     interGroupBW = Param.Unsigned(16, "interGroupBW")
 
-    pendingQueueDepth = Param.Unsigned(8, "max depth of pending wakeup pointers")
+    pendingQueueDepth = Param.Unsigned(32, "max depth of pending wakeup pointers")
 
     pendingWakeupQueueDepth = Param.Unsigned(8, "depth of pending wakeup pointers")
     pendingFwPointerQueueDepth = Param.Unsigned(8, "depth of pending forward pointers")
@@ -233,7 +233,7 @@ class DerivFFCPU(BaseCPU):
 
     ReadyHint = Param.Bool(False, "ReadyHint")
 
-    TermMax = Param.Unsigned(8, "TermMax")
+    TermMax = Param.Unsigned(32, "TermMax")
 
     MINWakeup = Param.Bool(False, "MINWakeup")
     XBarWakeup = Param.Bool(False, "XBarWakeup")

@@ -71,7 +71,7 @@ DataflowQueueBank<Impl>::clear(bool markSquashed)
 
     for (auto &pointers: prematureFwPointers) {
         for (auto &ptr: pointers) {
-            ptr.valid =false;
+            ptr.valid = false;
         }
     }
 }

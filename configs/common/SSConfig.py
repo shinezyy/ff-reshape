@@ -31,7 +31,7 @@ def modifyO3CPUConfig(options, cpu):
     elif options.use_bp == 'SNN':
         cpu.branchPred = SNN()
     elif options.use_bp == 'Yags':
-        cpu.branchPred =  Yags()
+        cpu.branchPred = Yags()
     elif options.use_bp == 'OracleBP':
         cpu.branchPred = OracleBP()
         assert options.outcome_path is not None

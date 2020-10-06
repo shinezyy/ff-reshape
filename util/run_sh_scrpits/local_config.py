@@ -12,9 +12,12 @@ cpt_dirs = {
     },
 }
 
-stats_base_dir = osp.expanduser('~/gem5-results-2017')
+# stats_base_dir = osp.expanduser('~/gem5-results-reuse')
+stats_base_dir = osp.expanduser('~/gem5-results-hpca-rebuttal')
 
-total_cores = 4
+branch_outcome_dir = osp.expanduser('~/research-data/spec2017_branch_outcome')
+
+total_cores = 128
 n_tasks = 1
 spare_cores = 1
 
