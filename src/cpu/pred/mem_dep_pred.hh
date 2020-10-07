@@ -51,10 +51,10 @@ struct MemPredHistory
     bool pathSensitive;
     DistancePair distPair;
 
-    bool predecessorIsLoad;
-
-    using FoldedPC = uint64_t ;
+    using FoldedPC = uint64_t;
     FoldedPC path;
+
+    bool lowConfidence;
 };
 
 struct SSBFCell
@@ -255,8 +255,8 @@ class MemDepPredictor: public SimObject
 
     void recordPath(Addr control_pc, bool is_call, bool pred_taken);
 
-    const unsigned callShamt{2};
-    const unsigned branchShamt{1};
+    const unsigned callShamt{3};
+    const unsigned branchShamt{3};
     FoldedPC controlPath{};
 
     void checkSilentViolation(
@@ -306,6 +306,10 @@ class MemDepPredictor: public SimObject
     Addr shiftAddr(Addr addr);
 
     MisPredTable misPredTable;
+
+    const unsigned confInit{4};
+
+    const unsigned confThreshold{2};
 
   public:
     void dumpTopMisprediction() const;

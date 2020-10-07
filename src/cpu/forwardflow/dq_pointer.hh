@@ -58,6 +58,7 @@ struct DQPointer: public TermedPointer{
 
     bool isLocal{false};
 
+    bool isDelayed{false};
 };
 
 struct WKPointer: public TermedPointer{
@@ -67,6 +68,7 @@ struct WKPointer: public TermedPointer{
         WKOrder, // wakeup store to load dependency
         WKMisc, // wakeup non-speculative, barrier, etc.
         WKBypass, // bypassing value on the path like store->load->load
+        WKBypassDelayed, // completed information
         WKLdReExec // wakeup non-speculative, barrier, etc.
     };
     WKType wkType;
@@ -105,16 +107,18 @@ struct WKPointer: public TermedPointer{
 struct PointerPair{
     bool isBypass;
     bool isBarrier;
+    bool isHardToPred;
     TermedPointer dest;
     TermedPointer payload;
     PointerPair() {
         isBypass = false;
         isBarrier = false;
+        isHardToPred = false;
         dest.valid = false;
         payload.valid = false;
     };
     PointerPair(const TermedPointer &d, const TermedPointer &p)
-    : isBypass(false), isBarrier(false), dest(d), payload(p)
+    : isBypass(false), isBarrier(false), isHardToPred(false), dest(d), payload(p)
     {}
 };
 

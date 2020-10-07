@@ -62,8 +62,10 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
     // bool found;
     // MemPredCell *cell;
     auto [found, cell] = find(pathTable, path_index, true);
+    mp_history->lowConfidence = false;
     if (found) { // in path table
         mp_history->bypass = cell->conf.read() > 0;
+        mp_history->lowConfidence = cell->conf.read() < confThreshold;
         mp_history->pathSensitive = true;
         mp_history->distPair = cell->distPair;
         mp_history->pathBypass = mp_history->bypass;
@@ -72,10 +74,10 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
         //         cell, path, path_index);
         DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, @ index: %u "
                 "path predictor predict %i with confi: %i "
-                "to storeDistance %u\n",
+                "to storeDistance %u, low conf: %i\n",
                 load_pc, path, path_index,
                 mp_history->pathBypass, cell->conf.read(),
-                cell->distPair.snDistance);
+                cell->distPair.snDistance, mp_history->lowConfidence);
 
     } else {
         mp_history->pathSensitive = false;
@@ -134,13 +136,22 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
         DPRINTF(NoSQPred, "For load @ 0x%x, mispredicted, should not bypass\n", load_pc);
         misPredTable.record(load_pc, false);
 
-        DPRINTF(NoSQPred, "Dec conf in pc table, ");
-        decrement(pcTable, load_pc, true, false);
+        auto path_key = genPathKey(load_pc, hist->path);
+        auto [found, cell] = find(pathTable, path_key, true);
 
-        auto path_index = genPathKey(load_pc, hist->path);
-        DPRINTF(NoSQPred, "Dec conf in path table with path: 0x%lx, ",
-                hist->path);
-        decrement(pathTable, path_index, true, true);
+        if (!found) {
+            DPRINTF(NoSQPred, "Dec conf only in path table with path: 0x%lx, ",
+                    hist->path);
+            decrement(pathTable, path_key, true, true);
+
+        } else {
+            DPRINTF(NoSQPred, "Dec conf in pc table, ");
+            decrement(pcTable, load_pc, true, false);
+
+            DPRINTF(NoSQPred, "Dec conf in path table with path: 0x%lx, ",
+                    hist->path);
+            decrement(pathTable, path_key, true, true);
+        }
 
     } else {
         if (pred_bypass != should_bypass) {
@@ -179,13 +190,13 @@ MemDepPredictor::decrement(MemPredTable &table, Addr key, bool alloc, bool isPat
     if (found) {
         cell->conf.decrement();
         // DPRINTF(NoSQPred, "Found Cell@: %p\n", cell);
-        DPRINTF(NoSQPred, "conf after dec: %i\n", cell->conf.read());
+        DPRINTFR(NoSQPred, "conf after dec: %i\n", cell->conf.read());
 
     } else if (alloc) {
         // DPRINTF(NoSQPred, "Dec on allocation\n");
         cell = allocate(table, key, isPath);
         cell->conf.decrement();
-        DPRINTF(NoSQPred, "conf after dec: %i\n", cell->conf.read());
+        DPRINTFR(NoSQPred, "conf after dec: %i\n", cell->conf.read());
 
         auto [found, cell] = find(table, key, isPath);
         assert(found);
@@ -208,7 +219,7 @@ MemDepPredictor::increment(MemPredTable &table, Addr key,
         // DPRINTF(NoSQPred, "Inc on allocation\n");
         cell = allocate(table, key, isPath);
         cell->distPair = dist_pair;
-        cell->conf.increment();
+        cell->conf.increment(confInit);
         DPRINTF(NoSQPred, "conf after inc: %i\n", cell->conf.read());
 
         auto [found, cell] = find(table, key, isPath);
@@ -228,10 +239,14 @@ void
 MemDepPredictor::recordPath(Addr control_pc, bool is_call, bool pred_taken)
 {
     if (is_call) {
-        // unsigned mask = ((uint64_t)1 << callShamt) - 1;
-        // controlPath = (controlPath << callShamt) | ((control_pc >> pcShamt) & mask);
+        unsigned mask = ((uint64_t)1 << callShamt) - 1;
+        controlPath = (controlPath << callShamt) | ((control_pc >> pcShamt) & mask);
+
     } else {
-        controlPath = (controlPath << (unsigned) 1) | pred_taken;
+        unsigned branch_mask = 0x3;
+        controlPath = (controlPath << branchShamt) |
+                (((control_pc >> pcShamt) & branch_mask) << (unsigned) 1) |
+                pred_taken;
     }
 }
 

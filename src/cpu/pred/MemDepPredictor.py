@@ -17,7 +17,8 @@ class MemDepPredictor(SimObject):
     ConfidenceBits = Param.Unsigned(7, "Bit width of bits to represent confidence")
     TagBits = Param.Unsigned(22, "Bit width of bits for tag")
 
-    HistoryLen = Param.Unsigned(16, "Length of bits used for path history")
+    HistoryLen = Param.Unsigned(6, "Length of bits used for path history")
+
     BranchPathLen = Param.Unsigned(1, "Length of bits extract from branch")
     CallPathLen = Param.Unsigned(2, "Length of bits extract from call")
 

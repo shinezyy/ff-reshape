@@ -99,11 +99,16 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
 
             } else if (inst->isNormalStore()) {
                 // todo: advance waking up successor as soon as the value reg available
-                DPRINTFR(FUW, "with value because of it's store\n");
                 // passing store value to predicted consumer
-                to_wake[DestPtr].hasVal = true;
-                to_wake[DestPtr].val.i = inst->readStoreValue();
-                to_wake[DestPtr].wkType = WKPointer::WKType::WKBypass;
+                if (!inst->memSuccessorDelayed) {
+                    DPRINTFR(FUW, "with value because of it's store\n");
+                    to_wake[DestPtr].hasVal = true;
+                    to_wake[DestPtr].val.i = inst->readStoreValue();
+                    to_wake[DestPtr].wkType = WKPointer::WKType::WKBypass;
+                } else {
+                    DPRINTFR(FUW, "canceled because consumer is predicted to delay\n");
+                    to_wake[DestPtr].valid = false;
+                }
             }
 
         } else {

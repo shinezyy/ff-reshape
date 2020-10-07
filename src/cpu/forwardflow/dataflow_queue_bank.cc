@@ -12,6 +12,7 @@
 #include "debug/FFDisp.hh"
 #include "debug/FFExec.hh"
 #include "debug/FFSquash.hh"
+#include "debug/NoSQPred.hh"
 #include "debug/NoSQSMB.hh"
 #include "debug/ObExec.hh"
 #include "debug/ObFU.hh"
@@ -276,7 +277,6 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             continue;
         }
 
-
         DPRINTF(NoSQSMB, "ptr.wkType == WKPointer::WKBypass: %i, inst->isNormalBypass(): %i\n",
                 ptr.wkType == WKPointer::WKBypass, inst->isNormalBypass());
 
@@ -339,6 +339,17 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             inst->bypassVal = ptr.val;
             inst->orderDepReady = true;
             handle_wakeup = true;
+
+        } else if (ptr.wkType == WKPointer::WKBypassDelayed && inst->isLoad()) {
+            assert(op == memBypassOp);
+            inst->orderDepReady = true;
+            handle_wakeup = true;
+
+            if (inst->isNormalBypass()) {
+                DPRINTF(NoSQPred, "Mark inst[%lu] as unconfident bypassing\n", inst->seqNum);
+                inst->bypassOp = 0;
+                inst->orderDepDelayed = true;
+            }
 
         } else { //  if (ptr.wkType == WKPointer::WKOp)
             // NOTE: With NoSQ, WKOp might carry memory response!
@@ -558,7 +569,12 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                         }
 
                         if (inst->isLoad() && op == memBypassOp) {
-                            optr.wkType = WKPointer::WKBypass;
+                            if (ptr.wkType == WKPointer::WKBypassDelayed ||
+                                inst->pointers[op].isDelayed) {
+                                optr.valid = false;
+                            } else {
+                                optr.wkType = WKPointer::WKBypass;
+                            }
                         }
 
                         if (grab_from_local_fw && ptr.isLocal) {
@@ -580,7 +596,8 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                     }
                 }
 
-                if (inst->isNormalBypass() && (inst->bypassOp == op) && inst->pointers[0].valid) {
+                if (inst->isNormalBypass() && inst->bypassOp == op && inst->pointers[0].valid &&
+                        ptr.wkType != WKPointer::WKBypassDelayed) {
                     auto wk_ptr = WKPointer(inst->pointers[0]);
                     wk_ptr.hasVal = true;
                     wk_ptr.val = ptr.val;

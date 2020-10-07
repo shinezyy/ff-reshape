@@ -336,6 +336,10 @@ public:
     unsigned numInFlightWk() const;
 
     void checkSanity() const;
+
+    void completeDelayedWBStore(DynInstPtr &inst);
+
+    void commitLoad(DynInstPtr &inst);
 };
 
 

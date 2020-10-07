@@ -150,7 +150,7 @@ template<class Impl>
 void FFDIEWC<Impl>::tryVerifyTailLoad() {
     DynInstPtr tail = getTailInst();
     if (tail && tail->isLoad() && tail->seqNum != verifiedTailLoad &&
-        (tail->isNormalBypass() || tail->effAddrValid())) {
+        (tail->isNormalBypass() || tail->orderDepDelayed || tail->effAddrValid())) {
         DPRINTF(NoSQSMB, "Last verified load is %lu\n", verifiedTailLoad);
         bool skip_verify;
 
@@ -905,6 +905,7 @@ FFDIEWC<Impl>::
         if (head_inst->physEffAddrHigh) {
             // pass yet
         }
+        dq.commitLoad(head_inst);
     }
 
     if (FullSystem) {
@@ -2680,13 +2681,17 @@ FFDIEWC<Impl>::setUpLoad(DynInstPtr &inst)
 
 template<class Impl>
 void
-FFDIEWC<Impl>::setStoreCompleted(InstSeqNum sn, Addr eff_addr)
+FFDIEWC<Impl>::setStoreCompleted(DynInstPtr &inst, Addr eff_addr)
 {
+    InstSeqNum sn = inst->seqNum;
     if (sn > lastCompletedStoreSN) {
         lastCompletedStoreSN = sn;
+        if (inst->memSuccessorDelayed) {
+            dq.completeDelayedWBStore(inst);
+        }
     }
-
     mDepPred->completeStore(eff_addr, sn);
+
 }
 
 template<class Impl>

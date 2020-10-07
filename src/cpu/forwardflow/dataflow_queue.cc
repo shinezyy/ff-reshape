@@ -506,7 +506,7 @@ DataflowQueues<Impl>::markFwPointers(
                 DPRINTF(NoSQPred, "Bypassing from non-store and non-bypassing insts, ignore it\n");
 
             } else if (inst->isNormalStore() && op == memBypassOp) {
-                if (inst->fuGranted) {
+                if (inst->fuGranted && !(pair.isHardToPred || inst->memSuccessorDelayed)) {
                     wk_ptr.val.i = inst->readStoreValue();
                     wk_ptr.wkType = WKPointer::WKBypass;
                     assert(pair.isBypass);
@@ -549,7 +549,10 @@ DataflowQueues<Impl>::markFwPointers(
                 inst->bypassOp, inst->opReady[inst->bypassOp]);
         auto wk_ptr = WKPointer(pair.payload);
         // todo: when op == 0 and inst is not normal bypass, there is a bug
-        if (inst->isNormalBypass()) {
+        if (pair.isHardToPred) {
+            wk_ptr.valid = false;
+
+        } else if (inst->isNormalBypass()) {
             wk_ptr.hasVal = true;
             if (pair.isBypass) {
                 wk_ptr.wkType = WKPointer::WKBypass;
@@ -580,13 +583,17 @@ DataflowQueues<Impl>::markFwPointers(
             op == memBypassOp && inst->fuGranted) {
         // now we do not use opReady because this is only a patch for when pair arrives after exec.
         // when we advance the condition of waking up consumers, we must switch to it.
-        DPRINTF(DQWake, "which is a producing store and "
-                        " has already been executed!\n");
-        auto wk_ptr = WKPointer(pair.payload);
-        wk_ptr.hasVal = true;
-        wk_ptr.wkType = WKPointer::WKBypass;
-        wk_ptr.val.i = inst->readStoreValue();
-        extraWakeup(wk_ptr);
+        if (!(pair.isHardToPred || inst->memSuccessorDelayed)) {
+            DPRINTF(DQWake, "which is a producing store and "
+                            " has already been executed!\n");
+            auto wk_ptr = WKPointer(pair.payload);
+            wk_ptr.hasVal = true;
+            wk_ptr.wkType = WKPointer::WKBypass;
+            wk_ptr.val.i = inst->readStoreValue();
+            extraWakeup(wk_ptr);
+        } else {
+            DPRINTF(DQWake, "Although producing store is executed, consumer is hard to predict\n");
+        }
 
     } else if (inst && inst->opReady[op] &&
                !(inst->isNormalStore() && pair.isBypass)) {
@@ -630,15 +637,23 @@ DataflowQueues<Impl>::markFwPointers(
     if (inst) {
         if (pair.isBypass && inst &&
             !(inst->isNormalStore() && op == memBypassOp) &&
-            !(inst->isLoad() && inst->isNormalBypass())) {
+            !(inst->isLoad() && (inst->isNormalBypass() || inst->isDelayedBypassLoad()))) {
             DPRINTF(NoSQPred, "Bypassing from non-store and non-bypassing insts, ignore it\n");
 
         } else  if (inst->isNormalStore() && pair.isBypass) {
             DPRINTF(FFDisp || Debug::DQWake,
                     "Storing pointer to dest field of store\n");
             pointers[0] = pair.payload;
+            if (pair.isHardToPred) {
+                DPRINTF(NoSQPred,
+                        "Mark its successor as hard to predict\n");
+                inst->memSuccessorDelayed = true;
+            }
         } else  {
             pointers[op] = pair.payload;
+            if (pair.isHardToPred && op == memBypassOp) {
+                pointers[op].isDelayed = true;
+            }
         }
 //        if (inst->isLoad() && pair.isBypass) {
 //            inst->bypassOp = memBypassOp;
@@ -1988,6 +2003,9 @@ void DataflowQueues<Impl>::selectPointersFromWakeQueues()
                         // pass
 
                     } else if (ptr.wkType == WKPointer::WKBypass) {
+                        // pass
+
+                    } else if (ptr.wkType == WKPointer::WKBypassDelayed) {
                         // pass
 
                     } else {

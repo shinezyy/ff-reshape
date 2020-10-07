@@ -427,10 +427,16 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     bool orderDepReady{};
     bool orderFulfilled();
 
+    bool orderDepDelayed{false};
+
+    bool memSuccessorDelayed{false};
+
     int bypassOp{0};
     bool dependOnBarrier{false};
 
     bool isNormalBypass() { return bypassOp && !dependOnBarrier;}
+
+    bool isDelayedBypassLoad() { return orderDepDelayed && !dependOnBarrier;}
 
     bool isNormalStore() { return this->isStore() && !this->isRVAmoStoreHalf();}
 

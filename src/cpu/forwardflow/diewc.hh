@@ -554,7 +554,7 @@ public:
     InstSeqNum lastCompletedStoreSN{};
 
   public:
-    void setStoreCompleted(InstSeqNum sn, Addr eff_addr);
+    void setStoreCompleted(DynInstPtr &inst, Addr eff_addr);
 
     InstSeqNum getLastCompletedStoreSN() {return lastCompletedStoreSN;}
 

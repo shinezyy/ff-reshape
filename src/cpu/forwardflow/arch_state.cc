@@ -297,7 +297,6 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
                 extptr(predecessor_pointer), inst->memPredHistory->distPair.dqDistance);
 
         if (dq->validPosition(predecessor_position)) {
-            inst->bypassOp = memBypassOp;
             inst->hasOrderDep = true;
 
             predecessor_pointer.op = memBypassOp; // hard-coded which is reserved for load
@@ -311,6 +310,15 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
             // TODO: update in pair consuming, especially for store
             pairs.emplace_back(predecessor_pointer, receiver);
             pairs.back().isBypass = true;
+
+            if (inst->memPredHistory->lowConfidence) {
+                pairs.back().isHardToPred = true;
+                inst->orderDepDelayed = true;
+                DPRINTF(NoSQSMB, "With low confidence\n");
+            } else {
+                inst->bypassOp = memBypassOp;
+            }
+
         } else {
             DPRINTF(NoSQSMB, "However, producer is not at a valid position (squashed)\n");
             bypass_canceled = true;

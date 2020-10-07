@@ -1185,6 +1185,44 @@ void DQTop<Impl>::checkSanity() const
     }
 }
 
+template<class Impl>
+void DQTop<Impl>::completeDelayedWBStore(DynInstPtr &inst)
+{
+    DPRINTF(DQWake, "Completing store[%lu]\n", inst->seqNum);
+    if (inst->pointers[0].valid && inst->memSuccessorDelayed) {
+        WKPointer wk(inst->pointers[0]);
+        DPRINTF(DQWake,
+                "Sending pointer to consumer" ptrfmt
+                        "that depends on store[%llu]" ptrfmt "\n",
+                extptr(wk), inst->seqNum, extptr(inst->dqPosition)
+        );
+
+        wk.hasVal = false;
+        // wk.val = inst->readStoreValue();
+        wk.wkType = WKPointer::WKBypassDelayed;
+        centralizedExtraWakeup(wk);
+        inst->pointers[0].valid = false;
+    }
+}
+
+template<class Impl>
+void DQTop<Impl>::commitLoad(DQTop::DynInstPtr &inst)
+{
+    if (inst->pointers[memBypassOp].valid &&
+            inst->pointers[memBypassOp].isDelayed) {
+        WKPointer wk(inst->pointers[memBypassOp]);
+        DPRINTF(DQWake,
+                "Sending pointer to successor" ptrfmt
+                        "that depends on load[%llu]" ptrfmt "\n",
+                extptr(wk), inst->seqNum, extptr(inst->dqPosition)
+        );
+        wk.hasVal = false;
+        wk.wkType = WKPointer::WKBypassDelayed;
+        centralizedExtraWakeup(wk);
+        inst->pointers[memBypassOp].valid = false;
+    }
+}
+
 
 }
 
