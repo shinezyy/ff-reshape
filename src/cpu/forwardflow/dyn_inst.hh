@@ -528,6 +528,10 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     InstSeqNum seqNVul{0};
 
     uint64_t readStoreValue();
+
+    bool storeValueBecomeReadyOn(unsigned op);
+
+    bool storeValueReady();
 };
 
 }

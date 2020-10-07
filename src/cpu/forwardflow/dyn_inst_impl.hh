@@ -432,6 +432,31 @@ BaseO3DynInst<Impl>::readStoreValue()
     return v;
 }
 
+template<class Impl>
+bool BaseO3DynInst<Impl>::storeValueBecomeReadyOn(unsigned int op)
+{
+    assert(isNormalStore());
+    if (hasOp[2] && op == 2) {
+        return true;
+    } else if (indirectRegIndices.at(1).size() == 2 && hasOp[1] && op == 1) {
+        return true;
+    }
+    return false;
+}
+
+template<class Impl>
+bool BaseO3DynInst<Impl>::storeValueReady()
+{
+    assert(isNormalStore());
+    if (opReady[2]) {
+        return true;
+    } else if (indirectRegIndices.at(1).size() == 2 && opReady[1]) {
+        // identical register
+        return true;
+    }
+    return false;
+}
+
 }
 
 #endif//__CPU_FF_DYN_INST_IMPL_HH__

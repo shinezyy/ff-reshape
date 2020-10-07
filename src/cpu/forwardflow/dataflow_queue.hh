@@ -432,6 +432,9 @@ public:
     std::string name() const { return _name; }
 
 private:
+    void pointerMeetsInst(TermedPointer &pointer, PointerPair &pair, DataflowQueues::DynInstPtr &inst,
+                          unsigned op, bool adapting_premature);
+
     void pickInterGroupPointers();
 
     unsigned fuFAIndex, fuMDIndex;
