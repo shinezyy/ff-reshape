@@ -72,6 +72,10 @@ void FFDIEWC<Impl>::tick() {
     // TODO: it writes center buffer
     ldstQueue.writebackStores();
 
+    readInstsToCommit();
+
+    tryVerifyTailLoads();
+
     // todo: commit from DQ
     // part DQC
     // part DQC should not read from DQCR in the same cycle
@@ -139,26 +143,46 @@ void FFDIEWC<Impl>::tick() {
     }
 #undef tbuf
 
-    tryVerifyTailLoad();
-
     sendBackwardInfo();
 
     clearAtEnd();
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::tryVerifyTailLoad() {
-    DynInstPtr tail = getTailInst();
-    if (tail && tail->isLoad() && tail->seqNum != verifiedTailLoad &&
-        (tail->isNormalBypass() || tail->effAddrValid())) {
+void FFDIEWC<Impl>::tryVerifyTailLoads()
+{
+    unsigned count = 0;
+    for (DynInstPtr &inst: instsToCommit) {
+        DPRINTF(NoSQSMB, "Verifying\n");
+        if (inst->isStore() || inst->isMemBarrier() || inst->isWriteBarrier()) {
+            DPRINTF(NoSQSMB || Debug::FFCommit, "Break verifying because encountered store\n");
+            break;
+        }
+        if (inst->isLoad()) {
+            bool break_verifying = tryVerifyTailLoad(inst, count == 0);
+            if (break_verifying) {
+                break;
+            }
+        }
+        count++;
+    }
+}
+
+
+template<class Impl>
+bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
+    bool break_verif = false;
+    if (!tail->loadVerified && !tail->sentReExec && (tail->isNormalBypass() || tail->effAddrValid())) {
         DPRINTF(NoSQSMB, "Last verified load is %lu\n", verifiedTailLoad);
         bool skip_verify;
 
-        if (tail->seqNum == bypassCanceled) {
+        if (tail->bypassCanceled) {
             skip_verify = false;
 
         } else if (tail->isRVAmoLoadHalf() || tail->isLoadReserved()) {
             // AMO load and LR are not verifiable
+            DPRINTF(NoSQSMB, "AMO load/ LR encountered\n");
+            break_verif = true;
             skip_verify = true;
 
         } else {
@@ -189,10 +213,10 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
         } else if (!ldstQueue.numStoresToWB(DummyTid)){
             DPRINTF(NoSQSMB, "Did not skip verifying load [%lu] @ 0x%lx size: %u\n",
                     tail->seqNum, tail->physEffAddrLow, tail->effSize);
-            auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(bypassCanceled);
+            auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(tail, is_tail);
             if (sent_reexec) {
                 verifiedTailLoad = tail->seqNum;
-
+                tail->sentReExec = true;
                 // stats
                 reExecutedLoads++;
                 if (tail->isNormalBypass()) {
@@ -212,13 +236,14 @@ void FFDIEWC<Impl>::tryVerifyTailLoad() {
                                  0, // dont care
                                  tail->memPredHistory // will be deleted
                 );
-
+                tail->bypassCanceled = true;
             }
         } else {
             DPRINTF(NoSQSMB, "Cannot verify load [%lu] yet, because of pending wb store\n",
                     tail->seqNum);
         }
     }
+    return break_verif;
 }
 
 template<class Impl>
@@ -584,15 +609,6 @@ void FFDIEWC<Impl>::writeCommitQueue() {
 
 template<class Impl>
 void FFDIEWC<Impl>::commit() {
-    // read insts
-    for (unsigned i = 0; i < width; i++) {
-        DynInstPtr inst = fromLastCycle->diewc2diewc.commitQueue[i];
-        if (inst) {
-            // push only non null pointers
-            insts_to_commit.push(inst);
-            DPRINTF(Commit, "read inst[%d] from last cycle\n", inst->seqNum);
-        }
-    }
 
     handleSquash();
 
@@ -788,6 +804,7 @@ FFDIEWC<Impl>::
     }
 
     if (head_inst->isLoad() && !head_inst->loadVerified) {
+        headNotVerified++;
         DPRINTF(FFCommit, "Inst[%llu] is load but not verified yet,"
                           " cannot commit\n", head_inst->seqNum);
         return false;
@@ -1080,7 +1097,7 @@ FFDIEWC<Impl>::commitInsts()
             // Notify potential listeners that this instruction is squashed
             ppSquash->notify(head_inst);
             ++num_committed;
-            insts_to_commit.pop();
+            instsToCommit.pop_front();
             continue;
 
         } else {
@@ -1198,7 +1215,7 @@ FFDIEWC<Impl>::commitInsts()
                     onInstBoundary && cpu->checkInterrupts(cpu->tcBase(0)))
                     squashAfter(head_inst);
 
-                insts_to_commit.pop();
+                instsToCommit.pop_front();
                 toAllocation->diewcInfo.usedDQ = true;
             } else {
                 DPRINTF(Commit, "Unable to commit head instruction PC:%s "
@@ -1227,7 +1244,7 @@ void FFDIEWC<Impl>::handleInterrupt() {
 template<class Impl>
 typename FFDIEWC<Impl>::DynInstPtr FFDIEWC<Impl>::getTailInst() {
     DynInstPtr n = nullptr;
-    return insts_to_commit.empty() ? n : insts_to_commit.front();
+    return instsToCommit.empty() ? n : instsToCommit.front();
 }
 
 template<class Impl>
@@ -1699,6 +1716,12 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                     sn_dist, dq_dist,
                     inst->memPredHistory);
         } else {
+            if (sn_dist != dq_dist * 100) {
+                DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
+                                  "sn_dist: %u, dq dist: %u\n",
+                        sn_dist, dq_dist);
+                return;
+            }
             mDepPred->update(
                     inst->instAddr(), true,
                     sn_dist, dq_dist,
@@ -2218,6 +2241,10 @@ void FFDIEWC<Impl>::regStats()
         .name(name() + ".headReadyNotExec")
         .desc("headReadyNotExec")
         ;
+    headNotVerified
+            .name(name() + ".headNotVerified")
+            .desc("headNotVerified")
+            ;
 
 }
 
@@ -2460,8 +2487,8 @@ template<class Impl>
 void FFDIEWC<Impl>::clearAtStart()
 {
     skipThisCycle = false;
-    while (!insts_to_commit.empty()) {
-        insts_to_commit.pop();
+    while (!instsToCommit.empty()) {
+        instsToCommit.pop_front();
     }
     DQPointerJumped = false;
     anySuccessfulCommit = false;
@@ -2723,6 +2750,21 @@ void FFDIEWC<Impl>::touchSSBF(Addr eff_addr, InstSeqNum ssn)
 {
     mDepPred->touchSSBF(eff_addr, ssn);
 }
+
+template<class Impl>
+void FFDIEWC<Impl>::readInstsToCommit()
+{
+    // read insts
+    for (unsigned i = 0; i < width; i++) {
+        DynInstPtr inst = fromLastCycle->diewc2diewc.commitQueue[i];
+        if (inst) {
+            // push only non null pointers
+            instsToCommit.push_back(inst);
+            DPRINTF(Commit, "read inst[%d] from last cycle\n", inst->seqNum);
+        }
+    }
+}
+
 
 }
 

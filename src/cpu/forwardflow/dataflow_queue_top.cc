@@ -131,26 +131,21 @@ void DQTop<Impl>::scheduleNonSpec()
 
 template<class Impl>
 std::pair<bool, bool>
-DQTop<Impl>::reExecTailLoad(InstSeqNum &canceled_seq)
+DQTop<Impl>::reExecTailLoad(DynInstPtr &inst, bool is_tail)
 {
-    auto inst = getTail();
     bool re_executed = false, bypass_canceled = false;
-    if (!inst) {
-        DPRINTF(FFSquash || Debug::NoSQSMB, "Ignore scheduling attempt to squashing inst\n");
-
-    } else if (!inst->isLoad()) {
-        DPRINTF(NoSQSMB, "Head inst is not load!\n");
-
-    } else if (inst->numBusyOps()) {
+    assert(inst);
+    assert(inst->isLoad());
+    if (inst->numBusyOps()) {
         if (!inst->orderFulfilled()) {
-            if (!numInFlightWk() && inst->seqNum > canceled_seq) {
+            if (is_tail && !numInFlightWk() && !inst->bypassCanceled) {
                 // TODO: mark misprediction
                 WKPointer wk = WKPointer(getTail()->dqPosition);
                 DPRINTF(DQ || Debug::NoSQSMB, "Mark tail load inst as order dep ready" ptrfmt "\n", extptr(wk));
                 wk.wkType = WKPointer::WKOrder;
                 centralizedExtraWakeup(wk);
                 bypass_canceled = true;
-                canceled_seq = inst->seqNum;
+//                canceled_seq = inst->seqNum;
             }
         } else {
             // wait non-order deps ready
@@ -159,7 +154,7 @@ DQTop<Impl>::reExecTailLoad(InstSeqNum &canceled_seq)
         }
 
     } else {
-        WKPointer wk = WKPointer(getTail()->dqPosition);
+        WKPointer wk = WKPointer(inst->dqPosition);
         DPRINTF(DQ || Debug::NoSQSMB, "Scheduling tail load inst[%lu] " ptrfmt "\n", inst->seqNum, extptr(wk));
         wk.wkType = WKPointer::WKLdReExec;
         centralizedExtraWakeup(wk);

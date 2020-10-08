@@ -91,7 +91,7 @@ public:
     void scheduleNonSpec();
 
     // 1: sent reexec pointer; 2: canceling bypassing
-    std::pair<bool, bool> reExecTailLoad(InstSeqNum &canceledSeq);
+    std::pair<bool, bool> reExecTailLoad(DynInstPtr &inst, bool is_tail);
 
     void centralizedExtraWakeup(const WKPointer &wk);
 

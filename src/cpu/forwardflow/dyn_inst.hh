@@ -532,6 +532,10 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     bool storeValueBecomeReadyOn(unsigned op);
 
     bool storeValueReady();
+
+    bool sentReExec{false};
+
+    bool bypassCanceled{false};
 };
 
 }

@@ -123,7 +123,9 @@ private:
 
     std::queue<PointerPair> pointerPackets;
 
-    std::queue<DynInstPtr> insts_to_commit;
+    std::list<DynInstPtr> instsToCommit;
+
+    void readInstsToCommit();
 
 public:
     XLSQ ldstQueue;
@@ -488,6 +490,8 @@ public:
     Stats::Scalar verificationSkipped;
     Stats::Formula verifSkipRate;
 
+    Stats::Scalar headNotVerified;
+
     ArchState *getArchState() {return &archState;}
 
     DQTop *getDQ() {return &dq;}
@@ -547,7 +551,10 @@ public:
 
     InstSeqNum scheduledNonSpec{0};
 
-    void tryVerifyTailLoad();
+    void tryVerifyTailLoads();
+
+    bool tryVerifyTailLoad(DynInstPtr &load, bool is_tail);
+
 
     void setUpLoad(DynInstPtr &inst);
 
