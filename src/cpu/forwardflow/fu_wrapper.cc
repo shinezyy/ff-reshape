@@ -98,12 +98,13 @@ bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
                 to_wake[DestPtr].hasVal = false;
 
             } else if (inst->isNormalStore()) {
-                // todo: advance waking up successor as soon as the value reg available
-                DPRINTFR(FUW, "with value because of it's store\n");
+                // done: advanced waking up successor as soon as the value reg available
+                DPRINTFR(FUW, "canceled because of it's producing store\n");
+                to_wake[DestPtr].valid = false;
                 // passing store value to predicted consumer
-                to_wake[DestPtr].hasVal = true;
-                to_wake[DestPtr].val.i = inst->readStoreValue();
-                to_wake[DestPtr].wkType = WKPointer::WKType::WKBypass;
+                // to_wake[DestPtr].hasVal = true;
+                // to_wake[DestPtr].val.i = inst->readStoreValue();
+                // to_wake[DestPtr].wkType = WKPointer::WKType::WKBypass;
             }
 
         } else {

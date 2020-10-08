@@ -484,12 +484,12 @@ DataflowQueues<Impl>::markFwPointers(
             DPRINTF(FFDisp || Debug::DQWake, "Pair arrives at inst[%lu] "
                                              "@" ptrfmt " \n", inst->seqNum, extptr(pair.dest));
         } else {
-            DPRINTF(FFDisp || Debug::DQWake, "Pair arrives at null inst "
-                                             "@" ptrfmt " \n", extptr(pair.dest));
+            DPRINTF(FFDisp || Debug::DQWake, "Pair arrives at null inst with term: %u "
+                                             "@" ptrfmt " \n", pair.dest.term, extptr(pair.dest));
         }
         DPRINTFR(FFDisp || Debug::DQWake,
-                 "and let it forward its value to" ptrfmt "\n",
-                 extptr(pair.payload));
+                 "and let it forward its value to term :%u " ptrfmt "\n",
+                 pair. payload.term, extptr(pair.payload));
     }
 
     if (pair.isBypass && inst &&
@@ -853,14 +853,14 @@ void DataflowQueues<Impl>::digestPairs()
                         extptr(pair.dest), inst->seqNum);
                 markFwPointers(inst->pointers, pair, inst);
 
-                if (op == 0 && inst->destReforward && inst->isExecuted()) {
-                    // already executed but not forwarded
-                    WKPointer wk(pair.payload);
-                    wk.hasVal = true;
-                    wk.val = inst->getDestValue();
-                    extraWakeup(wk);
-                    inst->destReforward = false;
-                }
+                // if (op == 0 && inst->destReforward && inst->isExecuted()) {
+                //     // already executed but not forwarded
+                //     WKPointer wk(pair.payload);
+                //     wk.hasVal = true;
+                //     wk.val = inst->getDestValue();
+                //     extraWakeup(wk);
+                //     inst->destReforward = false;
+                // }
 
             } else {
                 DPRINTF(DQPair, "Insert fw pointer" ptrfmt "before inst reached\n",
@@ -1937,23 +1937,30 @@ void DataflowQueues<Impl>::pointerMeetsInst(
 
     value_available |= inst->opReady[op];
 
+    DPRINTF(DQWake, "opready[op]: %i\n", value_available );
+
     bool load_bypass_value_avail = (op == 0 || op == memBypassOp) &&
                                    inst->isLoad() && inst->isNormalBypass() && inst->orderFulfilled();
     value_available |= load_bypass_value_avail;
+    DPRINTF(DQWake, "load_bypass_value_avail: %i\n", load_bypass_value_avail);
 
     bool barrier_dep_ready = inst->isLoad() && inst->dependOnBarrier && op == memBypassOp &&
             inst->orderFulfilled();
+    DPRINTF(DQWake, "barrier_dep_ready: %i\n", barrier_dep_ready);
 
     bool store_bypass_value_avail = inst->isNormalStore() && op == memBypassOp && inst->storeValueReady();
     value_available |= store_bypass_value_avail;
+    DPRINTF(DQWake, "store_bypass_value_avail: %i\n", store_bypass_value_avail);
 //    bool store_bypass_value_will_ready = inst->isNormalStore() &&
 //            inst->storeValueBecomeReadyOn(op) && inst->pointers[0].valid;
 //   value_available  |= store_bypass_value_will_ready;
 
     bool wakeup_successor_before_exec =
             load_bypass_value_avail || store_bypass_value_avail || barrier_dep_ready;
+    DPRINTF(DQWake, "wakeup_successor_before_exec: %i\n", wakeup_successor_before_exec);
 
     bool cannot_deliver_to_fu = op == 0 && (inst->fuGranted || inst->loadVerifying);
+    DPRINTF(DQWake, "cannot_deliver_to_fu: %i\n", cannot_deliver_to_fu);
 
     if (value_available) {
         auto wk_ptr = WKPointer(pointer);
@@ -1966,7 +1973,11 @@ void DataflowQueues<Impl>::pointerMeetsInst(
 
         } else if (load_bypass_value_avail) {
             wk_ptr.val = inst->bypassVal;
-            wk_ptr.wkType = WKPointer::WKBypass;
+            if (op == memBypassOp) {
+                wk_ptr.wkType = WKPointer::WKBypass;
+            } else {
+                // SMB
+            }
 
         } else if (barrier_dep_ready) {
             wk_ptr.hasVal = false;

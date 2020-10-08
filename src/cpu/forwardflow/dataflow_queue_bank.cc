@@ -125,7 +125,7 @@ DataflowQueueBank<Impl>::tryWakeTail()
 
     if (tail_inst->inReadyQueue || tail_inst->fuGranted ||
         (tail_inst->isForwarder() && tail_inst->isExecuted())) {
-        DPRINTF(DQWake, "Tail[%d] has been granted, skip\n", tail);
+        DPRINTF(DQWake, "Tail[%lu] has been granted, skip\n", tail_inst->seqNum);
         return nullptr;
     }
     RegReadNbusy++;
@@ -270,6 +270,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                          ptr.wkType == WKPointer::WKLdReExec)) {
             DPRINTF(DQWake, "Mark received dest after wakeup pointer arrives at Dest\n");
             inst->receivedDest = true;
+            inst->opReady[0] = true;
             if (anyPending) {
                 ptr.valid = false;
             }
@@ -692,8 +693,13 @@ DataflowQueueBank<Impl>::writeInstsToBank(
 
     for (unsigned i = 0; i < nOps; i++) {
         auto &ptr = prematureFwPointers[index][i];
-        if (ptr.valid && ptr.term == inst->dqPosition.term) {
+        if (ptr.valid && top->validPosition(top->c.pointer2uint(ptr)) &&
+            top->logicallyLT(top->c.pointer2uint(inst->dqPosition), top->c.pointer2uint(ptr)) &&
+                (inst->dqPosition.term == ptr.term || inst->dqPosition.term + 1 == ptr.term) ){
+
             inst->pointers[i] = ptr;
+            DPRINTF(DQWrite || Debug::FFDisp, "Term now: %u, inst term: %u, ptr term: %u\n",
+                    top->getHeadTerm(), inst->dqPosition.term, ptr.term);
             DPRINTF(DQWrite || Debug::FFDisp, "Adapted premature pointer" ptrfmt "\n",
                     extptr(ptr));
         }
