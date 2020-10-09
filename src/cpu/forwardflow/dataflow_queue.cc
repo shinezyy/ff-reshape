@@ -1935,9 +1935,12 @@ void DataflowQueues<Impl>::pointerMeetsInst(
 {
     bool value_available = false;
 
-    value_available |= inst->opReady[op];
+    bool bypass_after_barrier = pair.isBypass && inst->dependOnBarrier;
 
-    DPRINTF(DQWake, "opready[op]: %i\n", value_available );
+    value_available |= inst->opReady[op] && !bypass_after_barrier;
+
+    DPRINTF(DQWake, "opready[op]: %i, bypass_after_barrier: %i\n",
+            value_available, bypass_after_barrier);
 
     bool load_bypass_value_avail = !pair.isBarrier &&
         (op == 0 || op == memBypassOp) &&
@@ -1949,7 +1952,7 @@ void DataflowQueues<Impl>::pointerMeetsInst(
             inst->orderFulfilled();
     DPRINTF(DQWake, "pair is barrier: %i, barrier_dep_ready: %i\n", pair.isBarrier, barrier_dep_ready);
 
-    bool store_bypass_value_avail = !pair.isBarrier &&
+    bool store_bypass_value_avail = !pair.isBarrier && !inst->dependOnBarrier &&
         inst->isNormalStore() && op == memBypassOp && inst->storeValueReady();
     value_available |= store_bypass_value_avail;
     DPRINTF(DQWake, "store_bypass_value_avail: %i\n", store_bypass_value_avail);
