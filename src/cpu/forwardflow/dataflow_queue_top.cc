@@ -770,9 +770,9 @@ bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
         auto &p = inst->dqPosition;
         DPRINTF(DQWake, "Mark itself[%llu]" ptrfmt "ready\n",
                 inst->seqNum, extptr(p));
-        inst->opReady[0] = true;
         completeMemInst(inst);
     }
+    inst->opReady[0] = true;
     return false;
 }
 
