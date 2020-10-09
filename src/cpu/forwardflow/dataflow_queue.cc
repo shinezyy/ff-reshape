@@ -1939,16 +1939,18 @@ void DataflowQueues<Impl>::pointerMeetsInst(
 
     DPRINTF(DQWake, "opready[op]: %i\n", value_available );
 
-    bool load_bypass_value_avail = (op == 0 || op == memBypassOp) &&
-                                   inst->isLoad() && inst->isNormalBypass() && inst->orderFulfilled();
+    bool load_bypass_value_avail = !pair.isBarrier &&
+        (op == 0 || op == memBypassOp) &&
+        inst->isLoad() && inst->isNormalBypass() && inst->orderFulfilled();
     value_available |= load_bypass_value_avail;
     DPRINTF(DQWake, "load_bypass_value_avail: %i\n", load_bypass_value_avail);
 
-    bool barrier_dep_ready = inst->isLoad() && inst->dependOnBarrier && op == memBypassOp &&
+    bool barrier_dep_ready = pair.isBarrier && inst->dependOnBarrier && op == memBypassOp &&
             inst->orderFulfilled();
-    DPRINTF(DQWake, "barrier_dep_ready: %i\n", barrier_dep_ready);
+    DPRINTF(DQWake, "pair is barrier: %i, barrier_dep_ready: %i\n", pair.isBarrier, barrier_dep_ready);
 
-    bool store_bypass_value_avail = inst->isNormalStore() && op == memBypassOp && inst->storeValueReady();
+    bool store_bypass_value_avail = !pair.isBarrier &&
+        inst->isNormalStore() && op == memBypassOp && inst->storeValueReady();
     value_available |= store_bypass_value_avail;
     DPRINTF(DQWake, "store_bypass_value_avail: %i\n", store_bypass_value_avail);
 //    bool store_bypass_value_will_ready = inst->isNormalStore() &&

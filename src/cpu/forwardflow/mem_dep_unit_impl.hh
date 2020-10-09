@@ -191,7 +191,8 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
 
                 pair.dest = barrier_entry->latestPosition;
                 pair.payload = position;
-                DPRINTF(NoSQSMB, "Creating a valid SMB pair:" ptrfmt "->" ptrfmt "\n",
+                pair.isBarrier = true;
+                DPRINTF(NoSQSMB, "Creating a barrier SMB pair:" ptrfmt "->" ptrfmt "\n",
                         extptr(pair.dest), extptr(pair.payload));
             } else {
                 DPRINTF(NoSQSMB, "Dont insert dep for Atomic X store\n");
