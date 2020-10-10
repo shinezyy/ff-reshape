@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <boost/dynamic_bitset.hpp>
+
 #include "base/random.hh"
 #include "base/types.hh"
 #include "cpu/forwardflow/dq_pointer.hh"
@@ -49,12 +51,15 @@ struct MemPredHistory
     bool pathBypass;
 
     bool pathSensitive;
+    bool localSensitive;
     DistancePair distPair;
 
     bool predecessorIsLoad;
 
     using FoldedPC = uint64_t ;
     FoldedPC path;
+
+    boost::dynamic_bitset<> localHistory;
 };
 
 struct SSBFCell
@@ -181,6 +186,65 @@ class MisPredTable
     void record(Addr pc, bool fn);
 };
 
+struct LocalPredCell
+{
+    DistancePair distPair;
+
+    bool recentUsed{false};
+    bool recentTouched{false};
+    bool active{false};
+    boost::dynamic_bitset<> history;
+
+    unsigned count{0};
+};
+
+class LocalPredictor: public SimObject
+{
+  public:
+    using Table = std::map<Addr, LocalPredCell>;
+
+    typedef MemDepPredictorParams Params;
+    explicit LocalPredictor(const Params *p);
+  private:
+    Table instTable;
+
+    Table::iterator pointer;
+
+    const unsigned size{16};
+
+    const unsigned predTableSize{256};
+
+    const unsigned indexMask{256-1};
+
+    const unsigned resetCount{16};
+
+    const unsigned activeThres{4};
+
+    unsigned touchCount{0};
+
+    unsigned useCount{0};
+
+    void clearUseBit();
+
+    void clearTouchBit();
+
+    std::vector<SatCounter> predTable;
+
+    unsigned extractIndex(Addr pc, const boost::dynamic_bitset<> &hist) const;
+
+    Table::iterator evictOneInst();
+
+  public:
+    void recordMispred(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist);
+
+    // valid, bypass, pair
+    std::tuple<bool, bool, DistancePair> predict(Addr pc, MemPredHistory* &history);
+
+    void update(Addr pc, bool should_bypass,
+                unsigned sn_dist, unsigned dq_dist, MemPredHistory* &history);
+
+};
+
 class MemDepPredictor: public SimObject
 {
   public:
@@ -243,6 +307,8 @@ class MemDepPredictor: public SimObject
   private:
     MemPredTable pcTable;
     MemPredTable pathTable;
+
+    LocalPredictor localPredictor;
 
   public:
     TSSBF tssbf;

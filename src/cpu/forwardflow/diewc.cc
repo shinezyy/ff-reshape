@@ -1709,6 +1709,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                 extptr(cell->predecessorPosition), extptr(inst->dqPosition),
                 violation ? "" : "for silent violation");
         if (!violation) {
+            mDepPred->dumpTopMisprediction();
             mDepPred->checkSilentViolation(
                     inst->seqNum,
                     inst->instAddr(), inst->physEffAddrLow, inst->effSize,
@@ -1722,6 +1723,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                         sn_dist, dq_dist);
                 return;
             }
+            mDepPred->dumpTopMisprediction();
             mDepPred->update(
                     inst->instAddr(), true,
                     sn_dist, dq_dist,
