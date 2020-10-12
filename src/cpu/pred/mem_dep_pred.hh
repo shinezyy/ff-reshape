@@ -196,6 +196,10 @@ struct LocalPredCell
     boost::dynamic_bitset<> history;
 
     unsigned count{0};
+
+    LocalPredCell()
+    : history(8)
+    {}
 };
 
 class LocalPredictor: public SimObject
@@ -228,7 +232,7 @@ class LocalPredictor: public SimObject
 
     void clearTouchBit();
 
-    std::vector<SatCounter> predTable;
+    std::vector<SignedSatCounter> predTable;
 
     unsigned extractIndex(Addr pc, const boost::dynamic_bitset<> &hist) const;
 
@@ -242,6 +246,10 @@ class LocalPredictor: public SimObject
 
     void update(Addr pc, bool should_bypass,
                 unsigned sn_dist, unsigned dq_dist, MemPredHistory* &history);
+
+    const std::string _name;
+
+    const std::string name() const override {return _name;}
 
 };
 

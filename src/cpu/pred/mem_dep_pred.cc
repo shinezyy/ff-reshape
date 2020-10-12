@@ -60,7 +60,10 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
     auto pc_index = load_pc;
     auto path_index = genPathKey(load_pc, path);
 
-    auto [found, bypass, pair] = localPredictor.predict(load_pc, mp_history);
+    bool found;
+    bool bypass;
+    DistancePair pair;
+    std::tie(found, bypass, pair) = localPredictor.predict(load_pc, mp_history);
 
     MemPredCell *cell;
     std::tie(found, cell) = find(pathTable, path_index, true);
@@ -115,8 +118,8 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
         mp_history->pcBypass = false;
     }
 
-    DPRINTF(NoSQPred, "For load @ 0x%x, "
-            "overall: bypass: %i, pc: %i, path: 0x%lx, path sensitive: %i, store dist: %i, dq dist: %i\n",
+    DPRINTF(NoSQPred, "For load @ 0x%lx, "
+            "overall: bypass: %i, pc: %i, path: 0x%i, path sensitive: %i, store dist: %u, dq dist: %u\n",
             load_pc,
             mp_history->bypass, mp_history->pcBypass, mp_history->pathBypass,
             mp_history->pathSensitive, mp_history->distPair.snDistance,
@@ -132,6 +135,9 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
                         unsigned dq_dist, MemPredHistory *&hist)
 {
     bool pred_bypass = hist->bypass;
+    if (hist->localSensitive) {
+        localPredictor.update(load_pc, should_bypass, sn_dist, dq_dist, hist);
+    }
     if (!pred_bypass && !should_bypass) {
         // NOTE: check
         DPRINTF(NoSQPred, "For load @ 0x%x, correctly predicted non-bypassing\n",
@@ -150,7 +156,9 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
                 hist->path);
         decrement(pathTable, path_index, true, true);
 
-        localPredictor.recordMispred(load_pc, false, should_bypass, sn_dist);
+        if (!hist->localSensitive) {
+            localPredictor.recordMispred(load_pc, should_bypass, sn_dist, dq_dist);
+        }
 
     } else {
         if (pred_bypass != should_bypass) {
@@ -169,7 +177,10 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
         DPRINTF(NoSQPred, "Inc conf in path table @ index: %u with sn dist: %i, dq dist: %i, path: 0x%lx\n",
                 key, sn_dist, dq_dist, hist->path);
         increment(pathTable, key, {sn_dist, dq_dist}, false);
-        localPredictor.recordMispred(load_pc, false, should_bypass, sn_dist);
+
+        if (!hist->localSensitive) {
+            localPredictor.recordMispred(load_pc, should_bypass, sn_dist, dq_dist);
+        }
     }
     delete hist;
     hist = nullptr;
@@ -700,22 +711,38 @@ std::tuple<bool, bool, DistancePair>
 LocalPredictor::predict(Addr pc, MemPredHistory *&history)
 {
     auto pair = instTable.find(pc);
-    auto &cell = pair->second;
-    if (pair == instTable.end() || !cell.active) {
+    if (pair == instTable.end() || !pair->second.active) {
+        assert(history);
         history->localSensitive = false;
         return std::make_tuple(false, false, history->distPair);
     }
+    useCount++;
+    if (useCount >= resetCount) {
+        useCount = 0;
+        for (auto &pair: instTable) {
+            pair.second.recentUsed = false;
+        }
+    }
+    auto &cell = pair->second;
 
     unsigned index = extractIndex(pc, cell.history);
-    bool bypass = predTable[index].read() > 0;
+    bool bypass = predTable.at(index).read() > 0;
+    history->bypass = bypass;
     history->localHistory = cell.history;
     history->distPair = cell.distPair;
     history->localSensitive = true;
     cell.recentUsed = true;
 
+    if (Debug::NoSQPred) {
+        std::cout << "Local history: " << history->localHistory << "\n";
+    }
+
     cell.history <<= 1;
     cell.history[0] = bypass;
-
+    DPRINTF(NoSQPred, "Predicted by pattern predictor, bypass: %i from with sn dist: %u, "
+            "dq dist: %u\n",
+            bypass,
+            cell.distPair.snDistance, cell.distPair.dqDistance);
     return std::make_tuple(true, bypass, cell.distPair);
 }
 
@@ -727,18 +754,28 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
         recordMispred(pc, should_bypass, sn_dist, dq_dist);
         return;
     }
+    DPRINTF(NoSQPred, "Updating pattern history entry\n");
     auto &cell = pair->second;
     // recovery history:
     cell.history = history->localHistory << 1;
     // update history:
     cell.history[0] = should_bypass;
+    if (Debug::NoSQPred) {
+        std::cout << "Recover history to " << cell.history << "\n";
+    }
+    cell.distPair.snDistance = sn_dist;
+    cell.distPair.dqDistance = dq_dist;
 
     auto index = extractIndex(pc, history->localHistory);
-    SatCounter &counter = predTable.at(index);
+    SignedSatCounter &counter = predTable.at(index);
     if (should_bypass) {
         counter.increment();
     } else {
         counter.decrement();
+    }
+    if (Debug::NoSQPred) {
+        std::cout << "Counter under history " << history->localHistory << ":"
+            << counter.read() << "\n";
     }
 }
 
@@ -752,14 +789,35 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
         }
     }
     auto &cell = instTable[pc];
-    cell.recentTouched = true;
     cell.distPair.snDistance = sn_dist;
     cell.distPair.dqDistance = dq_dist;
     cell.count++;
 
+    touchCount++;
+    if (touchCount >= resetCount) {
+        touchCount = 0;
+        for (auto &pair: instTable) {
+            pair.second.recentTouched = false;
+        }
+    }
+    cell.recentTouched = true;
+
     if (cell.count > activeThres) {
         cell.active = true;
     }
+
+    if (cell.active) {
+        auto index = extractIndex(pc, cell.history);
+        SignedSatCounter &counter = predTable.at(index);
+        if (should_bypass) {
+            counter.increment();
+        } else {
+            counter.decrement();
+        }
+    }
+
+    cell.history = cell.history << 1;
+    cell.history[0] = should_bypass;
 }
 
 unsigned LocalPredictor::extractIndex(Addr pc, const boost::dynamic_bitset<> &hist) const
@@ -816,7 +874,9 @@ void LocalPredictor::clearTouchBit()
 }
 
 LocalPredictor::LocalPredictor(const LocalPredictor::Params *p)
-: SimObject(p)
+: SimObject(p),
+    predTable(predTableSize, SignedSatCounter(3, 0)),
+    _name("MemPatternPredictor")
 {
-
+    pointer = instTable.end();
 }
