@@ -81,12 +81,14 @@ template<class Impl>
 void
 DataflowQueueBank<Impl>::erase(BasePointer p, bool markSquashed)
 {
-    if (markSquashed && instArray[p.index]) {
-        DPRINTF(FFSquash, "Squash and erase inst[%lu] @" ptrfmt "\n",
-                instArray[p.index]->seqNum, extptr(p));
-        instArray[p.index]->setSquashed();
+    if (instArray[p.index]) {
+        auto &inst = instArray[p.index];
+        if (markSquashed) {
+            DPRINTF(FFSquash, "Squash and erase inst[%lu] @" ptrfmt "\n",
+                    instArray[p.index]->seqNum, extptr(p));
+            inst->setSquashed();
+        }
     }
-
     for (unsigned op = 0; op < nOps; op++) {
         prematureFwPointers[p.index][op].valid = false;
     }

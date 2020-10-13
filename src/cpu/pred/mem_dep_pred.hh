@@ -60,6 +60,8 @@ struct MemPredHistory
     FoldedPC path;
 
     boost::dynamic_bitset<> localHistory;
+    InstSeqNum inst;
+    bool willSquash;
 };
 
 struct SSBFCell
@@ -194,11 +196,13 @@ struct LocalPredCell
     bool recentTouched{false};
     bool active{false};
     boost::dynamic_bitset<> history;
+    InstSeqNum lastUpdate;
 
     unsigned count{0};
+    int numSpeculativeBits{0};
 
     LocalPredCell()
-    : history(8)
+    : history(12)
     {}
 };
 
@@ -241,6 +245,9 @@ class LocalPredictor: public SimObject
   public:
     void recordMispred(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist);
 
+    void recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+                       MemPredHistory *&history);
+
     // valid, bypass, pair
     std::tuple<bool, bool, DistancePair> predict(Addr pc, MemPredHistory* &history);
 
@@ -250,6 +257,8 @@ class LocalPredictor: public SimObject
     const std::string _name;
 
     const std::string name() const override {return _name;}
+
+    void recordSquash(Addr pc, MemPredHistory *&history);
 
 };
 
@@ -339,6 +348,9 @@ class MemDepPredictor: public SimObject
             unsigned sn_dist, unsigned dq_dist,
             MemPredHistory *&hist);
 
+    void recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+                       MemPredHistory *&history);
+
     void update(Addr load_pc, bool should_bypass,
                 unsigned sn_dist, unsigned dq_dist,
                 MemPredHistory *&hist);
@@ -383,6 +395,8 @@ class MemDepPredictor: public SimObject
 
   public:
     void dumpTopMisprediction() const;
+
+    void squashLoad(Addr pc, MemPredHistory *&hist);
 };
 
 #endif // __MEM_DEP_PRED_HH__

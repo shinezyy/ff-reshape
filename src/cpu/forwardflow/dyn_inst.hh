@@ -518,7 +518,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     bool shouldForward{};
     unsigned shouldForwFrom{};
 
-    MemPredHistory *memPredHistory;
+    MemPredHistory *memPredHistory{};
 
     bool loadVerified{false};
     bool loadVerifying{false};

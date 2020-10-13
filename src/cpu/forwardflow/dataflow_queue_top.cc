@@ -1180,6 +1180,13 @@ void DQTop<Impl>::checkSanity() const
     }
 }
 
+template<class Impl>
+void DQTop<Impl>::squashLoad(DQTop::DynInstPtr &inst)
+{
+
+    diewc->squashLoad(inst);
+}
+
 
 }
 

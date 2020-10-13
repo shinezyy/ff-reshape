@@ -571,6 +571,8 @@ public:
     bool checkViolation(DynInstPtr &inst);
 
     void setupPointerLink(DynInstPtr &inst, bool jumped, const PointerPair &pair);
+  public:
+    void squashLoad(DynInstPtr &inst);
 };
 
 

@@ -1429,6 +1429,10 @@ FFCPU<Impl>::squashInstIt(const ListIt &instIt, ThreadID tid)
                 (*instIt)->seqNum,
                 (*instIt)->pcState());
 
+        if ((*instIt)->isLoad()) {
+            dq->squashLoad(*instIt);
+        }
+
         // Mark it as squashed.
         (*instIt)->setSquashed();
 

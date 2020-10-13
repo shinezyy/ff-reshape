@@ -336,6 +336,8 @@ public:
     unsigned numInFlightWk() const;
 
     void checkSanity() const;
+
+    void squashLoad(DynInstPtr &inst);
 };
 
 

@@ -194,7 +194,20 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
 
         // action:
         if (skip_verify) {
-            DPRINTF(NoSQSMB, "Skip verifying load [%lu]\n", tail->seqNum);
+            DPRINTF(NoSQSMB || Debug::NoSQPred, "Skip verifying load [%lu]\n", tail->seqNum);
+            DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass",
+                    tail->seqNum, tail->instAddr(), tail->physEffAddrLow,
+                    tail->memPredHistory->bypass ? "": " not");
+            if (Debug::NoSQPred) {
+                std::cout << " with history: "
+                          << tail->memPredHistory->localHistory << "\n";
+            }
+
+            if (tail->memPredHistory->localSensitive) {
+                mDepPred->recordCorrect(tail->instAddr(), tail->memPredHistory->bypass,
+                                        tail->memPredHistory->distPair.snDistance,
+                                        tail->memPredHistory->distPair.dqDistance, tail->memPredHistory);;
+            }
             tail->loadVerified = true;
             verifiedTailLoad = tail->seqNum;
             tail->setCanCommit();
@@ -231,6 +244,14 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
                                   " even after it becomes DQ tail\n", tail->seqNum);
                 FPBypass++;
                 FPCanceledBypass++;
+
+                DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should not bypass",
+                        tail->seqNum, tail->instAddr(), tail->physEffAddrLow);
+                if (Debug::NoSQPred) {
+                    std::cout << " with history: "
+                              << tail->memPredHistory->localHistory << "\n";
+                }
+
                 mDepPred->update(tail->instAddr(), false,
                                  0, // dont care
                                  0, // dont care
@@ -1681,6 +1702,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
 
 
     if (violation) {
+        inst->memPredHistory->willSquash = true;
         fetchRedirect = true;
         ++memOrderViolationEvents;
         squashDueToMemMissPred(inst);
@@ -1693,6 +1715,12 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
     if (violation && inst->isNormalBypass() && inst->memPredHistory) {
         // false positive
         DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu]\n", inst->seqNum);
+        DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should not bypass",
+                inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
+        if (Debug::NoSQPred) {
+            std::cout << " with history: "
+                      << inst->memPredHistory->localHistory << "\n";
+        }
         mDepPred->update(inst->instAddr(), false,
                          0, // dont care
                          0, // dont care
@@ -1710,6 +1738,12 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                 violation ? "" : "for silent violation");
         if (!violation) {
             mDepPred->dumpTopMisprediction();
+            DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass",
+                    inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
+            if (Debug::NoSQPred) {
+                std::cout << " with history: "
+                          << inst->memPredHistory->localHistory << "\n";
+            }
             mDepPred->checkSilentViolation(
                     inst->seqNum,
                     inst->instAddr(), inst->physEffAddrLow, inst->effSize,
@@ -1722,6 +1756,12 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                                   "sn_dist: %u, dq dist: %u\n",
                         sn_dist, dq_dist);
                 return;
+            }
+            DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass",
+                    inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
+            if (Debug::NoSQPred) {
+                std::cout << " with history: "
+                          << inst->memPredHistory->localHistory << "\n";
             }
             mDepPred->dumpTopMisprediction();
             mDepPred->update(
@@ -2765,6 +2805,13 @@ void FFDIEWC<Impl>::readInstsToCommit()
             DPRINTF(Commit, "read inst[%d] from last cycle\n", inst->seqNum);
         }
     }
+}
+
+template<class Impl>
+void FFDIEWC<Impl>::squashLoad(FFDIEWC::DynInstPtr &inst)
+{
+    DPRINTF(NoSQPred, "Squashing load: %lu\n", inst->seqNum);
+    mDepPred->squashLoad(inst->instAddr(), inst->memPredHistory);
 }
 
 
