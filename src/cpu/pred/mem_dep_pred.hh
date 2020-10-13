@@ -62,6 +62,8 @@ struct MemPredHistory
     boost::dynamic_bitset<> localHistory;
     InstSeqNum inst;
     bool willSquash;
+
+    int32_t predictionValue;
 };
 
 struct SSBFCell
@@ -190,6 +192,8 @@ class MisPredTable
 
 struct LocalPredCell
 {
+    const unsigned historyLen;
+
     DistancePair distPair;
 
     bool recentUsed{false};
@@ -201,9 +205,22 @@ struct LocalPredCell
     unsigned count{0};
     int numSpeculativeBits{0};
 
+    std::vector<SignedSatCounter> weights;
+
+    int32_t theta;
+
     LocalPredCell()
-    : history(12)
+            : historyLen(12),
+              history(historyLen),
+              weights(historyLen + 1, SignedSatCounter(5, 0)),
+              theta(static_cast<int32_t>(1.93 * historyLen + 14.0))
     {}
+
+    static int b2s(bool bypass);
+
+    void fit(MemPredHistory *history, bool should_bypass);
+
+    int32_t predict();
 };
 
 class LocalPredictor: public SimObject
@@ -214,6 +231,10 @@ class LocalPredictor: public SimObject
     typedef MemDepPredictorParams Params;
     explicit LocalPredictor(const Params *p);
   private:
+    const unsigned historyLen{12};
+
+    const bool perceptron{false};
+
     Table instTable;
 
     Table::iterator pointer;
@@ -243,7 +264,7 @@ class LocalPredictor: public SimObject
     Table::iterator evictOneInst();
 
   public:
-    void recordMispred(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist);
+    void recordMispred(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist, MemPredHistory *hist);
 
     void recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
                        MemPredHistory *&history);

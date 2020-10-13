@@ -161,7 +161,7 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
         decrement(pathTable, path_index, true, true);
 
         if (!hist->localSensitive) {
-            localPredictor.recordMispred(load_pc, should_bypass, sn_dist, dq_dist);
+            localPredictor.recordMispred(load_pc, should_bypass, sn_dist, dq_dist, hist);
         }
 
     } else {
@@ -183,7 +183,7 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
         increment(pathTable, key, {sn_dist, dq_dist}, false);
 
         if (!hist->localSensitive) {
-            localPredictor.recordMispred(load_pc, should_bypass, sn_dist, dq_dist);
+            localPredictor.recordMispred(load_pc, should_bypass, sn_dist, dq_dist, hist);
         }
     }
     delete hist;
@@ -741,6 +741,9 @@ LocalPredictor::predict(Addr pc, MemPredHistory *&history)
     if (pair == instTable.end() || !pair->second.active) {
         assert(history);
         history->localSensitive = false;
+        if (pair != instTable.end()) {
+            history->localHistory = pair->second.history;
+        }
         return std::make_tuple(false, false, history->distPair);
     }
     useCount++;
@@ -752,9 +755,19 @@ LocalPredictor::predict(Addr pc, MemPredHistory *&history)
     }
     auto &cell = pair->second;
 
-    unsigned index = extractIndex(pc, cell.history);
-    bool bypass = predTable.at(index).read() > 0;
-    history->bypass = bypass;
+
+    // prediction with perceptron:
+    if (perceptron) {
+        int32_t val = cell.predict();
+
+        history->bypass = val > 0;
+        history->predictionValue = val;
+    } else {
+        // prediction with table:
+         unsigned index = extractIndex(pc, cell.history);
+         history->bypass = predTable.at(index).read() > 0;
+    }
+
     history->localHistory = cell.history;
     history->distPair = cell.distPair;
     if (!history->distPair.dqDistance) {
@@ -769,7 +782,7 @@ LocalPredictor::predict(Addr pc, MemPredHistory *&history)
     }
 
     cell.history <<= 1;
-    cell.history[0] = bypass;
+    cell.history[0] = history->bypass;
     cell.numSpeculativeBits += 1;
     if (Debug::NoSQPred) {
         std::cout << "History after pred: " << cell.history
@@ -779,9 +792,9 @@ LocalPredictor::predict(Addr pc, MemPredHistory *&history)
 
     DPRINTF(NoSQPred, "Predicted by pattern predictor, bypass: %i from with sn dist: %u, "
             "dq dist: %u\n",
-            bypass,
+            history->bypass,
             cell.distPair.snDistance, cell.distPair.dqDistance);
-    return std::make_tuple(true, bypass, cell.distPair);
+    return std::make_tuple(true, history->bypass, cell.distPair);
 }
 
 void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
@@ -789,7 +802,7 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
 {
     auto pair = instTable.find(pc);
     if (pair == instTable.end() || !history->localSensitive) { // evicted
-        recordMispred(pc, should_bypass, sn_dist, dq_dist);
+        recordMispred(pc, should_bypass, sn_dist, dq_dist, history);
         return;
     }
     DPRINTF(NoSQPred, "Updating pattern history entry\n");
@@ -801,7 +814,7 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
                       << ", should bypass: " << should_bypass
                       << "\n";
         }
-        boost::dynamic_bitset<> used_hist(12);
+        boost::dynamic_bitset<> used_hist(historyLen);
         unsigned index;
         if (!history->willSquash) {
             assert(cell.numSpeculativeBits > 0);
@@ -838,6 +851,9 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
             } else {
                 counter.decrement();
             }
+            if (perceptron && !history->localHistory.empty()) {
+                cell.fit(history, should_bypass);
+            }
         }
         if (Debug::NoSQPred) {
             std::cout << "Counter under history " << used_hist << ":"
@@ -856,7 +872,8 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
     }
 }
 
-void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist)
+void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+                                   MemPredHistory *hist)
 {
     auto pair = instTable.find(pc);
     if (pair == instTable.end()) {
@@ -865,6 +882,7 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
             instTable.erase(it);
         }
     }
+    DPRINTF(NoSQPred, "%s reach 1\n", __func__);
     auto &cell = instTable[pc];
     if (should_bypass && dq_dist) {
         cell.distPair.snDistance = sn_dist;
@@ -872,6 +890,7 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
     }
     cell.count++;
 
+    DPRINTF(NoSQPred, "%s reach 2\n", __func__);
     touchCount++;
     if (touchCount >= resetCount) {
         touchCount = 0;
@@ -881,10 +900,10 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
     }
     cell.recentTouched = true;
 
+    DPRINTF(NoSQPred, "%s reach 3\n", __func__);
     if (cell.count > activeThres) {
         cell.active = true;
     }
-
     if (cell.active) {
         auto index = extractIndex(pc, cell.history);
         SignedSatCounter &counter = predTable.at(index);
@@ -893,10 +912,15 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
         } else {
             counter.decrement();
         }
+        if (perceptron && !hist->localHistory.empty()) {
+            cell.fit(hist, should_bypass);
+        }
     }
+    DPRINTF(NoSQPred, "%s reach 4\n", __func__);
 
     cell.history = cell.history << 1;
     cell.history[0] = should_bypass;
+    DPRINTF(NoSQPred, "%s reach 5\n", __func__);
 }
 
 unsigned LocalPredictor::extractIndex(Addr pc, const boost::dynamic_bitset<> &hist) const
@@ -956,7 +980,7 @@ void LocalPredictor::clearTouchBit()
 
 LocalPredictor::LocalPredictor(const LocalPredictor::Params *p)
 : SimObject(p),
-    predTable(predTableSize, SignedSatCounter(3, 0)),
+    predTable(predTableSize, SignedSatCounter(2, 0)),
     _name("MemPatternPredictor")
 {
     pointer = instTable.end();
@@ -1017,4 +1041,42 @@ void LocalPredictor::recordSquash(Addr pc, MemPredHistory *&history)
                   << ", num spec: " << cell.numSpeculativeBits
                   << "\n";
     }
+}
+
+int LocalPredCell::b2s(bool bypass)
+{
+    // 1 -> 1; 0 -> -1
+    return ((int) bypass << 1) - 1;
+}
+
+void LocalPredCell::fit(MemPredHistory *hist, bool should_bypass)
+{
+    if (should_bypass == hist->bypass &&
+            abs(hist->predictionValue) > theta) {
+        return;
+    }
+    if (should_bypass) {
+        weights.back().increment();
+    } else {
+        weights.back().decrement();
+    }
+
+    const auto &hist_bits = hist->localHistory;
+
+    if (Debug::NoSQPred) {
+        std::cout << "Local history: " << hist->localHistory
+                  << "\n";
+    }
+    for (int i = 0; i < historyLen; i++) {
+        weights[i].add(b2s(should_bypass) * b2s(hist_bits[i]));
+    }
+}
+
+int32_t LocalPredCell::predict()
+{
+    int32_t sum = weights.back().read(); // bias
+    for (int i = 0; i < historyLen; i++) {
+        sum += b2s(history[i]) * weights[i].read();
+    }
+    return sum;
 }
