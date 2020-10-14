@@ -1773,6 +1773,12 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
     } else if (violation && !cell) {
         DPRINTF(NoSQPred, "Producing TSSBF entry has been evicted,"
                           " we have to give up recording\n");
+    } else if (!violation && inst->isNormalBypass()) {
+        DPRINTF(NoSQPred, "Correctly predicted bypassing\n");
+        MemPredHistory *&hist = inst->memPredHistory;
+        mDepPred->recordCorrect(
+                inst->instAddr(), hist->bypass,
+                hist->distPair.snDistance, hist->distPair.dqDistance, hist);
     }
 }
 
