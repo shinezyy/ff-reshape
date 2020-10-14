@@ -57,6 +57,7 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
     auto mp_history = new MemPredHistory;
     hist = mp_history;
     mp_history->willSquash = false;
+    mp_history->updatedHistory = false;
 
     auto pc_index = load_pc;
     auto path_index = genPathKey(load_pc, path);
@@ -519,7 +520,7 @@ MemDepPredictor::recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist
 
 void MemDepPredictor::squashLoad(Addr pc, MemPredHistory *&hist)
 {
-    if (!hist) {
+    if (!hist || hist->updatedHistory) {
         return;
     }
     if (hist->localSensitive) {
@@ -809,6 +810,7 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
     }
     DPRINTF(NoSQPred, "Updating pattern history entry\n");
     auto &cell = pair->second;
+    history->updatedHistory = true;
     if (history->bypass != should_bypass) {
         if (Debug::NoSQPred) {
             std::cout << "History now: " << cell.history
@@ -925,6 +927,7 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
         }
     }
     DPRINTF(NoSQPred, "%s reach 4\n", __func__);
+    hist->updatedHistory = true;
 
     cell.history = cell.history << 1;
     cell.history[0] = should_bypass;
@@ -1006,6 +1009,7 @@ LocalPredictor::recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist,
     if (!cell.active) {
         return;
     }
+    history->updatedHistory = true;
     if (Debug::NoSQPred) {
         std::cout << "History now: " << cell.history
                   << ", num spec: " << cell.numSpeculativeBits

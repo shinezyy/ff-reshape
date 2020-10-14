@@ -54,8 +54,6 @@ struct MemPredHistory
     bool localSensitive;
     DistancePair distPair;
 
-    bool predecessorIsLoad;
-
     using FoldedPC = uint64_t ;
     FoldedPC path;
 
@@ -64,6 +62,8 @@ struct MemPredHistory
     bool willSquash;
 
     int32_t predictionValue;
+
+    bool updatedHistory;
 };
 
 struct SSBFCell
