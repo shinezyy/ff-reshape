@@ -820,11 +820,11 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
         unsigned index;
         if (!history->willSquash) {
             if (cell.numSpeculativeBits > 0) {
-                assert(cell.history[cell.numSpeculativeBits - 1] != should_bypass);
-                cell.history[cell.numSpeculativeBits - 1] = should_bypass;
+                if (cell.numSpeculativeBits <= historyLen) {
+                    cell.history[cell.numSpeculativeBits - 1] = should_bypass;
+                    assert(cell.numSpeculativeBits >= 0);
+                }
                 cell.numSpeculativeBits--;
-                assert(cell.numSpeculativeBits >= 0);
-
                 DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history->inst, pc);
             }
 
@@ -832,7 +832,9 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
             index = extractIndex(pc, used_hist);
         } else {
             if (cell.numSpeculativeBits > 0) {
-                cell.history >>= 1;
+                if (cell.numSpeculativeBits <= historyLen) {
+                    cell.history >>= 1;
+                }
                 cell.numSpeculativeBits--;
                 DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history->inst, pc);
             }

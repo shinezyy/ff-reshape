@@ -1728,47 +1728,52 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
         );
         mDepPred->dumpTopMisprediction();
 
-    } else if (inst->wbCount == 2 && cell && !inst->isNormalBypass() && inst->memPredHistory) {
+    } else if (inst->wbCount == 2 && !inst->isNormalBypass() && inst->memPredHistory) {
 
-        auto sn_dist = inst->seqNum - cell->lastStore;
-        auto dq_dist = dq.c.computeDist(inst->dqPosition, cell->predecessorPosition);
+        if (cell) {
+            auto sn_dist = inst->seqNum - cell->lastStore;
+            auto dq_dist = dq.c.computeDist(inst->dqPosition, cell->predecessorPosition);
 
-        DPRINTF(NoSQPred, "Checking mem dep:" ptrfmt "->" ptrfmt " %s\n",
-                extptr(cell->predecessorPosition), extptr(inst->dqPosition),
-                violation ? "" : "for silent violation");
-        if (!violation) {
-            mDepPred->dumpTopMisprediction();
-            DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass",
-                    inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
-            if (Debug::NoSQPred) {
-                std::cout << " with history: "
-                          << inst->memPredHistory->localHistory << "\n";
+            DPRINTF(NoSQPred, "Checking mem dep:" ptrfmt "->" ptrfmt " %s\n",
+                    extptr(cell->predecessorPosition), extptr(inst->dqPosition),
+                    violation ? "" : "for silent violation");
+            if (!violation) {
+                mDepPred->dumpTopMisprediction();
+                DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass",
+                        inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
+                if (Debug::NoSQPred) {
+                    std::cout << " with history: "
+                              << inst->memPredHistory->localHistory << "\n";
+                }
+                mDepPred->checkSilentViolation(
+                        inst->seqNum,
+                        inst->instAddr(), inst->physEffAddrLow, inst->effSize,
+                        cell,
+                        sn_dist, dq_dist,
+                        inst->memPredHistory);
+            } else {
+                if (sn_dist != dq_dist * 100) {
+                    DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
+                                      "sn_dist: %u, dq dist: %u\n",
+                            sn_dist, dq_dist);
+                    return;
+                }
+                DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass",
+                        inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
+                if (Debug::NoSQPred) {
+                    std::cout << " with history: "
+                              << inst->memPredHistory->localHistory << "\n";
+                }
+                mDepPred->dumpTopMisprediction();
+                mDepPred->update(
+                        inst->instAddr(), true,
+                        sn_dist, dq_dist,
+                        inst->memPredHistory);
             }
-            mDepPred->checkSilentViolation(
-                    inst->seqNum,
-                    inst->instAddr(), inst->physEffAddrLow, inst->effSize,
-                    cell,
-                    sn_dist, dq_dist,
-                    inst->memPredHistory);
         } else {
-            if (sn_dist != dq_dist * 100) {
-                DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
-                                  "sn_dist: %u, dq dist: %u\n",
-                        sn_dist, dq_dist);
-                return;
-            }
-            DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass",
-                    inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
-            if (Debug::NoSQPred) {
-                std::cout << " with history: "
-                          << inst->memPredHistory->localHistory << "\n";
-            }
-            mDepPred->dumpTopMisprediction();
-            mDepPred->update(
-                    inst->instAddr(), true,
-                    sn_dist, dq_dist,
-                    inst->memPredHistory);
+            mDepPred->recordCorrect(inst->instAddr(), false, 0, 0, inst->memPredHistory);
         }
+
 
     } else if (violation && !cell) {
         DPRINTF(NoSQPred, "Producing TSSBF entry has been evicted,"

@@ -315,6 +315,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
             }
             if (inst->isLoad() && inst->isNormalBypass()) {
                 DPRINTF(DQWake, "Bypassing for inst [%llu] is canceled\n", inst->seqNum);
+                inst->bypassCanceled = true;
                 inst->bypassOp = 0;
             }
 
