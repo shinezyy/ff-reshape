@@ -49,6 +49,7 @@ struct MemPredHistory
     bool bypass;
     bool pcBypass;
     bool pathBypass;
+    bool patternBypass;
 
     bool pathSensitive;
     bool localSensitive;
@@ -239,7 +240,7 @@ class LocalPredictor: public SimObject
 
     Table::iterator pointer;
 
-    const unsigned size{16};
+    const unsigned size{32};
 
     const unsigned predTableSize{256};
 
@@ -247,7 +248,7 @@ class LocalPredictor: public SimObject
 
     const unsigned resetCount{16};
 
-    const unsigned activeThres{4};
+    const unsigned activeThres{16};
 
     unsigned touchCount{0};
 
@@ -280,6 +281,55 @@ class LocalPredictor: public SimObject
     const std::string name() const override {return _name;}
 
     void recordSquash(Addr pc, MemPredHistory *&history);
+
+};
+
+struct MetaCell
+{
+    float pcMissRate{0.5};
+    float pathMissRate{0.5};
+    float patternMissRate{0.5};
+};
+
+class MetaPredictor: public SimObject
+{
+  public:
+    typedef MemDepPredictorParams Params;
+
+    explicit MetaPredictor (const Params *p)
+            : SimObject(p),
+              table(size),
+              squashFactor(p->SquashFactor),
+              _name("MetaPredictor")
+
+    {}
+
+    const unsigned pcShamt{2};
+
+    const unsigned size{16};
+
+    const unsigned indexMask{size - 1};
+
+    std::vector<MetaCell> table;
+
+    void record(Addr load_pc, bool should, bool pc, bool path, bool pattern, bool pattern_sensitive,
+                bool will_squash);
+
+    enum WhichPredictor{
+        UsePC = 0,
+        UsePath,
+        UsePattern
+    };
+
+    const unsigned squashFactor;
+
+    WhichPredictor choose(Addr load_pc);
+
+    std::map<Addr, bool> blackList;
+
+    const std::string _name;
+
+    const std::string name() const override {return _name;}
 
 };
 
@@ -347,6 +397,8 @@ class MemDepPredictor: public SimObject
     MemPredTable pathTable;
 
     LocalPredictor localPredictor;
+
+    MetaPredictor meta;
 
   public:
     TSSBF tssbf;

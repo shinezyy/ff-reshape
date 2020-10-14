@@ -40,6 +40,7 @@ MemDepPredictor::MemDepPredictor(const Params *params)
     pcTable(PCTableDepth),
     pathTable(PathTableDepth),
     localPredictor(params),
+    meta(params),
     tssbf(params),
     sssbf(params)
 {
@@ -62,6 +63,8 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
     auto pc_index = load_pc;
     auto path_index = genPathKey(load_pc, path);
 
+    MetaPredictor::WhichPredictor which = meta.choose(load_pc);
+
     bool found;
     bool bypass;
     DistancePair pair;
@@ -71,7 +74,7 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
     std::tie(found, cell) = find(pathTable, path_index, true);
 
     if (found) { // in path table
-        if (!mp_history->localSensitive) {
+        if (!mp_history->localSensitive || which == MetaPredictor::UsePath) {
             mp_history->bypass = cell->conf.read() > 0;
             mp_history->distPair = cell->distPair;
         }
@@ -88,7 +91,7 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
                 cell->distPair.snDistance);
 
     } else {
-        if (!mp_history->localSensitive) {
+        if (!mp_history->localSensitive || which == MetaPredictor::UsePath) {
             mp_history->bypass = false;
         }
         mp_history->pathSensitive = true;
@@ -101,7 +104,8 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
     std::tie(found, cell) = find(pcTable, pc_index, false);
 
     if (found) {
-        if (!mp_history->localSensitive && !mp_history->pathSensitive) {
+        if ((!mp_history->localSensitive && !mp_history->pathSensitive) ||
+                which == MetaPredictor::UsePC) {
             mp_history->bypass = cell->conf.read() > 0;
             mp_history->distPair = cell->distPair;
         }
@@ -114,7 +118,8 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
                 mp_history->pcBypass, cell->conf.read(),
                 cell->distPair.snDistance);
     } else {
-        if (!mp_history->localSensitive && !mp_history->pathSensitive) {
+        if ((!mp_history->localSensitive && !mp_history->pathSensitive) ||
+            which == MetaPredictor::UsePC) {
             mp_history->bypass = false;
         }
         mp_history->pcBypass = false;
@@ -142,6 +147,8 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
     bool pred_bypass = hist->bypass;
     if (hist->localSensitive) {
         localPredictor.update(load_pc, should_bypass, sn_dist, dq_dist, hist);
+        meta.record(load_pc, should_bypass, hist->pcBypass, hist->pathBypass, hist->patternBypass,
+                    hist->localSensitive, hist->willSquash);
     }
     if (!pred_bypass && !should_bypass) {
         // NOTE: check
@@ -163,6 +170,8 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
 
         if (!hist->localSensitive) {
             localPredictor.recordMispred(load_pc, should_bypass, sn_dist, dq_dist, hist);
+            meta.record(load_pc, should_bypass, hist->pcBypass, hist->pathBypass, hist->patternBypass,
+                        hist->localSensitive, hist->willSquash);
         }
 
     } else {
@@ -185,6 +194,8 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
 
         if (!hist->localSensitive) {
             localPredictor.recordMispred(load_pc, should_bypass, sn_dist, dq_dist, hist);
+            meta.record(load_pc, should_bypass, hist->pcBypass, hist->pathBypass, hist->patternBypass,
+                        hist->localSensitive, hist->willSquash);
         }
     }
     delete hist;
@@ -516,6 +527,8 @@ MemDepPredictor::recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist
                                MemPredHistory *&history)
 {
     localPredictor.recordCorrect(pc, should_bypass, sn_dist, dq_dist, history);
+    meta.record(pc, should_bypass, history->pcBypass, history->pathBypass, history->patternBypass,
+                history->localSensitive, false);
 }
 
 void MemDepPredictor::squashLoad(Addr pc, MemPredHistory *&hist)
@@ -774,6 +787,7 @@ LocalPredictor::predict(Addr pc, MemPredHistory *&history)
     if (!history->distPair.dqDistance) {
         history->bypass = false;
     }
+    history->patternBypass = history->bypass;
     history->localSensitive = true;
     cell.recentUsed = true;
 
@@ -811,7 +825,7 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
     DPRINTF(NoSQPred, "Updating pattern history entry\n");
     auto &cell = pair->second;
     history->updatedHistory = true;
-    if (history->bypass != should_bypass) {
+    if (history->patternBypass != should_bypass) {
         if (Debug::NoSQPred) {
             std::cout << "History now: " << cell.history
                       << ", num spec: " << cell.numSpeculativeBits
@@ -1094,4 +1108,47 @@ int32_t LocalPredCell::predict()
         sum += b2s(history[i]) * weights[i].read();
     }
     return sum;
+}
+
+void MetaPredictor::record(Addr load_pc, bool should, bool pc, bool path, bool pattern, bool pattern_sensitive,
+                           bool will_squash)
+{
+    unsigned index = (load_pc >> pcShamt) & indexMask;
+    auto &cell = table[index];
+    float factor = 0.02;
+    if (will_squash) {
+        factor *= 3;
+    }
+    float decay = 1.0 - factor;
+    cell.pcMissRate = (should != pc) * factor + cell.pcMissRate * decay;
+    cell.pathMissRate = (should != path) * factor + cell.pathMissRate * decay;
+    if (pattern_sensitive) {
+        cell.patternMissRate = (should != pattern) * factor + cell.patternMissRate * decay;
+    }
+
+//    if (cell.patternMissRate > 0.75 &&
+//        cell.patternMissRate - cell.pcMissRate > 0.05 &&
+//        cell.patternMissRate - cell.pathMissRate > 0.05) {
+//        DPRINTF(NoSQPred, "Blacklist pc 0x%lx with pc: %f, path: %f, pattern: %f\n",
+//                load_pc,
+//                cell.pcMissRate, cell.pathMissRate, cell.patternMissRate);
+//    }
+}
+
+MetaPredictor::WhichPredictor
+MetaPredictor::choose(Addr load_pc)
+{
+    unsigned index = (load_pc >> pcShamt) & indexMask;
+    auto &cell = table[index];
+    if (blackList.count(load_pc)) {
+        DPRINTF(NoSQPred, "Won't choose pattern pred for pc 0x%lx because of blacklist\n", load_pc);
+    }
+    if (!blackList.count(load_pc) &&
+            cell.patternMissRate < cell.pathMissRate && cell.patternMissRate < cell.pcMissRate) {
+        return WhichPredictor::UsePattern;
+    } else if (cell.pathMissRate < cell.pcMissRate) {
+        return WhichPredictor::UsePath;
+    } else {
+        return WhichPredictor::UsePC;
+    }
 }

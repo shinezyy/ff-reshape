@@ -163,3 +163,7 @@ def addO3Options(parser):
             action='store_true',
             help='enable loop buffer')
 
+    parser.add_option("--mem-squash-factor",
+            action='store',
+            help='The factor to zoom the importance of squashed events')
+

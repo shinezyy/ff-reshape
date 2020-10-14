@@ -24,3 +24,5 @@ class MemDepPredictor(SimObject):
     TSSBFSize = Param.Unsigned(128, "Size of TSSBF table")
     TSSBFAssoc = Param.Unsigned(4, "Assoc of TSSBF index table")
     TSSBFTagBits = Param.Unsigned(38, "Bit width of bits for tag")
+
+    SquashFactor = Param.Unsigned(3, "Importance of squashed miss prediction")

@@ -107,6 +107,8 @@ def modifyO3CPUConfig(options, cpu):
         assert options.dq_groups
         cpu.numDQGroups = options.dq_groups
 
+        cpu.mDepPred.SquashFactor = options.mem_squash_factor
+
     elif options.cpu_type == 'DerivO3CPU':
 
         if options.o3_core_width is not None:
