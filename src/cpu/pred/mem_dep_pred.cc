@@ -801,6 +801,8 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
                             MemPredHistory *&history)
 {
     auto pair = instTable.find(pc);
+    DPRINTF(NoSQPred, "Pattern entry not found: %i, local sensitive: %i\n",
+            pair == instTable.end(), history->localSensitive);
     if (pair == instTable.end() || !history->localSensitive) { // evicted
         recordMispred(pc, should_bypass, sn_dist, dq_dist, history);
         return;
@@ -817,22 +819,25 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
         boost::dynamic_bitset<> used_hist(historyLen);
         unsigned index;
         if (!history->willSquash) {
-            assert(cell.numSpeculativeBits > 0);
-            assert(cell.history[cell.numSpeculativeBits - 1] != should_bypass);
-            cell.history[cell.numSpeculativeBits - 1] = should_bypass;
-            cell.numSpeculativeBits--;
-            assert(cell.numSpeculativeBits >= 0);
+            if (cell.numSpeculativeBits > 0) {
+                assert(cell.history[cell.numSpeculativeBits - 1] != should_bypass);
+                cell.history[cell.numSpeculativeBits - 1] = should_bypass;
+                cell.numSpeculativeBits--;
+                assert(cell.numSpeculativeBits >= 0);
 
-            DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history->inst, pc);
+                DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history->inst, pc);
+            }
 
             used_hist = history->localHistory;
             index = extractIndex(pc, used_hist);
         } else {
-            cell.history = history->localHistory;
-            cell.numSpeculativeBits = 0;
-            DPRINTF(NoSQPred, "Inst[%lu] dec num spec to 0 for pc:0x%lx\n", history->inst, pc);
+            if (cell.numSpeculativeBits > 0) {
+                cell.history >>= 1;
+                cell.numSpeculativeBits--;
+                DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history->inst, pc);
+            }
 
-            used_hist = cell.history;
+            used_hist = history->localHistory;
             index = extractIndex(pc, used_hist);
         }
         if (Debug::NoSQPred) {
@@ -879,6 +884,8 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
     if (pair == instTable.end()) {
         if (instTable.size() >= size) {
             auto it = evictOneInst();
+            DPRINTF(NoSQPred, "Evicting pc 0x%lx from pattern hist table\n",
+                    it->first);
             instTable.erase(it);
         }
     }
@@ -1004,8 +1011,11 @@ LocalPredictor::recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist,
                   << ", should bypass: " << should_bypass
                   << "\n";
     }
-    assert(cell.numSpeculativeBits > 0);
+    assert(cell.numSpeculativeBits > 0 || !history->localSensitive);
 //    assert(cell.history[cell.numSpeculativeBits - 1] == should_bypass);
+    if (!history->localSensitive) {
+        return;
+    }
     DPRINTF(NoSQPred, "Correctly predicted on history: ");
     if (Debug::NoSQPred) {
         std::cout << (cell.history >> cell.numSpeculativeBits) << "\n";
