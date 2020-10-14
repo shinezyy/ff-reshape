@@ -871,7 +871,6 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
         if (Debug::NoSQPred) {
             std::cout << "History remains to be " << cell.history << ", because no mispred\n";
         }
-        assert(false);
     }
     if (should_bypass && dq_dist) {
         cell.distPair.snDistance = sn_dist;
