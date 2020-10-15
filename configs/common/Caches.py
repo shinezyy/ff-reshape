@@ -77,6 +77,8 @@ class L2Cache(Cache):
     size = '1MB'
     clusivity='mostly_excl'
 
+    prefetcher = BOPPrefetcher()
+
 class L3Cache(Cache):
     assoc = 16
     tag_latency = 20
