@@ -181,6 +181,7 @@ class G5Config:
             self.arch_options += [
                 '--caches',
                 '--l2cache',
+                '--l3_cache',
             ]
             self.configurable_options = {
                 **self.configurable_options,
@@ -194,8 +195,8 @@ class G5Config:
                 '--l1i_assoc': '8',
                 '--l1d_assoc': '8',
 
-                '--l2_size': '4MB',
-                '--l2_assoc': '8',
+                # '--l2_size': '4MB',
+                # '--l2_assoc': '8',
             }
         else:
             print("Unknown CPU type")

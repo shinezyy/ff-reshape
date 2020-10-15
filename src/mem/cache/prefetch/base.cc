@@ -56,10 +56,27 @@
 #include "params/BasePrefetcher.hh"
 #include "sim/system.hh"
 
+BasePrefetcher::PrefetchInfo::PrefetchInfo(PacketPtr pkt, Addr addr)
+  : address(addr), pc(pkt->req->hasPC() ? pkt->req->getPC() : 0),
+    masterId(pkt->req->masterId()), validPC(pkt->req->hasPC()),
+    secure(pkt->isSecure())
+{
+}
+
+BasePrefetcher::PrefetchInfo::PrefetchInfo(PrefetchInfo const &pfi, Addr addr)
+  : address(addr), pc(pfi.pc), masterId(pfi.masterId), validPC(pfi.validPC),
+    secure(pfi.secure)
+{
+}
+
 void
 BasePrefetcher::PrefetchListener::notify(const PacketPtr &pkt)
 {
-    parent.probeNotify(pkt);
+    if (isFill) {
+        parent.notifyFill(pkt);
+    } else {
+        parent.probeNotify(pkt);
+    }
 }
 
 BasePrefetcher::BasePrefetcher(const BasePrefetcherParams *p)
@@ -67,7 +84,9 @@ BasePrefetcher::BasePrefetcher(const BasePrefetcherParams *p)
       lBlkSize(floorLog2(blkSize)), onMiss(p->on_miss), onRead(p->on_read),
       onWrite(p->on_write), onData(p->on_data), onInst(p->on_inst),
       masterId(p->sys->getMasterId(this)), pageBytes(p->sys->getPageBytes()),
-      prefetchOnAccess(p->prefetch_on_access)
+      prefetchOnAccess(p->prefetch_on_access),
+      useVirtualAddresses(p->use_virtual_addresses), issuedPrefetches(0),
+      usefulPrefetches(0)
 {
 }
 
@@ -132,6 +151,12 @@ BasePrefetcher::inMissQueue(Addr addr, bool is_secure) const
 }
 
 bool
+BasePrefetcher::hasBeenPrefetched(Addr addr, bool is_secure) const
+{
+    return cache->hasBeenPrefetched(addr, is_secure);
+}
+
+bool
 BasePrefetcher::samePage(Addr a, Addr b) const
 {
     return roundDown(a, pageBytes) == roundDown(b, pageBytes);
@@ -140,7 +165,7 @@ BasePrefetcher::samePage(Addr a, Addr b) const
 Addr
 BasePrefetcher::blockAddress(Addr a) const
 {
-    return a & ~(blkSize-1);
+    return a & ~((Addr)blkSize-1);
 }
 
 Addr
@@ -175,7 +200,21 @@ BasePrefetcher::probeNotify(const PacketPtr &pkt)
     if (pkt->cmd.isSWPrefetch()) return;
     if (pkt->req->isCacheMaintenance()) return;
     if (pkt->isWrite() && cache != nullptr && cache->coalesce()) return;
-    notify(pkt);
+
+    if (hasBeenPrefetched(pkt->getAddr(), pkt->isSecure())) {
+        usefulPrefetches += 1;
+    }
+
+    // Verify this access type is observed by prefetcher
+    if (observeAccess(pkt)) {
+        if (useVirtualAddresses && pkt->req->hasVaddr()) {
+            PrefetchInfo pfi(pkt, pkt->req->getVaddr());
+            notify(pkt, pfi);
+        } else if (!useVirtualAddresses && pkt->req->hasPaddr()) {
+            PrefetchInfo pfi(pkt, pkt->req->getPaddr());
+            notify(pkt, pfi);
+        }
+    }
 }
 
 void
@@ -189,6 +228,7 @@ BasePrefetcher::regProbeListeners()
     if (listeners.empty() && cache != nullptr) {
         ProbeManager *pm(cache->getProbeManager());
         listeners.push_back(new PrefetchListener(*this, pm, "Miss"));
+        listeners.push_back(new PrefetchListener(*this, pm, "Fill", true));
         if (prefetchOnAccess) {
             listeners.push_back(new PrefetchListener(*this, pm, "Hit"));
         }
