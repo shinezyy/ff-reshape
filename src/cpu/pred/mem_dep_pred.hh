@@ -312,8 +312,9 @@ class MetaPredictor: public SimObject
 
     std::vector<MetaCell> table;
 
-    void record(Addr load_pc, bool should, bool pc, bool path, bool pattern, bool pattern_sensitive,
-                bool will_squash);
+    void record(Addr load_pc, bool should, bool pc, bool path, bool pattern,
+            bool pattern_sensitive, bool path_sensitive,
+            bool will_squash);
 
     enum WhichPredictor{
         UsePC = 0,
