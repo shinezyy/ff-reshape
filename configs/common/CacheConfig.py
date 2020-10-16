@@ -92,7 +92,20 @@ def config_cache(options, system):
 
         system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
         system.l2.cpu_side = system.tol2bus.master
-        system.l2.mem_side = system.membus.slave
+
+        if options.l3_cache:
+            system.l3 = L3Cache(clk_domain=system.cpu_clk_domain)
+
+            system.tol3bus = L2XBar(clk_domain = system.cpu_clk_domain,
+                    width=64)
+
+            system.l3.cpu_side = system.tol3bus.master
+            system.l3.mem_side = system.membus.slave
+
+            system.l2.mem_side = system.tol3bus.slave
+        else:
+            system.l2.mem_side = system.membus.slave
+
 
     if options.memchecker:
         system.memchecker = MemChecker()

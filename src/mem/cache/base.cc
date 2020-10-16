@@ -69,7 +69,8 @@ using namespace std;
 BaseCache::CacheSlavePort::CacheSlavePort(const std::string &_name,
                                           BaseCache *_cache,
                                           const std::string &_label)
-    : QueuedSlavePort(_name, _cache, queue), queue(*_cache, *this, _label),
+    : QueuedSlavePort(_name, _cache, queue),
+      queue(*_cache, *this, true, _label),
       blocked(false), mustSendRetry(false),
       sendRetryEvent([this]{ processSendRetry(); }, _name)
 {
@@ -228,7 +229,7 @@ BaseCache::handleTimingReqHit(PacketPtr pkt, CacheBlk *blk, Tick request_time)
         // lat, neglecting responseLatency, modelling hit latency
         // just as the value of lat overriden by access(), which calls
         // the calculateAccessLatency() function.
-        cpuSidePort.schedTimingResp(pkt, request_time, true);
+        cpuSidePort.schedTimingResp(pkt, request_time);
     } else {
         DPRINTF(Cache, "%s satisfied %s, no response needed\n", __func__,
                 pkt->print());
@@ -400,7 +401,7 @@ BaseCache::handleUncacheableWriteResp(PacketPtr pkt)
     // Reset the bus additional time as it is now accounted for
     pkt->headerDelay = pkt->payloadDelay = 0;
 
-    cpuSidePort.schedTimingResp(pkt, completion_time, true);
+    cpuSidePort.schedTimingResp(pkt, completion_time);
 }
 
 void
@@ -477,6 +478,7 @@ BaseCache::recvTimingResp(PacketPtr pkt)
             writeAllocator->allocate() : mshr->allocOnFill();
         blk = handleFill(pkt, blk, writebacks, allocate);
         assert(blk != nullptr);
+        ppFill->notify(pkt);
     }
 
     if (blk && blk->isValid() && pkt->isClean() && !pkt->isInvalidate()) {
@@ -498,7 +500,7 @@ BaseCache::recvTimingResp(PacketPtr pkt)
         mshr->promoteWritable();
     }
 
-    serviceMSHRTargets(mshr, pkt, blk, writebacks);
+    serviceMSHRTargets(mshr, pkt, blk);
 
     if (mshr->promoteDeferredTargets()) {
         // avoid later read getting stale data while write miss is
@@ -900,10 +902,11 @@ BaseCache::calculateAccessLatency(const CacheBlk* blk,
         }
 
         // Check if the block to be accessed is available. If not, apply the
-        // access latency on top of block->whenReady.
-        if (blk->whenReady > curTick() &&
-            ticksToCycles(blk->whenReady - curTick()) > lat) {
-            lat += ticksToCycles(blk->whenReady - curTick());
+        // access latency on top of when the block is ready to be accessed.
+        const Tick when_ready = blk->getWhenReady();
+        if (when_ready > curTick() &&
+            ticksToCycles(when_ready - curTick()) > lat) {
+            lat += ticksToCycles(when_ready - curTick());
         }
     }
 
@@ -1004,7 +1007,7 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
                 return false;
             }
 
-            blk->status |= (BlkValid | BlkReadable);
+            blk->status |= BlkReadable;
         }
         // only mark the block dirty if we got a writeback command,
         // and leave it as is for a clean writeback
@@ -1024,8 +1027,8 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         DPRINTF(Cache, "%s new state is %s\n", __func__, blk->print());
         incHitCount(pkt);
         // populate the time when the block will be ready to access.
-        blk->whenReady = clockEdge(fillLatency) + pkt->headerDelay +
-            pkt->payloadDelay;
+        blk->setWhenReady(clockEdge(fillLatency) + pkt->headerDelay +
+            pkt->payloadDelay);
         return true;
     } else if (pkt->cmd == MemCmd::CleanEvict) {
         if (blk) {
@@ -1062,7 +1065,7 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
                     return false;
                 }
 
-                blk->status |= (BlkValid | BlkReadable);
+                blk->status |= BlkReadable;
             }
         }
 
@@ -1081,8 +1084,8 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
 
         incHitCount(pkt);
         // populate the time when the block will be ready to access.
-        blk->whenReady = clockEdge(fillLatency) + pkt->headerDelay +
-            pkt->payloadDelay;
+        blk->setWhenReady(clockEdge(fillLatency) + pkt->headerDelay +
+            pkt->payloadDelay);
         // if this a write-through packet it will be sent to cache
         // below
         return !pkt->writeThrough();
@@ -1149,26 +1152,23 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
             // No replaceable block or a mostly exclusive
             // cache... just use temporary storage to complete the
             // current request and then get rid of it
-            assert(!tempBlock->isValid());
             blk = tempBlock;
             tempBlock->insert(addr, is_secure);
             DPRINTF(Cache, "using temp block for %#llx (%s)\n", addr,
                     is_secure ? "s" : "ns");
         }
-
-        // we should never be overwriting a valid block
-        assert(!blk->isValid());
     } else {
         // existing block... probably an upgrade
-        assert(regenerateBlkAddr(blk) == addr);
-        assert(blk->isSecure() == is_secure);
-        // either we're getting new data or the block should already be valid
-        assert(pkt->hasData() || blk->isValid());
         // don't clear block status... if block is already dirty we
         // don't want to lose that
     }
 
-    blk->status |= BlkValid | BlkReadable;
+    // Block is guaranteed to be valid at this point
+    assert(blk->isValid());
+    assert(blk->isSecure() == is_secure);
+    assert(regenerateBlkAddr(blk) == addr);
+
+    blk->status |= BlkReadable;
 
     // sanity check for whole-line writes, which should always be
     // marked as writable as part of the fill, and then later marked
@@ -1215,8 +1215,7 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
         pkt->writeDataToBlock(blk->data, blkSize);
     }
     // We pay for fillLatency here.
-    blk->whenReady = clockEdge() + fillLatency * clockPeriod() +
-        pkt->payloadDelay;
+    blk->setWhenReady(clockEdge(fillLatency) + pkt->payloadDelay);
 
     return blk;
 }
@@ -2225,6 +2224,7 @@ BaseCache::regProbePoints()
 {
     ppHit = new ProbePointArg<PacketPtr>(this->getProbeManager(), "Hit");
     ppMiss = new ProbePointArg<PacketPtr>(this->getProbeManager(), "Miss");
+    ppFill = new ProbePointArg<PacketPtr>(this->getProbeManager(), "Fill");
 }
 
 ///////////////
@@ -2403,7 +2403,7 @@ BaseCache::MemSidePort::MemSidePort(const std::string &_name,
                                     const std::string &_label)
     : CacheMasterPort(_name, _cache, _reqQueue, _snoopRespQueue),
       _reqQueue(*_cache, *this, _snoopRespQueue, _label),
-      _snoopRespQueue(*_cache, *this, _label), cache(_cache)
+      _snoopRespQueue(*_cache, *this, true, _label), cache(_cache)
 {
 }
 
