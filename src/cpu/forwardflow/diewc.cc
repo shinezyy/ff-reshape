@@ -173,7 +173,8 @@ template<class Impl>
 bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
     bool break_verif = false;
     if (!tail->loadVerified && !tail->sentReExec && (tail->isNormalBypass() || tail->effAddrValid())) {
-        DPRINTF(NoSQSMB, "Last verified load is %lu\n", verifiedTailLoad);
+        DPRINTF(NoSQSMB, "Trying to verifiy inst[%lu], last verified load is %lu\n",
+                tail->seqNum, verifiedTailLoad);
         bool skip_verify;
 
         if (tail->bypassCanceled) {
@@ -186,10 +187,17 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
             skip_verify = true;
 
         } else {
-            skip_verify = mDepPred->checkAddr(tail->seqNum,
-                                              tail->memPredHistory->bypass,
-                                              tail->physEffAddrLow, tail->physEffAddrHigh,
-                                              tail->effSize, tail->seqNVul);
+            if (tail->memPredHistory) {
+                skip_verify = mDepPred->checkAddr(tail->seqNum,
+                        tail->memPredHistory->bypass,
+                        tail->physEffAddrLow, tail->physEffAddrHigh,
+                        tail->effSize, tail->seqNVul);
+            } else {
+                DPRINTF(NoSQSMB, "memPredHistory is released! maybe violation detected, break\n");
+                skip_verify = false;
+                break_verif = true;
+                return break_verif;
+            }
         }
 
         // action:
