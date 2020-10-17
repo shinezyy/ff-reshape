@@ -92,6 +92,7 @@ class G5Config:
                  debug=False,
                  panic_tick=None,
                  debug_flags=None,
+                 debug_range=2000,
                  spec=2017,
                  func_id=None,
                  ):
@@ -108,6 +109,7 @@ class G5Config:
         self.spec_version = spec
         self.func_id = func_id
         self.task = ''
+        self.debug_range = debug_range
 
         if full:
             self.insts = full_max_insts
@@ -132,8 +134,8 @@ class G5Config:
                     ]
             if self.panic_tick is not None:
                 self.options += [
-                        '--debug-start={}'.format   (self.panic_tick - 2000 * 500),
-                        '--debug-end={}'.format     (self.panic_tick + 2000 * 500),
+                        '--debug-start={}'.format   (self.panic_tick - self.debug_range * 500),
+                        '--debug-end={}'.format     (self.panic_tick + self.debug_range * 500),
                         ]
 
         self.options += [
