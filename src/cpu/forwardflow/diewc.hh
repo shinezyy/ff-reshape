@@ -516,7 +516,7 @@ public:
 
     Addr toCheckpoint;
 
-    bool cptHint;
+    bool cptHint{false};
 
     void setFanoutPred(FanoutPred *fanoutPred1);
 

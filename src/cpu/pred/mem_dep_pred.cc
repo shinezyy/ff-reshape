@@ -75,11 +75,11 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
 
     if (found) { // in path table
         if (!mp_history->localSensitive || which == MetaPredictor::UsePath) {
-            mp_history->bypass = cell->conf.read() > 0;
+            mp_history->bypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
             mp_history->distPair = cell->distPair;
         }
         mp_history->pathSensitive = true;
-        mp_history->pathBypass = cell->conf.read() > 0;
+        mp_history->pathBypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
 
         // DPRINTF(NoSQPred, "Found Cell@: %p with path: 0x%lx, index: 0x%lx\n",
         //         cell, path, path_index);
@@ -106,10 +106,10 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
     if (found) {
         if ((!mp_history->localSensitive && !mp_history->pathSensitive) ||
                 which == MetaPredictor::UsePC) {
-            mp_history->bypass = cell->conf.read() > 0;
+            mp_history->bypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
             mp_history->distPair = cell->distPair;
         }
-        mp_history->pcBypass = cell->conf.read() > 0;
+        mp_history->pcBypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
 
         DPRINTF(NoSQPred, "For load @ 0x%x, @ index: %u "
                 "pc predictor predict %i with confi: %i "
@@ -239,13 +239,17 @@ MemDepPredictor::increment(MemPredTable &table, Addr key,
     std::tie(found, cell) = find(table, key, isPath);
     if (found) {
         // DPRINTF(NoSQPred, "Inc in place\n");
-        cell->distPair = dist_pair;
+        if (dist_pair.dqDistance && dist_pair.dqDistance*100 == dist_pair.snDistance) {
+            cell->distPair = dist_pair;
+        }
         cell->conf.increment();
         DPRINTF(NoSQPred, "conf after inc: %i\n", cell->conf.read());
     } else {
         // DPRINTF(NoSQPred, "Inc on allocation\n");
         cell = allocate(table, key, isPath);
-        cell->distPair = dist_pair;
+        if (dist_pair.dqDistance && dist_pair.dqDistance*100 == dist_pair.snDistance) {
+            cell->distPair = dist_pair;
+        }
         cell->conf.increment();
         DPRINTF(NoSQPred, "conf after inc: %i\n", cell->conf.read());
 
@@ -566,7 +570,7 @@ TSSBF::TSSBF(const Params *p)
           Depth(Size/Assoc),
           IndexBits(ceilLog2(Depth)),
           IndexMask((((uint64_t)1) << IndexBits) - 1),
-          table(Depth),
+          table(Depth, SSBFSet()),
           tableAccCount(Depth, 0)
 {
 }
