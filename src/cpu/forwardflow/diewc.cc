@@ -1745,9 +1745,9 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                     extptr(cell->predecessorPosition), extptr(inst->dqPosition),
                     violation ? "" : "for silent violation");
             if (!violation) {
-                mDepPred->dumpTopMisprediction();
-                DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass",
-                        inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
+                DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass",
+                        inst->seqNum, inst->instAddr(), inst->physEffAddrLow,
+                        inst->memPredHistory->bypass ? "" : " not");
                 if (Debug::NoSQPred) {
                     std::cout << " with history: "
                               << inst->memPredHistory->patternInfo.localHistory << "\n";
@@ -1759,6 +1759,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                         sn_dist, dq_dist,
                         *(inst->memPredHistory));
             } else {
+                mDepPred->dumpTopMisprediction();
                 if (sn_dist != dq_dist * 100) {
                     DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
                                       "sn_dist: %u, dq dist: %u\n",

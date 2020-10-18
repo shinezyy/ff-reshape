@@ -182,7 +182,7 @@ MemDepPredictor::increment(MemPredTable &table, Addr key,
         if (dist_pair.dqDistance && dist_pair.dqDistance*100 == dist_pair.snDistance) {
             cell->distPair = dist_pair;
         }
-        cell->conf.increment();
+        cell->conf.increment(8);
         DPRINTF(NoSQPred, "conf after inc: %i\n", cell->conf.read());
     } else {
         // DPRINTF(NoSQPred, "Inc on allocation\n");
@@ -190,7 +190,7 @@ MemDepPredictor::increment(MemPredTable &table, Addr key,
         if (dist_pair.dqDistance && dist_pair.dqDistance*100 == dist_pair.snDistance) {
             cell->distPair = dist_pair;
         }
-        cell->conf.increment();
+        cell->conf.increment(8);
         DPRINTF(NoSQPred, "conf after inc: %i\n", cell->conf.read());
 
         auto [found, cell] = find(table, key, isPath);
@@ -530,6 +530,7 @@ void MemDepPredictor::pathPredict(PathPredInfo &info, Addr pc, MemDepPredictor::
         DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, "
                           "path signature not found\n", pc, path);
         info.valid = false;
+        info.path = path;
         return;
     }
 

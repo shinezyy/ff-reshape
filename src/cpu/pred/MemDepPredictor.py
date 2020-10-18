@@ -14,7 +14,7 @@ class MemDepPredictor(SimObject):
     DistanceBits = Param.Unsigned(6, "Bit width of bits to represent store distance")
     ShamtBits = Param.Unsigned(3, "Bit width of bits to represent shit amount")
     StoreSizeBits = Param.Unsigned(2, "Bit width of bits to represent store size")
-    ConfidenceBits = Param.Unsigned(7, "Bit width of bits to represent confidence")
+    ConfidenceBits = Param.Unsigned(10, "Bit width of bits to represent confidence")
     TagBits = Param.Unsigned(22, "Bit width of bits for tag")
 
     HistoryLen = Param.Unsigned(16, "Length of bits used for path history")
