@@ -109,7 +109,7 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
         return;
     }
     if (hist.updated) {
-        DPRINTF(NoSQPred, "history has been recorded, return");
+        DPRINTF(NoSQPred, "history has been recorded, return\n");
         return;
     }
     hist.updated = true;
@@ -209,17 +209,18 @@ void
 MemDepPredictor::recordPath(Addr control_pc, bool is_call, bool pred_taken)
 {
     if (is_call) {
-        // unsigned mask = ((uint64_t)1 << callShamt) - 1;
-        // controlPath = (controlPath << callShamt) | ((control_pc >> pcShamt) & mask);
+        unsigned mask = ((uint64_t)1 << callShamt) - 1;
+        controlPath = (controlPath << callShamt) | ((control_pc >> pcShamt) & mask);
     } else {
-        controlPath = (controlPath << (unsigned) 1) | pred_taken;
+        unsigned mask = ((uint64_t)1 << branchShamt) - 1;
+        controlPath = (controlPath << (branchShamt + 1)) | (((control_pc >> pcShamt) & mask) << 1) | pred_taken;
     }
 }
 
 Addr
 MemDepPredictor::genPathKey(Addr pc, FoldedPC path) const
 {
-    return pc ^ ((path & PathMask) << pcShamt);
+    return pc ^ (((path) & PathMask) << pcShamt);
 }
 
 Addr
@@ -469,7 +470,7 @@ MemDepPredictor::updatePredictorsOnCorrect(Addr pc, bool should_bypass, unsigned
                                            MemPredHistory &history)
 {
     if (history.updated) {
-        DPRINTF(NoSQPred, "history has been recorded, return");
+        DPRINTF(NoSQPred, "history has been recorded, return\n");
     }
     history.updated = true;
     // All correct predictions arrive here
@@ -927,7 +928,7 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
     }
     cell.recentTouched = true;
 
-    if (cell.count > activeThres) {
+    if (cell.count > activeThres && enablePattern) {
         cell.active = true;
     }
     if (cell.active) {
@@ -1146,7 +1147,7 @@ MetaPredictor::choose(Addr load_pc)
     }
     DPRINTF(NoSQPred, "Miss rate, pattern: %f, path: %f, pc: %f\n",
             cell.patternMissRate, cell.pathMissRate, cell.pcMissRate);
-    if (!blackList.count(load_pc) &&
+    if (enablePattern && !blackList.count(load_pc) &&
             cell.patternMissRate < cell.pathMissRate && cell.patternMissRate < cell.pcMissRate) {
         return WhichPredictor::UsePattern;
     } else if (cell.pathMissRate < cell.pcMissRate) {

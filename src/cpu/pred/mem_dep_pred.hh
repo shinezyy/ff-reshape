@@ -249,6 +249,7 @@ struct LocalPredCell
 class LocalPredictor: public SimObject
 {
   public:
+    const bool enablePattern{false};
     using Table = std::map<Addr, LocalPredCell>;
 
     typedef MemDepPredictorParams Params;
@@ -318,6 +319,8 @@ struct MetaCell
 class MetaPredictor: public SimObject
 {
   public:
+    const bool enablePattern{false};
+
     typedef MemDepPredictorParams Params;
 
     explicit MetaPredictor (const Params *p)
@@ -444,8 +447,8 @@ class MemDepPredictor: public SimObject
 
     void recordPath(Addr control_pc, bool is_call, bool pred_taken);
 
-    const unsigned callShamt{2};
-    const unsigned branchShamt{1};
+    const unsigned callShamt{3};
+    const unsigned branchShamt{2};
 
     FoldedPC controlPath{};
 
@@ -501,6 +504,8 @@ class MemDepPredictor: public SimObject
     Addr shiftAddr(Addr addr);
 
     MisPredTable misPredTable;
+
+    const bool enablePattern{false};
 
   public:
     void dumpTopMisprediction() const;

@@ -962,6 +962,15 @@ FFDIEWC<Impl>::
     if (commitCounter >= commitTraceInterval && !head_inst->isForwarder()) {
         DPRINTF(ASMCommit, "Inst[%lu]: %s\n",
                  head_inst->seqNum, head_inst->staticInst->disassemble(head_inst->instAddr()));
+
+        if (head_inst->isNormalStore()) {
+            DPRINTF(ASMCommit, "Inst[%lu] @pc:0x%lx store to 0x%lx\n",
+                    head_inst->seqNum, head_inst->instAddr(), head_inst->physEffAddrLow);
+        } else if (head_inst->isLoad()) {
+            DPRINTF(ASMCommit, "Inst[%lu] @pc:0x%lx load from 0x%lx\n",
+                    head_inst->seqNum, head_inst->instAddr(), head_inst->physEffAddrLow);
+        }
+
         DPRINTFR(ValueCommit, "%lu VCommitting %lu instruction with sn:%lu PC:",
                 curTick(), commitAll, head_inst->seqNum);
         if (Debug::ValueCommit) {
@@ -1745,12 +1754,14 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                     extptr(cell->predecessorPosition), extptr(inst->dqPosition),
                     violation ? "" : "for silent violation");
             if (!violation) {
-                DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass",
-                        inst->seqNum, inst->instAddr(), inst->physEffAddrLow,
-                        inst->memPredHistory->bypass ? "" : " not");
-                if (Debug::NoSQPred) {
-                    std::cout << " with history: "
-                              << inst->memPredHistory->patternInfo.localHistory << "\n";
+                if (!inst->memPredHistory->updated) {
+                    DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass",
+                            inst->seqNum, inst->instAddr(), inst->physEffAddrLow,
+                            inst->memPredHistory->bypass ? "" : " not");
+                    if (Debug::NoSQPred) {
+                        std::cout << " with history: "
+                                  << inst->memPredHistory->patternInfo.localHistory << "\n";
+                    }
                 }
                 mDepPred->checkSilentViolation(
                         inst->seqNum,
@@ -1759,7 +1770,6 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                         sn_dist, dq_dist,
                         *(inst->memPredHistory));
             } else {
-                mDepPred->dumpTopMisprediction();
                 if (sn_dist != dq_dist * 100) {
                     DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
                                       "sn_dist: %u, dq dist: %u\n",
@@ -1771,11 +1781,11 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                     std::cout << " with history: "
                               << inst->memPredHistory->patternInfo.localHistory << "\n";
                 }
-                mDepPred->dumpTopMisprediction();
                 mDepPred->update(
                         inst->instAddr(), true,
                         sn_dist, dq_dist,
                         *(inst->memPredHistory));
+                mDepPred->dumpTopMisprediction();
             }
         } else {
             mDepPred->update(
