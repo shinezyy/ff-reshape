@@ -44,27 +44,49 @@ struct MemPredCell
     {}
 };
 
+struct PredictionInfo
+{
+    bool valid;
+    bool bypass;
+    DistancePair distPair;
+};
+
+struct PathPredInfo: public PredictionInfo
+{
+    using FoldedPC = uint64_t ;
+    FoldedPC path;
+    int confidence;
+};
+struct PatternPredInfo: public PredictionInfo
+{
+
+    boost::dynamic_bitset<> localHistory;
+    int32_t predictionValue;
+};
+
 struct MemPredHistory
 {
     bool bypass;
-    bool pcBypass;
-    bool pathBypass;
-    bool patternBypass;
 
-    bool pathSensitive;
-    bool localSensitive;
+    PredictionInfo pcInfo;
+    PathPredInfo pathInfo;
+    PatternPredInfo patternInfo;
+
     DistancePair distPair;
 
-    using FoldedPC = uint64_t ;
-    FoldedPC path;
-
-    boost::dynamic_bitset<> localHistory;
     InstSeqNum inst;
     bool willSquash;
+    bool updated;
 
-    int32_t predictionValue;
-
-    bool updatedHistory;
+    MemPredHistory()
+            : bypass(false),
+              pcInfo(),
+              pathInfo(),
+              patternInfo(),
+              inst(0),
+              willSquash(false),
+              updated(false)
+    {}
 };
 
 struct SSBFCell
@@ -219,7 +241,7 @@ struct LocalPredCell
 
     static int b2s(bool bypass);
 
-    void fit(MemPredHistory *history, bool should_bypass);
+    void fit(PatternPredInfo &hist, bool should_bypass);
 
     int32_t predict();
 };
@@ -232,7 +254,8 @@ class LocalPredictor: public SimObject
     typedef MemDepPredictorParams Params;
     explicit LocalPredictor(const Params *p);
   private:
-    const unsigned historyLen{12};
+    const int historyLen{64};
+    const int visableHistoryLen{12};
 
     const bool perceptron{false};
 
@@ -248,7 +271,7 @@ class LocalPredictor: public SimObject
 
     const unsigned resetCount{16};
 
-    const unsigned activeThres{16};
+    const unsigned activeThres{64};
 
     unsigned touchCount{0};
 
@@ -265,22 +288,23 @@ class LocalPredictor: public SimObject
     Table::iterator evictOneInst();
 
   public:
-    void recordMispred(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist, MemPredHistory *hist);
+    void recordMispred(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+                       MemPredHistory &hist);
 
-    void recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
-                       MemPredHistory *&history);
+    void updateOnCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+                         MemPredHistory &history);
 
     // valid, bypass, pair
-    std::tuple<bool, bool, DistancePair> predict(Addr pc, MemPredHistory* &history);
+    void predict(Addr pc, PatternPredInfo &info);
 
-    void update(Addr pc, bool should_bypass,
-                unsigned sn_dist, unsigned dq_dist, MemPredHistory* &history);
+    void updateOnMiss(Addr pc, bool should_bypass,
+                      unsigned sn_dist, unsigned dq_dist, MemPredHistory &history);
 
     const std::string _name;
 
     const std::string name() const override {return _name;}
 
-    void recordSquash(Addr pc, MemPredHistory *&history);
+    void recordSquash(Addr pc, MemPredHistory &history);
 
 };
 
@@ -406,30 +430,41 @@ class MemDepPredictor: public SimObject
 
     SimpleSSBF sssbf;
 
-    std::pair<bool, DistancePair> predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist);
+    const int pathConfThres{15};
 
-    std::pair<bool, DistancePair> predict(Addr load_pc, MemPredHistory *&hist);
+    std::pair<bool, DistancePair> predict(Addr load_pc, FoldedPC path, MemPredHistory &hist);
+
+    void pcPredict(PredictionInfo &info, Addr pc);
+
+    void pathPredict(PathPredInfo &info, Addr pc, FoldedPC path);
+
+    void patternPredict(PatternPredInfo &info, Addr pc);
+
+    std::pair<bool, DistancePair> predict(Addr load_pc, MemPredHistory &hist);
 
     void recordPath(Addr control_pc, bool is_call, bool pred_taken);
 
     const unsigned callShamt{2};
     const unsigned branchShamt{1};
+
     FoldedPC controlPath{};
 
     void checkSilentViolation(
             InstSeqNum load_sn, Addr load_pc, Addr load_addr, uint8_t load_size,
             SSBFCell *last_store_cell,
             unsigned sn_dist, unsigned dq_dist,
-            MemPredHistory *&hist);
+            MemPredHistory &hist);
 
-    void recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
-                       MemPredHistory *&history);
+  private:
+    void updatePredictorsOnCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+                                   MemPredHistory &history);
 
+  public:
     void update(Addr load_pc, bool should_bypass,
                 unsigned sn_dist, unsigned dq_dist,
-                MemPredHistory *&hist);
+                MemPredHistory &hist);
 
-    void squash(MemPredHistory* &hist);
+    void squash(MemPredHistory &hist);
 
     void clear();
 
@@ -470,7 +505,7 @@ class MemDepPredictor: public SimObject
   public:
     void dumpTopMisprediction() const;
 
-    void squashLoad(Addr pc, MemPredHistory *&hist);
+    void squashLoad(Addr pc, MemPredHistory &hist);
 };
 
 #endif // __MEM_DEP_PRED_HH__

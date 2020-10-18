@@ -699,10 +699,10 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
         if (inst->isLoad()) {
             inst->storeSeq = storeSeq;
             DPRINTF(NoSQPred, "Predicting for inst[%lu]\n", inst->seqNum);
-            mDepPred->predict(inst->instAddr(), inst->memPredHistory);
+            mDepPred->predict(inst->instAddr(), *(inst->memPredHistory));
 
             inst->memPredHistory->inst = inst->seqNum;
-            if (inst->memPredHistory->localSensitive) {
+            if (inst->memPredHistory->patternInfo.valid) {
                 DPRINTF(NoSQPred, "Inst[%lu] inc num spec for pc:0x%lx\n", inst->seqNum, inst->instAddr());
             }
         }

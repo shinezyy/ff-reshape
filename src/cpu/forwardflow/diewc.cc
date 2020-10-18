@@ -187,13 +187,13 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
             skip_verify = true;
 
         } else {
-            if (tail->memPredHistory) {
+            if (!tail->memPredHistory->updated) {
                 skip_verify = mDepPred->checkAddr(tail->seqNum,
                         tail->memPredHistory->bypass,
                         tail->physEffAddrLow, tail->physEffAddrHigh,
                         tail->effSize, tail->seqNVul);
             } else {
-                DPRINTF(NoSQSMB, "memPredHistory is released! maybe violation detected, break\n");
+                DPRINTF(NoSQSMB, "memPredHistory is record! maybe violation detected, break\n");
                 skip_verify = false;
                 break_verif = true;
                 return break_verif;
@@ -205,17 +205,16 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
             DPRINTF(NoSQSMB || Debug::NoSQPred, "Skip verifying load [%lu]\n", tail->seqNum);
             DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass",
                     tail->seqNum, tail->instAddr(), tail->physEffAddrLow,
-                    tail->memPredHistory->bypass ? "": " not");
+                    tail->memPredHistory->bypass ? "" : " not");
             if (Debug::NoSQPred) {
                 std::cout << " with history: "
-                          << tail->memPredHistory->localHistory << "\n";
+                          << tail->memPredHistory->patternInfo.localHistory << "\n";
             }
 
-            if (tail->memPredHistory->localSensitive) {
-                mDepPred->recordCorrect(tail->instAddr(), tail->memPredHistory->bypass,
-                                        tail->memPredHistory->distPair.snDistance,
-                                        tail->memPredHistory->distPair.dqDistance, tail->memPredHistory);;
-            }
+            mDepPred->update(tail->instAddr(), tail->memPredHistory->bypass,
+                             tail->memPredHistory->distPair.snDistance,
+                             tail->memPredHistory->distPair.dqDistance,
+                             *(tail->memPredHistory));
             tail->loadVerified = true;
             verifiedTailLoad = tail->seqNum;
             tail->setCanCommit();
@@ -246,7 +245,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
                     reExecutedNonBypass++;
                 }
             }
-            if (canceled_bypassing && tail->memPredHistory) {
+            if (canceled_bypassing) {
                 DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu], "
                                   "because it does not received the bypassing pointer"
                                   " even after it becomes DQ tail\n", tail->seqNum);
@@ -257,13 +256,13 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
                         tail->seqNum, tail->instAddr(), tail->physEffAddrLow);
                 if (Debug::NoSQPred) {
                     std::cout << " with history: "
-                              << tail->memPredHistory->localHistory << "\n";
+                              << tail->memPredHistory->patternInfo.localHistory << "\n";
                 }
 
                 mDepPred->update(tail->instAddr(), false,
                                  0, // dont care
                                  0, // dont care
-                                 tail->memPredHistory // will be deleted
+                                 *(tail->memPredHistory)
                 );
                 tail->bypassCanceled = true;
             }
@@ -1720,23 +1719,23 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
 
     SSBFCell *cell = mDepPred->tssbf.find(inst->physEffAddrLow);
 
-    if (violation && inst->isNormalBypass() && inst->memPredHistory) {
+    if (violation && inst->isNormalBypass() && !inst->memPredHistory->updated) {
         // false positive
         DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu]\n", inst->seqNum);
         DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should not bypass",
                 inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
         if (Debug::NoSQPred) {
             std::cout << " with history: "
-                      << inst->memPredHistory->localHistory << "\n";
+                      << inst->memPredHistory->patternInfo.localHistory << "\n";
         }
         mDepPred->update(inst->instAddr(), false,
                          0, // dont care
                          0, // dont care
-                         inst->memPredHistory
+                         *(inst->memPredHistory)
         );
         mDepPred->dumpTopMisprediction();
 
-    } else if (inst->wbCount == 2 && !inst->isNormalBypass() && inst->memPredHistory) {
+    } else if (inst->wbCount == 2 && !inst->isNormalBypass()) {
 
         if (cell) {
             auto sn_dist = inst->seqNum - cell->lastStore;
@@ -1751,47 +1750,55 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                         inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
                 if (Debug::NoSQPred) {
                     std::cout << " with history: "
-                              << inst->memPredHistory->localHistory << "\n";
+                              << inst->memPredHistory->patternInfo.localHistory << "\n";
                 }
                 mDepPred->checkSilentViolation(
                         inst->seqNum,
                         inst->instAddr(), inst->physEffAddrLow, inst->effSize,
                         cell,
                         sn_dist, dq_dist,
-                        inst->memPredHistory);
+                        *(inst->memPredHistory));
             } else {
                 if (sn_dist != dq_dist * 100) {
                     DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
                                       "sn_dist: %u, dq dist: %u\n",
                             sn_dist, dq_dist);
-                    return;
                 }
                 DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass",
                         inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
                 if (Debug::NoSQPred) {
                     std::cout << " with history: "
-                              << inst->memPredHistory->localHistory << "\n";
+                              << inst->memPredHistory->patternInfo.localHistory << "\n";
                 }
                 mDepPred->dumpTopMisprediction();
                 mDepPred->update(
                         inst->instAddr(), true,
                         sn_dist, dq_dist,
-                        inst->memPredHistory);
+                        *(inst->memPredHistory));
             }
         } else {
-            mDepPred->recordCorrect(inst->instAddr(), false, 0, 0, inst->memPredHistory);
+            mDepPred->update(
+                    inst->instAddr(), inst->memPredHistory->bypass,
+                    0, 0,
+                    *(inst->memPredHistory));
         }
 
 
     } else if (violation && !cell) {
         DPRINTF(NoSQPred, "Producing TSSBF entry has been evicted,"
-                          " we have to give up recording\n");
+                          " we have to do dummy recording\n");
+        MemPredHistory &hist = *(inst->memPredHistory);
+        mDepPred->update(
+                inst->instAddr(), !hist.bypass,
+                0, 0,
+                hist);
     } else if (!violation && inst->isNormalBypass()) {
         DPRINTF(NoSQPred, "Correctly predicted bypassing\n");
-        MemPredHistory *&hist = inst->memPredHistory;
-        mDepPred->recordCorrect(
-                inst->instAddr(), hist->bypass,
-                hist->distPair.snDistance, hist->distPair.dqDistance, hist);
+        MemPredHistory &hist = *(inst->memPredHistory);
+        mDepPred->update(
+                inst->instAddr(), hist.bypass,
+                hist.distPair.snDistance, hist.distPair.dqDistance,
+                hist);
     }
 }
 
@@ -2759,10 +2766,10 @@ template<class Impl>
 void
 FFDIEWC<Impl>::setUpLoad(DynInstPtr &inst)
 {
-    MemPredHistory *hist = inst->memPredHistory;
-    if (hist->bypass) {
-        inst->seqNVul = inst->seqNum - hist->distPair.snDistance;
-        // touch tssbf!
+    const MemPredHistory &hist = *(inst->memPredHistory);
+    if (hist.bypass) {
+        inst->seqNVul = inst->seqNum - hist.distPair.snDistance;
+        // touch tssbf?
     }
 }
 
@@ -2830,7 +2837,7 @@ template<class Impl>
 void FFDIEWC<Impl>::squashLoad(FFDIEWC::DynInstPtr &inst)
 {
     DPRINTF(NoSQPred, "Squashing load: %lu\n", inst->seqNum);
-    mDepPred->squashLoad(inst->instAddr(), inst->memPredHistory);
+    mDepPred->squashLoad(inst->instAddr(), *(inst->memPredHistory));
 }
 
 

@@ -47,159 +47,99 @@ MemDepPredictor::MemDepPredictor(const Params *params)
 }
 
 std::pair<bool, DistancePair>
-MemDepPredictor::predict(Addr load_pc, MemPredHistory *&hist)
+MemDepPredictor::predict(Addr load_pc, MemPredHistory &hist)
 {
     return predict(load_pc, controlPath, hist);
 }
 
 std::pair<bool, DistancePair>
-MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory *&hist)
+MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory &hist)
 {
-    auto mp_history = new MemPredHistory;
-    hist = mp_history;
-    mp_history->willSquash = false;
-    mp_history->updatedHistory = false;
-
-    auto pc_index = load_pc;
-    auto path_index = genPathKey(load_pc, path);
+    pcPredict(hist.pcInfo, load_pc);
+    pathPredict(hist.pathInfo, load_pc, path);
+    patternPredict(hist.patternInfo, load_pc);
 
     MetaPredictor::WhichPredictor which = meta.choose(load_pc);
 
-    bool found;
-    bool bypass;
-    DistancePair pair;
-    std::tie(found, bypass, pair) = localPredictor.predict(load_pc, mp_history);
-
-    MemPredCell *cell;
-    std::tie(found, cell) = find(pathTable, path_index, true);
-
-    if (found) { // in path table
-        if (!mp_history->localSensitive || which == MetaPredictor::UsePath) {
-            mp_history->bypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
-            mp_history->distPair = cell->distPair;
-        }
-        mp_history->pathSensitive = true;
-        mp_history->pathBypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
-
-        // DPRINTF(NoSQPred, "Found Cell@: %p with path: 0x%lx, index: 0x%lx\n",
-        //         cell, path, path_index);
-        DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, @ index: %u "
-                "path predictor predict %i with confi: %i "
-                "to storeDistance %u\n",
-                load_pc, path, path_index,
-                mp_history->pathBypass, cell->conf.read(),
-                cell->distPair.snDistance);
-
+    if (hist.pathInfo.valid && abs(hist.pathInfo.confidence) > pathConfThres) {
+        DPRINTF(NoSQPred, "Choosing path pred results because of high conf: %i\n", hist.pathInfo.confidence);
+        hist.bypass = hist.pathInfo.bypass;
+        hist.distPair = hist.pathInfo.distPair;
     } else {
-        if (!mp_history->localSensitive || which == MetaPredictor::UsePath) {
-            mp_history->bypass = false;
+        if (which == MetaPredictor::UsePattern && hist.patternInfo.valid) {
+            DPRINTF(NoSQPred, "Choosing pattern pred results because of meta\n");
+            hist.bypass = hist.patternInfo.bypass;
+            hist.distPair = hist.patternInfo.distPair;
+        } else if (which == MetaPredictor::UsePath && hist.pathInfo.valid) {
+            DPRINTF(NoSQPred, "Choosing path pred results because of meta\n");
+            hist.bypass = hist.pathInfo.bypass;
+            hist.distPair = hist.pathInfo.distPair;
+        } else if (which == MetaPredictor::UsePC && hist.pcInfo.valid) {
+            DPRINTF(NoSQPred, "Choosing pc pred results because of meta\n");
+            hist.bypass = hist.pcInfo.bypass;
+            hist.distPair = hist.pcInfo.distPair;
+        } else {
+            DPRINTF(NoSQPred, "Do not bypass because no valid prediction\n");
+            hist.bypass = false;
         }
-        mp_history->pathSensitive = false;
-        mp_history->pathBypass = false;
-        DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, "
-                "path signature not found\n",
-                load_pc, path);
     }
 
-    std::tie(found, cell) = find(pcTable, pc_index, false);
-
-    if (found) {
-        if ((!mp_history->localSensitive && !mp_history->pathSensitive) ||
-                which == MetaPredictor::UsePC) {
-            mp_history->bypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
-            mp_history->distPair = cell->distPair;
-        }
-        mp_history->pcBypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
-
-        DPRINTF(NoSQPred, "For load @ 0x%x, @ index: %u "
-                "pc predictor predict %i with confi: %i "
-                "to storeDistance %u\n",
-                load_pc, pc_index,
-                mp_history->pcBypass, cell->conf.read(),
-                cell->distPair.snDistance);
-    } else {
-        if ((!mp_history->localSensitive && !mp_history->pathSensitive) ||
-            which == MetaPredictor::UsePC) {
-            mp_history->bypass = false;
-        }
-        mp_history->pcBypass = false;
-    }
 
     DPRINTF(NoSQPred, "For load @ 0x%lx, "
-            "overall: bypass: %i, pc: %i, path: %i, path sensitive: %i, store dist: %u, dq dist: %u\n",
+            "overall: bypass: %i, store dist: %u, dq dist: %u\n",
             load_pc,
-            mp_history->bypass, mp_history->pcBypass, mp_history->pathBypass,
-            mp_history->pathSensitive, mp_history->distPair.snDistance,
-            mp_history->distPair.dqDistance
+            hist.bypass,
+            hist.distPair.snDistance, hist.distPair.dqDistance
             );
-    if (mp_history->bypass) {
-        assert(mp_history->distPair.dqDistance > 0);
+    if (hist.bypass) {
+        assert(hist.distPair.dqDistance > 0);
     }
 
-    mp_history->path = path;
-    return std::make_pair(mp_history->bypass, mp_history->distPair);
+    return std::make_pair(hist.bypass, hist.distPair);
 }
 
 void
 MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
-                        unsigned dq_dist, MemPredHistory *&hist)
+                        unsigned dq_dist, MemPredHistory &hist)
 {
-    bool pred_bypass = hist->bypass;
-    if (hist->localSensitive) {
-        localPredictor.update(load_pc, should_bypass, sn_dist, dq_dist, hist);
-        meta.record(load_pc, should_bypass, hist->pcBypass, hist->pathBypass, hist->patternBypass,
-                    hist->localSensitive, hist->pathSensitive, hist->willSquash);
-    }
-    if (!pred_bypass && !should_bypass) {
-        // NOTE: check
-        DPRINTF(NoSQPred, "For load @ 0x%x, correctly predicted non-bypassing\n",
-                load_pc);
+    bool pred_bypass = hist.bypass;
+
+    if (should_bypass == pred_bypass) {
+        updatePredictorsOnCorrect(load_pc, should_bypass, sn_dist, dq_dist, hist);
         return;
+    }
+    if (hist.updated) {
+        DPRINTF(NoSQPred, "history has been recorded, return");
+        return;
+    }
+    hist.updated = true;
+    // for miss
+    meta.record(load_pc, should_bypass, hist.pcInfo.bypass,
+                hist.pathInfo.bypass, hist.patternInfo.bypass,
+                hist.patternInfo.valid, hist.pathInfo.valid, hist.willSquash);
 
-    } else if (pred_bypass && !should_bypass) {
-        DPRINTF(NoSQPred, "For load @ 0x%x, mispredicted, should not bypass\n", load_pc);
-        misPredTable.record(load_pc, false);
-
+    // All miss predictions arrive here
+    localPredictor.updateOnMiss(load_pc, should_bypass, sn_dist, dq_dist, hist);
+    misPredTable.record(load_pc, true);
+    if (!should_bypass) {
         DPRINTF(NoSQPred, "Dec conf in pc table, ");
         decrement(pcTable, load_pc, true, false);
 
-        auto path_index = genPathKey(load_pc, hist->path);
+        auto path_index = genPathKey(load_pc, hist.pathInfo.path);
         DPRINTF(NoSQPred, "Dec conf in path table with path: 0x%lx, ",
-                hist->path);
+                hist.pathInfo.path);
         decrement(pathTable, path_index, true, true);
 
-        if (!hist->localSensitive) {
-            localPredictor.recordMispred(load_pc, should_bypass, sn_dist, dq_dist, hist);
-            meta.record(load_pc, should_bypass, hist->pcBypass, hist->pathBypass, hist->patternBypass,
-                        hist->localSensitive, hist->pathSensitive, hist->willSquash);
-        }
-
     } else {
-        if (pred_bypass != should_bypass) {
-            misPredTable.record(load_pc, true);
-            DPRINTF(NoSQPred, "For load @ 0x%x, mispredicted, should bypass!\n", load_pc);
-        } else {
-            DPRINTF(NoSQPred, "For load @ 0x%x, correctly predicted bypassing\n",
-                    load_pc);
-        }
-
         DPRINTF(NoSQPred, "Inc conf in pc table @ index: %u with sn dist: %i, dq dist: %i\n",
                 load_pc, sn_dist, dq_dist);
         increment(pcTable, load_pc, {sn_dist, dq_dist}, false);
 
-        auto key = genPathKey(load_pc, hist->path);
+        auto key = genPathKey(load_pc, hist.pathInfo.path);
         DPRINTF(NoSQPred, "Inc conf in path table @ index: %u with sn dist: %i, dq dist: %i, path: 0x%lx\n",
-                key, sn_dist, dq_dist, hist->path);
+                key, sn_dist, dq_dist, hist.pathInfo.path);
         increment(pathTable, key, {sn_dist, dq_dist}, false);
-
-        if (!hist->localSensitive) {
-            localPredictor.recordMispred(load_pc, should_bypass, sn_dist, dq_dist, hist);
-            meta.record(load_pc, should_bypass, hist->pcBypass, hist->pathBypass, hist->patternBypass,
-                        hist->localSensitive, hist->pathSensitive, hist->willSquash);
-        }
     }
-    delete hist;
-    hist = nullptr;
 }
 
 void
@@ -260,10 +200,9 @@ MemDepPredictor::increment(MemPredTable &table, Addr key,
 
 
 void
-MemDepPredictor::squash(MemPredHistory* &hist)
+MemDepPredictor::squash(MemPredHistory &hist)
 {
-    delete hist;
-    hist = nullptr;
+    hist.updated = true;
 }
 
 void
@@ -496,13 +435,13 @@ void MemDepPredictor::checkSilentViolation(
         InstSeqNum load_sn, Addr load_pc, Addr load_addr, uint8_t load_size,
         SSBFCell *last_store_cell,
         unsigned int sn_dist, unsigned int dq_dist,
-        MemPredHistory *&hist)
+        MemPredHistory &hist)
 {
-    if (sn_dist != dq_dist * 100) {
+    if (!dq_dist || sn_dist != dq_dist * 100) {
         DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
                           "%lu -> %lu with dq dist: %u\n", last_store_cell->lastStore, load_sn, dq_dist);
-        if (hist->localSensitive) {
-            recordCorrect(load_pc, hist->bypass, sn_dist, dq_dist, hist);
+        if (hist.patternInfo.valid) {
+            updatePredictorsOnCorrect(load_pc, hist.patternInfo.bypass, sn_dist, dq_dist, hist);
         }
         return;
     }
@@ -518,19 +457,27 @@ void MemDepPredictor::checkSilentViolation(
                           "load: 0x%lx with size %u\n",
                           store_start, last_store_cell->size,
                           load_start, load_size);
-        recordCorrect(load_pc, false, sn_dist, dq_dist, hist);
+        updatePredictorsOnCorrect(load_pc, false, sn_dist, dq_dist, hist);
         return;
+    } else {
+        update(load_pc, true, sn_dist, dq_dist, hist);
     }
-
-    update(load_pc, true, sn_dist, dq_dist, hist);
-
 }
 
 void
-MemDepPredictor::recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
-                               MemPredHistory *&history)
+MemDepPredictor::updatePredictorsOnCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+                                           MemPredHistory &history)
 {
-    auto key = genPathKey(pc, history->path);
+    if (history.updated) {
+        DPRINTF(NoSQPred, "history has been recorded, return");
+    }
+    history.updated = true;
+    // All correct predictions arrive here
+    meta.record(pc, should_bypass, history.pcInfo.bypass,
+                history.pathInfo.bypass, history.patternInfo.bypass,
+                history.patternInfo.valid, history.pathInfo.valid, history.willSquash);
+
+    auto key = genPathKey(pc, history.pathInfo.path);
     if (should_bypass) {
         increment(pcTable, pc, {sn_dist, dq_dist}, false);
         increment(pathTable, key, {sn_dist, dq_dist}, false);
@@ -538,22 +485,70 @@ MemDepPredictor::recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist
         decrement(pcTable, pc, false, false);
         decrement(pathTable, key, false, true);
     }
-
-    localPredictor.recordCorrect(pc, should_bypass, sn_dist, dq_dist, history);
-    meta.record(pc, should_bypass, history->pcBypass, history->pathBypass, history->patternBypass,
-                history->localSensitive, history->pathSensitive, false);
+    localPredictor.updateOnCorrect(pc, should_bypass, sn_dist, dq_dist, history);
 }
 
-void MemDepPredictor::squashLoad(Addr pc, MemPredHistory *&hist)
+void MemDepPredictor::squashLoad(Addr pc, MemPredHistory &hist)
 {
-    if (!hist || hist->updatedHistory) {
+    if (hist.updated) {
         return;
     }
-    if (hist->localSensitive) {
+    hist.updated = true;
+    if (hist.patternInfo.valid) {
         localPredictor.recordSquash(pc, hist);
     }
-    delete hist;
-    hist = nullptr;
+}
+
+void MemDepPredictor::pcPredict(PredictionInfo &info, Addr pc)
+{
+    auto pc_index = pc;
+
+    auto [found, cell] = find(pcTable, pc_index, false);
+
+    if (!found) {
+        DPRINTF(NoSQPred, "For load @ 0x%x "
+                          "pc entry not found\n", pc);
+        info.valid = false;
+        return;
+    }
+    info.valid = true;
+    info.bypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
+    info.distPair = cell->distPair;
+
+    DPRINTF(NoSQPred, "For load @ 0x%x, @ index: %u "
+                      "pc predictor predict %i with confi: %i "
+                      "to storeDistance %u\n",
+            pc, pc_index, info.bypass, cell->conf.read(),
+            cell->distPair.snDistance);
+}
+
+void MemDepPredictor::pathPredict(PathPredInfo &info, Addr pc, MemDepPredictor::FoldedPC path)
+{
+    auto path_index = genPathKey(pc, path);
+    auto [found, cell] = find(pathTable, path_index, true);
+    if (!found) {
+        DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, "
+                          "path signature not found\n", pc, path);
+        info.valid = false;
+        return;
+    }
+
+    info.valid = true;
+    info.bypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
+    info.distPair = cell->distPair;
+    info.confidence = cell->conf.read();
+    info.path = path;
+    DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, @ index: %u "
+                      "path predictor predict %i with confi: %i "
+                      "to storeDistance %u\n",
+            pc, path, path_index,
+            info.bypass, cell->conf.read(),
+            cell->distPair.snDistance);
+}
+
+void MemDepPredictor::patternPredict(PatternPredInfo &info, Addr pc)
+{
+    localPredictor.predict(pc, info);
 }
 
 MemDepPredictor *MemDepPredictorParams::create()
@@ -761,18 +756,19 @@ void MisPredTable::record(Addr pc, bool fn)
 }
 
 // valid, bypass, pair
-std::tuple<bool, bool, DistancePair>
-LocalPredictor::predict(Addr pc, MemPredHistory *&history)
+void
+LocalPredictor::predict(Addr pc, PatternPredInfo &info)
 {
     auto pair = instTable.find(pc);
     if (pair == instTable.end() || !pair->second.active) {
-        assert(history);
-        history->localSensitive = false;
+        info.valid = false;
         if (pair != instTable.end()) {
-            history->localHistory = pair->second.history;
+            info.localHistory = pair->second.history;
         }
-        return std::make_tuple(false, false, history->distPair);
+        return;
     }
+
+    info.valid = true;
     useCount++;
     if (useCount >= resetCount) {
         useCount = 0;
@@ -782,35 +778,30 @@ LocalPredictor::predict(Addr pc, MemPredHistory *&history)
     }
     auto &cell = pair->second;
 
-
     // prediction with perceptron:
     if (perceptron) {
         int32_t val = cell.predict();
 
-        history->bypass = val > 0;
-        history->predictionValue = val;
+        info.bypass = val > 0;
+        info.predictionValue = val;
     } else {
         // prediction with table:
          unsigned index = extractIndex(pc, cell.history);
-         history->bypass = predTable.at(index).read() > 0;
+        info.bypass = predTable.at(index).read() > 0;
     }
+    info.bypass &= info.distPair.dqDistance > 0;
 
-    history->localHistory = cell.history;
-    history->distPair = cell.distPair;
-    if (!history->distPair.dqDistance) {
-        history->bypass = false;
-    }
-    history->patternBypass = history->bypass;
-    history->localSensitive = true;
+    info.localHistory = cell.history;
+    info.distPair = cell.distPair;
     cell.recentUsed = true;
 
     if (Debug::NoSQPred) {
-        std::cout << "Local history: " << history->localHistory
+        std::cout << "Local history: " << info.localHistory
         << "\n";
     }
 
     cell.history <<= 1;
-    cell.history[0] = history->bypass;
+    cell.history[0] = info.bypass;
     cell.numSpeculativeBits += 1;
     if (Debug::NoSQPred) {
         std::cout << "History after pred: " << cell.history
@@ -820,44 +811,43 @@ LocalPredictor::predict(Addr pc, MemPredHistory *&history)
 
     DPRINTF(NoSQPred, "Predicted by pattern predictor, bypass: %i from with sn dist: %u, "
             "dq dist: %u\n",
-            history->bypass,
+            info.bypass,
             cell.distPair.snDistance, cell.distPair.dqDistance);
-    return std::make_tuple(true, history->bypass, cell.distPair);
 }
 
-void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
-                            MemPredHistory *&history)
+void LocalPredictor::updateOnMiss(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+                                  MemPredHistory &history)
 {
     auto pair = instTable.find(pc);
-    DPRINTF(NoSQPred, "Pattern entry not found: %i, local sensitive: %i\n",
-            pair == instTable.end(), history->localSensitive);
-    if (pair == instTable.end() || !history->localSensitive) { // evicted
+    DPRINTF(NoSQPred, "Pattern entry not found: %i, pattern sensitive: %i\n",
+            pair == instTable.end(), history.patternInfo.valid);
+    if (pair == instTable.end() || !history.patternInfo.valid) { // evicted
         recordMispred(pc, should_bypass, sn_dist, dq_dist, history);
         return;
     }
     DPRINTF(NoSQPred, "Updating pattern history entry\n");
     auto &cell = pair->second;
-    history->updatedHistory = true;
-    if (history->patternBypass != should_bypass) {
+    if (history.patternInfo.bypass != should_bypass) {
         if (Debug::NoSQPred) {
             std::cout << "History now: " << cell.history
                       << ", num spec: " << cell.numSpeculativeBits
                       << ", should bypass: " << should_bypass
                       << "\n";
         }
-        boost::dynamic_bitset<> used_hist(historyLen);
+        boost::dynamic_bitset<> used_hist(visableHistoryLen);
         unsigned index;
-        if (!history->willSquash) {
+        if (!history.willSquash) {
             if (cell.numSpeculativeBits > 0) {
                 if (cell.numSpeculativeBits <= historyLen) {
                     cell.history[cell.numSpeculativeBits - 1] = should_bypass;
                     assert(cell.numSpeculativeBits >= 0);
                 }
                 cell.numSpeculativeBits--;
-                DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history->inst, pc);
+                DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history.inst, pc);
             }
 
-            used_hist = history->localHistory;
+            used_hist = history.patternInfo.localHistory;
+            used_hist.resize(visableHistoryLen);
             index = extractIndex(pc, used_hist);
         } else {
             if (cell.numSpeculativeBits > 0) {
@@ -865,10 +855,11 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
                     cell.history >>= 1;
                 }
                 cell.numSpeculativeBits--;
-                DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history->inst, pc);
+                DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history.inst, pc);
             }
 
-            used_hist = history->localHistory;
+            used_hist = history.patternInfo.localHistory;
+            used_hist.resize(visableHistoryLen);
             index = extractIndex(pc, used_hist);
         }
         if (Debug::NoSQPred) {
@@ -881,14 +872,14 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
             std::cout << "Recover history to " << cell.history << "\n";
         }
         SignedSatCounter &counter = predTable.at(index);
-        if (history->willSquash) {
+        if (history.willSquash) {
             if (should_bypass) {
                 counter.increment();
             } else {
                 counter.decrement();
             }
-            if (perceptron && !history->localHistory.empty()) {
-                cell.fit(history, should_bypass);
+            if (perceptron && !history.patternInfo.localHistory.empty()) {
+                cell.fit(history.patternInfo, should_bypass);
             }
         }
         if (Debug::NoSQPred) {
@@ -908,7 +899,7 @@ void LocalPredictor::update(Addr pc, bool should_bypass, unsigned int sn_dist, u
 }
 
 void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
-                                   MemPredHistory *hist)
+                                   MemPredHistory &hist)
 {
     auto pair = instTable.find(pc);
     if (pair == instTable.end()) {
@@ -919,15 +910,13 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
             instTable.erase(it);
         }
     }
-    DPRINTF(NoSQPred, "%s reach 1\n", __func__);
     auto &cell = instTable[pc];
-    if (should_bypass && dq_dist) {
+    if (should_bypass && dq_dist && sn_dist == dq_dist * 100) {
         cell.distPair.snDistance = sn_dist;
         cell.distPair.dqDistance = dq_dist;
     }
     cell.count++;
 
-    DPRINTF(NoSQPred, "%s reach 2\n", __func__);
     touchCount++;
     if (touchCount >= resetCount) {
         touchCount = 0;
@@ -937,7 +926,6 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
     }
     cell.recentTouched = true;
 
-    DPRINTF(NoSQPred, "%s reach 3\n", __func__);
     if (cell.count > activeThres) {
         cell.active = true;
     }
@@ -949,16 +937,13 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
         } else {
             counter.decrement();
         }
-        if (perceptron && !hist->localHistory.empty()) {
-            cell.fit(hist, should_bypass);
+        if (perceptron && !hist.patternInfo.localHistory.empty()) {
+            cell.fit(hist.patternInfo, should_bypass);
         }
     }
-    DPRINTF(NoSQPred, "%s reach 4\n", __func__);
-    hist->updatedHistory = true;
 
     cell.history = cell.history << 1;
     cell.history[0] = should_bypass;
-    DPRINTF(NoSQPred, "%s reach 5\n", __func__);
 }
 
 unsigned LocalPredictor::extractIndex(Addr pc, const boost::dynamic_bitset<> &hist) const
@@ -1025,8 +1010,8 @@ LocalPredictor::LocalPredictor(const LocalPredictor::Params *p)
 }
 
 void
-LocalPredictor::recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
-                              MemPredHistory *&history)
+LocalPredictor::updateOnCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+                                MemPredHistory &history)
 {
     auto pair = instTable.find(pc);
     if (pair == instTable.end()) {
@@ -1036,16 +1021,15 @@ LocalPredictor::recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist,
     if (!cell.active) {
         return;
     }
-    history->updatedHistory = true;
     if (Debug::NoSQPred) {
         std::cout << "History now: " << cell.history
                   << ", num spec: " << cell.numSpeculativeBits
                   << ", should bypass: " << should_bypass
                   << "\n";
     }
-    assert(cell.numSpeculativeBits > 0 || !history->localSensitive);
+    assert(cell.numSpeculativeBits > 0 || !history.patternInfo.valid);
 //    assert(cell.history[cell.numSpeculativeBits - 1] == should_bypass);
-    if (!history->localSensitive) {
+    if (!history.patternInfo.valid) {
         return;
     }
     DPRINTF(NoSQPred, "Correctly predicted on history: ");
@@ -1054,11 +1038,11 @@ LocalPredictor::recordCorrect(Addr pc, bool should_bypass, unsigned int sn_dist,
         std::cout << "History now: " << cell.history << "\n";
     }
     cell.numSpeculativeBits--;
-    DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history->inst, pc);
+    DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history.inst, pc);
     assert(cell.numSpeculativeBits >= 0);
 }
 
-void LocalPredictor::recordSquash(Addr pc, MemPredHistory *&history)
+void LocalPredictor::recordSquash(Addr pc, MemPredHistory &history)
 {
     auto pair = instTable.find(pc);
     if (pair == instTable.end()) {
@@ -1076,7 +1060,7 @@ void LocalPredictor::recordSquash(Addr pc, MemPredHistory *&history)
     }
     cell.history >>= 1;
     cell.numSpeculativeBits--;
-    DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history->inst, pc);
+    DPRINTF(NoSQPred, "Inst[%lu] dec num spec for pc:0x%lx\n", history.inst, pc);
     assert(cell.numSpeculativeBits >= 0);
     if (Debug::NoSQPred) {
         std::cout << "History after squash: " << cell.history
@@ -1091,10 +1075,10 @@ int LocalPredCell::b2s(bool bypass)
     return ((int) bypass << 1) - 1;
 }
 
-void LocalPredCell::fit(MemPredHistory *hist, bool should_bypass)
+void LocalPredCell::fit(PatternPredInfo &hist, bool should_bypass)
 {
-    if (should_bypass == hist->bypass &&
-            abs(hist->predictionValue) > theta) {
+    if (should_bypass == hist.bypass &&
+        abs(hist.predictionValue) > theta) {
         return;
     }
     if (should_bypass) {
@@ -1103,10 +1087,10 @@ void LocalPredCell::fit(MemPredHistory *hist, bool should_bypass)
         weights.back().decrement();
     }
 
-    const auto &hist_bits = hist->localHistory;
+    const auto &hist_bits = hist.localHistory;
 
     if (Debug::NoSQPred) {
-        std::cout << "Local history: " << hist->localHistory
+        std::cout << "Local history: " << hist.localHistory
                   << "\n";
     }
     for (int i = 0; i < historyLen; i++) {

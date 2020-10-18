@@ -173,6 +173,10 @@ BaseO3DynInst<Impl>::initVars()
     receivedDest = false;
 
     readyTick = 0;
+
+    if (this->isLoad()) {
+        memPredHistory = std::make_unique<MemPredHistory>();
+    }
 }
 
 template <class Impl>
