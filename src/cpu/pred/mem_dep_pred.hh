@@ -489,15 +489,15 @@ class MemDepPredictor: public SimObject
 
     Addr extractTag(Addr key, bool isPath);
 
-    std::pair<bool, MemPredCell *> find(MemPredTable &table, Addr key, bool isPath);
+    std::pair<bool, MemPredCell *> find(MemPredTable &table, Addr indexKey, bool isPath, Addr tagKey);
 
-    MemPredCell *allocate(MemPredTable &table, Addr key, bool isPath);
+    MemPredCell *allocate(MemPredTable &table, Addr indexKey, bool isPath, Addr tagKey);
 
     void decrement(Addr pc, FoldedPC path);
 
-    void decrement(MemPredTable &table, Addr key, bool alloc, bool isPath);
+    void decrement(MemPredTable &table, Addr key, bool alloc, bool isPath, Addr pc);
 
-    void increment(MemPredTable &table, Addr key, const DistancePair &pair, bool isPath);
+    void increment(MemPredTable &table, Addr key, const DistancePair &pair, bool isPath, Addr pc);
 
     FoldedPC getPath() const;
 
