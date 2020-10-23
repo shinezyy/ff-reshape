@@ -960,15 +960,16 @@ FFDIEWC<Impl>::
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
 
     if (commitCounter >= commitTraceInterval && !head_inst->isForwarder()) {
-        DPRINTF(ASMCommit, "Inst[%lu]: %s\n",
-                 head_inst->seqNum, head_inst->staticInst->disassemble(head_inst->instAddr()));
+        // DPRINTF(ASMCommit, "Inst[%lu]: %s\n",
+        //          head_inst->seqNum, head_inst->staticInst->disassemble(head_inst->instAddr()));
 
         if (head_inst->isNormalStore()) {
-            DPRINTF(ASMCommit, "Inst[%lu] @pc:0x%lx store to 0x%lx\n",
-                    head_inst->seqNum, head_inst->instAddr(), head_inst->physEffAddrLow);
+            DPRINTF(ASMCommit, "Inst[%lu][%lu] @pc:0x%lx store to 0x%lx\n",
+                    head_inst->seqNum, commitAll, head_inst->instAddr(), head_inst->physEffAddrLow);
         } else if (head_inst->isLoad()) {
-            DPRINTF(ASMCommit, "Inst[%lu] @pc:0x%lx load from 0x%lx\n",
-                    head_inst->seqNum, head_inst->instAddr(), head_inst->physEffAddrLow);
+            DPRINTF(ASMCommit, "Inst[%lu][%lu] @pc:0x%lx load from 0x%lx have path: 0x%lx\n",
+                    head_inst->seqNum, commitAll, head_inst->instAddr(), head_inst->physEffAddrLow,
+                    head_inst->memPredHistory->pathInfo.path);
         }
 
         DPRINTFR(ValueCommit, "%lu VCommitting %lu instruction with sn:%lu PC:",
