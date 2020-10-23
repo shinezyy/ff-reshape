@@ -212,7 +212,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
             }
 
             mDepPred->update(tail->instAddr(), tail->memPredHistory->bypass,
-                             tail->memPredHistory->distPair.snDistance,
+                             tail->memPredHistory->distPair.ssnDistance,
                              tail->memPredHistory->distPair.dqDistance,
                              *(tail->memPredHistory));
             tail->loadVerified = true;
@@ -1809,7 +1809,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
         MemPredHistory &hist = *(inst->memPredHistory);
         mDepPred->update(
                 inst->instAddr(), hist.bypass,
-                hist.distPair.snDistance, hist.distPair.dqDistance,
+                hist.distPair.ssnDistance, hist.distPair.dqDistance,
                 hist);
     }
 }
@@ -2780,7 +2780,7 @@ FFDIEWC<Impl>::setUpLoad(DynInstPtr &inst)
 {
     const MemPredHistory &hist = *(inst->memPredHistory);
     if (hist.bypass) {
-        inst->seqNVul = inst->seqNum - hist.distPair.snDistance;
+        inst->seqNVul = inst->seqNum - hist.distPair.ssnDistance;
         // touch tssbf?
     }
 }

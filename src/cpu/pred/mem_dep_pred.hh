@@ -19,16 +19,16 @@
 
 struct DistancePair
 {
-    unsigned snDistance{};
+    unsigned ssnDistance{};
     unsigned dqDistance{};
 
     DistancePair() = default;
 
     DistancePair(unsigned sn, unsigned dq)
-    : snDistance(sn), dqDistance(dq) {}
+    : ssnDistance(sn), dqDistance(dq) {}
 
     DistancePair &operator = (const DistancePair &pair) {
-        snDistance = pair.snDistance;
+        ssnDistance = pair.ssnDistance;
         dqDistance = pair.dqDistance;
         return *this;
     }
@@ -43,6 +43,7 @@ struct MemPredCell
         conf(counter_bits)
     {}
 };
+
 
 struct PredictionInfo
 {
@@ -361,6 +362,17 @@ class MetaPredictor: public SimObject
 
 };
 
+struct RecentStore {
+    InstSeqNum seq;
+    BasePointer pointer;
+
+    RecentStore (const InstSeqNum &s, const BasePointer &p)
+    :
+    seq(s),
+    pointer(p)
+    {}
+};
+
 class MemDepPredictor: public SimObject
 {
   public:
@@ -511,6 +523,23 @@ class MemDepPredictor: public SimObject
     void dumpTopMisprediction() const;
 
     void squashLoad(Addr pc, MemPredHistory &hist);
+
+  private:
+    std::deque<RecentStore> recentStoreTable;
+
+    bool storeWalking{false};
+  public:
+    BasePointer getStorePosition(uint64_t ssn_distance) const;
+
+    void addNewStore(const BasePointer &ptr, InstSeqNum seq);
+
+    void squashStoreTable();
+
+    void storeTableWalkStart();
+
+    void storeTableWalkEnd();
+
+    void removeStore(InstSeqNum seq);
 };
 
 #endif // __MEM_DEP_PRED_HH__

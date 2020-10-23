@@ -91,7 +91,7 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory &hist)
             "overall: bypass: %i, store dist: %u, dq dist: %u\n",
             load_pc,
             hist.bypass,
-            hist.distPair.snDistance, hist.distPair.dqDistance
+            hist.distPair.ssnDistance, hist.distPair.dqDistance
             );
     if (hist.bypass) {
         assert(hist.distPair.dqDistance > 0);
@@ -182,7 +182,7 @@ MemDepPredictor::increment(MemPredTable &table, Addr key, const DistancePair &pa
     std::tie(found, cell) = find(table, key, isPath, pc);
     if (found) {
         // DPRINTF(NoSQPred, "Inc in place\n");
-        if (pair.dqDistance && pair.dqDistance * 100 == pair.snDistance) {
+        if (pair.dqDistance && pair.dqDistance * 100 == pair.ssnDistance) {
             cell->distPair = pair;
         }
         cell->conf.increment(8);
@@ -191,7 +191,7 @@ MemDepPredictor::increment(MemPredTable &table, Addr key, const DistancePair &pa
     } else {
         // DPRINTF(NoSQPred, "Inc on allocation\n");
         cell = allocate(table, key, isPath, pc);
-        if (pair.dqDistance && pair.dqDistance * 100 == pair.snDistance) {
+        if (pair.dqDistance && pair.dqDistance * 100 == pair.ssnDistance) {
             cell->distPair = pair;
         }
         cell->conf.increment(8);
@@ -525,7 +525,7 @@ void MemDepPredictor::pcPredict(PredictionInfo &info, Addr pc)
                       "pc predictor predict %i with confi: %i "
                       "to storeDistance %u\n",
             pc, pc_index, info.bypass, cell->conf.read(),
-            cell->distPair.snDistance);
+            cell->distPair.ssnDistance);
 }
 
 void MemDepPredictor::pathPredict(PathPredInfo &info, Addr pc, MemDepPredictor::FoldedPC path)
@@ -550,12 +550,49 @@ void MemDepPredictor::pathPredict(PathPredInfo &info, Addr pc, MemDepPredictor::
                       "to storeDistance %u\n",
             pc, path, path_index,
             info.bypass, cell->conf.read(),
-            cell->distPair.snDistance);
+            cell->distPair.ssnDistance);
 }
 
 void MemDepPredictor::patternPredict(PatternPredInfo &info, Addr pc)
 {
     localPredictor.predict(pc, info);
+}
+
+BasePointer MemDepPredictor::getStorePosition(uint64_t ssn_distance) const {
+    assert(recentStoreTable.size() > ssn_distance);
+    assert(!storeWalking);
+    return recentStoreTable[ssn_distance].pointer;
+}
+
+void MemDepPredictor::addNewStore(const BasePointer &ptr, InstSeqNum seq) {
+    recentStoreTable.emplace_back(seq, ptr);
+}
+
+void MemDepPredictor::squashStoreTable() {
+    assert(!storeWalking);
+    recentStoreTable.clear();
+}
+
+void MemDepPredictor::storeTableWalkStart() {
+    storeWalking = true;
+}
+
+void MemDepPredictor::storeTableWalkEnd() {
+    storeWalking = false;
+}
+
+void MemDepPredictor::removeStore(InstSeqNum seq) {
+    auto it = recentStoreTable.rbegin(),
+    e = recentStoreTable.rend();
+    while (it != e) {
+        if (it->seq <= seq) {
+            DPRINTF(NoSQPred, "Remove Inst[%lu] from recent store table\n", it->seq);
+            std::advance(it, 1); // backward to forward dirty things
+            recentStoreTable.erase(it.base());
+        } else {
+            break;
+        }
+    }
 }
 
 MemDepPredictor *MemDepPredictorParams::create()
@@ -819,7 +856,7 @@ LocalPredictor::predict(Addr pc, PatternPredInfo &info)
     DPRINTF(NoSQPred, "Predicted by pattern predictor, bypass: %i from with sn dist: %u, "
             "dq dist: %u\n",
             info.bypass,
-            cell.distPair.snDistance, cell.distPair.dqDistance);
+            cell.distPair.ssnDistance, cell.distPair.dqDistance);
 }
 
 void LocalPredictor::updateOnMiss(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
@@ -900,7 +937,7 @@ void LocalPredictor::updateOnMiss(Addr pc, bool should_bypass, unsigned int sn_d
         }
     }
     if (should_bypass && dq_dist) {
-        cell.distPair.snDistance = sn_dist;
+        cell.distPair.ssnDistance = sn_dist;
         cell.distPair.dqDistance = dq_dist;
     }
 }
@@ -919,7 +956,7 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
     }
     auto &cell = instTable[pc];
     if (should_bypass && dq_dist && sn_dist == dq_dist * 100) {
-        cell.distPair.snDistance = sn_dist;
+        cell.distPair.ssnDistance = sn_dist;
         cell.distPair.dqDistance = dq_dist;
     }
     cell.count++;
