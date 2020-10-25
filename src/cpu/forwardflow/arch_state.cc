@@ -289,13 +289,20 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
         MemPredHistory &hist = *(inst->memPredHistory);
         unsigned ssn_dist = hist.distPair.ssnDistance;
         TermedPointer predecessor_pointer = mDepPred->getStorePosition(ssn_dist);
+        if (!predecessor_pointer.valid) {
+            bypass_canceled = true;
+        }
         int predecessor_position = dq->c.pointer2uint(predecessor_pointer);
+
+        if (!dq->validPosition(predecessor_position)) {
+            bypass_canceled = true;
+        }
 
         DPRINTF(NoSQPred, "Inst[%lu] is predicted to bypass from" ptrfmt " with dist %u\n",
                 inst->seqNum,
                 extptr(predecessor_pointer), hist.distPair.dqDistance);
 
-        if (dq->validPosition(predecessor_position)) {
+        if (!bypass_canceled) {
             inst->bypassOp = memBypassOp;
             inst->hasOrderDep = true;
 
@@ -310,9 +317,9 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
             // TODO: update in pair consuming, especially for store
             pairs.emplace_back(predecessor_pointer, receiver);
             pairs.back().isBypass = true;
+
         } else {
             DPRINTF(NoSQSMB, "However, producer is not at a valid position (squashed)\n");
-            bypass_canceled = true;
         }
     }
 

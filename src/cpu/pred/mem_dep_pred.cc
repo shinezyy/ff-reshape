@@ -44,6 +44,7 @@ MemDepPredictor::MemDepPredictor(const Params *params)
     tssbf(params),
     sssbf(params)
 {
+    nullTermedPointer.valid = false;
 }
 
 void
@@ -93,9 +94,6 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory &hist)
             hist.bypass,
             hist.distPair.ssnDistance, hist.distPair.dqDistance
             );
-    if (hist.bypass) {
-        assert(hist.distPair.dqDistance > 0);
-    }
 }
 
 void
@@ -549,9 +547,12 @@ void MemDepPredictor::patternPredict(PatternPredInfo &info, Addr pc)
 }
 
 TermedPointer MemDepPredictor::getStorePosition(unsigned ssn_distance) const {
-    assert(recentStoreTable.size() > ssn_distance);
-    assert(!storeWalking);
-    return recentStoreTable[ssn_distance].pointer;
+    if (recentStoreTable.size() > ssn_distance) {
+        assert(!storeWalking);
+        return recentStoreTable[ssn_distance].pointer;
+    } else {
+        return nullTermedPointer;
+    }
 }
 
 void MemDepPredictor::addNewStore(const TermedPointer &ptr, InstSeqNum seq) {

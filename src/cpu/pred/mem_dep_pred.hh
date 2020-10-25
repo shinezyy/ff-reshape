@@ -527,6 +527,9 @@ class MemDepPredictor: public SimObject
     std::deque<RecentStore> recentStoreTable;
 
     bool storeWalking{false};
+
+    TermedPointer nullTermedPointer;
+
   public:
     TermedPointer getStorePosition(unsigned ssn_distance) const;
 

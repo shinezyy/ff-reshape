@@ -1192,11 +1192,16 @@ void DQTop<Impl>::walkThroughStores(deque<RecentStore> &recentStoreTable)
     unsigned u = tail;
     while (validPosition(u) && logicallyLET(u, head)) {
         const BasePointer ptr = c.uint2Pointer(u);
+        DPRINTF(NoSQPred, "Walk store at" ptrfmt "\n", extptr(ptr));
         DataflowQueueBank *bank = (*dqGroups[ptr.group])[ptr.bank];
         DynInstPtr inst = bank->readInstsFromBank(ptr);
         if (inst && inst->isNormalStore()) {
             recentStoreTable.emplace_front(inst->seqNum, inst->dqPosition);
         }
+        if (u == head) {
+            break;
+        }
+        u = inc(u);
     }
 }
 
