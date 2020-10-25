@@ -441,6 +441,8 @@ void FFDIEWC<Impl>::dispatch() {
             ldstQueue.insertStore(inst);
             ++dispStores;
 
+            mDepPred->addNewStore(inst->dqPosition, inst->seqNum);
+
             if (inst->isStoreConditional()) {
                 DPRINTF(DIEWC, "Store cond: %s\n",
                         inst->staticInst->disassemble(inst->instAddr()));
@@ -1748,12 +1750,13 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
     } else if (inst->wbCount == 2 && !inst->isNormalBypass()) {
 
         if (cell) {
-            auto sn_dist = inst->seqNum - cell->lastStore;
-            auto dq_dist = dq.c.computeDist(inst->dqPosition, cell->predecessorPosition);
+            auto ssn_dist = inst->storeSeq - cell->lastStoreSSN;
+            auto dq_dist = 0;
 
-            DPRINTF(NoSQPred, "Checking mem dep:" ptrfmt "->" ptrfmt " %s\n",
-                    extptr(cell->predecessorPosition), extptr(inst->dqPosition),
+            DPRINTF(NoSQPred, "Checking mem dep: %lu -> %lu %s\n",
+                    cell->lastStoreSSN, inst->seqNum,
                     violation ? "" : "for silent violation");
+
             if (!violation) {
                 if (!inst->memPredHistory->updated) {
                     DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass",
@@ -1768,14 +1771,9 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                         inst->seqNum,
                         inst->instAddr(), inst->physEffAddrLow, inst->effSize,
                         cell,
-                        sn_dist, dq_dist,
+                        ssn_dist, dq_dist,
                         *(inst->memPredHistory));
             } else {
-                if (sn_dist != dq_dist * 100) {
-                    DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
-                                      "sn_dist: %u, dq dist: %u\n",
-                            sn_dist, dq_dist);
-                }
                 DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass",
                         inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
                 if (Debug::NoSQPred) {
@@ -1784,7 +1782,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                 }
                 mDepPred->update(
                         inst->instAddr(), true,
-                        sn_dist, dq_dist,
+                        ssn_dist, dq_dist,
                         *(inst->memPredHistory));
                 mDepPred->dumpTopMisprediction();
             }

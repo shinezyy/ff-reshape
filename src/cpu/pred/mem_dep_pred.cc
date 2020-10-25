@@ -46,13 +46,13 @@ MemDepPredictor::MemDepPredictor(const Params *params)
 {
 }
 
-std::pair<bool, DistancePair>
+void
 MemDepPredictor::predict(Addr load_pc, MemPredHistory &hist)
 {
-    return predict(load_pc, controlPath, hist);
+    predict(load_pc, controlPath, hist);
 }
 
-std::pair<bool, DistancePair>
+void
 MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory &hist)
 {
     pcPredict(hist.pcInfo, load_pc);
@@ -96,8 +96,6 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory &hist)
     if (hist.bypass) {
         assert(hist.distPair.dqDistance > 0);
     }
-
-    return std::make_pair(hist.bypass, hist.distPair);
 }
 
 void
@@ -183,7 +181,7 @@ MemDepPredictor::increment(MemPredTable &table, Addr key, const DistancePair &pa
     if (found) {
         // DPRINTF(NoSQPred, "Inc in place\n");
         if (pair.dqDistance && pair.dqDistance * 100 == pair.ssnDistance) {
-            cell->distPair = pair;
+            cell->storeDistance = pair.ssnDistance;
         }
         cell->conf.increment(8);
         DPRINTF(NoSQPred, "@%s index %lu conf after inc: %i\n",
@@ -192,7 +190,7 @@ MemDepPredictor::increment(MemPredTable &table, Addr key, const DistancePair &pa
         // DPRINTF(NoSQPred, "Inc on allocation\n");
         cell = allocate(table, key, isPath, pc);
         if (pair.dqDistance && pair.dqDistance * 100 == pair.ssnDistance) {
-            cell->distPair = pair;
+            cell->storeDistance = pair.ssnDistance;
         }
         cell->conf.increment(8);
         DPRINTF(NoSQPred, "@%s index %lu conf after inc: %i\n",
@@ -310,9 +308,7 @@ void MemDepPredictor::commitStore(Addr eff_addr, uint8_t eff_size,
         DPRINTF(NoSQPred, "Allocating new entry\n");
         cell = tssbf.allocate(eff_addr);
     }
-    cell->lastStore = sn;
-    cell->lastStorePosition = position;
-    cell->predecessorPosition = position;
+    cell->lastStoreSSN = sn;
     cell->offset = eff_addr & tssbf.offsetMask;
     cell->size = eff_size;
 
@@ -332,18 +328,12 @@ InstSeqNum MemDepPredictor::lookupAddr(Addr eff_addr) {
     if (!cell) {
         return 0;
     } else {
-        return cell->lastStore;
+        return cell->lastStoreSSN;
     }
 }
 
 void MemDepPredictor::commitLoad(Addr eff_addr, InstSeqNum sn, BasePointer &position) {
-    DPRINTF(NoSQPred, "eff_addr: 0x%lx, debug: %p\n", eff_addr, debug);
-    SSBFCell *cell = tssbf.find(eff_addr);
-    if (!cell) {
-        DPRINTF(NoSQPred, "When committing load producing store is not found\n");
-    } else {
-        cell->predecessorPosition = position;
-    }
+    // pass
 }
 
 Addr
@@ -373,8 +363,8 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
             DPRINTF(NoSQSMB, "Cannot skip because SSBF entry not found\n");
 
         } else {
-            DPRINTF(NoSQSMB, "last store @ 0x%lx is %lu\n", eff_addr_low, cell->lastStore);
-            skip_verify = cell->lastStore == nvul && cell->offset == offset && cell->size == size;
+            DPRINTF(NoSQSMB, "last store @ 0x%lx is %lu\n", eff_addr_low, cell->lastStoreSSN);
+            skip_verify = cell->lastStoreSSN == nvul && cell->offset == offset && cell->size == size;
             // log
             DPRINTF(NoSQSMB, "recorded offset: %u, offset: %u,"
                              "recorded size: %u, size: %u\n",
@@ -400,12 +390,12 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
                 sssbf.dump();
             }
         } else {
-            skip_verify = cell->lastStore > 0 && cell->lastStore <= nvul;
+            skip_verify = cell->lastStoreSSN > 0 && cell->lastStoreSSN <= nvul;
 
             // log
             DPRINTF(NoSQSMB, "%s with last store @ 0x%lx is %lu\n",
                     skip_verify ? "Skip" : "Dont Skip",
-                    eff_addr_low, cell->lastStore);
+                    eff_addr_low, cell->lastStoreSSN);
         }
     }
 
@@ -417,7 +407,7 @@ void MemDepPredictor::touchSSBF(Addr eff_addr, InstSeqNum ssn)
     auto cell = tssbf.find(eff_addr);
     if (!cell) {
         cell = tssbf.allocate(eff_addr);
-        cell->lastStore = ssn;
+        cell->lastStoreSSN = ssn;
         cell->size = 0;
     }
 }
@@ -425,8 +415,8 @@ void MemDepPredictor::touchSSBF(Addr eff_addr, InstSeqNum ssn)
 void MemDepPredictor::completeStore(Addr eff_addr, InstSeqNum ssn)
 {
     auto cell = tssbf.find(eff_addr);
-    if (cell && cell->lastStore < ssn) {
-        cell->lastStore = ssn;
+    if (cell && cell->lastStoreSSN < ssn) {
+        cell->lastStoreSSN = ssn;
     }
 }
 
@@ -445,7 +435,7 @@ void MemDepPredictor::checkSilentViolation(
 {
     if (!dq_dist || sn_dist != dq_dist * 100) {
         DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
-                          "%lu -> %lu with dq dist: %u\n", last_store_cell->lastStore, load_sn, dq_dist);
+                          "%lu -> %lu with dq dist: %u\n", last_store_cell->lastStoreSSN, load_sn, dq_dist);
         if (hist.patternInfo.valid) {
             updatePredictorsOnCorrect(load_pc, hist.patternInfo.bypass, sn_dist, dq_dist, hist);
         }
@@ -518,14 +508,14 @@ void MemDepPredictor::pcPredict(PredictionInfo &info, Addr pc)
         return;
     }
     info.valid = true;
-    info.bypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
-    info.distPair = cell->distPair;
+    info.bypass = cell->conf.read() > 0 && cell->storeDistance;
+    info.distPair.ssnDistance = cell->storeDistance;
 
     DPRINTF(NoSQPred, "For load @ 0x%x, @ index: %u "
                       "pc predictor predict %i with confi: %i "
                       "to storeDistance %u\n",
             pc, pc_index, info.bypass, cell->conf.read(),
-            cell->distPair.ssnDistance);
+            cell->storeDistance);
 }
 
 void MemDepPredictor::pathPredict(PathPredInfo &info, Addr pc, MemDepPredictor::FoldedPC path)
@@ -541,8 +531,8 @@ void MemDepPredictor::pathPredict(PathPredInfo &info, Addr pc, MemDepPredictor::
     }
 
     info.valid = true;
-    info.bypass = cell->conf.read() > 0 && cell->distPair.dqDistance;
-    info.distPair = cell->distPair;
+    info.bypass = cell->conf.read() > 0 && cell->storeDistance;
+    info.distPair.ssnDistance = cell->storeDistance;
     info.confidence = cell->conf.read();
     info.path = path;
     DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, @ index: %u "
@@ -550,7 +540,7 @@ void MemDepPredictor::pathPredict(PathPredInfo &info, Addr pc, MemDepPredictor::
                       "to storeDistance %u\n",
             pc, path, path_index,
             info.bypass, cell->conf.read(),
-            cell->distPair.ssnDistance);
+            cell->storeDistance);
 }
 
 void MemDepPredictor::patternPredict(PatternPredInfo &info, Addr pc)
@@ -558,13 +548,13 @@ void MemDepPredictor::patternPredict(PatternPredInfo &info, Addr pc)
     localPredictor.predict(pc, info);
 }
 
-BasePointer MemDepPredictor::getStorePosition(uint64_t ssn_distance) const {
+TermedPointer MemDepPredictor::getStorePosition(unsigned ssn_distance) const {
     assert(recentStoreTable.size() > ssn_distance);
     assert(!storeWalking);
     return recentStoreTable[ssn_distance].pointer;
 }
 
-void MemDepPredictor::addNewStore(const BasePointer &ptr, InstSeqNum seq) {
+void MemDepPredictor::addNewStore(const TermedPointer &ptr, InstSeqNum seq) {
     recentStoreTable.emplace_back(seq, ptr);
 }
 
@@ -664,7 +654,7 @@ void TSSBF::checkAndRandEvictOldest(TSSBF::SSBFSet &set)
         DPRINTF(NoSQPred, "Doing Eviction\n");
         auto it = set.begin(), oldest = set.begin(), e = set.end();
         while (it != e) {
-            if (it->second.lastStore < oldest->second.lastStore) {
+            if (it->second.lastStoreSSN < oldest->second.lastStoreSSN) {
                 oldest = it;
             }
             it++;
@@ -686,8 +676,8 @@ InstSeqNum TSSBF::findYoungestInSet(Addr key)
 
     InstSeqNum youngest = 0;
     for (const auto &it: set) {
-        if (it.second.lastStore > youngest) {
-            youngest = it.second.lastStore;
+        if (it.second.lastStoreSSN > youngest) {
+            youngest = it.second.lastStoreSSN;
         }
     }
     return youngest;
@@ -833,11 +823,11 @@ LocalPredictor::predict(Addr pc, PatternPredInfo &info)
          unsigned index = extractIndex(pc, cell.history);
         info.bypass = predTable.at(index).read() > 0;
     }
-    info.bypass &= info.distPair.dqDistance > 0;
 
     info.localHistory = cell.history;
-    info.distPair = cell.distPair;
+    info.distPair.ssnDistance = cell.storeDistance;
     cell.recentUsed = true;
+    info.bypass &= info.distPair.ssnDistance > 0;
 
     if (Debug::NoSQPred) {
         std::cout << "Local history: " << info.localHistory
@@ -853,20 +843,19 @@ LocalPredictor::predict(Addr pc, PatternPredInfo &info)
                 << "\n";
     }
 
-    DPRINTF(NoSQPred, "Predicted by pattern predictor, bypass: %i from with sn dist: %u, "
+    DPRINTF(NoSQPred, "Predicted by pattern predictor, bypass: %i, from with ssn dist: %u, "
             "dq dist: %u\n",
-            info.bypass,
-            cell.distPair.ssnDistance, cell.distPair.dqDistance);
+            info.bypass, cell.storeDistance);
 }
 
-void LocalPredictor::updateOnMiss(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+void LocalPredictor::updateOnMiss(Addr pc, bool should_bypass, unsigned int ssn_dist, unsigned int dq_dist,
                                   MemPredHistory &history)
 {
     auto pair = instTable.find(pc);
     DPRINTF(NoSQPred, "Pattern entry not found: %i, pattern sensitive: %i\n",
             pair == instTable.end(), history.patternInfo.valid);
     if (pair == instTable.end() || !history.patternInfo.valid) { // evicted
-        recordMispred(pc, should_bypass, sn_dist, dq_dist, history);
+        recordMispred(pc, should_bypass, ssn_dist, dq_dist, history);
         return;
     }
     DPRINTF(NoSQPred, "Updating pattern history entry\n");
@@ -937,12 +926,11 @@ void LocalPredictor::updateOnMiss(Addr pc, bool should_bypass, unsigned int sn_d
         }
     }
     if (should_bypass && dq_dist) {
-        cell.distPair.ssnDistance = sn_dist;
-        cell.distPair.dqDistance = dq_dist;
+        cell.storeDistance = ssn_dist;
     }
 }
 
-void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int ssn_dist, unsigned int dq_dist,
                                    MemPredHistory &hist)
 {
     auto pair = instTable.find(pc);
@@ -955,9 +943,8 @@ void LocalPredictor::recordMispred(Addr pc, bool should_bypass, unsigned int sn_
         }
     }
     auto &cell = instTable[pc];
-    if (should_bypass && dq_dist && sn_dist == dq_dist * 100) {
-        cell.distPair.ssnDistance = sn_dist;
-        cell.distPair.dqDistance = dq_dist;
+    if (should_bypass && dq_dist && ssn_dist == dq_dist * 100) {
+        cell.storeDistance = ssn_dist;
     }
     cell.count++;
 

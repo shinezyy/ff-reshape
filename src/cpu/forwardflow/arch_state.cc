@@ -286,15 +286,14 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
         !inst->isRVAmoLoadHalf() &&
         inst->memPredHistory->bypass) { // NoSQ
 
-        int ld_position = dq->c.pointer2uint(inst->dqPosition);
-        int predecessor_position = ld_position - (int) inst->memPredHistory->distPair.dqDistance; // predicted
-        if (predecessor_position < 0) {
-            predecessor_position += dq->c.dqSize;
-        }
-        auto predecessor_pointer = dq->c.uint2Pointer(predecessor_position);
+        MemPredHistory &hist = *(inst->memPredHistory);
+        unsigned ssn_dist = hist.distPair.ssnDistance;
+        TermedPointer predecessor_pointer = mDepPred->getStorePosition(ssn_dist);
+        int predecessor_position = dq->c.pointer2uint(predecessor_pointer);
+
         DPRINTF(NoSQPred, "Inst[%lu] is predicted to bypass from" ptrfmt " with dist %u\n",
                 inst->seqNum,
-                extptr(predecessor_pointer), inst->memPredHistory->distPair.dqDistance);
+                extptr(predecessor_pointer), hist.distPair.dqDistance);
 
         if (dq->validPosition(predecessor_position)) {
             inst->bypassOp = memBypassOp;
@@ -441,7 +440,8 @@ ArchState<Impl>::ArchState(DerivFFCPUParams *params)
     : MaxCheckpoints(params->MaxCheckpoints),
     gen(0xa2c57a7e),
     decoupleOpPosition(params->DecoupleOpPosition),
-    readyHint(params->ReadyHint)
+    readyHint(params->ReadyHint),
+    mDepPred(params->mDepPred)
 {
 }
 

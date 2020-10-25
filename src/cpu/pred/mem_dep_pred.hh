@@ -37,7 +37,7 @@ struct DistancePair
 struct MemPredCell
 {
     SignedSatCounter conf;
-    DistancePair distPair;
+    unsigned storeDistance;
 
     explicit MemPredCell (unsigned counter_bits):
         conf(counter_bits)
@@ -93,11 +93,10 @@ struct MemPredHistory
 struct SSBFCell
 {
     using SSN = InstSeqNum;
-    SSN lastStore{};
+    SSN lastStoreSSN{};
+    InstSeqNum lastStoreSN{};
     uint8_t size;
     uint8_t offset;
-    BasePointer lastStorePosition;
-    BasePointer predecessorPosition;
 };
 
 template <class Container>
@@ -218,7 +217,7 @@ struct LocalPredCell
 {
     const unsigned historyLen;
 
-    DistancePair distPair;
+    unsigned storeDistance;
 
     bool recentUsed{false};
     bool recentTouched{false};
@@ -290,7 +289,7 @@ class LocalPredictor: public SimObject
     Table::iterator evictOneInst();
 
   public:
-    void recordMispred(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
+    void recordMispred(Addr pc, bool should_bypass, unsigned int ssn_dist, unsigned int dq_dist,
                        MemPredHistory &hist);
 
     void updateOnCorrect(Addr pc, bool should_bypass, unsigned int sn_dist, unsigned int dq_dist,
@@ -300,7 +299,7 @@ class LocalPredictor: public SimObject
     void predict(Addr pc, PatternPredInfo &info);
 
     void updateOnMiss(Addr pc, bool should_bypass,
-                      unsigned sn_dist, unsigned dq_dist, MemPredHistory &history);
+                      unsigned ssn_dist, unsigned dq_dist, MemPredHistory &history);
 
     const std::string _name;
 
@@ -364,9 +363,9 @@ class MetaPredictor: public SimObject
 
 struct RecentStore {
     InstSeqNum seq;
-    BasePointer pointer;
+    TermedPointer pointer;
 
-    RecentStore (const InstSeqNum &s, const BasePointer &p)
+    RecentStore (const InstSeqNum &s, const TermedPointer &p)
     :
     seq(s),
     pointer(p)
@@ -447,7 +446,7 @@ class MemDepPredictor: public SimObject
 
     const int pathConfThres{15};
 
-    std::pair<bool, DistancePair> predict(Addr load_pc, FoldedPC path, MemPredHistory &hist);
+    void predict(Addr load_pc, FoldedPC path, MemPredHistory &hist);
 
     void pcPredict(PredictionInfo &info, Addr pc);
 
@@ -455,7 +454,7 @@ class MemDepPredictor: public SimObject
 
     void patternPredict(PatternPredInfo &info, Addr pc);
 
-    std::pair<bool, DistancePair> predict(Addr load_pc, MemPredHistory &hist);
+    void predict(Addr load_pc, MemPredHistory &hist);
 
     void recordPath(Addr control_pc, bool is_call, bool pred_taken);
 
@@ -529,9 +528,9 @@ class MemDepPredictor: public SimObject
 
     bool storeWalking{false};
   public:
-    BasePointer getStorePosition(uint64_t ssn_distance) const;
+    TermedPointer getStorePosition(unsigned ssn_distance) const;
 
-    void addNewStore(const BasePointer &ptr, InstSeqNum seq);
+    void addNewStore(const TermedPointer &ptr, InstSeqNum seq);
 
     void squashStoreTable();
 

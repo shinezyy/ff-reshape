@@ -20,6 +20,7 @@
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/dataflow_queue_common.hh"
 #include "cpu/forwardflow/dq_pointer.hh"
+#include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/reg_class.hh"
 
 //#include "cpu/forwardflow/dyn_inst.hh"
@@ -195,6 +196,8 @@ private:
     const bool readyHint;
 
     void countChild(DQPointer parent_ptr, DynInstPtr &inst);
+
+    MemDepPredictor *mDepPred;
 };
 
 }
