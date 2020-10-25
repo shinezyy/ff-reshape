@@ -27,6 +27,7 @@
 #include "cpu/forwardflow/crossbar_narrow.hh"
 #include "cpu/forwardflow/dataflow_queue_common.hh"
 #include "cpu/forwardflow/network.hh"
+#include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/timebuf.hh"
 #include "fu_pool.hh"
 
@@ -338,6 +339,8 @@ public:
     void checkSanity() const;
 
     void squashLoad(DynInstPtr &inst);
+
+    void walkThroughStores(std::deque<RecentStore> &recentStoreTable);
 };
 
 

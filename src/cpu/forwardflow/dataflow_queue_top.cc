@@ -1186,6 +1186,20 @@ void DQTop<Impl>::squashLoad(DQTop::DynInstPtr &inst)
     diewc->squashLoad(inst);
 }
 
+template<class Impl>
+void DQTop<Impl>::walkThroughStores(deque<RecentStore> &recentStoreTable)
+{
+    unsigned u = tail;
+    while (validPosition(u) && logicallyLET(u, head)) {
+        const BasePointer ptr = c.uint2Pointer(u);
+        DataflowQueueBank *bank = (*dqGroups[ptr.group])[ptr.bank];
+        DynInstPtr inst = bank->readInstsFromBank(ptr);
+        if (inst && inst->isNormalStore()) {
+            recentStoreTable.emplace_front(inst->seqNum, inst->dqPosition);
+        }
+    }
+}
+
 
 }
 

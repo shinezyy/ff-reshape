@@ -539,6 +539,9 @@ class MemDepPredictor: public SimObject
     void storeTableWalkEnd();
 
     void removeStore(InstSeqNum seq);
+
+    std::deque<RecentStore> &getRecentStoreTable();
+
 };
 
 #endif // __MEM_DEP_PRED_HH__

@@ -1352,25 +1352,16 @@ void FFDIEWC<Impl>::handleSquash() {
             dqSquashSeq = squashed_inst;
             archState.recoverCPT(squashed_inst);
 
-            // toNextCycle->diewc2diewc.squash = false;
-            // toNextCycle->diewc2diewc.pc = fromLastCycle->diewc2diewc.pc;
-            // does not override if there is another squashing this cycle
-
-            // todo: following LOCs will cause loop?
-            // toNextCycle->diewc2diewc.doneSeqNum = squashed_inst;
-            // toNextCycle->diewc2diewc.squash = true;
-            // toNextCycle->diewc2diewc.dqSquashing = true;
-            // toNextCycle->diewc2diewc.mispredictInst =
-            //         fromLastCycle->diewc2diewc.mispredictInst;
-            // toNextCycle->diewc2diewc.branchTaken =
-            //         fromLastCycle->diewc2diewc.branchTaken;
-            // toNextCycle->diewc2diewc.squashInst = dq.findInst(squashed_inst);
-
             if (toNextCycle->diewc2diewc.mispredictInst) {
                 if (toNextCycle->diewc2diewc.mispredictInst->isUncondCtrl()) {
                     toNextCycle->diewc2diewc.branchTaken = true;
                 }
             }
+
+            mDepPred->squashStoreTable();
+            mDepPred->storeTableWalkStart();
+            dq.walkThroughStores(mDepPred->getRecentStoreTable());
+            mDepPred->storeTableWalkEnd();
 
         } else {
             DPRINTF(FFSquash, "Squashing all!\n");
@@ -1378,7 +1369,6 @@ void FFDIEWC<Impl>::handleSquash() {
             bool dont_care_either = false;
             dq.squash(dont_care, true, dont_care_either);
             archState.squashAll();
-            // archState.dumpMaps();
         }
 
     }

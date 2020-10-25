@@ -555,7 +555,7 @@ TermedPointer MemDepPredictor::getStorePosition(unsigned ssn_distance) const {
 }
 
 void MemDepPredictor::addNewStore(const TermedPointer &ptr, InstSeqNum seq) {
-    recentStoreTable.emplace_back(seq, ptr);
+    recentStoreTable.emplace_front(seq, ptr);
 }
 
 void MemDepPredictor::squashStoreTable() {
@@ -583,6 +583,10 @@ void MemDepPredictor::removeStore(InstSeqNum seq) {
             break;
         }
     }
+}
+
+std::deque<RecentStore> &MemDepPredictor::getRecentStoreTable() {
+    return recentStoreTable;
 }
 
 MemDepPredictor *MemDepPredictorParams::create()
