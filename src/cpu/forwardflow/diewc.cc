@@ -1369,6 +1369,7 @@ void FFDIEWC<Impl>::handleSquash() {
             bool dont_care_either = false;
             dq.squash(dont_care, true, dont_care_either);
             archState.squashAll();
+            mDepPred->squashStoreTable();
         }
 
     }

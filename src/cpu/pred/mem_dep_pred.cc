@@ -554,8 +554,12 @@ void MemDepPredictor::patternPredict(PatternPredInfo &info, Addr pc)
 TermedPointer MemDepPredictor::getStorePosition(unsigned ssn_distance) const {
     if (recentStoreTable.size() > ssn_distance) {
         assert(!storeWalking);
-//        DPRINTF(NoSQPred, "RCST[0]: %lu ptrfmt, RCST[1]: %lu ptrfmt, RCST[2]: %lu ptrfmt",
-//                recentStoreTable[0].seq);
+        if (Debug::NoSQPred) {
+            for (unsigned u = 0; u < recentStoreTable.size(); u++) {
+                DPRINTF(NoSQPred, "RCST[%u]: %lu " ptrfmt "\n",
+                        u, recentStoreTable[u].seq, extptr(recentStoreTable[u].pointer));
+            }
+        }
         return recentStoreTable[ssn_distance].pointer;
     } else {
         return nullTermedPointer;
