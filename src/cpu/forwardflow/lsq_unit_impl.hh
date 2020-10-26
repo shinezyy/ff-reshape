@@ -1218,11 +1218,11 @@ LSQUnit<Impl>::completeStore(int store_idx)
     }
 
     auto inst = storeQueue[store_idx].inst;
-    iewStage->setStoreCompleted(inst->seqNum, inst->physEffAddrLow);
+    iewStage->setStoreCompleted(inst->seqNum, inst->physEffAddrLow, inst->storeSeq);
     DPRINTF(NoSQPred, "Completing Store %lu addr: 0x%lx, size: %u\n",
             inst->seqNum, inst->physEffAddrLow, inst->effSize);
     if (inst->physEffAddrHigh) {
-        iewStage->setStoreCompleted(inst->seqNum, inst->physEffAddrHigh);
+        iewStage->setStoreCompleted(inst->seqNum, inst->physEffAddrHigh, inst->storeSeq);
     }
 
 

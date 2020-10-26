@@ -483,7 +483,7 @@ class MemDepPredictor: public SimObject
     void clear();
 
     void commitStore(Addr eff_addr, uint8_t eff_size,
-                     InstSeqNum sn, const BasePointer &position);
+                     InstSeqNum ssn, const BasePointer &position);
 
     InstSeqNum lookupAddr(Addr eff_addr);
 

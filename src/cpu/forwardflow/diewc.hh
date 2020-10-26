@@ -560,10 +560,12 @@ public:
 
     InstSeqNum lastCompletedStoreSN{};
 
-  public:
-    void setStoreCompleted(InstSeqNum sn, Addr eff_addr);
+    InstSeqNum lastCompletedStoreSSN{};
 
-    InstSeqNum getLastCompletedStoreSN() {return lastCompletedStoreSN;}
+  public:
+    void setStoreCompleted(InstSeqNum sn, Addr eff_addr, InstSeqNum ssn);
+
+    InstSeqNum getLastCompletedStoreSN() {return lastCompletedStoreSSN;}
 
     void touchSSBF(Addr eff_addr, InstSeqNum ssn);
   private:

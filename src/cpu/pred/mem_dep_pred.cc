@@ -177,22 +177,25 @@ MemDepPredictor::increment(MemPredTable &table, Addr key, const DistancePair &pa
     MemPredCell *cell;
     std::tie(found, cell) = find(table, key, isPath, pc);
     if (found) {
-        // DPRINTF(NoSQPred, "Inc in place\n");
-        if (pair.dqDistance && pair.dqDistance * 100 == pair.ssnDistance) {
-            cell->storeDistance = pair.ssnDistance;
+        if (cell->storeDistance == pair.ssnDistance) {
+            cell->conf.increment();
+        } else {
+            if (cell->conf.read() > 0) {
+                cell->conf.decrement();
+            } else {
+                cell->storeDistance = pair.ssnDistance;
+                cell->conf.increment();
+            }
         }
-        cell->conf.increment(8);
-        DPRINTF(NoSQPred, "@%s index %lu conf after inc: %i\n",
-                isPath ? "path": "pc", key, cell->conf.read());
+
+        DPRINTF(NoSQPred, "@%s index %lu conf after inc: %i, ssn dist now: %u\n",
+                isPath ? "path": "pc", key, cell->conf.read(), cell->storeDistance);
     } else {
-        // DPRINTF(NoSQPred, "Inc on allocation\n");
         cell = allocate(table, key, isPath, pc);
-        if (pair.dqDistance && pair.dqDistance * 100 == pair.ssnDistance) {
-            cell->storeDistance = pair.ssnDistance;
-        }
-        cell->conf.increment(8);
-        DPRINTF(NoSQPred, "@%s index %lu conf after inc: %i\n",
-                isPath ? "path": "pc", key, cell->conf.read());
+        cell->storeDistance = pair.ssnDistance;
+        cell->conf.increment();
+        DPRINTF(NoSQPred, "@%s index %lu conf after inc: %i, ssn dist now: %u\n",
+                isPath ? "path": "pc", key, cell->conf.read(), cell->storeDistance);
 
         auto [found, cell] = find(table, key, isPath, pc);
         assert(found);
@@ -299,25 +302,27 @@ MemDepPredictor::clear()
 }
 
 void MemDepPredictor::commitStore(Addr eff_addr, uint8_t eff_size,
-                                  InstSeqNum sn, const BasePointer &position) {
+                                  InstSeqNum ssn, const BasePointer &position) {
     eff_addr = shiftAddr(eff_addr);
     SSBFCell *cell = tssbf.find(eff_addr);
     if (!cell) {
         DPRINTF(NoSQPred, "Allocating new entry\n");
         cell = tssbf.allocate(eff_addr);
     }
-    cell->lastStoreSSN = sn;
+    cell->lastStoreSSN = ssn;
     cell->offset = eff_addr & tssbf.offsetMask;
     cell->size = eff_size;
 
     DPRINTF(NoSQPred, "Setting 0x%lx last store SN to %lu with size: %u, offset: %u\n",
-            eff_addr, sn, eff_size, cell->offset);
+            eff_addr, ssn, eff_size, cell->offset);
 
     tssbf.touch(eff_addr);
 
     InstSeqNum &sssbf_entry = sssbf.find(eff_addr);
-    assert(sn > sssbf_entry);
-    sssbf_entry = sn;
+    DPRINTF(NoSQPred, "Last SSN: %lu, setting: %lu\n",
+            sssbf_entry, ssn);
+    assert(ssn > sssbf_entry || (sssbf_entry == 0 && ssn == 0));
+    sssbf_entry = ssn;
     sssbf.touch(eff_addr);
 }
 
@@ -549,6 +554,8 @@ void MemDepPredictor::patternPredict(PatternPredInfo &info, Addr pc)
 TermedPointer MemDepPredictor::getStorePosition(unsigned ssn_distance) const {
     if (recentStoreTable.size() > ssn_distance) {
         assert(!storeWalking);
+//        DPRINTF(NoSQPred, "RCST[0]: %lu ptrfmt, RCST[1]: %lu ptrfmt, RCST[2]: %lu ptrfmt",
+//                recentStoreTable[0].seq);
         return recentStoreTable[ssn_distance].pointer;
     } else {
         return nullTermedPointer;

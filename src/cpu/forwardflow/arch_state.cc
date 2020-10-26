@@ -298,9 +298,9 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
             bypass_canceled = true;
         }
 
-        DPRINTF(NoSQPred, "Inst[%lu] is predicted to bypass from" ptrfmt " with dist %u\n",
+        DPRINTF(NoSQPred, "Inst[%lu] is predicted to bypass from" ptrfmt " with ssn dist %u\n",
                 inst->seqNum,
-                extptr(predecessor_pointer), hist.distPair.dqDistance);
+                extptr(predecessor_pointer), hist.distPair.ssnDistance);
 
         if (!bypass_canceled) {
             inst->bypassOp = memBypassOp;

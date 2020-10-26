@@ -877,11 +877,11 @@ FFDIEWC<Impl>::
         head_inst->setCompleted();
 
         mDepPred->commitStore(head_inst->physEffAddrLow, head_inst->effSize,
-                              head_inst->seqNum, head_inst->dqPosition);
+                              head_inst->storeSeq, head_inst->dqPosition);
 
         if (head_inst->physEffAddrHigh) {
             mDepPred->commitStore(head_inst->physEffAddrHigh, head_inst->effSize,
-                                  head_inst->seqNum, head_inst->dqPosition);
+                                  head_inst->storeSeq, head_inst->dqPosition);
         }
     }
 
@@ -2768,20 +2768,22 @@ FFDIEWC<Impl>::setUpLoad(DynInstPtr &inst)
 {
     const MemPredHistory &hist = *(inst->memPredHistory);
     if (hist.bypass) {
-        inst->seqNVul = inst->seqNum - hist.distPair.ssnDistance;
-        // touch tssbf?
+        inst->seqNVul = inst->storeSeq - hist.distPair.ssnDistance;
+        DPRINTF(NoSQPred, "Setting seqNVul of bypassing load %lu to %lu with distance %u\n",
+                inst->seqNum, inst->seqNVul, hist.distPair.ssnDistance);
     }
 }
 
 template<class Impl>
 void
-FFDIEWC<Impl>::setStoreCompleted(InstSeqNum sn, Addr eff_addr)
+FFDIEWC<Impl>::setStoreCompleted(InstSeqNum sn, Addr eff_addr, InstSeqNum ssn)
 {
     if (sn > lastCompletedStoreSN) {
         lastCompletedStoreSN = sn;
+        lastCompletedStoreSSN = ssn;
     }
 
-    mDepPred->completeStore(eff_addr, sn);
+    mDepPred->completeStore(eff_addr, ssn);
 }
 
 template<class Impl>

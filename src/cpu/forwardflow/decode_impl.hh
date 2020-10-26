@@ -693,11 +693,13 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
         }
 
         if (inst->isStore()) {
-            inst->storeSeq = storeSeq++;
+            inst->storeSeq = ++storeSeq;
+            DPRINTF(NoSQPred, "Store inst[%lu] store seq: %lu\n", inst->seqNum, inst->storeSeq);
         }
 
         if (inst->isLoad()) {
             inst->storeSeq = storeSeq;
+            DPRINTF(NoSQPred, "Load inst[%lu] store seq: %lu\n", inst->seqNum, inst->storeSeq);
             DPRINTF(NoSQPred, "Predicting for inst[%lu]\n", inst->seqNum);
             mDepPred->predict(inst->instAddr(), *(inst->memPredHistory));
 
