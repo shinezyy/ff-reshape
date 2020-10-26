@@ -506,7 +506,7 @@ void MemDepPredictor::pcPredict(PredictionInfo &info, Addr pc)
         return;
     }
     info.valid = true;
-    info.bypass = cell->conf.read() > 0 && cell->storeDistance;
+    info.bypass = cell->conf.read() > 0;
     info.distPair.ssnDistance = cell->storeDistance;
 
     DPRINTF(NoSQPred, "For load @ 0x%x, @ index: %u "
@@ -529,7 +529,7 @@ void MemDepPredictor::pathPredict(PathPredInfo &info, Addr pc, MemDepPredictor::
     }
 
     info.valid = true;
-    info.bypass = cell->conf.read() > 0 && cell->storeDistance;
+    info.bypass = cell->conf.read() > 0;
     info.distPair.ssnDistance = cell->storeDistance;
     info.confidence = cell->conf.read();
     info.path = path;
@@ -556,7 +556,10 @@ TermedPointer MemDepPredictor::getStorePosition(unsigned ssn_distance) const {
 }
 
 void MemDepPredictor::addNewStore(const TermedPointer &ptr, InstSeqNum seq) {
+    DPRINTF(NoSQPred, "Insert inst[%lu] @" ptrfmt "into recent store table\n",
+            seq, extptr(ptr));
     recentStoreTable.emplace_front(seq, ptr);
+    DPRINTF(NoSQPred, "Now last store: %lu\n", recentStoreTable[0].seq);
 }
 
 void MemDepPredictor::squashStoreTable() {
