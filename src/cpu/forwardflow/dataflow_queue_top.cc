@@ -1187,22 +1187,26 @@ void DQTop<Impl>::squashLoad(DQTop::DynInstPtr &inst)
 }
 
 template<class Impl>
-void DQTop<Impl>::walkThroughStores(deque<RecentStore> &recentStoreTable)
+InstSeqNum DQTop<Impl>::walkThroughStores(deque<RecentStore> &recentStoreTable)
 {
     unsigned u = tail;
+    InstSeqNum latestStoreSeq = 0;
     while (validPosition(u) && logicallyLET(u, head)) {
         const BasePointer ptr = c.uint2Pointer(u);
         DPRINTF(NoSQPred, "Walk store at" ptrfmt "\n", extptr(ptr));
         DataflowQueueBank *bank = (*dqGroups[ptr.group])[ptr.bank];
         DynInstPtr inst = bank->readInstsFromBank(ptr);
-        if (inst && inst->isNormalStore()) {
+        if (inst && inst->isStore()) {
             recentStoreTable.emplace_front(inst->seqNum, inst->dqPosition);
+            latestStoreSeq = inst->storeSeq;
+            DPRINTF(NoSQPred, "Seq: %lu, store seq: %lu\n", inst->seqNum, latestStoreSeq);
         }
         if (u == head) {
             break;
         }
         u = inc(u);
     }
+    return latestStoreSeq;
 }
 
 

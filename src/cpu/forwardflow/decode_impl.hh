@@ -508,6 +508,11 @@ DefaultDecode<Impl>::checkSignalsAndUpdate(ThreadID tid)
     // Update the per thread stall statuses.
     readStallSignals(tid);
 
+    if (fromCommit->diewc2diewc.restoreStoreSeq){
+        storeSeq = fromCommit->diewc2diewc.storeSeq;
+        DPRINTF(NoSQPred, "Restore store seq to %lu\n", storeSeq);
+    }
+
     // Check squash signals from commit.
     if (fromCommit->diewc2diewc.squash) {
 

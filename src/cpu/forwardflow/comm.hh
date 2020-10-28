@@ -482,6 +482,10 @@ struct TimeBufStruct {
         bool memViolation;
 
         bool halfSquash;
+
+        bool restoreStoreSeq;
+
+        uint64_t storeSeq;
     };
 
     DIEWC2DIEWC diewc2diewc;

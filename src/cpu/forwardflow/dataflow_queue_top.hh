@@ -340,7 +340,7 @@ public:
 
     void squashLoad(DynInstPtr &inst);
 
-    void walkThroughStores(std::deque<RecentStore> &recentStoreTable);
+    InstSeqNum walkThroughStores(std::deque<RecentStore> &recentStoreTable);
 };
 
 

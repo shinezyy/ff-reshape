@@ -1360,8 +1360,14 @@ void FFDIEWC<Impl>::handleSquash() {
 
             mDepPred->squashStoreTable();
             mDepPred->storeTableWalkStart();
-            dq.walkThroughStores(mDepPred->getRecentStoreTable());
+            InstSeqNum latestStoreSeq = dq.walkThroughStores(mDepPred->getRecentStoreTable());
             mDepPred->storeTableWalkEnd();
+
+            // restore store seq in decode stage
+            if (latestStoreSeq) {
+                toNextCycle->diewc2diewc.restoreStoreSeq = true;
+                toNextCycle->diewc2diewc.storeSeq = latestStoreSeq;
+            }
 
         } else {
             DPRINTF(FFSquash, "Squashing all!\n");
