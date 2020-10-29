@@ -19,10 +19,14 @@
 
 struct DistancePair
 {
-    unsigned ssnDistance{};
+    int ssnDistance{};
     unsigned dqDistance{};
 
-    DistancePair() = default;
+    DistancePair()
+    {
+        ssnDistance = -1;
+        dqDistance = 0;
+    };
 
     DistancePair(unsigned sn, unsigned dq)
     : ssnDistance(sn), dqDistance(dq) {}
@@ -37,10 +41,11 @@ struct DistancePair
 struct MemPredCell
 {
     SignedSatCounter conf;
-    unsigned storeDistance;
+    int storeDistance;
 
     explicit MemPredCell (unsigned counter_bits):
-        conf(counter_bits)
+        conf(counter_bits),
+        storeDistance(-1)
     {}
 };
 
@@ -502,13 +507,17 @@ class MemDepPredictor: public SimObject
 
     std::pair<bool, MemPredCell *> find(MemPredTable &table, Addr indexKey, bool isPath, Addr tagKey);
 
-    MemPredCell *allocate(MemPredTable &table, Addr indexKey, bool isPath, Addr tagKey);
+    const unsigned pathStep{3};
 
-    void decrement(Addr pc, FoldedPC path);
+    std::pair<bool, MemPredCell *> findLongestPath(MemPredTable &table, Addr path, Addr pc);
 
-    void decrement(MemPredTable &table, Addr key, bool alloc, bool isPath, Addr pc);
+    MemPredCell *allocate(MemPredTable &table, Addr index_key, bool isPath, Addr pc);
 
-    void increment(MemPredTable &table, Addr key, const DistancePair &pair, bool isPath, Addr pc);
+    DistancePair negativePair;
+
+    void updateTop(const DistancePair &pair, Addr pc, Addr path);
+
+    void updateInPath(Addr path, const DistancePair &pair, Addr pc, unsigned current_depth, bool create);
 
     FoldedPC getPath() const;
 

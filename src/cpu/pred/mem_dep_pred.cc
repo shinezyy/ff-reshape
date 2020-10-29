@@ -45,6 +45,7 @@ MemDepPredictor::MemDepPredictor(const Params *params)
     sssbf(params)
 {
     nullTermedPointer.valid = false;
+    negativePair.ssnDistance = -1;
 }
 
 void
@@ -73,7 +74,7 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory &hist)
             hist.distPair = hist.patternInfo.distPair;
 
         } else if (hist.pathInfo.valid) {
-            DPRINTF(NoSQPred, "Choosing path pred results because of meta\n");
+            DPRINTF(NoSQPred, "Choosing path pred results\n");
             hist.bypass = hist.pathInfo.bypass;
             hist.distPair = hist.pathInfo.distPair;
 
@@ -120,88 +121,101 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
     localPredictor.updateOnMiss(load_pc, should_bypass, sn_dist, dq_dist, hist);
     misPredTable.record(load_pc, true);
     if (!should_bypass) {
-        DPRINTF(NoSQPred, "Dec conf in pc table, ");
-        decrement(pcTable, load_pc, true, false, load_pc);
-
-        auto path_index = genPathKey(load_pc, hist.pathInfo.path);
-        DPRINTF(NoSQPred, "Dec conf in path table with path: 0x%lx, index: %lu ",
-                hist.pathInfo.path, path_index);
-        decrement(pathTable, path_index, true, true, load_pc);
+        updateTop(negativePair, load_pc, hist.pathInfo.path);
 
     } else {
-        DPRINTF(NoSQPred, "Inc conf in pc table @ index: %u with sn dist: %i, dq dist: %i\n",
-                load_pc, sn_dist, dq_dist);
-        increment(pcTable, load_pc, {sn_dist, dq_dist}, false, load_pc);
-
-        auto key = genPathKey(load_pc, hist.pathInfo.path);
-        DPRINTF(NoSQPred, "Inc conf in path table @ index: %u with sn dist: %i, dq dist: %i, path: 0x%lx\n",
-                key, sn_dist, dq_dist, hist.pathInfo.path);
-        increment(pathTable, key, {sn_dist, dq_dist}, true, load_pc);
+        updateTop({sn_dist, dq_dist}, load_pc, hist.pathInfo.path);
     }
 }
 
-void
-MemDepPredictor::decrement(Addr pc, FoldedPC path)
+void MemDepPredictor::updateTop(const DistancePair &pair, Addr pc, Addr path)
 {
-    panic("Deprecated\n");
-}
+    auto [found_in_pc, pc_cell] = find(pcTable, pc, false, pc);
+    if (found_in_pc) {
+        if (pc_cell->storeDistance != pair.ssnDistance) {
+            if (pc_cell->conf.read() <= 0) {
+                pc_cell->conf.increment();
+                pc_cell->storeDistance = pair.ssnDistance;
+                DPRINTF(NoSQPred, "Flip in pc table with pc 0x%lx, distance %i\n",
+                        pc, pc_cell->storeDistance);
 
-void
-MemDepPredictor::decrement(MemPredTable &table, Addr key, bool alloc, bool isPath, Addr pc)
-{
-    bool found;
-    MemPredCell *cell;
-    std::tie(found, cell) = find(table, key, isPath, pc);
-    if (found) {
-        cell->conf.decrement();
-        // DPRINTF(NoSQPred, "Found Cell@: %p\n", cell);
-        DPRINTF(NoSQPred, "@%s index %lu conf after dec: %i\n",
-                isPath ? "path": "pc", key, cell->conf.read());
+                updateInPath(path, pair, pc, pathStep, false);
 
-    } else if (alloc) {
-        // DPRINTF(NoSQPred, "Dec on allocation\n");
-        cell = allocate(table, key, isPath, pc);
-        cell->conf.decrement();
-        DPRINTF(NoSQPred, "@%s index %lu conf after dec: %i\n",
-                isPath ? "path": "pc", key, cell->conf.read());
+            } else if (pc_cell->conf.read() > 0) {
+                pc_cell->conf.decrement();
 
-        auto [found, cell] = find(table, key, isPath, pc);
-        assert(found);
-    }
-}
-
-void
-MemDepPredictor::increment(MemPredTable &table, Addr key, const DistancePair &pair, bool isPath, Addr pc)
-{
-    bool found;
-    MemPredCell *cell;
-    std::tie(found, cell) = find(table, key, isPath, pc);
-    if (found) {
-        if (cell->storeDistance == pair.ssnDistance) {
-            cell->conf.increment();
-        } else {
-            if (cell->conf.read() > 0) {
-                cell->conf.decrement();
-            } else {
-                cell->storeDistance = pair.ssnDistance;
-                cell->conf.increment();
+                DPRINTF(NoSQPred, "Dec conf in pc table with pc 0x%lx, old distance %i, conf now: %i\n",
+                        pc, pc_cell->storeDistance, pc_cell->conf.read());
+                updateInPath(path, pair, pc, pathStep, true);
             }
+
+        } else { // the same
+            pc_cell->conf.increment();
+
+            DPRINTF(NoSQPred, "Inc conf in pc table with pc 0x%lx, distance %i, conf now: %i\n",
+                    pc, pc_cell->storeDistance, pc_cell->conf.read());
+            updateInPath(path, pair, pc, pathStep, false);
         }
 
-        DPRINTF(NoSQPred, "@%s index %lu conf after inc: %i, ssn dist now: %u\n",
-                isPath ? "path": "pc", key, cell->conf.read(), cell->storeDistance);
     } else {
-        cell = allocate(table, key, isPath, pc);
-        cell->storeDistance = pair.ssnDistance;
-        cell->conf.increment();
-        DPRINTF(NoSQPred, "@%s index %lu conf after inc: %i, ssn dist now: %u\n",
-                isPath ? "path": "pc", key, cell->conf.read(), cell->storeDistance);
+        pc_cell = allocate(pcTable, pc, false, pc);
+        pc_cell->storeDistance = pair.ssnDistance;
+        pc_cell->conf.increment();
 
-        auto [found, cell] = find(table, key, isPath, pc);
-        assert(found);
+        DPRINTF(NoSQPred, "Touch in pc table with pc 0x%lx, distance %i\n",
+                pc, pair.ssnDistance);
     }
 }
 
+
+void MemDepPredictor::updateInPath(
+        Addr path, const DistancePair &pair, Addr pc, unsigned current_depth, bool create)
+{
+    if (current_depth > HistoryLen) {
+        return;
+    }
+    Addr mask = ((Addr)1 << current_depth) - 1;
+    Addr masked_path = path & mask;
+    Addr key = genPathKey(pc, masked_path);
+    auto [found, path_cell] = find(pathTable, key, true, pc);
+
+    if (found) {
+        if (path_cell->storeDistance != pair.ssnDistance) {
+            if (path_cell->conf.read() <= 0) {
+                path_cell->storeDistance = pair.ssnDistance;
+                path_cell->conf.increment();
+
+                DPRINTF(NoSQPred, "Flip in path table with pc 0x%lx, distance %i, path: 0x%lx\n",
+                        pc, pair.ssnDistance, masked_path);
+
+                updateInPath(path, pair, pc, current_depth + pathStep, false);
+
+            } else if (path_cell->conf.read() > 0) {
+                path_cell->conf.decrement();
+
+                DPRINTF(NoSQPred, "Dec in path table with pc 0x%lx, old distance %i, path: 0x%lx, conf now: %i\n",
+                        pc, pair.ssnDistance, masked_path, path_cell->conf.read());
+
+                updateInPath(path, pair, pc, current_depth + pathStep, true);
+            }
+        } else { // the same
+            path_cell->conf.increment();
+
+            DPRINTF(NoSQPred, "Inc conf in path table with pc 0x%lx, distance %i, path: 0x%lx, conf now: %i\n",
+                    pc, pair.ssnDistance, masked_path, path_cell->conf.read());
+            updateInPath(path, pair, pc, current_depth + pathStep, false);
+        }
+
+    } else {
+        if (create) {
+            path_cell = allocate(pathTable, masked_path, true, pc);
+            path_cell->storeDistance = pair.ssnDistance;
+            path_cell->conf.increment();
+            DPRINTF(NoSQPred, "Touch in path table with pc 0x%lx, distance %i, path: 0x%lx\n",
+                    pc, pair.ssnDistance, masked_path);
+        }
+    }
+}
 
 void
 MemDepPredictor::squash(MemPredHistory &hist)
@@ -266,12 +280,30 @@ MemDepPredictor::find(MemPredTable &table, Addr indexKey, bool isPath, Addr tagK
     return std::make_pair(found, cell);
 }
 
-MemPredCell *
-MemDepPredictor::allocate(MemPredTable &table, Addr indexKey, bool isPath, Addr tagKey)
+std::pair<bool, MemPredCell *>
+MemDepPredictor::findLongestPath(MemDepPredictor::MemPredTable &table, Addr path, Addr pc)
 {
-    MemPredSet &set = table.at(extractIndex(indexKey, isPath));
+    for (unsigned used_history_len = HistoryLen; used_history_len > 0; used_history_len -= pathStep) {
+        Addr mask = ((Addr) 1 << used_history_len) - 1;
+        Addr masked_path = mask & path;
+        Addr key = genPathKey(pc, masked_path);
+        auto [found, cell] = find(table, key, true, pc);
+        if (found) {
+            DPRINTF(NoSQPred, "Found when history len = %u\n", used_history_len);
+            return std::make_pair(found, cell);
+        }
+    }
+    return std::make_pair(false, nullptr);
+}
+
+
+MemPredCell *
+MemDepPredictor::allocate(MemPredTable &table, Addr path, bool isPath, Addr pc)
+{
     unsigned assoc = isPath ? PathTableAssoc : PCTableAssoc;
-    auto tag = extractTag(tagKey, isPath);
+    Addr index_key = isPath ? genPathKey(pc, path) : pc;
+    MemPredSet &set = table.at(extractIndex(index_key, isPath));
+    auto tag = extractTag(pc, isPath);
     assert(!set.count(tag));
 
     checkAndRandEvict(set, assoc);
@@ -283,7 +315,7 @@ MemDepPredictor::allocate(MemPredTable &table, Addr indexKey, bool isPath, Addr 
 
     bool found;
     MemPredCell *cell;
-    std::tie(found, cell) = find(table, indexKey, isPath, tagKey);
+    std::tie(found, cell) = find(table, index_key, isPath, pc);
     assert(found);
 
     return &(pair.first->second);
@@ -476,13 +508,10 @@ MemDepPredictor::updatePredictorsOnCorrect(Addr pc, bool should_bypass, unsigned
                 history.pathInfo.bypass, history.patternInfo.bypass,
                 history.patternInfo.valid, history.pathInfo.valid, history.willSquash);
 
-    auto key = genPathKey(pc, history.pathInfo.path);
     if (should_bypass) {
-        increment(pcTable, pc, {sn_dist, dq_dist}, false, pc);
-        increment(pathTable, key, {sn_dist, dq_dist}, true, pc);
+        updateTop({sn_dist, dq_dist}, pc, history.pathInfo.path);
     } else {
-        decrement(pcTable, pc, false, false, pc);
-        decrement(pathTable, key, false, true, pc);
+        updateTop(negativePair, pc, history.pathInfo.path);
     }
     localPredictor.updateOnCorrect(pc, should_bypass, sn_dist, dq_dist, history);
 }
@@ -511,7 +540,7 @@ void MemDepPredictor::pcPredict(PredictionInfo &info, Addr pc)
         return;
     }
     info.valid = true;
-    info.bypass = cell->conf.read() > 0;
+    info.bypass = cell->storeDistance != -1;
     info.distPair.ssnDistance = cell->storeDistance;
 
     DPRINTF(NoSQPred, "For load @ 0x%x, @ index: %u "
@@ -523,8 +552,7 @@ void MemDepPredictor::pcPredict(PredictionInfo &info, Addr pc)
 
 void MemDepPredictor::pathPredict(PathPredInfo &info, Addr pc, MemDepPredictor::FoldedPC path)
 {
-    auto path_index = genPathKey(pc, path);
-    auto [found, cell] = find(pathTable, path_index, true, pc);
+    auto [found, cell] = findLongestPath(pathTable, path, pc);
     if (!found) {
         DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, "
                           "path signature not found\n", pc, path);
@@ -538,10 +566,10 @@ void MemDepPredictor::pathPredict(PathPredInfo &info, Addr pc, MemDepPredictor::
     info.distPair.ssnDistance = cell->storeDistance;
     info.confidence = cell->conf.read();
     info.path = path;
-    DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, @ index: %u "
+    DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, "
                       "path predictor predict %i with confi: %i "
                       "to storeDistance %u\n",
-            pc, path, path_index,
+            pc, path,
             info.bypass, cell->conf.read(),
             cell->storeDistance);
 }
