@@ -269,8 +269,11 @@ MemDepPredictor::find(MemPredTable &table, Addr indexKey, bool isPath, Addr tagK
     bool found;
     MemPredCell *cell = nullptr;
 
-    MemPredSet &set = table.at(extractIndex(indexKey, isPath));
+    Addr index = extractIndex(indexKey, isPath);
+    MemPredSet &set = table.at(index);
     Addr tag = extractTag(tagKey, isPath); // high bits are folded or thrown awary here
+
+    DPRINTF(NoSQPred, "Find with tag: 0x%lx, index: 0x%lx\n", tag, index);
 
     auto it = set.find(tag);
     found = it != set.end();
@@ -529,9 +532,7 @@ void MemDepPredictor::squashLoad(Addr pc, MemPredHistory &hist)
 
 void MemDepPredictor::pcPredict(PredictionInfo &info, Addr pc)
 {
-    auto pc_index = pc;
-
-    auto [found, cell] = find(pcTable, pc_index, false, pc);
+    auto [found, cell] = find(pcTable, pc, false, pc);
 
     if (!found) {
         DPRINTF(NoSQPred, "For load @ 0x%x "
@@ -546,7 +547,7 @@ void MemDepPredictor::pcPredict(PredictionInfo &info, Addr pc)
     DPRINTF(NoSQPred, "For load @ 0x%x, @ index: %u "
                       "pc predictor predict %i with confi: %i "
                       "to storeDistance %u\n",
-            pc, pc_index, info.bypass, cell->conf.read(),
+            pc, pc, info.bypass, cell->conf.read(),
             cell->storeDistance);
 }
 
