@@ -593,6 +593,17 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                             extptr(ptr), extptr(wk_ptr));
                     dq->extraWakeup(wk_ptr);
                 }
+
+                if (inst->isNormalStore()&& inst->pointers[0].valid && inst->storeValueBecomeReadyOn(op)) {
+                    auto wk_ptr = WKPointer(inst->pointers[0]);
+                    wk_ptr.hasVal = true;
+                    wk_ptr.val = ptr.val;
+                    wk_ptr.wkType = WKPointer::WKBypass;
+                    DPRINTF(DQWake,
+                            "Bypassing from store" ptrfmt "to load" ptrfmt "\n",
+                            extptr(ptr), extptr(wk_ptr));
+                    dq->extraWakeup(wk_ptr);
+                }
             }
         }
     }
