@@ -158,7 +158,7 @@ void MemDepPredictor::updateTop(const DistancePair &pair, Addr pc, Addr path)
         }
 
     } else {
-        pc_cell = allocate(pcTable, pc, false, pc);
+        pc_cell = allocate(pcTable, pc, false, pc, 0);
         pc_cell->storeDistance = pair.ssnDistance;
         pc_cell->conf.increment();
 
@@ -176,7 +176,7 @@ void MemDepPredictor::updateInPath(
     }
     Addr mask = ((Addr)1 << current_depth) - 1;
     Addr masked_path = path & mask;
-    Addr key = genPathKey(pc, masked_path);
+    Addr key = genPathKey(pc, masked_path, current_depth);
     auto [found, path_cell] = find(pathTable, key, true, pc);
 
     if (found) {
@@ -194,7 +194,7 @@ void MemDepPredictor::updateInPath(
                 path_cell->conf.decrement();
 
                 DPRINTF(NoSQPred, "Dec in path table with pc 0x%lx, old distance %i, path: 0x%lx, conf now: %i\n",
-                        pc, pair.ssnDistance, masked_path, path_cell->conf.read());
+                        pc, path_cell->storeDistance, masked_path, path_cell->conf.read());
 
                 updateInPath(path, pair, pc, current_depth + pathStep, true);
             }
@@ -208,7 +208,7 @@ void MemDepPredictor::updateInPath(
 
     } else {
         if (create) {
-            path_cell = allocate(pathTable, masked_path, true, pc);
+            path_cell = allocate(pathTable, masked_path, true, pc, current_depth);
             path_cell->storeDistance = pair.ssnDistance;
             path_cell->conf.increment();
             DPRINTF(NoSQPred, "Touch in path table with pc 0x%lx, distance %i, path: 0x%lx\n",
@@ -236,9 +236,15 @@ MemDepPredictor::recordPath(Addr control_pc, bool is_call, bool pred_taken)
 }
 
 Addr
-MemDepPredictor::genPathKey(Addr pc, FoldedPC path) const
+MemDepPredictor::genPathKey(Addr pc, FoldedPC path, unsigned path_depth) const
 {
-    return pc ^ (((path) & PathMask) << pcShamt);
+    Addr folded = 0;
+    for (int rest = path_depth; rest > 0; rest -= PathTableIndexBits) {
+        folded ^= path & (PathTableIndexMask >> pcShamt);
+        path >>= PathTableIndexBits;
+    }
+    folded &= (PathTableIndexMask >> pcShamt);
+    return pc ^ (folded << pcShamt);
 }
 
 Addr
@@ -289,7 +295,7 @@ MemDepPredictor::findLongestPath(MemDepPredictor::MemPredTable &table, Addr path
     for (unsigned used_history_len = HistoryLen; used_history_len > 0; used_history_len -= pathStep) {
         Addr mask = ((Addr) 1 << used_history_len) - 1;
         Addr masked_path = mask & path;
-        Addr key = genPathKey(pc, masked_path);
+        Addr key = genPathKey(pc, masked_path, used_history_len);
         auto [found, cell] = find(table, key, true, pc);
         if (found) {
             DPRINTF(NoSQPred, "Found when history len = %u\n", used_history_len);
@@ -301,10 +307,10 @@ MemDepPredictor::findLongestPath(MemDepPredictor::MemPredTable &table, Addr path
 
 
 MemPredCell *
-MemDepPredictor::allocate(MemPredTable &table, Addr path, bool isPath, Addr pc)
+MemDepPredictor::allocate(MemPredTable &table, Addr path, bool isPath, Addr pc, unsigned path_depth)
 {
     unsigned assoc = isPath ? PathTableAssoc : PCTableAssoc;
-    Addr index_key = isPath ? genPathKey(pc, path) : pc;
+    Addr index_key = isPath ? genPathKey(pc, path, path_depth) : pc;
     MemPredSet &set = table.at(extractIndex(index_key, isPath));
     auto tag = extractTag(pc, isPath);
     assert(!set.count(tag));

@@ -499,7 +499,7 @@ class MemDepPredictor: public SimObject
 
   private:
 
-    Addr genPathKey(Addr pc, FoldedPC path) const;
+    Addr genPathKey(Addr pc, FoldedPC path, unsigned path_depth) const;
 
     Addr extractIndex(Addr key, bool isPath);
 
@@ -507,11 +507,11 @@ class MemDepPredictor: public SimObject
 
     std::pair<bool, MemPredCell *> find(MemPredTable &table, Addr indexKey, bool isPath, Addr tagKey);
 
-    const unsigned pathStep{3};
+    const unsigned pathStep{10};
 
     std::pair<bool, MemPredCell *> findLongestPath(MemPredTable &table, Addr path, Addr pc);
 
-    MemPredCell *allocate(MemPredTable &table, Addr index_key, bool isPath, Addr pc);
+    MemPredCell *allocate(MemPredTable &table, Addr path, bool isPath, Addr pc, unsigned path_depth);
 
     DistancePair negativePair;
 

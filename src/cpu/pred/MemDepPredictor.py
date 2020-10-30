@@ -6,9 +6,9 @@ class MemDepPredictor(SimObject):
     cxx_class = 'MemDepPredictor'
     cxx_header = 'cpu/pred/mem_dep_pred.hh'
 
-    PCTableSize = Param.Unsigned(1024, "Size of PC indexed table")
+    PCTableSize = Param.Unsigned(4096, "Size of PC indexed table")
     PCTableAssoc = Param.Unsigned(4, "Size of PC indexed table")
-    PathTableSize = Param.Unsigned(1024, "Size of PC^PAth index table")
+    PathTableSize = Param.Unsigned(4096, "Size of PC^PAth index table")
     PathTableAssoc = Param.Unsigned(4, "Size of PC^PAth index table")
 
     DistanceBits = Param.Unsigned(6, "Bit width of bits to represent store distance")
@@ -17,7 +17,7 @@ class MemDepPredictor(SimObject):
     ConfidenceBits = Param.Unsigned(10, "Bit width of bits to represent confidence")
     TagBits = Param.Unsigned(22, "Bit width of bits for tag")
 
-    HistoryLen = Param.Unsigned(12, "Length of bits used for path history")
+    HistoryLen = Param.Unsigned(40, "Length of bits used for path history")
     BranchPathLen = Param.Unsigned(1, "Length of bits extract from branch")
     CallPathLen = Param.Unsigned(3, "Length of bits extract from call")
 
