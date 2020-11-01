@@ -102,6 +102,7 @@ def template FloatExecute {{
                     fault = make_shared<IllegalFrmFault>(ROUND_MODE, machInst);
                 }
                 if (std::fetestexcept(FE_INEXACT)) {
+                    DPRINTF(RiscvMisc, "RV F/D: setting FE_INEXACT\n");
                     FFLAGS |= FloatInexact;
                 }
                 if (std::fetestexcept(FE_UNDERFLOW)) {
