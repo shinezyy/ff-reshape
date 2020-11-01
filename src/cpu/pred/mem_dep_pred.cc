@@ -365,6 +365,7 @@ void MemDepPredictor::commitStore(Addr eff_addr, uint8_t eff_size,
     assert(ssn > sssbf_entry || (sssbf_entry == 0 && ssn == 0));
     sssbf_entry = ssn;
     sssbf.touch(eff_addr);
+
 }
 
 InstSeqNum MemDepPredictor::lookupAddr(Addr eff_addr) {

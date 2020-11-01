@@ -883,6 +883,7 @@ FFDIEWC<Impl>::
             mDepPred->commitStore(head_inst->physEffAddrHigh, head_inst->effSize,
                                   head_inst->storeSeq, head_inst->dqPosition);
         }
+        mDepPred->removeStore(head_inst->seqNum);
     }
 
 
