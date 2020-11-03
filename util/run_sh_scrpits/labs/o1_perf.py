@@ -51,13 +51,14 @@ def main():
             '--branch-trace-file': 'useless_branch.protobuf.gz',
 
             '--narrow-xbar-wk': 0,
-            '--xbar-wk': 1,
-            '--min-wk': 0,
+            '--xbar-wk': 0,
+            '--min-wk': 1,
+            '--mem-squash-factor': 3,
             }
     if obp:
         dict_options['--use-bp'] = 'OracleBP'
     else:
-        dict_options['--use-bp'] = 'ZPerceptron'
+        dict_options['--use-bp'] = 'LTAGE'
 
     binary_options= [
             '--rand-op-position',

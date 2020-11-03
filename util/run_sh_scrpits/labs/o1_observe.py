@@ -63,7 +63,7 @@ else:
     lbuf_suffix = '_nbuf'
 
 config = f'ob_o1_r_h{lbuf_suffix}{obp_suffix}'
-outdir = f'{c.stats_base_dir}/{config}{d}/'
+outdir = f'{c.dev_stats_base_dir}/{config}{d}/'
 
 def main():
     g5_configs = []
