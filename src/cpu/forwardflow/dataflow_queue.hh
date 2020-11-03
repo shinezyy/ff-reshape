@@ -150,7 +150,7 @@ public:
     std::vector<std::vector<bool>> fuGroupCaps;
     std::unordered_map<OpClass, unsigned> opLat;
 
-    bool llBlocked;
+    bool llBlocked{false};
     bool llBlockedNext;
 
     unsigned head, tail;

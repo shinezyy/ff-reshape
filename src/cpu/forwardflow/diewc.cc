@@ -2824,12 +2824,6 @@ bool FFDIEWC<Impl>::checkViolation(FFDIEWC::DynInstPtr &inst)
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::touchSSBF(Addr eff_addr, InstSeqNum ssn)
-{
-    mDepPred->touchSSBF(eff_addr, ssn);
-}
-
-template<class Impl>
 void FFDIEWC<Impl>::readInstsToCommit()
 {
     // read insts

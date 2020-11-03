@@ -409,6 +409,7 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
 
         } else {
             DPRINTF(NoSQSMB, "last store @ 0x%lx is %lu\n", eff_addr_low, cell->lastStoreSSN);
+            assert(cell->size);
             skip_verify = cell->lastStoreSSN == nvul && cell->offset == offset && cell->size == size;
             // log
             DPRINTF(NoSQSMB, "recorded offset: %u, offset: %u,"
@@ -437,6 +438,28 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
         } else {
             skip_verify = cell->lastStoreSSN > 0 && cell->lastStoreSSN <= nvul;
 
+//            bool low_not_intersected;
+//
+//            if (!skip_verify) {
+//                assert(cell->size);
+//                Addr load_addr = eff_addr_low;
+//                Addr store_start = (load_addr & ~(tssbf.offsetMask)) | cell->offset;
+//                Addr store_end = store_start + cell->size - 1;
+//
+//                Addr load_start = load_addr;
+//                Addr load_end = load_addr + size - 1;
+//
+//                low_not_intersected = store_end < load_start || load_end < store_start;
+//
+//                if (low_not_intersected) {
+//                    DPRINTF(NoSQPred, "Store and load are not intersected: store: 0x%lx with size %u, "
+//                                      "load: 0x%lx with size %u\n",
+//                            store_start, cell->size,
+//                            load_start, size);
+//                }
+//                skip_verify |= low_not_intersected;
+//            }
+
             // log
             DPRINTF(NoSQSMB, "%s with last store @ 0x%lx is %lu\n",
                     skip_verify ? "Skip" : "Dont Skip",
@@ -449,6 +472,7 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
 
 void MemDepPredictor::touchSSBF(Addr eff_addr, InstSeqNum ssn)
 {
+    panic("Touch not supported!\n");
     auto cell = tssbf.find(eff_addr);
     if (!cell) {
         cell = tssbf.allocate(eff_addr);
@@ -478,16 +502,7 @@ void MemDepPredictor::checkSilentViolation(
         unsigned int sn_dist, unsigned int dq_dist,
         MemPredHistory &hist)
 {
-    if (!dq_dist || sn_dist != dq_dist * 100) {
-        DPRINTF(NoSQPred, "The distance between producer and consumer is not reasonable:"
-                          "%lu -> %lu with dq dist: %u\n", last_store_cell->lastStoreSSN, load_sn, dq_dist);
-        if (hist.patternInfo.valid) {
-            updatePredictorsOnCorrect(load_pc, hist.patternInfo.bypass, sn_dist, dq_dist, hist);
-        }
-        return;
-    }
-
-    Addr store_start = (load_pc & ~(tssbf.offsetMask)) | last_store_cell->offset;
+    Addr store_start = (load_addr & ~(tssbf.offsetMask)) | last_store_cell->offset;
     Addr store_end = store_start + last_store_cell->size - 1;
 
     Addr load_start = load_addr;

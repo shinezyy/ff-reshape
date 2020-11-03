@@ -672,7 +672,6 @@ LSQUnit<Impl>::executeLoad(DynInstPtr &inst)
         if (!inst->isNormalBypass()) {
             inst->seqNVul = iewStage->getLastCompletedStoreSN();
             // touch the TSSBF here?
-            iewStage->touchSSBF(inst->physEffAddrLow, inst->seqNVul);
             DPRINTF(NoSQPred, "Setting Nvul (%lu) for inst[%lu]\n", inst->seqNVul, inst->seqNum);
         }
 

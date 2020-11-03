@@ -20,12 +20,12 @@
 struct DistancePair
 {
     int ssnDistance{};
-    unsigned dqDistance{};
+    int dqDistance{};
 
     DistancePair()
     {
         ssnDistance = -1;
-        dqDistance = 0;
+        dqDistance = -1;
     };
 
     DistancePair(unsigned sn, unsigned dq)
