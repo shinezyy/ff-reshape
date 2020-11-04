@@ -84,6 +84,9 @@ struct MemPredHistory
     bool willSquash;
     bool updated;
 
+    bool canceled;
+    bool afterSquash;
+
     MemPredHistory()
             : bypass(false),
               pcInfo(),
@@ -91,7 +94,9 @@ struct MemPredHistory
               patternInfo(),
               inst(0),
               willSquash(false),
-              updated(false)
+              updated(false),
+              canceled(false),
+              afterSquash(false)
     {}
 };
 
@@ -541,6 +546,8 @@ class MemDepPredictor: public SimObject
 
   public:
     TermedPointer getStorePosition(unsigned ssn_distance) const;
+
+    unsigned getNumStores() const;
 
     void addNewStore(const TermedPointer &ptr, InstSeqNum seq);
 

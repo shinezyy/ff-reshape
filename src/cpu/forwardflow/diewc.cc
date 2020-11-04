@@ -203,9 +203,9 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
         // action:
         if (skip_verify) {
             DPRINTF(NoSQSMB || Debug::NoSQPred, "Skip verifying load [%lu]\n", tail->seqNum);
-            DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass",
+            DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass with distance %i\n",
                     tail->seqNum, tail->instAddr(), tail->physEffAddrLow,
-                    tail->memPredHistory->bypass ? "" : " not");
+                    tail->memPredHistory->bypass ? "" : " not", tail->memPredHistory->distPair.ssnDistance);
             if (Debug::NoSQPred) {
                 std::cout << " with history: "
                           << tail->memPredHistory->patternInfo.localHistory << "\n";
@@ -252,7 +252,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
                 FPBypass++;
                 FPCanceledBypass++;
 
-                DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should not bypass",
+                DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should not bypass\n",
                         tail->seqNum, tail->instAddr(), tail->physEffAddrLow);
                 if (Debug::NoSQPred) {
                     std::cout << " with history: "
@@ -265,6 +265,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
                                  *(tail->memPredHistory)
                 );
                 tail->bypassCanceled = true;
+                tail->memPredHistory->canceled = true;
             }
         } else {
             DPRINTF(NoSQSMB, "Cannot verify load [%lu] yet, because of pending wb store\n",
@@ -1732,7 +1733,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
     if (violation && inst->isNormalBypass() && !inst->memPredHistory->updated) {
         // false positive
         DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu]\n", inst->seqNum);
-        DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should not bypass",
+        DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should not bypass\n",
                 inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
         if (Debug::NoSQPred) {
             std::cout << " with history: "
@@ -1757,9 +1758,9 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
 
             if (!violation) {
                 if (!inst->memPredHistory->updated) {
-                    DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass",
+                    DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass with distance %i\n",
                             inst->seqNum, inst->instAddr(), inst->physEffAddrLow,
-                            inst->memPredHistory->bypass ? "" : " not");
+                            inst->memPredHistory->bypass ? "" : " not", ssn_dist);
                     if (Debug::NoSQPred) {
                         std::cout << " with history: "
                                   << inst->memPredHistory->patternInfo.localHistory << "\n";
@@ -1772,8 +1773,8 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                         ssn_dist, dq_dist,
                         *(inst->memPredHistory));
             } else {
-                DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass",
-                        inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
+                DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass with distance %i\n",
+                        inst->seqNum, inst->instAddr(), inst->physEffAddrLow, ssn_dist);
                 if (Debug::NoSQPred) {
                     std::cout << " with history: "
                               << inst->memPredHistory->patternInfo.localHistory << "\n";

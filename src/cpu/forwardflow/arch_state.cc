@@ -320,6 +320,16 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(Dyn
 
         } else {
             DPRINTF(NoSQSMB, "However, producer is not at a valid position (squashed)\n");
+            inst->memPredHistory->canceled = true;
+        }
+    }
+
+    if (inst->isLoad() &&
+        !inst->isLoadReserved() &&
+        !inst->isRVAmoLoadHalf()) { // predicted not to bypass
+
+        if (mDepPred->getNumStores() == 0) {
+            inst->memPredHistory->afterSquash = true;
         }
     }
 

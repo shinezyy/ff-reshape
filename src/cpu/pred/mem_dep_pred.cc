@@ -112,6 +112,13 @@ MemDepPredictor::update(Addr load_pc, bool should_bypass, unsigned sn_dist,
         return;
     }
     hist.updated = true;
+
+    if (hist.canceled || hist.afterSquash) {
+        DPRINTF(NoSQPred, "Load is after squash: %i or is canceled: %i."
+                          " So it is not a confident record to update counters\n",
+                          hist.afterSquash, hist.canceled);
+        return;
+    }
     // for miss
     meta.record(load_pc, should_bypass, hist.pcInfo.bypass,
                 hist.pathInfo.bypass, hist.patternInfo.bypass,
@@ -528,6 +535,12 @@ MemDepPredictor::updatePredictorsOnCorrect(Addr pc, bool should_bypass, unsigned
         DPRINTF(NoSQPred, "history has been recorded, return\n");
     }
     history.updated = true;
+    if (history.canceled || history.afterSquash) {
+        DPRINTF(NoSQPred, "Load is after squash: %i or is canceled: %i."
+                          " So it is not a confident record to update counters\n",
+                history.afterSquash, history.canceled);
+        return;
+    }
     // All correct predictions arrive here
     meta.record(pc, should_bypass, history.pcInfo.bypass,
                 history.pathInfo.bypass, history.patternInfo.bypass,
@@ -563,7 +576,7 @@ void MemDepPredictor::pcPredict(PredictionInfo &info, Addr pc)
         return;
     }
     info.valid = true;
-    info.bypass = cell->storeDistance != -1;
+    info.bypass = cell->storeDistance >= 0;
     info.distPair.ssnDistance = cell->storeDistance;
 
     DPRINTF(NoSQPred, "For load @ 0x%x, @ index: %u "
@@ -585,8 +598,8 @@ void MemDepPredictor::pathPredict(PathPredInfo &info, Addr pc, MemDepPredictor::
     }
 
     info.valid = true;
-    info.bypass = cell->conf.read() > 0;
     info.distPair.ssnDistance = cell->storeDistance;
+    info.bypass = info.distPair.ssnDistance >= 0;
     info.confidence = cell->conf.read();
     info.path = path;
     DPRINTF(NoSQPred, "For load @ 0x%x with path 0x%lx, "
@@ -653,6 +666,10 @@ void MemDepPredictor::removeStore(InstSeqNum seq) {
 
 std::deque<RecentStore> &MemDepPredictor::getRecentStoreTable() {
     return recentStoreTable;
+}
+
+unsigned MemDepPredictor::getNumStores() const {
+    return recentStoreTable.size();
 }
 
 MemDepPredictor *MemDepPredictorParams::create()
