@@ -78,7 +78,7 @@ MemDepPredictor::predict(Addr load_pc, FoldedPC path, MemPredHistory &hist)
             hist.bypass = hist.pathInfo.bypass;
             hist.distPair = hist.pathInfo.distPair;
 
-        } else if (which == MetaPredictor::UsePC && hist.pcInfo.valid) {
+        } else if (hist.pcInfo.valid) {
             DPRINTF(NoSQPred, "Choosing pc pred results because of meta\n");
             hist.bypass = hist.pcInfo.bypass;
             hist.distPair = hist.pcInfo.distPair;
@@ -475,6 +475,10 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
                             "Store and load are not intersected: "
                             "low word touched by %lu, high word touched by %lu\n",
                             low_word_lssn, has_high_word ? high_word_lssn : 0);
+                } else {
+                    DPRINTF(NoSQPred,
+                            "Has high: %i, high lssn: %lu, low lssn: %lu\n",
+                            has_high_word, high_word_lssn, low_word_lssn);
                 }
                 skip_verify |= not_intersected;
             }

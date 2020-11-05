@@ -21,7 +21,7 @@ class MemDepPredictor(SimObject):
     BranchPathLen = Param.Unsigned(1, "Length of bits extract from branch")
     CallPathLen = Param.Unsigned(3, "Length of bits extract from call")
 
-    TSSBFSize = Param.Unsigned(128, "Size of TSSBF table")
+    TSSBFSize = Param.Unsigned(512, "Size of TSSBF table")
     TSSBFAssoc = Param.Unsigned(4, "Assoc of TSSBF index table")
     TSSBFTagBits = Param.Unsigned(38, "Bit width of bits for tag")
 
