@@ -221,6 +221,8 @@ void MemDepPredictor::updateInPath(
             DPRINTF(NoSQPred, "Touch in path table with pc 0x%lx, distance %i, path: 0x%lx\n",
                     pc, pair.ssnDistance, masked_path);
         }
+        // continue to update recursively
+        updateInPath(path, pair, pc, current_depth + pathStep, false);
     }
 }
 
