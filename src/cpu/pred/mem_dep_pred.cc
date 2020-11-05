@@ -368,13 +368,27 @@ void MemDepPredictor::commitStore(Addr eff_addr, uint8_t eff_size,
 
     tssbf.touch(eff_addr);
 
-    InstSeqNum &sssbf_entry = sssbf.find(eff_addr);
-    DPRINTF(NoSQPred, "Last SSN: %lu, setting: %lu\n",
-            sssbf_entry, ssn);
+    // Simple SSBF
+    Addr word_aligned_addr = eff_addr >> 2;
+    InstSeqNum &sssbf_entry = sssbf.find(word_aligned_addr);
+    DPRINTF(NoSQPred, "Word 0x%x, Last SSN: %lu, setting: %lu\n",
+            word_aligned_addr << 2, sssbf_entry, ssn);
     assert(ssn > sssbf_entry || (sssbf_entry == 0 && ssn == 0));
     sssbf_entry = ssn;
-    sssbf.touch(eff_addr);
 
+    sssbf.touch(word_aligned_addr);
+
+    if (eff_size > 4) {
+        assert((eff_addr & 0x7) == 0);
+        word_aligned_addr += 1;
+        InstSeqNum &sssbf_entry = sssbf.find(word_aligned_addr);
+        DPRINTF(NoSQPred, "Word 0x%x, Last SSN: %lu, setting: %lu\n",
+                word_aligned_addr << 2, sssbf_entry, ssn);
+        assert(ssn > sssbf_entry || (sssbf_entry == 0 && ssn == 0));
+        sssbf_entry = ssn;
+
+        sssbf.touch(word_aligned_addr);
+    }
 }
 
 InstSeqNum MemDepPredictor::lookupAddr(Addr eff_addr) {
@@ -426,48 +440,44 @@ bool MemDepPredictor::checkAddr(InstSeqNum load_sn, bool pred_bypass, Addr eff_a
                     cell->offset, offset, cell->size, size);
         }
     } else {
+        bool has_high_word = size > 4;
+        // Make use of the Risc-V ``aligned'' load/stores here: Only LD/SD can cross words
+        InstSeqNum low_word_lssn = sssbf.find(eff_addr_low >> 2);
+        InstSeqNum high_word_lssn = sssbf.find((eff_addr_low >> 2) + 1);
+
         if (!cell) {
             InstSeqNum set_youngest = tssbf.findYoungestInSet(eff_addr_low);
-            InstSeqNum sssbf_youngest = sssbf.find(eff_addr_low);
             skip_verify = (set_youngest > 0 && set_youngest <= nvul) ||
-                    sssbf_youngest <= nvul;
+                    (low_word_lssn <= nvul && (!has_high_word || high_word_lssn <= nvul));
 
             // log
             if (skip_verify) {
-                DPRINTF(NoSQSMB, "Skip verification because either tssbf youngest (%lu) or sssbf youngest (%lu)"
+                DPRINTF(NoSQSMB, "Skip verification because either tssbf youngest (%lu) or sssbf youngest (%lu, %lu)"
                                  " in this set is older than nvul(%lu)\n",
-                        set_youngest, sssbf_youngest, nvul);
+                        set_youngest, low_word_lssn, high_word_lssn, nvul);
             } else {
-                DPRINTF(NoSQSMB, "Cannot Skip verification because tssbf youngest (%lu) and sssbf youngest (%lu)"
+                DPRINTF(NoSQSMB, "Cannot Skip verification because tssbf youngest (%lu) and sssbf youngest (%lu, %lu)"
                                  " in this set are younger than nvul(%lu)\n",
-                        set_youngest, sssbf_youngest, nvul);
+                        set_youngest, low_word_lssn, high_word_lssn, nvul);
                 tssbf.dump();
                 sssbf.dump();
             }
         } else {
             skip_verify = cell->lastStoreSSN > 0 && cell->lastStoreSSN <= nvul;
 
-//            bool low_not_intersected;
-//
-//            if (!skip_verify) {
-//                assert(cell->size);
-//                Addr load_addr = eff_addr_low;
-//                Addr store_start = (load_addr & ~(tssbf.offsetMask)) | cell->offset;
-//                Addr store_end = store_start + cell->size - 1;
-//
-//                Addr load_start = load_addr;
-//                Addr load_end = load_addr + size - 1;
-//
-//                low_not_intersected = store_end < load_start || load_end < store_start;
-//
-//                if (low_not_intersected) {
-//                    DPRINTF(NoSQPred, "Store and load are not intersected: store: 0x%lx with size %u, "
-//                                      "load: 0x%lx with size %u\n",
-//                            store_start, cell->size,
-//                            load_start, size);
-//                }
-//                skip_verify |= low_not_intersected;
-//            }
+            bool not_intersected;
+
+            if (!skip_verify) {
+                not_intersected = (low_word_lssn <= nvul) && (!has_high_word || high_word_lssn <= nvul);
+
+                if (not_intersected) {
+                    DPRINTF(NoSQPred,
+                            "Store and load are not intersected: "
+                            "low word touched by %lu, high word touched by %lu\n",
+                            low_word_lssn, has_high_word ? high_word_lssn : 0);
+                }
+                skip_verify |= not_intersected;
+            }
 
             // log
             DPRINTF(NoSQSMB, "%s with last store @ 0x%lx is %lu\n",
