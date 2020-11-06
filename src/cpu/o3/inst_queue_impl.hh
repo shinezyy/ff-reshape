@@ -399,6 +399,13 @@ InstructionQueue<Impl>::regStats()
         .desc("Number of vector alu accesses")
         .flags(total);
 
+    numOperandBusyInsts
+        .init(4)
+        .name(name() + ".numOperandBusyInsts")
+        .desc("numOperandBusyInsts")
+        .flags(total | pdf);
+        ;
+
 }
 
 template <class Impl>
@@ -1371,6 +1378,8 @@ InstructionQueue<Impl>::addToDependents(DynInstPtr &new_inst)
     int8_t total_src_regs = new_inst->numSrcRegs();
     bool return_val = false;
 
+    unsigned num_busy = 0;
+
     for (int src_reg_idx = 0;
          src_reg_idx < total_src_regs;
          src_reg_idx++)
@@ -1392,6 +1401,7 @@ InstructionQueue<Impl>::addToDependents(DynInstPtr &new_inst)
                         src_reg->className());
 
                 dependGraph.insert(src_reg->flatIndex(), new_inst);
+                num_busy += 1;
 
                 // Change the return value to indicate that something
                 // was added to the dependency graph.
@@ -1406,6 +1416,7 @@ InstructionQueue<Impl>::addToDependents(DynInstPtr &new_inst)
             }
         }
     }
+    numOperandBusyInsts[num_busy]++;
 
     return return_val;
 }

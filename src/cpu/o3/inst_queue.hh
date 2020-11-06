@@ -551,6 +551,8 @@ class InstructionQueue
     Stats::Scalar intAluAccesses;
     Stats::Scalar fpAluAccesses;
     Stats::Scalar vecAluAccesses;
+
+    Stats::Vector numOperandBusyInsts;
 };
 
 #endif //__CPU_O3_INST_QUEUE_HH__
