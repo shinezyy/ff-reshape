@@ -300,6 +300,19 @@ class BaseCPU(MemObject):
             uncached_bus = cached_bus
         self.connectUncachedPorts(uncached_bus)
 
+    def addPrivateSplitL1CachesWithPlusI(self, ic, dc, icp):
+        self.icache = ic
+        self.icache_plus = icp
+        self.dcache = dc
+
+        self.icache_port = ic.cpu_side
+        self.dcache_port = dc.cpu_side
+
+        self.icache_plus.cpu_side = self.icache.mem_side
+
+        self._cached_ports = ['icache_plus.mem_side', 'dcache.mem_side']
+        assert buildEnv['TARGET_ISA'] not in ['x86', 'arm']
+
     def addPrivateSplitL1Caches(self, ic, dc, iwc = None, dwc = None):
         self.icache = ic
         self.dcache = dc

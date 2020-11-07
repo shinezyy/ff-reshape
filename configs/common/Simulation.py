@@ -487,8 +487,12 @@ def run(options, root, testsys, cpu_class):
 
             if options.branch_trace_en:
                 CpuConfig.config_branch_trace(cpu_class, switch_cpus[i], options)
+
             # O3 Config
-            SSConfig.modifyO3CPUConfig(options, switch_cpus[i])
+            if options.cpu_type == 'DerivFFCPU' or options.cpu_type == 'DerivO3CPU':
+                SSConfig.modifyO3CPUConfig(options, switch_cpus[i])
+            elif options.cpu_type == 'XiangshanO3CPU':
+                print("The core parameter is set in riscv/xiangshan.py, don't modify here")
 
         # If elastic tracing is enabled attach the elastic trace probe
         # to the switch CPUs

@@ -94,6 +94,7 @@ class G5Config:
                  debug_flags=None,
                  spec=2017,
                  func_id=None,
+                 config_script='configs/spec2017/se_spec17.py',
                  ):
         self.interval = 200 * 10 ** 6
         self.warmup = 20 * 10 ** 6
@@ -108,6 +109,7 @@ class G5Config:
         self.spec_version = spec
         self.func_id = func_id
         self.task = ''
+        self.config_script = config_script
 
         if full:
             self.insts = full_max_insts
@@ -140,7 +142,7 @@ class G5Config:
             '-q',
             '--stats-file=stats.txt',
             '--outdir=' + self.bmk_outdir,
-            pjoin(gem5_home(), 'configs/spec2017/se_spec17.py'),
+            pjoin(gem5_home(), self.config_script),
             '--spec-2017-bench',
             '-b', '{}'.format(self.benchmark),
 

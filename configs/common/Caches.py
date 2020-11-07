@@ -62,6 +62,16 @@ class L1_ICache(L1Cache):
     # Writeback clean lines as well
     writeback_clean = True
 
+class L1_ICachePlus(L1Cache):
+    assoc = 8
+    is_read_only = False
+    # Writeback clean lines as well
+    writeback_clean = True
+
+    tag_latency = 3
+    data_latency = 3
+    response_latency = 3
+
 class L1_DCache(L1Cache):
     write_buffers = 16
 

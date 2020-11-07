@@ -143,8 +143,17 @@ def config_cache(options, system):
 
             # When connecting the caches, the clock is also inherited
             # from the CPU in question
-            system.cpu[i].addPrivateSplitL1Caches(icache, dcache,
-                                                  iwalkcache, dwalkcache)
+
+            if not options.l1i_plus:
+                system.cpu[i].addPrivateSplitL1Caches(icache, dcache,
+                                                      iwalkcache, dwalkcache)
+            else:
+                icache = icache_class(size='16kB',
+                        assoc=options.l1i_assoc)
+                icache_plus = L1_ICachePlus(size='128kB')
+
+                system.cpu[i].addPrivateSplitL1CachesWithPlusI(
+                        icache, dcache, icache_plus)
 
             if options.memchecker:
                 # The mem_side ports of the caches haven't been connected yet.
