@@ -82,6 +82,13 @@ def get_mem_demand(cpt_dir, cpt_id):
     else:
         return None
 
+def get_benchmarks(fname):
+    benchmarks = []
+    with open(fname) as f:
+        for line in f:
+            if not line.startswith('#'):
+                benchmarks.append(line.strip())
+    return benchmarks
 
 class G5Config:
     def __init__(self, benchmark, bmk_outdir, cpt_id, arch,
@@ -95,6 +102,8 @@ class G5Config:
                  debug_range=2000,
                  spec=2017,
                  func_id=None,
+                 mem_demand=None,
+                 simpoint=False,
                  ):
         self.interval = 200 * 10 ** 6
         self.warmup = 20 * 10 ** 6
@@ -103,13 +112,17 @@ class G5Config:
         self.cpt_id = cpt_id
         self.arch = arch
         self.bench_cpt_dir = pjoin(gem5_cpt_dir(self.arch, 2017), benchmark)
-        self.mem_demand = get_mem_demand(self.bench_cpt_dir, cpt_id)
+        if mem_demand is None:
+            self.mem_demand = get_mem_demand(self.bench_cpt_dir, cpt_id)
+        else:
+            self.mem_demand = mem_demand
         self.debug = debug
         self.debug_flags = debug_flags
         self.spec_version = spec
         self.func_id = func_id
         self.task = ''
         self.debug_range = debug_range
+        self.simpoint = simpoint
 
         if full:
             self.insts = full_max_insts
@@ -149,12 +162,16 @@ class G5Config:
             '--benchmark-stdout={}/out'.format(self.bmk_outdir),
             '--benchmark-stderr={}/err'.format(self.bmk_outdir),
             '-I {}'.format(self.insts),
-            '-r {}'.format(self.cpt_id + 1),
-            '--restore-simpoint-checkpoint',
-            '--checkpoint-dir={}'.format(self.bench_cpt_dir),
             '--arch={}'.format(self.arch),
             '--spec-size=ref',
         ]
+
+        if not self.simpoint:
+            self.options += [
+                    '-r {}'.format(self.cpt_id + 1),
+                    '--restore-simpoint-checkpoint',
+                    '--checkpoint-dir={}'.format(self.bench_cpt_dir),
+                    ]
 
         self.options += self.arch_options
         if self.mem_demand is None:
@@ -163,15 +180,16 @@ class G5Config:
             self.options.append(f'--mem-size={self.mem_demand}')
 
     def set_default_arch_options(self):
-        self.configurable_options = {
-            **self.configurable_options,
-            '--num-ROB': self.window_size,
-            '--num-PhysReg': self.window_size,
-            '--num-IQ': round(0.417 * self.window_size),
-            '--num-LQ': round(0.32 * self.window_size),
-            '--num-SQ': round(0.25 * self.window_size),
-            '--use-bp': 'ZPerceptron',
-        }
+        if self.cpu_model == 'OoO':
+            self.configurable_options = {
+                **self.configurable_options,
+                '--num-ROB': self.window_size,
+                '--num-PhysReg': self.window_size,
+                '--num-IQ': round(0.417 * self.window_size),
+                '--num-LQ': round(0.32 * self.window_size),
+                '--num-SQ': round(0.25 * self.window_size),
+                '--use-bp': 'ZPerceptron',
+            }
 
         if self.cpu_model == 'TimingSimple':
             self.configurable_options = {
@@ -200,6 +218,9 @@ class G5Config:
                 # '--l2_size': '4MB',
                 # '--l2_assoc': '8',
             }
+        elif self.cpu_model == 'Atomic':
+            '--cpu-type=AtomicSimpleCPU',
+            '--mem-type=SimpleMemory',
         else:
             print("Unknown CPU type")
             assert False
@@ -247,7 +268,7 @@ class G5Config:
             'ts-take_cpt_for_benchmark')
         prerequisite = os.path.isfile(cpt_flag_file)
 
-        if prerequisite:
+        if self.simpoint or prerequisite:
             print('cpt flag found, is going to run gem5 on', self.task)
             avoid_repeated(
                 self.run, self.bmk_outdir,
@@ -291,3 +312,4 @@ def get_debug_options():
 
 
 stats_base_dir = lc.stats_base_dir
+dev_stats_base_dir = lc.dev_stats_base_dir
