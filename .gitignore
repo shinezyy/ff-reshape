@@ -33,5 +33,6 @@ simpoint/
 /util/run_sh_scrpits/tmp_spec.txt
 /util/run_sh_scrpits/ts*
 /util/run_sh_scrpits/test/perf/
-util/run_sh_scrpits/labs/tmp.txt
-venv/
+x264_stats.log.mbtree.temp
+x264_stats.log.temp
+valgrind*.txt
