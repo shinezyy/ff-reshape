@@ -580,6 +580,48 @@ mkdirFunc(SyscallDesc *desc, int num, Process *p, ThreadContext *tc)
 }
 
 SyscallReturn
+mkdiratFunc(SyscallDesc *desc, int num, Process *p, ThreadContext *tc)
+{
+    string path;
+
+    int index = 0;
+
+    int tgt_fd = p->getSyscallArg(tc, index);
+
+    if (tgt_fd == AT_FDCWD) {
+        // behave the same as mkdir
+        if (!tc->getMemProxy().tryReadString(path, p->getSyscallArg(tc, index)))
+            return -EFAULT;
+
+        // Adjust path for current working directory
+        path = p->fullPath(path);
+
+        mode_t mode = p->getSyscallArg(tc, index);
+
+        int result = mkdir(path.c_str(), mode);
+        return (result == -1) ? -errno : result;
+
+    } else {
+        auto ffdp = std::dynamic_pointer_cast<FileFDEntry>((*p->fds)[tgt_fd]);
+        if (!ffdp)
+            return -EBADF;
+        int sim_fd = ffdp->getSimFD();
+
+        if (!tc->getMemProxy().tryReadString(path, p->getSyscallArg(tc, index)))
+            return -EFAULT;
+
+        // Adjust path for current working directory
+        path = p->fullPath(path);
+
+        mode_t mode = p->getSyscallArg(tc, index);
+
+        int result = mkdirat(sim_fd, path.c_str(), mode);
+        return (result == -1) ? -errno : result;
+    }
+}
+
+
+SyscallReturn
 renameFunc(SyscallDesc *desc, int num, Process *p, ThreadContext *tc)
 {
     string old_name;
