@@ -287,6 +287,7 @@ FDArray::allocFD(std::shared_ptr<FDEntry> in)
         std::shared_ptr<FDEntry> fdp = _fdArray[i];
         if (!fdp) {
             _fdArray[i] = in;
+            warn("Setting i% th entry in FD array\n", i);
             return i;
         }
     }
@@ -326,6 +327,7 @@ FDArray::setFDEntry(int tgt_fd, std::shared_ptr<FDEntry> fdep)
 {
     assert(0 <= tgt_fd && tgt_fd < _fdArray.size());
     _fdArray[tgt_fd] = fdep;
+    warn("Setting entry [%i] in FD array\n", tgt_fd);
 }
 
 int
