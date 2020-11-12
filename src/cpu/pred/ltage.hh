@@ -56,6 +56,7 @@
 
 #include "base/types.hh"
 #include "cpu/pred/bpred_unit.hh"
+#include "cpu/pred/loop_info.hh"
 #include "params/LTAGE.hh"
 
 class LTAGE: public BPredUnit
@@ -71,6 +72,10 @@ class LTAGE: public BPredUnit
                 bool squashed) override;
     void squash(ThreadID tid, void *bp_history) override;
     unsigned getGHR(ThreadID tid, void *bp_history) const override;
+
+    bool canPredictLoop() override { return true; }
+
+    std::unique_ptr<LoopInfo> moveLastLoopInfo() override;
 
   private:
     // Prediction Structures
@@ -345,6 +350,7 @@ class LTAGE: public BPredUnit
      */
     void specLoopUpdate(Addr pc, bool taken, BranchInfo* bi);
 
+
     const unsigned logSizeBiMP;
     const unsigned logRatioBiModalHystEntries;
     const unsigned logSizeTagTables;
@@ -396,6 +402,8 @@ class LTAGE: public BPredUnit
     int8_t useAltPredForNewlyAllocated;
     int tCounter;
     int logTick;
+
+    LoopInfo *lastControlLoopInfo;
 };
 
 #endif // __CPU_PRED_LTAGE

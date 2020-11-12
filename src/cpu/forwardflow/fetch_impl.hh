@@ -586,6 +586,9 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     Addr branch_pc = nextPC.pc();
     predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
                                         nextPC, tid);
+    if (branchPred->canPredictLoop()){
+        inst->loopInfo = branchPred->moveLastLoopInfo();
+    }
 
     if (lbuf->enable) {
         lbuf->probe(branch_pc, nextPC.pc(), predict_taken);

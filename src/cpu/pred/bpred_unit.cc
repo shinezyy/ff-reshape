@@ -535,3 +535,7 @@ BPredUnit::getLastCallsite(ThreadID tid)
     return rasTop.pc();
 }
 
+std::unique_ptr<LoopInfo> BPredUnit::moveLastLoopInfo() {
+    return nullptr;
+}
+

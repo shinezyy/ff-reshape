@@ -59,7 +59,8 @@ LTAGE::LTAGE(const LTAGEParams *params)
     minHist(params->minHist),
     maxHist(params->maxHist),
     minTagWidth(params->minTagWidth),
-    threadHistory(params->numThreads)
+    threadHistory(params->numThreads),
+    lastControlLoopInfo(nullptr)
 {
     assert(params->histBufferSize > params->maxHist * 2);
     useAltPredForNewlyAllocated = 0;
@@ -300,6 +301,14 @@ LTAGE::getLoop(Addr pc, BranchInfo* bi) const
         if (ltable[bi->loopIndex + i].tag == bi->loopTag) {
             bi->loopHit = i;
             bi->loopPredValid = (ltable[bi->loopIndex + i].confidence >= 3);
+
+            lastControlLoopInfo->valid = bi->loopPredValid;
+            if (bi->loopPredValid) {
+                lastControlLoopInfo->loopEnd = pc;
+                lastControlLoopInfo->restIterations =
+                        ltable[bi->loopIndex + i].numIter - ltable[bi->loopIndex + i].currentIterSpec;
+            }
+
             bi->currentIter = ltable[bi->loopIndex + i].currentIterSpec;
             if (ltable[bi->loopIndex + i].currentIterSpec + 1 ==
                 ltable[bi->loopIndex + i].numIter) {
@@ -458,6 +467,7 @@ bool
 LTAGE::predict(ThreadID tid, Addr branch_pc, bool cond_branch, void* &b)
 {
     BranchInfo *bi = new BranchInfo(nHistoryTables+1);
+    lastControlLoopInfo = new LoopInfo();
     b = (void*)(bi);
     Addr pc = branch_pc;
     bool pred_taken = true;
@@ -792,6 +802,13 @@ LTAGE::uncondBranch(ThreadID tid, Addr br_pc, void* &bp_history)
     updateHistories(tid, br_pc, true, bp_history);
     assert(threadHistory[tid].gHist ==
            &threadHistory[tid].globalHistory[threadHistory[tid].ptGhist]);
+}
+
+std::unique_ptr<LoopInfo> LTAGE::moveLastLoopInfo() {
+    DPRINTF(LTage, "Getting loop info\n");
+    auto ptr = lastControlLoopInfo;
+    lastControlLoopInfo = nullptr;
+    return std::unique_ptr<LoopInfo>(ptr);
 }
 
 LTAGE*

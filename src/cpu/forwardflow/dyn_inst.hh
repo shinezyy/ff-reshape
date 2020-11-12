@@ -53,6 +53,7 @@
 #include "cpu/forwardflow/cpu.hh"
 #include "cpu/forwardflow/isa_specific.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/pred/loop_info.hh"
 #include "cpu/pred/mem_dep_pred.hh"
 #include "cpu/reg_class.hh"
 #include "debug/FFExec.hh"
@@ -519,6 +520,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     unsigned shouldForwFrom{};
 
     std::unique_ptr<MemPredHistory> memPredHistory;
+
+    std::unique_ptr<LoopInfo> loopInfo{};
 
     bool loadVerified{false};
     bool loadVerifying{false};

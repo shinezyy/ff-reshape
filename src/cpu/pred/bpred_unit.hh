@@ -55,6 +55,7 @@
 #include "base/types.hh"
 #include "cpu/pred/btb.hh"
 #include "cpu/pred/indirect.hh"
+#include "cpu/pred/loop_info.hh"
 #include "cpu/pred/ras.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/static_inst.hh"
@@ -211,6 +212,12 @@ class BPredUnit : public SimObject
     virtual bool getLastDirection() {
         return false;
     }
+
+    virtual bool canPredictLoop() {
+        return false;
+    }
+
+    virtual std::unique_ptr<LoopInfo> moveLastLoopInfo();
 
   private:
     struct PredictorHistory {
