@@ -111,11 +111,6 @@ class G5Config:
         self.bmk_outdir = bmk_outdir
         self.cpt_id = cpt_id
         self.arch = arch
-        self.bench_cpt_dir = pjoin(gem5_cpt_dir(self.arch, 2017), benchmark)
-        if mem_demand is None:
-            self.mem_demand = get_mem_demand(self.bench_cpt_dir, cpt_id)
-        else:
-            self.mem_demand = mem_demand
         self.debug = debug
         self.debug_flags = debug_flags
         self.spec_version = spec
@@ -123,6 +118,14 @@ class G5Config:
         self.task = ''
         self.debug_range = debug_range
         self.simpoint = simpoint
+
+        if not self.simpoint:
+            self.bench_cpt_dir = pjoin(gem5_cpt_dir(self.arch, self.spec_version), benchmark)
+
+        if mem_demand is None:
+            self.mem_demand = get_mem_demand(self.bench_cpt_dir, cpt_id)
+        else:
+            self.mem_demand = mem_demand
 
         if full:
             self.insts = full_max_insts
@@ -155,8 +158,20 @@ class G5Config:
             '-q',
             '--stats-file=stats.txt',
             '--outdir=' + self.bmk_outdir,
-            pjoin(gem5_home(), 'configs/spec2017/se_spec17.py'),
-            '--spec-2017-bench',
+            ]
+
+        if self.spec_version == 2017:
+            self.options += [
+                    pjoin(gem5_home(), 'configs/spec2017/se_spec17.py'),
+                    '--spec-2017-bench',
+                    ]
+        else:
+            self.options += [
+                    pjoin(gem5_home(), 'configs/spec2006/se_spec06.py'),
+                    '--spec-2006-bench',
+                    ]
+
+        self.options += [
             '-b', '{}'.format(self.benchmark),
 
             '--benchmark-stdout={}/out'.format(self.bmk_outdir),
@@ -263,10 +278,11 @@ class G5Config:
         if not os.path.isdir(self.bmk_outdir):
             os.makedirs(self.bmk_outdir)
 
-        cpt_flag_file = pjoin(
-            gem5_cpt_dir(self.arch, self.spec_version), self.benchmark,
-            'ts-take_cpt_for_benchmark')
-        prerequisite = os.path.isfile(cpt_flag_file)
+        if not self.simpoint:
+            cpt_flag_file = pjoin(
+                gem5_cpt_dir(self.arch, self.spec_version), self.benchmark,
+                'ts-take_cpt_for_benchmark')
+            prerequisite = os.path.isfile(cpt_flag_file)
 
         if self.simpoint or prerequisite:
             print('cpt flag found, is going to run gem5 on', self.task)
