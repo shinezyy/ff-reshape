@@ -30,6 +30,7 @@ cores_per_task = (total_cores - spare_cores) // n_tasks
 tag_dict = {
         'xiangshan-05': '105',
         'xiangshan-04': '104',
+        '135': '135',
         }
 
 machine_tag = tag_dict[platform.node()]
