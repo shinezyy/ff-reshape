@@ -1,5 +1,5 @@
 import os.path as osp
-
+import platform
 
 cpt_dirs = {
     2006: {
@@ -27,4 +27,13 @@ spare_cores = 1
 cores_per_task = (total_cores - spare_cores) // n_tasks
 
 
-machine_tag = '104'
+tag_dict = {
+        'xiangshan-05': '105',
+        'xiangshan-04': '104',
+        }
+
+machine_tag = tag_dict[platform.node()]
+
+
+if __name__ == '__main__':
+    print(platform.node())
