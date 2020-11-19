@@ -66,8 +66,8 @@ from common.Caches import *
 from get_spec_proc import Spec17
 
 
-def get_one_spec_2017_process(spec06_obj, benchmark_name):
-    process = spec06_obj.gen_proc(benchmark_name)
+def get_one_spec_2017_process(spec_obj, benchmark_name):
+    process = spec_obj.gen_proc(benchmark_name)
     if process:
         return process
     else:
@@ -89,7 +89,8 @@ def get_spec_2017_processes(options):
     if not options.arch:
         print("No Arch(ARM, RISCV) specified. Exiting!\n", file=sys.stderr)
         sys.exit(1)
-    spec17 = Spec17(arch_suffix[options.arch], options.spec_size)
+    spec17 = Spec17(arch_suffix[options.arch], options.spec_size,
+            options.spec_cmd_mode, options.cmd)
     num_processes = len(benchmarks)
     multiprocesses = []
     assert len(stderrs) == len(benchmarks)

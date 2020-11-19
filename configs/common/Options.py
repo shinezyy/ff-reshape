@@ -157,6 +157,10 @@ def addSpec2006Options(parser):
             action="store_true",
             help="use spec 2017 benchmarks as workloads"
             )
+    parser.add_option("--spec-cmd-mode",
+            action="store_true",
+            help="use spec commands from cmd"
+            )
     parser.add_option("--spec-size",
             action="store",
             choices=['ref', 'train', 'test'],

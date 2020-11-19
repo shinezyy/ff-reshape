@@ -13,7 +13,7 @@ window_size = 192 * 1
 
 lbuf_on = True
 obp = True
-full = True
+full = False
 debug = False
 simpoint_list = [0, 1, 2]
 #simpoint_list = [1]

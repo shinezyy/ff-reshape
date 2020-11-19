@@ -40,5 +40,3 @@ fotonik3d_r_base.rv64g-gcc-9-64 > fotonik3d_r.log 2>> fotonik3d_r.err
 # 554.roms_r ref
 roms_r_base.rv64g-gcc-9-64 < ocean_benchmark2.in.x > ocean_benchmark2.log 2>> ocean_benchmark2.err
 
-# 997.specrand_fr ref
-specrand_fr_base.rv64g-gcc-9-64 1255432124 234923 > rand.234923.out 2>> rand.234923.err

@@ -1,5 +1,8 @@
+from __future__ import print_function
+
 import re
 import os
+import json
 
 def get_input_dict_file(file_name):
     text = ''
@@ -43,10 +46,15 @@ def get_input_dict(t = 'all', size = 'ref'):
         return all_bmks, all_names
 
 if __name__ == '__main__':
+    js = {}
     cmd_map, name_dict = get_input_dict(t='all', size='ref')
     for k, v in cmd_map.items():
-        print k, v
-    for k in name_dict:
-        print k
+        if len(v) > 1:
+            for i, cmd in enumerate(v):
+                js[k + '_' + str(i)] = cmd
+        else:
+            js[k] = v[0]
 
+    with open('spec2017_cmds.json', 'w') as fp:
+        json.dump(js, fp, indent=4, sort_keys=True)
 

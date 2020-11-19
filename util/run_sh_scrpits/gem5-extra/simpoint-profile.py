@@ -6,16 +6,17 @@ sys.path.append('../')
 from os.path import join as pjoin
 from multiprocessing import Pool
 import common as c
+import spec_common as sc
 import local_config as lc
 import argparse
 
 num_thread = lc.cores_per_task
-benchmark_list_file = f'../benchmark-list/spec2017_on_{lc.machine_tag}.txt'
 config = f'spec2017_simpoint_profile_full'
 outdir = pjoin(lc.simpoint_base_dir, f'{config}')
 
 def main():
     g5_configs = []
+    spec = sc.Spec17Commands()
 
     dict_options = {
             # '--branch-trace-file': 'useless_branch.protobuf.gz',
@@ -28,13 +29,13 @@ def main():
             '--simpoint-profile',
             ]
 
-    for benchmark in c.get_benchmarks(benchmark_list_file):
-        cpt_id = 0
-        task = f'{benchmark}_{cpt_id}'
+    for task, cmd in spec.get_local().items():
+        benchmark = task.split('_')[0]
         g5_config = c.G5Config(
                 benchmark=benchmark,
+                task=task,
                 bmk_outdir=pjoin(outdir, task),
-                cpt_id=int(cpt_id),
+                cpt_id=0,
                 arch='RISCV',
                 full=True,
                 full_max_insts=7*10**12,
@@ -43,6 +44,8 @@ def main():
                 mem_demand='16GB',
                 simpoint=True,
                 cpu_model='Atomic',
+                cmd=cmd,
+                spec_cmd_mode=True,
                 )
 
         g5_config.add_options(binary_options)

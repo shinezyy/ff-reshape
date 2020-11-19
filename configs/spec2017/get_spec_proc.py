@@ -11,15 +11,22 @@ from os.path import join as pjoin
 
 
 class Spec17:
-    def __init__(self, suffix, size):
+    def __init__(self, suffix, size, cmd_mode, cmd):
         print 'Initializing Spec17 Object'
         self.edu_flag = self.init_env()
-        self.cmd_map, self.name_map = get_input_dict()
 
         self.spec_dir = os.environ['cpu_2017_dir']+'/'
         self.pid_idx = 0
         self.size = size
         self.suffix = suffix
+
+        if cmd_mode:
+            self.cmd_mode = True
+            self.cmd = cmd.split('@')
+            self.cmd_map, self.name_map = get_input_dict()
+        else:
+            self.cmd_mode = False
+            self.cmd_map, self.name_map = get_input_dict()
 
 
     def init_env(self):
@@ -46,12 +53,6 @@ class Spec17:
             return None
 
         full_name = self.name_map[benchmark_name]
-        cmds = self.cmd_map[benchmark_name]
-
-        exe_sub_dir = '{}/exe/{}{}'.format(full_name, cmds[0][0].split('_r')[0],
-                self.suffix)
-        executable = pjoin(self.spec_dir, exe_sub_dir)
-        proc.executable = executable
 
         if self.size == 'ref':
             d = 'refrate'
@@ -64,7 +65,15 @@ class Spec17:
         all_input_dir = pjoin(self.spec_dir,
                 '{}/data/all/input/'.format(full_name))
 
-        first_cmd_list = cmds[0]
+        if self.cmd_mode:
+            first_cmd_list = self.cmd
+        else:
+            first_cmd_list = self.cmd_map[benchmark_name][0]
+
+        exe_sub_dir = '{}/exe/{}{}'.format(full_name, first_cmd_list[0].split('_r')[0],
+                self.suffix)
+        executable = pjoin(self.spec_dir, exe_sub_dir)
+        proc.executable = executable
 
         if benchmark_name == 'perlbench':
             cmds = first_cmd_list[2:]

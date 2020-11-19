@@ -92,6 +92,7 @@ def get_benchmarks(fname):
 
 class G5Config:
     def __init__(self, benchmark, bmk_outdir, cpt_id, arch,
+                 task=None,
                  full=True,
                  full_max_insts=250 * 10**6,
                  cpu_model='OoO',
@@ -104,20 +105,30 @@ class G5Config:
                  func_id=None,
                  mem_demand=None,
                  simpoint=False,
+                 cmd="",
+                 spec_cmd_mode=False,
                  ):
         self.interval = 200 * 10 ** 6
         self.warmup = 20 * 10 ** 6
+
         self.benchmark = benchmark
+        if task is not None:
+            self.task = task
+        else:
+            self.task = benchmark
+
         self.bmk_outdir = bmk_outdir
         self.cpt_id = cpt_id
+
         self.arch = arch
         self.debug = debug
         self.debug_flags = debug_flags
         self.spec_version = spec
         self.func_id = func_id
-        self.task = ''
         self.debug_range = debug_range
         self.simpoint = simpoint
+        self.cmd = cmd
+        self.spec_cmd_mode = spec_cmd_mode
 
         if not self.simpoint:
             self.bench_cpt_dir = pjoin(gem5_cpt_dir(self.arch, self.spec_version), benchmark)
@@ -179,7 +190,11 @@ class G5Config:
             '-I {}'.format(self.insts),
             '--arch={}'.format(self.arch),
             '--spec-size=ref',
+            '--cmd={}'.format('@'.join(self.cmd)),
         ]
+
+        if self.spec_cmd_mode:
+            self.options.append('--spec-cmd-mode')
 
         if not self.simpoint:
             self.options += [
@@ -274,7 +289,7 @@ class G5Config:
         )
 
     def check_and_run(self):
-        self.task = "{}_{}".format(self.benchmark, self.cpt_id)
+        self.task = "{}_{}".format(self.task, self.cpt_id)
 
         if not os.path.isdir(self.bmk_outdir):
             os.makedirs(self.bmk_outdir)
