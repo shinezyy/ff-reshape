@@ -10,8 +10,8 @@ import local_config as lc
 import argparse
 
 num_thread = lc.cores_per_task
-benchmark_list_file = './crashed.txt'
-config = f'simpoint_profile'
+benchmark_list_file = f'../benchmark-list/spec2017_on_{lc.machine_tag}.txt'
+config = f'spec2017_simpoint_profile_full'
 outdir = pjoin(lc.simpoint_base_dir, f'{config}')
 
 def main():
@@ -28,7 +28,7 @@ def main():
             '--simpoint-profile',
             ]
 
-    for benchmark in c.get_benchmarks('./rest.txt'):
+    for benchmark in c.get_benchmarks(benchmark_list_file):
         cpt_id = 0
         task = f'{benchmark}_{cpt_id}'
         g5_config = c.G5Config(
@@ -37,7 +37,7 @@ def main():
                 cpt_id=int(cpt_id),
                 arch='RISCV',
                 full=True,
-                full_max_insts=1200*10**9,
+                full_max_insts=7*10**12,
                 debug=False,
                 func_id=config,
                 mem_demand='16GB',

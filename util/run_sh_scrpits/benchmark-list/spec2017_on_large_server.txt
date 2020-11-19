@@ -1,0 +1,8 @@
+gcc
+mcf
+xz
+omnetpp
+cactuBSSN
+perlbench
+xalancbmk
+lbm

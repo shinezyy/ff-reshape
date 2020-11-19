@@ -1,8 +1,8 @@
 # 503.bwaves_r ref
+bwaves_r_base.rv64g-gcc-9-64 bwaves_4 < bwaves_4.in > bwaves_4.out 2>> bwaves_4.err
 bwaves_r_base.rv64g-gcc-9-64 bwaves_1 < bwaves_1.in > bwaves_1.out 2>> bwaves_1.err
 bwaves_r_base.rv64g-gcc-9-64 bwaves_2 < bwaves_2.in > bwaves_2.out 2>> bwaves_2.err
 bwaves_r_base.rv64g-gcc-9-64 bwaves_3 < bwaves_3.in > bwaves_3.out 2>> bwaves_3.err
-bwaves_r_base.rv64g-gcc-9-64 bwaves_4 < bwaves_4.in > bwaves_4.out 2>> bwaves_4.err
 
 # 507.cactuBSSN_r ref
 cactusBSSN_r_base.rv64g-gcc-9-64 spec_ref.par   > spec_ref.out 2>> spec_ref.err

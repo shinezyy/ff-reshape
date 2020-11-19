@@ -25,3 +25,6 @@ n_tasks = 1
 spare_cores = 1
 
 cores_per_task = (total_cores - spare_cores) // n_tasks
+
+
+machine_tag = '104'
