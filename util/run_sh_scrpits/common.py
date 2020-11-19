@@ -265,6 +265,7 @@ class G5Config:
                     f'--outcome-path={o_path}',
                     ]
         gem5 = sh.Command(pjoin(gem5_build(self.arch), 'gem5.opt'))
+        os.chdir(pjoin(gem5_exec(str(self.spec_version)), self.benchmark))
         # sys.exit(0)
         gem5(
             _out=pjoin(self.bmk_outdir, 'gem5_out.txt'),
@@ -285,7 +286,7 @@ class G5Config:
             prerequisite = os.path.isfile(cpt_flag_file)
 
         if self.simpoint or prerequisite:
-            print('cpt flag found, is going to run gem5 on', self.task)
+            print('cpt flag found or doing simpoint profiling, is going to run gem5 on', self.task)
             avoid_repeated(
                 self.run, self.bmk_outdir,
                 func_id=self.func_id,
