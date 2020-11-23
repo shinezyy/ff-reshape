@@ -122,7 +122,11 @@ ObjectFileFormat::ObjectFileFormat()
 ObjectFile *
 createObjectFile(const std::string &fname, bool raw)
 {
-    ImageFileDataPtr ifd(new ImageFileData(fname));
+  if (fname.empty()) {
+    return nullptr;
+  }
+
+  ImageFileDataPtr ifd(new ImageFileData(fname));
 
     for (auto &format: object_file_formats()) {
         ObjectFile *file_obj = format->load(ifd);

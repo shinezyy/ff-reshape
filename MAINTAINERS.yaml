@@ -188,6 +188,12 @@ fastmodel:
   maintainers:
     - Gabe Black <gabe.black@gmail.com>
 
+gcpt:
+  status: maintained
+  maintainers:
+    - Zhou Yaoyang <shinezyy@qq.com>
+    - Boyang Han <yqszxx@gmail.com>
+
 gpu-compute:
   status: maintained
   maintainers:

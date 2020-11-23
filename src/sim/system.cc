@@ -203,7 +203,9 @@ System::System(const Params &p)
       kvmVM(p.kvm_vm),
 #endif
       physmem(name() + ".physmem", p.memories, p.mmap_using_noreserve,
-              p.shared_backstore),
+              p.shared_backstore,
+              p.restore_from_gcpt,
+              p.gcpt_file),
       ShadowRomRanges(p.shadow_rom_ranges.begin(),
                       p.shadow_rom_ranges.end()),
       memoryMode(p.mem_mode),
@@ -588,6 +590,15 @@ System::getRequestorName(RequestorID requestor_id)
 
     const auto& requestor_info = requestors[requestor_id];
     return requestor_info.req_name;
+}
+
+void System::initState() {
+    // it does nothing
+    SimObject::initState();
+
+    if (physmem.tryRestoreFromGCpt()) {
+        inform("Restoring from Generic Checkpoint\n");
+    }
 }
 
 } // namespace gem5

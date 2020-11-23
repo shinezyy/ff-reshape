@@ -36,6 +36,7 @@ SimObject('Plic.py', sim_objects=['Plic'], tags='riscv isa')
 SimObject('RTC.py', sim_objects=['RiscvRTC'], tags='riscv isa')
 SimObject('RiscvVirtIOMMIO.py', sim_objects=['RiscvMmioVirtIO'],
     tags='riscv isa')
+SimObject('Lint.py', sim_objects=['Lint'], tags='riscv isa')
 
 DebugFlag('Clint', tags='riscv isa')
 DebugFlag('Plic', tags='riscv isa')
@@ -48,3 +49,4 @@ Source('plic_device.cc', tags='riscv isa')
 Source('plic.cc', tags='riscv isa')
 Source('rtc.cc', tags='riscv isa')
 Source('vio_mmio.cc', tags='riscv isa')
+Source('lint.cc', tags='riscv isa')

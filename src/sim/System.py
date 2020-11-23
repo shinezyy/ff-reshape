@@ -131,3 +131,8 @@ class System(SimObject):
 
     if buildEnv['USE_KVM']:
         kvm_vm = Param.KvmVM(NULL, 'KVM VM (i.e., shared memory domain)')
+
+    restore_from_gcpt = Param.Bool(False, "Restoring from gcpt")
+    # Generic Checkpoint image file
+    gcpt_file = Param.String("/the/mid/of/nowhere.xhit",
+                             "Generic Checkpoint image file")
