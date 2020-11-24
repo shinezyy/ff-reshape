@@ -60,3 +60,9 @@ class SimpleUart(Uart):
 class Uart8250(Uart):
     type = 'Uart8250'
     cxx_header = "dev/serial/uart8250.hh"
+
+class UartLite(BasicPioDevice):
+    type = 'UartLite'
+    cxx_header = "dev/serial/uartlite.hh"
+    pio_addr = 0x40600000
+    pio_size = Param.Addr(0xd, "Size of address range")

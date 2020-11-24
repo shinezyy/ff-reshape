@@ -215,7 +215,9 @@ System::System(Params *p)
       kvmVM(nullptr),
 #endif
       physmem(name() + ".physmem", p->memories, p->mmap_using_noreserve,
-              p->shared_backstore),
+              p->shared_backstore,
+              p->restore_from_gcpt,
+              p->gcpt_file),
       memoryMode(p->mem_mode),
       _cacheLineSize(p->cache_line_size),
       workItemsBegin(0),
@@ -655,6 +657,15 @@ System::getRequestorName(RequestorID requestor_id)
 
     const auto& requestor_info = requestors[requestor_id];
     return requestor_info.req_name;
+}
+
+void System::initState() {
+  // it does nothing
+  SimObject::initState();
+
+  if (physmem.tryRestoreFromGCpt()) {
+    inform("Restoring from Generic Checkpoint\n");
+  }
 }
 
 System *

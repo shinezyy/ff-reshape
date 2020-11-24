@@ -60,16 +60,26 @@ ObjectFileFormat::ObjectFileFormat()
 ObjectFile *
 createObjectFile(const std::string &fname, bool raw)
 {
-    ImageFileDataPtr ifd(new ImageFileData(fname));
+  printf("0\n");
+  if (fname.empty()) {
+    return nullptr;
+  }
+  ImageFileDataPtr ifd(new ImageFileData(fname));
 
     for (auto &format: object_file_formats()) {
         ObjectFile *file_obj = format->load(ifd);
-        if (file_obj)
+        printf("1\n");
+        if (file_obj) {
+            printf("2\n");
             return file_obj;
+        }
     }
 
-    if (raw)
+    if (raw) {
+        printf("3\n");
         return new RawImage(ifd);
+    }
+    printf("4\n");
 
     return nullptr;
 }

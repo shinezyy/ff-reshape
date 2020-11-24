@@ -128,7 +128,10 @@ def build_test_system(np):
                                              test_sys.cpu_voltage_domain)
 
     if buildEnv['TARGET_ISA'] == 'riscv':
-        test_sys.workload.bootloader = options.kernel
+        if options.generic_rv_cpt is not None:
+            test_sys.workload.bootloader = ''
+        else:
+            test_sys.workload.bootloader = options.kernel
     elif options.kernel is not None:
         test_sys.workload.object_file = binary(options.kernel)
 
@@ -337,6 +340,12 @@ else:
 np = options.num_cpus
 
 test_sys = build_test_system(np)
+
+if options.generic_rv_cpt is not None:
+    assert(buildEnv['TARGET_ISA'] == "riscv")
+    test_sys.restore_from_gcpt = True
+    test_sys.gcpt_file = options.generic_rv_cpt
+
 if len(bm) == 2:
     drive_sys = build_drive_system(np)
     root = makeDualRoot(True, test_sys, drive_sys, options.etherdump)

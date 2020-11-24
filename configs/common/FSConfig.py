@@ -627,7 +627,8 @@ def makeBareMetalRiscvSystem(mem_mode, mdesc=None, cmdline=None):
         # generic system
         mdesc = SysConfig()
     self.mem_mode = mem_mode
-    self.mem_ranges = [AddrRange(mdesc.mem())]
+    self.mem_ranges = [AddrRange(start=0x80000000, size=mdesc.mem())]
+    print(self.mem_ranges)
 
     self.workload = RiscvBareMetal()
 
@@ -642,6 +643,13 @@ def makeBareMetalRiscvSystem(mem_mode, mdesc=None, cmdline=None):
     self.bridge.ranges = [AddrRange(IO_address_space_base, Addr.max)]
 
     self.system_port = self.membus.slave
+
+    self.lint = Lint()
+    self.lint.pio = self.membus.mem_side_ports
+
+    self.uartlite = UartLite()
+    self.uartlite.pio = self.membus.mem_side_ports
+
     return self
 
 def makeDualRoot(full_system, testSystem, driveSystem, dumpfile):
