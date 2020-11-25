@@ -10,14 +10,17 @@ Tick Lint::read(PacketPtr pkt) {
   assert(pkt->getAddr() >= pioAddr && pkt->getAddr() < pioAddr + pioSize);
   assert(pkt->getSize() == 8);
 
-  pkt->setLE(timeStamp);
   timeStamp += 800;
+  pkt->setLE(timeStamp);
   pkt->makeAtomicResponse();
   return pioDelay;
 }
 
 Tick Lint::write(PacketPtr pkt) {
-  warn("Lint device doesn't support writes\n");
+  assert(pkt->getAddr() >= pioAddr && pkt->getAddr() < pioAddr + pioSize);
+  assert(pkt->getSize() == 8);
+
+  timeStamp = pkt->getRaw<uint64_t>();
 
   pkt->makeAtomicResponse();
   return pioDelay;

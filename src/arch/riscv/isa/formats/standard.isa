@@ -372,16 +372,36 @@ def template CSRExecute {{
                             xc->setMiscReg(MISCREG_FFLAGS, bits(data, 4, 0));
                             xc->setMiscReg(MISCREG_FRM, bits(data, 7, 5));
                             break;
-                          case CSR_MIP: case CSR_MIE:
+
+                          case CSR_MIP:
                             if (oldinterrupt.mei == newinterrupt.mei &&
-                                oldinterrupt.mti == newinterrupt.mti &&
-                                oldinterrupt.msi == newinterrupt.msi) {
+                                    oldinterrupt.mti == newinterrupt.mti &&
+                                    oldinterrupt.msi == newinterrupt.msi) {
                                 xc->setMiscReg(CSRData.at(csr).physIndex,data);
                             } else {
-                                std::string error = "Interrupt m bits are "
-                                                    "read-only\n";
-                                fault = make_shared<IllegalInstFault>(error,
-                                                                     machInst);
+                                warn("Ignore writing mip: oldinterrupt.mei:%i newinterrupt.mei:%i; "
+                                        "oldinterrupt.mti:%i newinterrupt.mti:%i; "
+                                        "oldinterrupt.msi:%i newinterrupt.msi:%i\n",
+                                        oldinterrupt.mei, newinterrupt.mei,
+                                        oldinterrupt.mti, newinterrupt.mti,
+                                        oldinterrupt.msi, newinterrupt.msi
+                                    );
+                            }
+                            break;
+
+                          case CSR_MIE:
+                            if (oldinterrupt.mei == newinterrupt.mei &&
+                                    oldinterrupt.mti == newinterrupt.mti &&
+                                    oldinterrupt.msi == newinterrupt.msi) {
+                                xc->setMiscReg(CSRData.at(csr).physIndex,data);
+                            } else {
+                                warn("Ignore writing mie: oldinterrupt.mei:%i newinterrupt.mei:%i; "
+                                        "oldinterrupt.mti:%i newinterrupt.mti:%i; "
+                                        "oldinterrupt.msi:%i newinterrupt.msi:%i\n",
+                                        oldinterrupt.mei, newinterrupt.mei,
+                                        oldinterrupt.mti, newinterrupt.mti,
+                                        oldinterrupt.msi, newinterrupt.msi
+                                    );
                             }
                             break;
                           default:
