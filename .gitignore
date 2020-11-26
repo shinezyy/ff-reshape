@@ -36,3 +36,4 @@ simpoint/
 x264_stats.log.mbtree.temp
 x264_stats.log.temp
 valgrind*.txt
+util/run_sh_scrpits/spec_exe/
