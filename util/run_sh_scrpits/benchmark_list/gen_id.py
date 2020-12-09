@@ -22,4 +22,4 @@ for d in dirs:
 
 print(new_js)
 with open("./spec2017_ids_cmds.json", 'w') as njsf:
-    json.dump(new_js, njsf)
+    json.dump(new_js, njsf, indent=4, sort_keys=True)

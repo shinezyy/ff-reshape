@@ -2,6 +2,7 @@ import json
 import local_config as lc
 import common as c
 from pathlib import Path
+import re
 
 class SpecCommands:
     def __init__(self, cmd_json):
@@ -9,7 +10,7 @@ class SpecCommands:
             self.cmds = json.load(f)
     def get(self, task: str):
         if task in self.cmds:
-            return self.cmds[task]
+            return [(task, self.cmds[task])]
 
         similar = False
         for t in self.cmds:
@@ -43,12 +44,18 @@ class SpecCommands:
 class Spec17Commands(SpecCommands):
     def __init__(self):
         base_path = Path(__file__).parent
-        cmd_file_path = (base_path / 'benchmark_list/spec2017_cmds.json').resolve()
+        cmd_file_path = (base_path / 'benchmark_list/spec2017_ids_cmds.json').resolve()
+        SpecCommands.__init__(self, cmd_file_path)
+
+class Spec06Commands(SpecCommands):
+    def __init__(self):
+        base_path = Path(__file__).parent
+        cmd_file_path = (base_path / 'benchmark_list/spec2006_cmds.json').resolve()
         SpecCommands.__init__(self, cmd_file_path)
 
 
 if __name__ == '__main__':
     spec = Spec17Commands()
-    print(spec.get('gcc_pp_O2'))
+    # print(spec.get('gcc_pp_O2'))
     print(spec.get_all())
 
