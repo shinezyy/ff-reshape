@@ -143,7 +143,7 @@ def gather_binary():
         bin_path = bin_template.format(raw[k]['id'], cmds[k][0])
         print(bin_path)
         assert osp.isfile(bin_path)
-        sh.cp([bin_path, './spec{ver}_exe'])
+        sh.rsync(['-u', bin_path, f'./spec{ver}_exe/'])
 
 
 preprocess()
