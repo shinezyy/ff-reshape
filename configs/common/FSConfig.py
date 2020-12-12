@@ -640,15 +640,18 @@ def makeBareMetalRiscvSystem(mem_mode, mdesc=None, cmdline=None):
     self.bridge.slave = self.membus.master
     # Sv39 has 56 bit physical addresses; use the upper 8 bit for the IO space
     IO_address_space_base = 0x00FF000000000000
-    self.bridge.ranges = [AddrRange(IO_address_space_base, Addr.max)]
+    self.bridge.ranges = [
+            AddrRange(0x38000000, 0x38010000 - 1),
+            AddrRange(0x40600000, 0x4060000d - 1),
+            AddrRange(IO_address_space_base, Addr.max),]
 
     self.system_port = self.membus.slave
 
     self.lint = Lint()
-    self.lint.pio = self.membus.mem_side_ports
+    self.lint.pio = self.iobus.master
 
     self.uartlite = UartLite()
-    self.uartlite.pio = self.membus.mem_side_ports
+    self.uartlite.pio = self.iobus.master
 
     return self
 
