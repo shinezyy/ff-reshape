@@ -56,6 +56,7 @@
 #include "debug/O3CPU.hh"
 #include "debug/Quiesce.hh"
 #include "enums/MemoryMode.hh"
+#include "sim/async.hh"
 #include "sim/core.hh"
 #include "sim/full_system.hh"
 #include "sim/process.hh"
@@ -1518,6 +1519,11 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
 
         // Check for instruction-count-based events.
         thread[tid]->comInstEventQueue.serviceEvents(thread[tid]->numInst);
+
+        if (this->warmUpInstCount && totalInsts() == this->warmUpInstCount) {
+            fprintf(stderr, "Will trigger stat dump and reset\n");
+            Stats::schedStatEvent(true, true, curTick(), 0);
+        }
     }
     thread[tid]->numOp++;
     thread[tid]->threadStats.numOps++;

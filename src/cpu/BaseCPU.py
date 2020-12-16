@@ -184,6 +184,10 @@ class BaseCPU(ClockedObject):
 
     _uncached_interrupt_response_ports = []
     _uncached_interrupt_request_ports = []
+
+    GCptWarmupInstCount = Param.Counter(0,
+        "reset stats when any thread has reached this inst count")
+
     if buildEnv['TARGET_ISA'] == 'x86':
         _uncached_interrupt_response_ports += ["interrupts[0].pio",
                                   "interrupts[0].int_responder"]

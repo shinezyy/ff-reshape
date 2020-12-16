@@ -339,6 +339,10 @@ def addCommonOptions(parser):
     parser.add_option("-p", "--prog-interval", type="str",
         help="CPU Progress Interval")
 
+    # for gcpt
+    parser.add_option("--gcpt-warmup", action="store", type="int",
+        default=None,
+        help="Warmup period in total instructions for restoring cpt")
     # Fastforwarding and simpoint related materials
     parser.add_option("-W", "--warmup-insts", action="store", type="int",
         default=None,
