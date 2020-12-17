@@ -1,3 +1,20 @@
+# What's different?
+
+`configs/example/fs.py` is modified to support Generic Checkpoint (GCpt) for RISC-V
+
+We implemented the minimum required devices (timer, sdcard, and uartlite) to boot Linux.
+Our memory space layout is different Sifive's:
+```
+mmio map 'clint' at     [0x38000000, 0x3800ffff]
+mmio map 'sdhci' at     [0x40002000, 0x4000207f]
+mmio map 'uartlite' at  [0x40600000, 0x4060000c]
+Main memory is at       [0x80000000, 0x280000000]
+```
+
+Set `--generic-rv-cpt=/path/to/the memory image/gzip/file` to restore from the GCpt;
+Set `--gcpt-warmup=N` to reset and dump stats after warmup with `N` instructions;
+
+# The original READMD
 This is the gem5 simulator.
 
 The main website can be found at http://www.gem5.org
