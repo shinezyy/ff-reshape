@@ -33,14 +33,15 @@ script_template_2 ='''
 echo "===== Start running SPEC20{ver} ref ====="
 
 # notify processor start spec command
-# /root/blabla
+/root/before_workload
 
 echo "running command"
 # run command
 /root/spec{ver}_exe/{task}
+# /root/hello
 
 # good trap: stop processor
-/root/trap
+/root/trap_new
 '''
 
 copy_io_files = {
@@ -133,6 +134,7 @@ def copy_inputs():
 
         copy_to(ref_inputs, dest)
         copy_to(all_inputs, dest)
+
 
 def gather_binary():
     if ver == '06':
