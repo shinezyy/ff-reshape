@@ -1,5 +1,8 @@
+from __future__ import print_function
+
 import re
 import os
+import json
 
 def get_input_dict():
     text = ''
@@ -42,6 +45,24 @@ def get_input_dict():
 
 if __name__ == '__main__':
     name_map, cmd_map = get_input_dict()
-    for k in name_map:
-        print k
+    # print(cmd_map)
+    js = {}
+    for name in name_map:
+        id_ = name_map[name]
+        cmds = cmd_map[id_]
+        print(name, id_, cmds)
+        if len(cmds) > 1:
+            for i, cmd in enumerate(cmds):
+                js[name + '_' + str(i)] = {}
+                js[name + '_' + str(i)]['id'] = id_
+                js[name + '_' + str(i)]['cmd'] = cmd.split(' ')
+                print(name, js[name + '_' + str(i)])
+        else:
+            js[name] = {}
+            js[name]['id'] = id_
+            js[name]['cmd'] = cmds[0].split(' ')
+            print(name, js[name])
+
+    with open('spec2006_cmds.json', 'w') as fp:
+        json.dump(js, fp, indent=4, sort_keys=True)
 
