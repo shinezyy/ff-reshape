@@ -27,7 +27,7 @@
 # Authors: Nathan Binkert
 
 from m5.params import *
-from CheckerCPU import CheckerCPU
+from m5.objects.CheckerCPU import CheckerCPU
 
 class FFChecker(CheckerCPU):
     type = 'FFChecker'

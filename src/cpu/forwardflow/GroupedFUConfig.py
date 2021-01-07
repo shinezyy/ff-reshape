@@ -41,10 +41,11 @@
 from m5.SimObject import SimObject
 from m5.defines import buildEnv
 from m5.params import *
-from FuncUnit import *
+from m5.objects.FuncUnit import *
 import copy
 
-commonOpList = [OpDesc(opClass='No_OpClass'), OpDesc(opClass='IntAlu'),
+def getCommonOpList():
+    return [OpDesc(opClass='No_OpClass'), OpDesc(opClass='IntAlu'),
 
         OpDesc(opClass='MemRead'), OpDesc(opClass='MemWrite'),
         OpDesc(opClass='FloatMemRead'), OpDesc(opClass='FloatMemWrite'),
@@ -55,7 +56,7 @@ class GroupCommon(FUDesc):
     count = 1
 
 class Group0(GroupCommon):
-    opList = copy.deepcopy(commonOpList)
+    opList = getCommonOpList()
     # int MD
     opList += [ OpDesc(opClass='IntMult', opLat=3),
             OpDesc(opClass='IntDiv', opLat=20, pipelined=False) ]
@@ -67,7 +68,7 @@ class Group0(GroupCommon):
             OpDesc(opClass='FloatSqrt', opLat=24, pipelined=False) ]
 
 class Group1(GroupCommon):
-    opList = copy.deepcopy(commonOpList)
+    opList = getCommonOpList()
     # FP ALU
     opList += [ OpDesc(opClass='FloatAdd', opLat=2),
         OpDesc(opClass='FloatCmp', opLat=2)]
@@ -77,7 +78,7 @@ class Group1(GroupCommon):
 
 
 class Group2(GroupCommon):
-    opList = copy.deepcopy(commonOpList)
+    opList = getCommonOpList()
     # int MD
     opList += [ OpDesc(opClass='IntMult', opLat=3),
             OpDesc(opClass='IntDiv', opLat=20, pipelined=False) ]
@@ -89,7 +90,7 @@ class Group2(GroupCommon):
             OpDesc(opClass='FloatSqrt', opLat=24, pipelined=False) ]
 
 class Group3(GroupCommon):
-    opList = copy.deepcopy(commonOpList)
+    opList = getCommonOpList()
     # FP ALU
     opList += [ OpDesc(opClass='FloatAdd', opLat=2),
             OpDesc(opClass='FloatCmp', opLat=2)]

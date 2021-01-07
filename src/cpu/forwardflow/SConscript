@@ -135,4 +135,4 @@ if 'FFCPU' in env['CPU_MODELS']:
     SimObject('FFChecker.py')
     Source('checker.cc')
 else:
-    print "FFCPU not in CPU models!"
+    print("FFCPU not in CPU models!")

@@ -43,12 +43,12 @@ from __future__ import print_function
 from m5.defines import buildEnv
 from m5.params import *
 from m5.proxy import *
-from BaseCPU import BaseCPU
-from FFFUPool import *
-from FFChecker import FFChecker
-from BranchPredictor import *
-from MemDepPredictor import *
-from LoopBuffer import *
+from m5.objects.BaseCPU import BaseCPU
+from m5.objects.FFFUPool import *
+from m5.objects.FFChecker import FFChecker
+from m5.objects.BranchPredictor import *
+from m5.objects.MemDepPredictor import *
+from m5.objects.LoopBuffer import *
 
 coreWidth = 4
 

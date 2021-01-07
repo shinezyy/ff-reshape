@@ -41,8 +41,8 @@ from __future__ import print_function
 from m5.defines import buildEnv
 from m5.params import *
 from m5.proxy import *
-from m5.objects.ranchTrace import *
-from m5.objects.oopBuffer import *
+from m5.objects.BranchTrace import *
+from m5.objects.LoopBuffer import *
 from m5.objects.BaseCPU import BaseCPU
 from m5.objects.FUPool import *
 from m5.objects.O3Checker import O3Checker
