@@ -36,9 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ali Saidi
- *          Andreas Sandberg
  */
 
 #include "dev/arm/pl011.hh"
@@ -58,7 +55,7 @@ Pl011::Pl011(const Pl011Params *p)
       intEvent([this]{ generateInterrupt(); }, name()),
       control(0x300), fbrd(0), ibrd(0), lcrh(0), ifls(0x12),
       imsc(0), rawInt(0),
-      gic(p->gic), endOnEOT(p->end_on_eot), intNum(p->int_num),
+      endOnEOT(p->end_on_eot), interrupt(p->interrupt->get()),
       intDelay(p->int_delay)
 {
 }
@@ -133,10 +130,14 @@ Pl011::read(PacketPtr pkt)
         DPRINTF(Uart, "Reading Masked Int status as 0x%x\n", maskInt());
         data = maskInt();
         break;
+      case UART_DMACR:
+        warn("PL011: DMA not supported\n");
+        data = 0x0; // DMA never enabled
+        break;
       default:
         if (readId(pkt, AMBA_ID, pioAddr)) {
             // Hack for variable size accesses
-            data = pkt->getLE<uint32_t>();
+            data = pkt->getUintX(ByteOrder::little);
             break;
         }
 
@@ -239,6 +240,14 @@ Pl011::write(PacketPtr pkt)
             dataAvailable();
         }
         break;
+      case UART_DMACR:
+        // DMA is not supported, so panic if anyome tries to enable it.
+        // Bits 0, 1, 2 enables DMA on RX, TX, ERR respectively, others res0.
+        if (data & 0x7) {
+            panic("Tried to enable DMA on PL011\n");
+        }
+        warn("PL011: DMA not supported\n");
+        break;
       default:
         panic("Tried to write PL011 at offset %#x that doesn't exist\n", daddr);
         break;
@@ -263,7 +272,7 @@ Pl011::generateInterrupt()
             imsc, rawInt, maskInt());
 
     if (maskInt()) {
-        gic->sendInt(intNum);
+        interrupt->raise();
         DPRINTF(Uart, " -- Generated\n");
     }
 }
@@ -280,7 +289,7 @@ Pl011::setInterrupts(uint16_t ints, uint16_t mask)
         if (!intEvent.scheduled())
             schedule(intEvent, curTick() + intDelay);
     } else if (old_ints && !maskInt()) {
-        gic->clearInt(intNum);
+        interrupt->clear();
     }
 }
 

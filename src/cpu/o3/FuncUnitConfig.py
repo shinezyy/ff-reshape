@@ -1,4 +1,4 @@
-# Copyright (c) 2010 ARM Limited
+# Copyright (c) 2010, 2017 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -35,13 +35,12 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Kevin Lim
 
 from m5.SimObject import SimObject
 from m5.defines import buildEnv
 from m5.params import *
-from FuncUnit import *
+
+from m5.objects.FuncUnit import *
 
 class IntALU(FUDesc):
     opList = [ OpDesc(opClass='IntAlu') ]
@@ -96,6 +95,10 @@ class FP_MultDiv(FUDesc):
 #                OpDesc(opClass='SimdFloatMultAcc'),
 #                OpDesc(opClass='SimdFloatSqrt') ]
 #     count = 4
+
+class PredALU(FUDesc):
+    opList = [ OpDesc(opClass='SimdPredAlu') ]
+    count = 1
 
 # class ReadPort(FUDesc):
 #     opList = [ OpDesc(opClass='MemRead'),

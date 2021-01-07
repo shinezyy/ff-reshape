@@ -1,4 +1,4 @@
-#! /usr/bin/env python2
+#! /usr/bin/env python2.7
 #
 # Copyright (c) 2016 ARM Limited
 # All rights reserved
@@ -34,8 +34,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Andreas Sandberg
 
 import os
 import sys
@@ -86,7 +84,6 @@ repo_types = {
     "auto" : detect_repo,
     "none" : lambda : None,
     "git" : repo.GitRepo,
-    "hg" : repo.MercurialRepo,
 }
 
 if __name__ == '__main__':

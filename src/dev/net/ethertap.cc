@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Nathan Binkert
  */
 
 /* @file
@@ -92,7 +90,7 @@ class TapEvent : public PollEvent
 };
 
 EtherTapBase::EtherTapBase(const Params *p)
-    : EtherObject(p), buflen(p->bufsz), dump(p->dump), event(NULL),
+    : SimObject(p), buflen(p->bufsz), dump(p->dump), event(NULL),
       interface(NULL),
       txEvent([this]{ retransmit(); }, "EtherTapBase retransmit")
 {
@@ -159,15 +157,12 @@ EtherTapBase::stopPolling()
 }
 
 
-EtherInt*
-EtherTapBase::getEthPort(const std::string &if_name, int idx)
+Port &
+EtherTapBase::getPort(const std::string &if_name, PortID idx)
 {
-    if (if_name == "tap") {
-        if (interface->getPeer())
-            panic("Interface already connected to\n");
-        return interface;
-    }
-    return NULL;
+    if (if_name == "tap")
+        return *interface;
+    return SimObject::getPort(if_name, idx);
 }
 
 bool
@@ -201,7 +196,7 @@ EtherTapBase::sendSimulated(void *data, size_t len)
         DPRINTF(Ethernet, "bus busy...buffer for retransmission\n");
         packetBuffer.push(packet);
         if (!txEvent.scheduled())
-            schedule(txEvent, curTick() + retryTime);
+            schedule(txEvent, curTick() + SimClock::Int::ns);
     } else if (dump) {
         dump->dump(packet);
     }
@@ -223,7 +218,7 @@ EtherTapBase::retransmit()
     }
 
     if (!packetBuffer.empty() && !txEvent.scheduled())
-        schedule(txEvent, curTick() + retryTime);
+        schedule(txEvent, curTick() + SimClock::Int::ns);
 }
 
 

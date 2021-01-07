@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Nathan Binkert
  */
 
 #ifndef __BASE_STL_HELPERS_HH__
@@ -38,14 +36,6 @@
 namespace m5 {
 namespace stl_helpers {
 
-template <typename T>
-void
-deletePointer(T &ptr)
-{
-    delete ptr;
-    ptr = NULL;
-}
-
 template <class T>
 class ContainerPrint
 {
@@ -54,10 +44,16 @@ class ContainerPrint
     bool first;
 
   public:
+    /**
+     * @ingroup api_base_utils
+     */
     ContainerPrint(std::ostream &out)
         : out(out), first(true)
     {}
 
+    /**
+     * @ingroup api_base_utils
+     */
     void
     operator()(const T &elem)
     {
@@ -116,6 +112,12 @@ template<typename Container,
     return out;
 }
 #else
+/**
+ * Write out all elements in an stl container as a space separated
+ * list enclosed in square brackets
+ *
+ * @ingroup api_base_utils
+ */
 template <template <typename T, typename A> class C, typename T, typename A>
     std::ostream &
 operator<<(std::ostream& out, const C<T,A> &vec)

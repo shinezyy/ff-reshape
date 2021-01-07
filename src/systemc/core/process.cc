@@ -23,8 +23,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #include "systemc/core/process.hh"
@@ -81,7 +79,7 @@ Process::suspend(bool inc_kids)
     if (inc_kids)
         forEachKid([](Process *p) { p->suspend(true); });
 
-    if (!_suspended) {
+    if (!_suspended && !_terminated) {
         _suspended = true;
         _suspendedReady = scheduler.suspend(this);
 
@@ -102,7 +100,7 @@ Process::resume(bool inc_kids)
     if (inc_kids)
         forEachKid([](Process *p) { p->resume(true); });
 
-    if (_suspended) {
+    if (_suspended && !_terminated) {
         _suspended = false;
         if (_suspendedReady)
             scheduler.resume(this);
@@ -124,7 +122,8 @@ Process::disable(bool inc_kids)
                 message.c_str());
     }
 
-    _disabled = true;
+    if (!_terminated)
+        _disabled = true;
 }
 
 void
@@ -134,7 +133,8 @@ Process::enable(bool inc_kids)
     if (inc_kids)
         forEachKid([](Process *p) { p->enable(true); });
 
-    _disabled = false;
+    if (!_terminated)
+        _disabled = false;
 }
 
 void
@@ -149,8 +149,8 @@ Process::kill(bool inc_kids)
     if (inc_kids)
         forEachKid([](Process *p) { p->kill(true); });
 
-    // If we're in the middle of unwinding, ignore the kill request.
-    if (_isUnwinding)
+    // If we're unwinding or terminated, ignore the kill request.
+    if (_isUnwinding || _terminated)
         return;
 
     // Update our state.
@@ -177,8 +177,8 @@ Process::reset(bool inc_kids)
     if (inc_kids)
         forEachKid([](Process *p) { p->reset(true); });
 
-    // If we're in the middle of unwinding, ignore the reset request.
-    if (_isUnwinding)
+    // If we're already unwinding or terminated, ignore the reset request.
+    if (_isUnwinding || _terminated)
         return;
 
     // Clear suspended ready since we're about to run regardless.

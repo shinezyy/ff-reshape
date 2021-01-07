@@ -36,9 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ron Dreslinski
- *          Mitch Hayenga
  */
 
 /**
@@ -51,29 +48,35 @@
 
 #include <cstdint>
 
+#include "arch/generic/tlb.hh"
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
+#include "sim/byteswap.hh"
 #include "sim/clocked_object.hh"
 #include "sim/probe/probe.hh"
 
 class BaseCache;
 struct BasePrefetcherParams;
 
-class BasePrefetcher : public ClockedObject
+namespace Prefetcher {
+
+class Base : public ClockedObject
 {
     class PrefetchListener : public ProbeListenerArgBase<PacketPtr>
     {
       public:
-        PrefetchListener(BasePrefetcher &_parent, ProbeManager *pm,
-                         const std::string &name, bool _isFill = false)
+        PrefetchListener(Base &_parent, ProbeManager *pm,
+                         const std::string &name, bool _isFill = false,
+                         bool _miss = false)
             : ProbeListenerArgBase(pm, name),
-              parent(_parent), isFill(_isFill) {}
+              parent(_parent), isFill(_isFill), miss(_miss) {}
         void notify(const PacketPtr &pkt) override;
       protected:
-        BasePrefetcher &parent;
-        bool isFill;
+        Base &parent;
+        const bool isFill;
+        const bool miss;
     };
 
     std::vector<PrefetchListener *> listeners;
@@ -85,16 +88,26 @@ class BasePrefetcher : public ClockedObject
      * generate new prefetch requests.
      */
     class PrefetchInfo {
-        /** The address. */
+        /** The address used to train and generate prefetches */
         Addr address;
         /** The program counter that generated this address. */
         Addr pc;
         /** The requestor ID that generated this address. */
-        MasterID masterId;
+        RequestorID requestorId;
         /** Validity bit for the PC of this address. */
         bool validPC;
         /** Whether this address targets the secure memory space. */
         bool secure;
+        /** Size in bytes of the request triggering this event */
+        unsigned int size;
+        /** Whether this event comes from a write request */
+        bool write;
+        /** Physical address, needed because address can be virtual */
+        Addr paddress;
+        /** Whether this event comes from a cache miss */
+        bool cacheMiss;
+        /** Pointer to the associated request data */
+        uint8_t *data;
 
       public:
         /**
@@ -138,9 +151,70 @@ class BasePrefetcher : public ClockedObject
          * Gets the requestor ID that generated this address
          * @return the requestor ID that generated this address
          */
-        MasterID getMasterId() const
+        RequestorID getRequestorId() const
         {
-            return masterId;
+            return requestorId;
+        }
+
+        /**
+         * Gets the size of the request triggering this event
+         * @return the size in bytes of the request triggering this event
+         */
+        unsigned int getSize() const
+        {
+            return size;
+        }
+
+        /**
+         * Checks if the request that caused this prefetch event was a write
+         * request
+         * @return true if the request causing this event is a write request
+         */
+        bool isWrite() const
+        {
+            return write;
+        }
+
+        /**
+         * Gets the physical address of the request
+         * @return physical address of the request
+         */
+        Addr getPaddr() const
+        {
+            return paddress;
+        }
+
+        /**
+         * Check if this event comes from a cache miss
+         * @result true if this event comes from a cache miss
+         */
+        bool isCacheMiss() const
+        {
+            return cacheMiss;
+        }
+
+        /**
+         * Gets the associated data of the request triggering the event
+         * @param Byte ordering of the stored data
+         * @return the data
+         */
+        template <typename T>
+        inline T
+        get(ByteOrder endian) const
+        {
+            if (data == nullptr) {
+                panic("PrefetchInfo::get called with a request with no data.");
+            }
+            switch (endian) {
+                case ByteOrder::big:
+                    return betoh(*(T*)data);
+
+                case ByteOrder::little:
+                    return letoh(*(T*)data);
+
+                default:
+                    panic("Illegal byte order in PrefetchInfo::get()\n");
+            };
         }
 
         /**
@@ -157,9 +231,11 @@ class BasePrefetcher : public ClockedObject
         /**
          * Constructs a PrefetchInfo using a PacketPtr.
          * @param pkt PacketPtr used to generate the PrefetchInfo
-         * @param addr the address value of the new object
+         * @param addr the address value of the new object, this address is
+         *        used to train the prefetcher
+         * @param miss whether this event comes from a cache miss
          */
-        PrefetchInfo(PacketPtr pkt, Addr addr);
+        PrefetchInfo(PacketPtr pkt, Addr addr, bool miss);
 
         /**
          * Constructs a PrefetchInfo using a new address value and
@@ -168,6 +244,11 @@ class BasePrefetcher : public ClockedObject
          * @param addr the address value of the new object
          */
         PrefetchInfo(PrefetchInfo const &pfi, Addr addr);
+
+        ~PrefetchInfo()
+        {
+            delete[] data;
+        }
     };
 
   protected:
@@ -199,7 +280,7 @@ class BasePrefetcher : public ClockedObject
     const bool onInst;
 
     /** Request id for prefetches */
-    const MasterID masterId;
+    const RequestorID requestorId;
 
     const Addr pageBytes;
 
@@ -209,8 +290,12 @@ class BasePrefetcher : public ClockedObject
     /** Use Virtual Addresses for prefetching */
     const bool useVirtualAddresses;
 
-    /** Determine if this access should be observed */
-    bool observeAccess(const PacketPtr &pkt) const;
+    /**
+     * Determine if this access should be observed
+     * @param pkt The memory request causing the event
+     * @param miss whether this event comes from a cache miss
+     */
+    bool observeAccess(const PacketPtr &pkt, bool miss) const;
 
     /** Determine if address is in cache */
     bool inCache(Addr addr, bool is_secure) const;
@@ -232,21 +317,25 @@ class BasePrefetcher : public ClockedObject
     Addr pageOffset(Addr a) const;
     /** Build the address of the i-th block inside the page */
     Addr pageIthBlockAddress(Addr page, uint32_t i) const;
-
-    Stats::Scalar pfIssued;
+    struct StatGroup : public Stats::Group
+    {
+        StatGroup(Stats::Group *parent);
+        Stats::Scalar pfIssued;
+    } prefetchStats;
 
     /** Total prefetches issued */
     uint64_t issuedPrefetches;
     /** Total prefetches that has been useful */
     uint64_t usefulPrefetches;
 
+    /** Registered tlb for address translations */
+    BaseTLB * tlb;
+
   public:
+    Base(const BasePrefetcherParams *p);
+    virtual ~Base() = default;
 
-    BasePrefetcher(const BasePrefetcherParams *p);
-
-    virtual ~BasePrefetcher() {}
-
-    void setCache(BaseCache *_cache);
+    virtual void setCache(BaseCache *_cache);
 
     /**
      * Notify prefetcher of cache access (may be any access or just
@@ -262,10 +351,6 @@ class BasePrefetcher : public ClockedObject
 
     virtual Tick nextPrefetchReadyTime() const = 0;
 
-    /**
-     * Register local statistics.
-     */
-    void regStats() override;
 
     /**
      * Register probe points for this object.
@@ -275,8 +360,9 @@ class BasePrefetcher : public ClockedObject
     /**
      * Process a notification event from the ProbeListener.
      * @param pkt The memory request causing the event
+     * @param miss whether this event comes from a cache miss
      */
-    void probeNotify(const PacketPtr &pkt);
+    void probeNotify(const PacketPtr &pkt, bool miss);
 
     /**
      * Add a SimObject and a probe name to listen events from
@@ -284,5 +370,16 @@ class BasePrefetcher : public ClockedObject
      * @param name The probe name
      */
     void addEventProbe(SimObject *obj, const char *name);
+
+    /**
+     * Add a BaseTLB object to be used whenever a translation is needed.
+     * This is generally required when the prefetcher is allowed to generate
+     * page crossing references and/or uses virtual addresses for training.
+     * @param tlb pointer to the BaseTLB object to add
+     */
+    void addTLB(BaseTLB *tlb);
 };
+
+} // namespace Prefetcher
+
 #endif //__MEM_CACHE_PREFETCH_BASE_HH__

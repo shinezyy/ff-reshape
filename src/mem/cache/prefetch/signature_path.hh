@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Javier Bueno
  */
 
  /**
@@ -42,13 +40,16 @@
 #ifndef __MEM_CACHE_PREFETCH_SIGNATURE_PATH_HH__
 #define __MEM_CACHE_PREFETCH_SIGNATURE_PATH_HH__
 
+#include "base/sat_counter.hh"
 #include "mem/cache/prefetch/associative_set.hh"
 #include "mem/cache/prefetch/queued.hh"
 #include "mem/packet.hh"
 
 struct SignaturePathPrefetcherParams;
 
-class SignaturePathPrefetcher : public QueuedPrefetcher
+namespace Prefetcher {
+
+class SignaturePath : public Queued
 {
   protected:
     /** Signature type */
@@ -62,8 +63,6 @@ class SignaturePathPrefetcher : public QueuedPrefetcher
     const uint8_t signatureShift;
     /** Size of the signature, in bits */
     const signature_t signatureBits;
-    /** Maximum pattern entries counter value */
-    const uint8_t maxCounterValue;
     /** Minimum confidence to issue a prefetch */
     const double prefetchConfidenceThreshold;
     /** Minimum confidence to keep navigating lookahead entries */
@@ -87,9 +86,9 @@ class SignaturePathPrefetcher : public QueuedPrefetcher
     {
         /** stride in a page in blkSize increments */
         stride_t stride;
-        /** counter value (max value defined by maxCounterValue) */
-        uint8_t counter;
-        PatternStrideEntry() : stride(0), counter(0)
+        /** Saturating counter */
+        SatCounter counter;
+        PatternStrideEntry(unsigned bits) : stride(0), counter(bits)
         {}
     };
     /** Pattern entry data type, a set of stride and counter entries */
@@ -98,19 +97,23 @@ class SignaturePathPrefetcher : public QueuedPrefetcher
         /** group of stides */
         std::vector<PatternStrideEntry> strideEntries;
         /** use counter, used by SPPv2 */
-        uint8_t counter;
-        PatternEntry(size_t num_strides) : strideEntries(num_strides),
-                                           counter(0)
-        {}
+        SatCounter counter;
+        PatternEntry(size_t num_strides, unsigned counter_bits)
+          : TaggedEntry(), strideEntries(num_strides, counter_bits),
+            counter(counter_bits)
+        {
+        }
 
         /** Reset the entries to their initial values */
-        void reset() override
+        void
+        invalidate() override
         {
+            TaggedEntry::invalidate();
             for (auto &entry : strideEntries) {
-                entry.counter = 0;
+                entry.counter.reset();
                 entry.stride = 0;
             }
-            counter = 0;
+            counter.reset();
         }
 
         /**
@@ -135,13 +138,9 @@ class SignaturePathPrefetcher : public QueuedPrefetcher
          * Gets the entry with the provided stride, if there is no entry with
          * the associated stride, it replaces one of them.
          * @param stride the stride to find
-         * @param max_counter_value maximum value of the confidence counters,
-         *        it is used when no strides are found and an entry needs to be
-         *        replaced
          * @result reference to the selected entry
          */
-        PatternStrideEntry &getStrideEntry(stride_t stride,
-                                           uint8_t max_counter_value);
+        PatternStrideEntry &getStrideEntry(stride_t stride);
     };
     /** Pattern table */
     AssociativeSet<PatternEntry> patternTable;
@@ -280,10 +279,13 @@ class SignaturePathPrefetcher : public QueuedPrefetcher
     }
 
   public:
-    SignaturePathPrefetcher(const SignaturePathPrefetcherParams* p);
-    ~SignaturePathPrefetcher() {}
+    SignaturePath(const SignaturePathPrefetcherParams* p);
+    ~SignaturePath() = default;
+
     void calculatePrefetch(const PrefetchInfo &pfi,
                            std::vector<AddrPriority> &addresses) override;
 };
+
+} // namespace Prefetcher
 
 #endif//__MEM_CACHE_PREFETCH_SIGNATURE_PATH_HH__

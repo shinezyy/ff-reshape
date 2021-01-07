@@ -8,7 +8,7 @@ cscope.out
 .*.swp
 .*.swo
 m5out
-/src/doxygen
+/src/doxygen/html
 /ext/dramsim2/DRAMSim2
 /ext/mcpat/regression/*/*.out
 /util/m5/*.o
@@ -39,3 +39,13 @@ valgrind*.txt
 util/run_sh_scrpits/spec_exe/
 util/run_sh_scrpits/spec06_exe/
 util/run_sh_scrpits/spec17_exe/
+/system/arm/dt/.gen
+/system/arm/bootloader/arm/*.o
+/system/arm/bootloader/arm/boot.arm
+/system/arm/bootloader/arm/boot_emm.arm
+/system/arm/bootloader/arm64/*.o
+/system/arm/bootloader/arm64/boot.arm64
+/system/arm/bootloader/arm64/boot_emm.arm64
+/system/arm/bootloader/arm64/boot_v2.arm64
+configs/example/memcheck.cfg
+configs/dram/lowp_sweep.cfg

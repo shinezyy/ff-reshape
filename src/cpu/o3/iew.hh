@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012, 2014 ARM Limited
+ * Copyright (c) 2010-2012, 2014, 2019 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -36,8 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Kevin Lim
  */
 
 #ifndef __CPU_O3_IEW_HH__
@@ -147,6 +145,9 @@ class DefaultIEW
     /** Initializes stage; sends back the number of free IQ and LSQ entries. */
     void startupStage();
 
+    /** Clear all thread-specific states */
+    void clearStates(ThreadID tid);
+
     /** Sets main time buffer used for backwards communication. */
     void setTimeBuffer(TimeBuffer<TimeStruct> *tb_ptr);
 
@@ -175,24 +176,24 @@ class DefaultIEW
     void squash(ThreadID tid);
 
     /** Wakes all dependents of a completed instruction. */
-    void wakeDependents(DynInstPtr &inst);
+    void wakeDependents(const DynInstPtr &inst);
 
     /** Tells memory dependence unit that a memory instruction needs to be
      * rescheduled. It will re-execute once replayMemInst() is called.
      */
-    void rescheduleMemInst(DynInstPtr &inst);
+    void rescheduleMemInst(const DynInstPtr &inst);
 
     /** Re-executes all rescheduled memory instructions. */
-    void replayMemInst(DynInstPtr &inst);
+    void replayMemInst(const DynInstPtr &inst);
 
     /** Moves memory instruction onto the list of cache blocked instructions */
-    void blockMemInst(DynInstPtr &inst);
+    void blockMemInst(const DynInstPtr &inst);
 
     /** Notifies that the cache has become unblocked */
     void cacheUnblocked();
 
     /** Sends an instruction to commit through the time buffer. */
-    void instToCommit(DynInstPtr &inst);
+    void instToCommit(const DynInstPtr &inst);
 
     /** Inserts unused instructions of a thread into the skid buffer. */
     void skidInsert(ThreadID tid);
@@ -230,18 +231,28 @@ class DefaultIEW
     bool hasStoresToWB(ThreadID tid) { return ldstQueue.hasStoresToWB(tid); }
 
     /** Check misprediction  */
-    void checkMisprediction(DynInstPtr &inst);
+    void checkMisprediction(const DynInstPtr &inst);
+
+    // hardware transactional memory
+    // For debugging purposes, it is useful to keep track of the most recent
+    // htmUid that has been committed (architecturally, not transactionally)
+    // to ensure that the core and the memory subsystem are observing
+    // correct ordering constraints.
+    void setLastRetiredHtmUid(ThreadID tid, uint64_t htmUid)
+    {
+        ldstQueue.setLastRetiredHtmUid(tid, htmUid);
+    }
 
   private:
     /** Sends commit proper information for a squash due to a branch
      * mispredict.
      */
-    void squashDueToBranch(DynInstPtr &inst, ThreadID tid);
+    void squashDueToBranch(const DynInstPtr &inst, ThreadID tid);
 
     /** Sends commit proper information for a squash due to a memory order
      * violation.
      */
-    void squashDueToMemOrder(DynInstPtr &inst, ThreadID tid);
+    void squashDueToMemOrder(const DynInstPtr &inst, ThreadID tid);
 
     /** Sets Dispatch to blocked, and signals back to other stages to block. */
     void block(ThreadID tid);
@@ -295,7 +306,7 @@ class DefaultIEW
 
   private:
     /** Updates execution stats based on the instruction. */
-    void updateExeInstStats(DynInstPtr &inst);
+    void updateExeInstStats(const DynInstPtr &inst);
 
     /** Pointer to main time buffer used for backwards communication. */
     TimeBuffer<TimeStruct> *timeBuffer;

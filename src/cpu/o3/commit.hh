@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012, 2014 ARM Limited
+ * Copyright (c) 2010-2012, 2014, 2019 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -36,9 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Kevin Lim
- *          Korey Sewell
  */
 
 #ifndef __CPU_O3_COMMIT_HH__
@@ -52,6 +49,7 @@
 #include "cpu/inst_seq.hh"
 #include "cpu/o3/probe/branch_trace.hh"
 #include "cpu/timebuf.hh"
+#include "enums/CommitPolicy.hh"
 #include "sim/probe/probe.hh"
 
 struct DerivO3CPUParams;
@@ -121,13 +119,6 @@ class DefaultCommit
         SquashAfterPending, //< Committing instructions before a squash.
     };
 
-    /** Commit policy for SMT mode. */
-    enum CommitPolicy {
-        Aggressive,
-        RoundRobin,
-        OldestReady
-    };
-
   private:
     /** Overall commit status. */
     CommitStatus _status;
@@ -153,9 +144,6 @@ class DefaultCommit
 
     /** Returns the name of the DefaultCommit. */
     std::string name() const;
-
-    /** Registers statistics. */
-    void regStats();
 
     /** Registers probes. */
     void regProbePoints();
@@ -195,6 +183,9 @@ class DefaultCommit
     /** Initializes stage by sending back the number of free entries. */
     void startupStage();
 
+    /** Clear all thread-specific states */
+    void clearStates(ThreadID tid);
+
     /** Initializes the draining of commit. */
     void drain();
 
@@ -212,6 +203,12 @@ class DefaultCommit
 
     /** Deschedules a thread from scheduling */
     void deactivateThread(ThreadID tid);
+
+    /** Is the CPU currently processing a HTM transaction? */
+    bool executingHtmTransaction(ThreadID) const;
+
+    /* Reset HTM tracking, e.g. after an abort */
+    void resetHtmStartsStops(ThreadID);
 
     /** Ticks the commit stage, which tries to commit instructions. */
     void tick();
@@ -284,7 +281,7 @@ class DefaultCommit
      * @param tid ID of the thread to squash.
      * @param head_inst Instruction that requested the squash.
      */
-    void squashAfter(ThreadID tid, DynInstPtr &head_inst);
+    void squashAfter(ThreadID tid, const DynInstPtr &head_inst);
 
     /** Handles processing an interrupt. */
     void handleInterrupt();
@@ -298,7 +295,7 @@ class DefaultCommit
     /** Tries to commit the head ROB instruction passed in.
      * @param head_inst The instruction to be committed.
      */
-    bool commitHead(DynInstPtr &head_inst, unsigned inst_num);
+    bool commitHead(const DynInstPtr &head_inst, unsigned inst_num);
 
     /** Gets instructions from rename and inserts them into the ROB. */
     void getInsts();
@@ -479,49 +476,7 @@ class DefaultCommit
     bool avoidQuiesceLiveLock;
 
     /** Updates commit stats based on this instruction. */
-    void updateComInstStats(DynInstPtr &inst);
 
-    /** Stat for the total number of squashed instructions discarded by commit.
-     */
-    Stats::Scalar commitSquashedInsts;
-    /** Stat for the total number of times commit has had to stall due to a non-
-     * speculative instruction reaching the head of the ROB.
-     */
-    Stats::Scalar commitNonSpecStalls;
-    /** Stat for the total number of branch mispredicts that caused a squash. */
-    Stats::Scalar branchMispredicts;
-    /** Distribution of the number of committed instructions each cycle. */
-    Stats::Distribution numCommittedDist;
-
-    /** Total number of instructions committed. */
-    Stats::Vector instsCommitted;
-    /** Total number of ops (including micro ops) committed. */
-    Stats::Vector opsCommitted;
-    /** Total number of software prefetches committed. */
-    Stats::Vector statComSwp;
-    /** Stat for the total number of committed memory references. */
-    Stats::Vector statComRefs;
-    /** Stat for the total number of committed loads. */
-    Stats::Vector statComLoads;
-    /** Total number of committed memory barriers. */
-    Stats::Vector statComMembars;
-    /** Total number of committed branches. */
-    Stats::Vector statComBranches;
-    /** Total number of vector instructions */
-    Stats::Vector statComVector;
-    /** Total number of floating point instructions */
-    Stats::Vector statComFloating;
-    /** Total number of integer instructions */
-    Stats::Vector statComInteger;
-    /** Total number of function calls */
-    Stats::Vector statComFunctionCalls;
-    /** Committed instructions by instruction type (OpClass) */
-    Stats::Vector2d statCommittedInstType;
-
-    /** Number of cycles where the commit bandwidth limit is reached. */
-    Stats::Scalar commitEligibleSamples;
-
-    Stats::Scalar HeadNotExec;
 
 private:
     std::array<bool, Impl::MaxThreads> skipThisCycle;
@@ -534,6 +489,61 @@ private:
     BranchTrace *branchTrace;
 
     uint32_t branchCounter{};
+
+    void updateComInstStats(const DynInstPtr &inst);
+
+    // HTM
+    int htmStarts[Impl::MaxThreads];
+    int htmStops[Impl::MaxThreads];
+
+    struct CommitStats : public Stats::Group {
+        CommitStats(O3CPU *cpu, DefaultCommit *commit);
+        /** Stat for the total number of squashed instructions discarded by
+         * commit.
+         */
+        Stats::Scalar commitSquashedInsts;
+        /** Stat for the total number of times commit has had to stall due
+         * to a non-speculative instruction reaching the head of the ROB.
+         */
+        Stats::Scalar commitNonSpecStalls;
+        /** Stat for the total number of branch mispredicts that caused a
+         * squash.
+         */
+        Stats::Scalar branchMispredicts;
+        /** Distribution of the number of committed instructions each cycle. */
+        Stats::Distribution numCommittedDist;
+
+        /** Total number of instructions committed. */
+        Stats::Vector instsCommitted;
+        /** Total number of ops (including micro ops) committed. */
+        Stats::Vector opsCommitted;
+        /** Stat for the total number of committed memory references. */
+        Stats::Vector memRefs;
+        /** Stat for the total number of committed loads. */
+        Stats::Vector loads;
+        /** Stat for the total number of committed atomics. */
+        Stats::Vector amos;
+        /** Total number of committed memory barriers. */
+        Stats::Vector membars;
+        /** Total number of committed branches. */
+        Stats::Vector branches;
+        /** Total number of vector instructions */
+        Stats::Vector vector;
+        /** Total number of floating point instructions */
+        Stats::Vector floating;
+        /** Total number of integer instructions */
+        Stats::Vector integer;
+        /** Total number of function calls */
+        Stats::Vector functionCalls;
+        /** Committed instructions by instruction type (OpClass) */
+        Stats::Vector2d committedInstType;
+
+        /** Number of cycles where the commit bandwidth limit is reached. */
+        Stats::Scalar commitEligibleSamples;
+
+        Stats::Scalar HeadNotExec;
+    } stats;
+
 };
 
 #endif // __CPU_O3_COMMIT_HH__

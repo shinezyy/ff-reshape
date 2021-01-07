@@ -33,8 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Andreas Hansson
  */
 
 #include "mem/physical.hh"
@@ -73,8 +71,15 @@ using namespace std;
 
 PhysicalMemory::PhysicalMemory(const string& _name,
                                const vector<AbstractMemory*>& _memories,
-                               bool mmap_using_noreserve) :
-    _name(_name), size(0), mmapUsingNoReserve(mmap_using_noreserve)
+                               bool mmap_using_noreserve,
+                               const std::string& shared_backstore,
+                               bool restore_from_gcpt,
+                               const std::string& gcpt_path
+                               ) :
+    _name(_name), size(0), mmapUsingNoReserve(mmap_using_noreserve),
+    sharedBackstore(shared_backstore),
+    restoreFromGCpt(restore_from_gcpt),
+    gCptPath(gcpt_path)
 {
     if (mmap_using_noreserve)
         warn("Not reserving swap space. May cause SIGSEGV on actual usage\n");
@@ -194,7 +199,23 @@ PhysicalMemory::createBackingStore(AddrRange range,
     // perform the actual mmap
     DPRINTF(AddrRanges, "Creating backing store for range %s with size %d\n",
             range.to_string(), range.size());
-    int map_flags = MAP_ANON | MAP_PRIVATE;
+
+    int shm_fd;
+    int map_flags;
+
+    if (sharedBackstore.empty()) {
+        shm_fd = -1;
+        map_flags =  MAP_ANON | MAP_PRIVATE;
+    } else {
+        DPRINTF(AddrRanges, "Sharing backing store as %s\n",
+                sharedBackstore.c_str());
+        shm_fd = shm_open(sharedBackstore.c_str(), O_CREAT | O_RDWR, 0666);
+        if (shm_fd == -1)
+               panic("Shared memory failed");
+        if (ftruncate(shm_fd, range.size()))
+               panic("Setting size of shared memory failed");
+        map_flags = MAP_SHARED;
+    }
 
     // to be able to simulate very large memories, the user can opt to
     // pass noreserve to mmap
@@ -204,7 +225,7 @@ PhysicalMemory::createBackingStore(AddrRange range,
 
     uint8_t* pmem = (uint8_t*) mmap(NULL, range.size(),
                                     PROT_READ | PROT_WRITE,
-                                    map_flags, -1, 0);
+                                    map_flags, shm_fd, 0);
 
     if (pmem == (uint8_t*) MAP_FAILED) {
         perror("mmap");
@@ -278,8 +299,7 @@ void
 PhysicalMemory::access(PacketPtr pkt)
 {
     assert(pkt->isRequest());
-    AddrRange addr_range = RangeSize(pkt->getAddr(), pkt->getSize());
-    const auto& m = addrMap.contains(addr_range);
+    const auto& m = addrMap.contains(pkt->getAddrRange());
     assert(m != addrMap.end());
     m->second->access(pkt);
 }
@@ -288,8 +308,7 @@ void
 PhysicalMemory::functionalAccess(PacketPtr pkt)
 {
     assert(pkt->isRequest());
-    AddrRange addr_range = RangeSize(pkt->getAddr(), pkt->getSize());
-    const auto& m = addrMap.contains(addr_range);
+    const auto& m = addrMap.contains(pkt->getAddrRange());
     assert(m != addrMap.end());
     m->second->functionalAccess(pkt);
 }
@@ -398,33 +417,49 @@ PhysicalMemory::unserialize(CheckpointIn &cp)
 void
 PhysicalMemory::unserializeStore(CheckpointIn &cp)
 {
-    const uint32_t chunk_size = 16384;
-
     unsigned int store_id;
     UNSERIALIZE_SCALAR(store_id);
 
     string filename;
     UNSERIALIZE_SCALAR(filename);
-    string filepath = cp.cptDir + "/" + filename;
+
+    string filepath = cp.getCptDir() + "/" + filename;
+
+    long range_size;
+    UNSERIALIZE_SCALAR(range_size);
+
+    unserializeStoreFrom(filepath, store_id, range_size);
+}
+
+void
+PhysicalMemory::unserializeStoreFromFile(string filepath)
+{
+    unserializeStoreFrom(filepath, 0, 0);
+}
+
+void
+PhysicalMemory::unserializeStoreFrom(string filepath,
+        unsigned store_id, long range_size)
+{
+    const uint32_t chunk_size = 16384;
 
     // mmap memoryfile
     gzFile compressed_mem = gzopen(filepath.c_str(), "rb");
     if (compressed_mem == NULL)
-        fatal("Can't open physical memory checkpoint file '%s'", filename);
+        fatal("Can't open physical memory checkpoint file '%s'", filepath.c_str());
 
     // we've already got the actual backing store mapped
     uint8_t* pmem = backingStore[store_id].pmem;
     AddrRange range = backingStore[store_id].range;
 
-    long range_size;
-    UNSERIALIZE_SCALAR(range_size);
+    if (range_size != 0) {
+        DPRINTF(Checkpoint, "Unserializing physical memory %s with size %d\n",
+                filepath.c_str(), range_size);
 
-    DPRINTF(Checkpoint, "Unserializing physical memory %s with size %d\n",
-            filename, range_size);
-
-    if (range_size != range.size())
-        fatal("Memory range size has changed! Saw %lld, expected %lld\n",
-              range_size, range.size());
+        if (range_size != (long) range.size())
+            fatal("Memory range size has changed! Saw %lld, expected %lld\n",
+                    range_size, range.size());
+    }
 
     uint64_t curr_size = 0;
     long* temp_page = new long[chunk_size];
@@ -452,5 +487,15 @@ PhysicalMemory::unserializeStore(CheckpointIn &cp)
 
     if (gzclose(compressed_mem))
         fatal("Close failed on physical memory checkpoint file '%s'\n",
-              filename);
+              filepath.c_str());
+}
+
+bool PhysicalMemory::tryRestoreFromGCpt() {
+  if (!restoreFromGCpt) {
+    return false;
+  }
+
+  unserializeStoreFromFile(gCptPath);
+
+  return true;
 }

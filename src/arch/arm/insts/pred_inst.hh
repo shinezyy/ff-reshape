@@ -36,13 +36,13 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Stephen Hines
  */
+
 #ifndef __ARCH_ARM_INSTS_PREDINST_HH__
 #define __ARCH_ARM_INSTS_PREDINST_HH__
 
 #include "arch/arm/insts/static_inst.hh"
+#include "base/logging.hh"
 #include "base/trace.hh"
 
 namespace ArmISA
@@ -186,7 +186,7 @@ vfp_modified_imm(uint8_t data, FpDataType dtype)
                   (bits(bigData, 7) << 63);
         break;
       default:
-        assert(0);
+        panic("Unrecognized FP data type");
     }
     return bigData;
 }
@@ -250,7 +250,7 @@ class PredImmOp : public PredOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+            Addr pc, const Loader::SymbolTable *symtab) const override;
 };
 
 /**
@@ -271,7 +271,7 @@ class PredIntOp : public PredOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+            Addr pc, const Loader::SymbolTable *symtab) const override;
 };
 
 class DataImmOp : public PredOp
@@ -290,7 +290,7 @@ class DataImmOp : public PredOp
     {}
 
     std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+            Addr pc, const Loader::SymbolTable *symtab) const override;
 };
 
 class DataRegOp : public PredOp
@@ -309,7 +309,7 @@ class DataRegOp : public PredOp
     {}
 
     std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+            Addr pc, const Loader::SymbolTable *symtab) const override;
 };
 
 class DataRegRegOp : public PredOp
@@ -327,7 +327,7 @@ class DataRegRegOp : public PredOp
     {}
 
     std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+            Addr pc, const Loader::SymbolTable *symtab) const override;
 };
 
 /**
@@ -371,7 +371,7 @@ class PredMacroOp : public PredOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+            Addr pc, const Loader::SymbolTable *symtab) const override;
 };
 
 /**
@@ -387,7 +387,7 @@ class PredMicroop : public PredOp
     }
 
     void
-    advancePC(PCState &pcState) const
+    advancePC(PCState &pcState) const override
     {
         if (flags[IsLastMicroop])
             pcState.uEnd();

@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Tushar Krishna
  */
 
 #include "cpu/testers/garnet_synthetic_traffic/GarnetSyntheticTraffic.hh"
@@ -40,7 +38,6 @@
 #include "base/random.hh"
 #include "base/statistics.hh"
 #include "debug/GarnetSyntheticTraffic.hh"
-#include "mem/mem_object.hh"
 #include "mem/packet.hh"
 #include "mem/port.hh"
 #include "mem/request.hh"
@@ -75,7 +72,7 @@ GarnetSyntheticTraffic::sendPkt(PacketPtr pkt)
 }
 
 GarnetSyntheticTraffic::GarnetSyntheticTraffic(const Params *p)
-    : MemObject(p),
+    : ClockedObject(p),
       tickEvent([this]{ tick(); }, "GarnetSyntheticTraffic tick",
                 false, Event::CPU_Tick_Pri),
       cachePort("GarnetSyntheticTraffic", this),
@@ -93,7 +90,7 @@ GarnetSyntheticTraffic::GarnetSyntheticTraffic(const Params *p)
       injVnet(p->inj_vnet),
       precision(p->precision),
       responseLimit(p->response_limit),
-      masterId(p->system->getMasterId(this))
+      requestorId(p->system->getRequestorId(this))
 {
     // set up counters
     noResponseCycles = 0;
@@ -110,13 +107,13 @@ GarnetSyntheticTraffic::GarnetSyntheticTraffic(const Params *p)
             name(), id);
 }
 
-BaseMasterPort &
-GarnetSyntheticTraffic::getMasterPort(const std::string &if_name, PortID idx)
+Port &
+GarnetSyntheticTraffic::getPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "test")
         return cachePort;
     else
-        return MemObject::getMasterPort(if_name, idx);
+        return ClockedObject::getPort(if_name, idx);
 }
 
 void
@@ -293,18 +290,20 @@ GarnetSyntheticTraffic::generatePkt()
     if (injReqType == 0) {
         // generate packet for virtual network 0
         requestType = MemCmd::ReadReq;
-        req = std::make_shared<Request>(paddr, access_size, flags, masterId);
+        req = std::make_shared<Request>(paddr, access_size, flags,
+                                        requestorId);
     } else if (injReqType == 1) {
         // generate packet for virtual network 1
         requestType = MemCmd::ReadReq;
         flags.set(Request::INST_FETCH);
         req = std::make_shared<Request>(
-            0, 0x0, access_size, flags, masterId, 0x0, 0);
+            0x0, access_size, flags, requestorId, 0x0, 0);
         req->setPaddr(paddr);
     } else {  // if (injReqType == 2)
         // generate packet for virtual network 2
         requestType = MemCmd::WriteReq;
-        req = std::make_shared<Request>(paddr, access_size, flags, masterId);
+        req = std::make_shared<Request>(paddr, access_size, flags,
+                                        requestorId);
     }
 
     req->setContext(id);

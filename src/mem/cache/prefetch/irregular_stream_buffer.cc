@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Javier Bueno
  */
 
 #include "mem/cache/prefetch/irregular_stream_buffer.hh"
@@ -34,32 +32,36 @@
 #include "mem/cache/prefetch/associative_set_impl.hh"
 #include "params/IrregularStreamBufferPrefetcher.hh"
 
-IrregularStreamBufferPrefetcher::IrregularStreamBufferPrefetcher(
+namespace Prefetcher {
+
+IrregularStreamBuffer::IrregularStreamBuffer(
     const IrregularStreamBufferPrefetcherParams *p)
-    : QueuedPrefetcher(p), maxCounterValue(p->max_counter_value),
-        chunkSize(p->chunk_size),
-        prefetchCandidatesPerEntry(p->prefetch_candidates_per_entry),
-        degree(p->degree),
-        trainingUnit(p->training_unit_assoc, p->training_unit_entries,
-                     p->training_unit_indexing_policy,
-                     p->training_unit_replacement_policy),
-        psAddressMappingCache(p->address_map_cache_assoc,
-                              p->address_map_cache_entries,
-                              p->ps_address_map_cache_indexing_policy,
-                              p->ps_address_map_cache_replacement_policy,
-                              AddressMappingEntry(prefetchCandidatesPerEntry)),
-        spAddressMappingCache(p->address_map_cache_assoc,
-                              p->address_map_cache_entries,
-                              p->sp_address_map_cache_indexing_policy,
-                              p->sp_address_map_cache_replacement_policy,
-                              AddressMappingEntry(prefetchCandidatesPerEntry)),
-        structuralAddressCounter(0)
+  : Queued(p),
+    chunkSize(p->chunk_size),
+    prefetchCandidatesPerEntry(p->prefetch_candidates_per_entry),
+    degree(p->degree),
+    trainingUnit(p->training_unit_assoc, p->training_unit_entries,
+                 p->training_unit_indexing_policy,
+                 p->training_unit_replacement_policy),
+    psAddressMappingCache(p->address_map_cache_assoc,
+                          p->address_map_cache_entries,
+                          p->ps_address_map_cache_indexing_policy,
+                          p->ps_address_map_cache_replacement_policy,
+                          AddressMappingEntry(prefetchCandidatesPerEntry,
+                                              p->num_counter_bits)),
+    spAddressMappingCache(p->address_map_cache_assoc,
+                          p->address_map_cache_entries,
+                          p->sp_address_map_cache_indexing_policy,
+                          p->sp_address_map_cache_replacement_policy,
+                          AddressMappingEntry(prefetchCandidatesPerEntry,
+                                              p->num_counter_bits)),
+    structuralAddressCounter(0)
 {
     assert(isPowerOf2(prefetchCandidatesPerEntry));
 }
 
 void
-IrregularStreamBufferPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
+IrregularStreamBuffer::calculatePrefetch(const PrefetchInfo &pfi,
     std::vector<AddrPriority> &addresses)
 {
     // This prefetcher requires a PC
@@ -100,30 +102,29 @@ IrregularStreamBufferPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
         if (mapping_A.counter > 0 && mapping_B.counter > 0) {
             // Entry for A and B
             if (mapping_B.address == (mapping_A.address + 1)) {
-                if (mapping_B.counter < maxCounterValue) {
-                    mapping_B.counter += 1;
-                }
+                mapping_B.counter++;
             } else {
                 if (mapping_B.counter == 1) {
-                    // counter would hit 0, reassign address
-                    mapping_B.counter = 1;
+                    // Counter would hit 0, reassign address while keeping
+                    // counter at 1
                     mapping_B.address = mapping_A.address + 1;
                     addStructuralToPhysicalEntry(mapping_B.address, is_secure,
                             correlated_addr_B);
                 } else {
-                    mapping_B.counter -= 1;
+                    mapping_B.counter--;
                 }
             }
         } else {
             if (mapping_A.counter == 0) {
                 // if A is not valid, generate a new structural address
-                mapping_A.counter = 1;
+                mapping_A.counter++;
                 mapping_A.address = structuralAddressCounter;
                 structuralAddressCounter += chunkSize;
                 addStructuralToPhysicalEntry(mapping_A.address,
                         is_secure, correlated_addr_A);
             }
-            mapping_B.counter = 1;
+            mapping_B.counter.reset();
+            mapping_B.counter++;
             mapping_B.address = mapping_A.address + 1;
             // update SP-AMC
             addStructuralToPhysicalEntry(mapping_B.address, is_secure,
@@ -147,7 +148,10 @@ IrregularStreamBufferPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
             Addr sp_index   = mapping.address % prefetchCandidatesPerEntry;
             AddressMappingEntry *sp_am =
                 spAddressMappingCache.findEntry(sp_address, is_secure);
-            assert(sp_am != nullptr);
+            if (sp_am == nullptr) {
+                // The entry has been evicted, can not generate prefetches
+                return;
+            }
             for (unsigned d = 1;
                     d <= degree && (sp_index + d) < prefetchCandidatesPerEntry;
                     d += 1)
@@ -163,8 +167,8 @@ IrregularStreamBufferPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
     }
 }
 
-IrregularStreamBufferPrefetcher::AddressMapping&
-IrregularStreamBufferPrefetcher::getPSMapping(Addr paddr, bool is_secure)
+IrregularStreamBuffer::AddressMapping&
+IrregularStreamBuffer::getPSMapping(Addr paddr, bool is_secure)
 {
     Addr amc_address = paddr / prefetchCandidatesPerEntry;
     Addr map_index   = paddr % prefetchCandidatesPerEntry;
@@ -183,7 +187,7 @@ IrregularStreamBufferPrefetcher::getPSMapping(Addr paddr, bool is_secure)
 }
 
 void
-IrregularStreamBufferPrefetcher::addStructuralToPhysicalEntry(
+IrregularStreamBuffer::addStructuralToPhysicalEntry(
     Addr structural_address, bool is_secure, Addr physical_address)
 {
     Addr amc_address = structural_address / prefetchCandidatesPerEntry;
@@ -200,11 +204,14 @@ IrregularStreamBufferPrefetcher::addStructuralToPhysicalEntry(
     }
     AddressMapping &mapping = sp_entry->mappings[map_index];
     mapping.address = physical_address;
-    mapping.counter = 1;
+    mapping.counter.reset();
+    mapping.counter++;
 }
 
-IrregularStreamBufferPrefetcher*
+} // namespace Prefetcher
+
+Prefetcher::IrregularStreamBuffer*
 IrregularStreamBufferPrefetcherParams::create()
 {
-    return new IrregularStreamBufferPrefetcher(this);
+    return new Prefetcher::IrregularStreamBuffer(this);
 }

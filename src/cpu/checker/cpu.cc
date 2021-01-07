@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011,2013,2017 ARM Limited
+ * Copyright (c) 2011,2013,2017-2018 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -36,9 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Kevin Lim
- *          Geoffrey Blake
  */
 
 #include "cpu/checker/cpu.hh"
@@ -47,12 +44,11 @@
 #include <string>
 
 #include "arch/generic/tlb.hh"
-#include "arch/kernel_stats.hh"
-#include "arch/vtophys.hh"
 #include "cpu/base.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
+#include "cpu/utils.hh"
 #include "params/CheckerCPU.hh"
 #include "sim/full_system.hh"
 
@@ -62,12 +58,14 @@ using namespace TheISA;
 void
 CheckerCPU::init()
 {
-    masterId = systemPtr->getMasterId(this);
+    requestorId = systemPtr->getRequestorId(this);
 }
 
 CheckerCPU::CheckerCPU(Params *p)
     : BaseCPU(p, true), systemPtr(NULL), icachePort(NULL), dcachePort(NULL),
-      tc(NULL), thread(NULL)
+      tc(NULL), thread(NULL),
+      unverifiedReq(nullptr),
+      unverifiedMemData(nullptr)
 {
     curStaticInst = NULL;
     curMacroStaticInst = NULL;
@@ -101,8 +99,7 @@ CheckerCPU::setSystem(System *system)
     systemPtr = system;
 
     if (FullSystem) {
-        thread = new SimpleThread(this, 0, systemPtr, itb, dtb,
-                                  p->isa[0], false);
+        thread = new SimpleThread(this, 0, systemPtr, itb, dtb, p->isa[0]);
     } else {
         thread = new SimpleThread(this, 0, systemPtr,
                                   workload.size() ? workload[0] : NULL,
@@ -111,19 +108,18 @@ CheckerCPU::setSystem(System *system)
 
     tc = thread->getTC();
     threadContexts.push_back(tc);
-    thread->kernelStats = NULL;
     // Thread should never be null after this
     assert(thread != NULL);
 }
 
 void
-CheckerCPU::setIcachePort(MasterPort *icache_port)
+CheckerCPU::setIcachePort(RequestPort *icache_port)
 {
     icachePort = icache_port;
 }
 
 void
-CheckerCPU::setDcachePort(MasterPort *dcache_port)
+CheckerCPU::setDcachePort(RequestPort *dcache_port)
 {
     dcachePort = dcache_port;
 }
@@ -138,31 +134,70 @@ CheckerCPU::unserialize(CheckpointIn &cp)
 {
 }
 
+RequestPtr
+CheckerCPU::genMemFragmentRequest(Addr frag_addr, int size,
+                                  Request::Flags flags,
+                                  const std::vector<bool>& byte_enable,
+                                  int& frag_size, int& size_left) const
+{
+    frag_size = std::min(
+        cacheLineSize() - addrBlockOffset(frag_addr, cacheLineSize()),
+        (Addr) size_left);
+    size_left -= frag_size;
+
+    RequestPtr mem_req;
+
+    if (!byte_enable.empty()) {
+        // Set up byte-enable mask for the current fragment
+        auto it_start = byte_enable.cbegin() + (size - (frag_size +
+                                                        size_left));
+        auto it_end = byte_enable.cbegin() + (size - size_left);
+        if (isAnyActiveElement(it_start, it_end)) {
+            mem_req = std::make_shared<Request>(frag_addr, frag_size,
+                    flags, requestorId, thread->pcState().instAddr(),
+                    tc->contextId());
+            mem_req->setByteEnable(std::vector<bool>(it_start, it_end));
+        }
+    } else {
+        mem_req = std::make_shared<Request>(frag_addr, frag_size,
+                    flags, requestorId, thread->pcState().instAddr(),
+                    tc->contextId());
+    }
+
+    return mem_req;
+}
+
 Fault
 CheckerCPU::readMem(Addr addr, uint8_t *data, unsigned size,
-                    Request::Flags flags)
+                    Request::Flags flags,
+                    const std::vector<bool>& byte_enable)
 {
+    assert(byte_enable.empty() || byte_enable.size() == size);
+
     Fault fault = NoFault;
-    int fullSize = size;
-    Addr secondAddr = roundDown(addr + size - 1, cacheLineSize());
     bool checked_flags = false;
     bool flags_match = true;
     Addr pAddr = 0x0;
 
-
-    if (secondAddr > addr)
-       size = secondAddr - addr;
+    Addr frag_addr = addr;
+    int frag_size = 0;
+    int size_left = size;
+    bool predicate;
 
     // Need to account for multiple accesses like the Atomic and TimingSimple
     while (1) {
-        auto mem_req = std::make_shared<Request>(
-            0, addr, size, flags, masterId,
-            thread->pcState().instAddr(), tc->contextId());
+        RequestPtr mem_req = genMemFragmentRequest(frag_addr, size, flags,
+                                                   byte_enable, frag_size,
+                                                   size_left);
+
+        predicate = (mem_req != nullptr);
 
         // translate to physical address
-        fault = dtb->translateFunctional(mem_req, tc, BaseTLB::Read);
+        if (predicate) {
+            fault = dtb->translateFunctional(mem_req, tc, BaseTLB::Read);
+        }
 
-        if (!checked_flags && fault == NoFault && unverifiedReq) {
+        if (predicate && !checked_flags && fault == NoFault && unverifiedReq) {
             flags_match = checkFlags(unverifiedReq, mem_req->getVaddr(),
                                      mem_req->getPaddr(), mem_req->getFlags());
             pAddr = mem_req->getPaddr();
@@ -170,18 +205,18 @@ CheckerCPU::readMem(Addr addr, uint8_t *data, unsigned size,
         }
 
         // Now do the access
-        if (fault == NoFault &&
+        if (predicate && fault == NoFault &&
             !mem_req->getFlags().isSet(Request::NO_ACCESS)) {
             PacketPtr pkt = Packet::createRead(mem_req);
 
             pkt->dataStatic(data);
 
-            if (!(mem_req->isUncacheable() || mem_req->isMmappedIpr())) {
+            if (!(mem_req->isUncacheable() || mem_req->isLocalAccess())) {
                 // Access memory to see if we have the same data
                 dcachePort->sendFunctional(pkt);
             } else {
                 // Assume the data is correct if it's an uncached access
-                memcpy(data, unverifiedMemData, size);
+                memcpy(data, unverifiedMemData, frag_size);
             }
 
             delete pkt;
@@ -195,22 +230,21 @@ CheckerCPU::readMem(Addr addr, uint8_t *data, unsigned size,
         }
 
         //If we don't need to access a second cache line, stop now.
-        if (secondAddr <= addr)
+        if (size_left == 0)
         {
             break;
         }
 
         // Setup for accessing next cache line
-        data += size;
-        unverifiedMemData += size;
-        size = addr + fullSize - secondAddr;
-        addr = secondAddr;
+        frag_addr += frag_size;
+        data += frag_size;
+        unverifiedMemData += frag_size;
     }
 
     if (!flags_match) {
         warn("%lli: Flags do not match CPU:%#x %#x %#x Checker:%#x %#x %#x\n",
              curTick(), unverifiedReq->getVaddr(), unverifiedReq->getPaddr(),
-             unverifiedReq->getFlags(), addr, pAddr, flags);
+             unverifiedReq->getFlags(), frag_addr, pAddr, flags);
         handleError();
     }
 
@@ -219,31 +253,35 @@ CheckerCPU::readMem(Addr addr, uint8_t *data, unsigned size,
 
 Fault
 CheckerCPU::writeMem(uint8_t *data, unsigned size,
-                     Addr addr, Request::Flags flags, uint64_t *res)
+                     Addr addr, Request::Flags flags, uint64_t *res,
+                     const std::vector<bool>& byte_enable)
 {
+    assert(byte_enable.empty() || byte_enable.size() == size);
+
     Fault fault = NoFault;
     bool checked_flags = false;
     bool flags_match = true;
     Addr pAddr = 0x0;
     static uint8_t zero_data[64] = {};
 
-    int fullSize = size;
-
-    Addr secondAddr = roundDown(addr + size - 1, cacheLineSize());
-
-    if (secondAddr > addr)
-        size = secondAddr - addr;
+    Addr frag_addr = addr;
+    int frag_size = 0;
+    int size_left = size;
+    bool predicate;
 
     // Need to account for a multiple access like Atomic and Timing CPUs
     while (1) {
-        auto mem_req = std::make_shared<Request>(
-            0, addr, size, flags, masterId,
-            thread->pcState().instAddr(), tc->contextId());
+        RequestPtr mem_req = genMemFragmentRequest(frag_addr, size, flags,
+                                                   byte_enable, frag_size,
+                                                   size_left);
 
-        // translate to physical address
-        fault = dtb->translateFunctional(mem_req, tc, BaseTLB::Write);
+        predicate = (mem_req != nullptr);
 
-        if (!checked_flags && fault == NoFault && unverifiedReq) {
+        if (predicate) {
+            fault = dtb->translateFunctional(mem_req, tc, BaseTLB::Write);
+        }
+
+        if (predicate && !checked_flags && fault == NoFault && unverifiedReq) {
            flags_match = checkFlags(unverifiedReq, mem_req->getVaddr(),
                                     mem_req->getPaddr(), mem_req->getFlags());
            pAddr = mem_req->getPaddr();
@@ -260,7 +298,7 @@ CheckerCPU::writeMem(uint8_t *data, unsigned size,
         bool was_prefetch = mem_req->isPrefetch();
 
         //If we don't need to access a second cache line, stop now.
-        if (fault != NoFault || secondAddr <= addr)
+        if (fault != NoFault || size_left == 0)
         {
             if (fault != NoFault && was_prefetch) {
               fault = NoFault;
@@ -268,16 +306,13 @@ CheckerCPU::writeMem(uint8_t *data, unsigned size,
             break;
         }
 
-        //Update size and access address
-        size = addr + fullSize - secondAddr;
-        //And access the right address.
-        addr = secondAddr;
+        frag_addr += frag_size;
    }
 
    if (!flags_match) {
        warn("%lli: Flags do not match CPU:%#x %#x Checker:%#x %#x %#x\n",
             curTick(), unverifiedReq->getVaddr(), unverifiedReq->getPaddr(),
-            unverifiedReq->getFlags(), addr, pAddr, flags);
+            unverifiedReq->getFlags(), frag_addr, pAddr, flags);
        handleError();
    }
 
@@ -303,12 +338,12 @@ CheckerCPU::writeMem(uint8_t *data, unsigned size,
    // const set of zeros.
    if (flags & Request::STORE_NO_DATA) {
        assert(!data);
-       assert(sizeof(zero_data) <= fullSize);
+       assert(sizeof(zero_data) <= size);
        data = zero_data;
    }
 
    if (unverifiedReq && unverifiedMemData &&
-       memcmp(data, unverifiedMemData, fullSize) && extraData) {
+       memcmp(data, unverifiedMemData, size) && extraData) {
            warn("%lli: Store value does not match value sent to memory! "
                   "data: %#x inst_data: %#x", curTick(), data,
                   unverifiedMemData);
@@ -316,12 +351,6 @@ CheckerCPU::writeMem(uint8_t *data, unsigned size,
    }
 
    return fault;
-}
-
-Addr
-CheckerCPU::dbg_vtophys(Addr addr)
-{
-    return vtophys(tc, addr);
 }
 
 /**

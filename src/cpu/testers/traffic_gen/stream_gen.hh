@@ -33,8 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Giacomo Travaglini
  */
 
 /**
@@ -63,6 +61,8 @@ class StreamGen
     }
 
   public:
+    virtual ~StreamGen() {};
+
     virtual uint32_t pickStreamID() = 0;
     virtual uint32_t pickSubStreamID() = 0;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012, 2015, 2017 ARM Limited
+ * Copyright (c) 2010-2012, 2015, 2017, 2018, 2020 ARM Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
@@ -37,17 +37,11 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Steve Reinhardt
  */
 
 #include "cpu/simple/base.hh"
 
-#include "arch/kernel_stats.hh"
-#include "arch/stacktrace.hh"
 #include "arch/utility.hh"
-#include "arch/vtophys.hh"
-#include "base/cp_annotate.hh"
 #include "base/cprintf.hh"
 #include "base/inifile.hh"
 #include "base/loader/symtab.hh"
@@ -61,16 +55,16 @@
 #include "cpu/checker/thread_context.hh"
 #include "cpu/exetrace.hh"
 #include "cpu/pred/bpred_unit.hh"
-#include "cpu/profile.hh"
 #include "cpu/simple/exec_context.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/smt.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Decode.hh"
+#include "debug/ExecFaulting.hh"
 #include "debug/Fetch.hh"
+#include "debug/HtmCpu.hh"
 #include "debug/Quiesce.hh"
-#include "mem/mem_object.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
 #include "params/BaseSimpleCPU.hh"
@@ -132,11 +126,6 @@ BaseSimpleCPU::init()
     for (auto tc : threadContexts) {
         // Initialise the ThreadContext's memory proxies
         tc->initMemProxies(tc);
-
-        if (FullSystem && !params()->switched_out) {
-            // initialize CPU, including PC
-            TheISA::initCPU(tc, tc->contextId());
-        }
     }
 }
 
@@ -146,7 +135,8 @@ BaseSimpleCPU::checkPcEventQueue()
     Addr oldpc, pc = threadInfo[curThread]->thread->instAddr();
     do {
         oldpc = pc;
-        system->pcEventQueue.service(threadContexts[curThread]);
+        threadInfo[curThread]->thread->pcEventQueue.service(
+                oldpc, threadContexts[curThread]);
         pc = threadInfo[curThread]->thread->instAddr();
     } while (oldpc != pc);
 }
@@ -175,12 +165,12 @@ BaseSimpleCPU::countInst()
     if (!curStaticInst->isMicroop() || curStaticInst->isLastMicroop()) {
         t_info.numInst++;
         t_info.numInsts++;
+
+        system->totalNumInsts++;
+        t_info.thread->funcExeInst++;
     }
     t_info.numOp++;
     t_info.numOps++;
-
-    system->totalNumInsts++;
-    t_info.thread->funcExeInst++;
 }
 
 Counter
@@ -406,6 +396,7 @@ BaseSimpleCPU::regStats()
 void
 BaseSimpleCPU::resetStats()
 {
+    BaseCPU::resetStats();
     for (auto &thread_info : threadInfo) {
         thread_info->notIdleFraction = (_status != Idle);
     }
@@ -430,12 +421,6 @@ change_thread_state(ThreadID tid, int activate, int priority)
 {
 }
 
-Addr
-BaseSimpleCPU::dbg_vtophys(Addr addr)
-{
-    return vtophys(threadContexts[curThread], addr);
-}
-
 void
 BaseSimpleCPU::wakeup(ThreadID tid)
 {
@@ -448,18 +433,40 @@ BaseSimpleCPU::wakeup(ThreadID tid)
 }
 
 void
+BaseSimpleCPU::traceFault()
+{
+    if (DTRACE(ExecFaulting)) {
+        traceData->setFaulting(true);
+    } else {
+        delete traceData;
+        traceData = NULL;
+    }
+}
+
+void
 BaseSimpleCPU::checkForInterrupts()
 {
     SimpleExecContext&t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
     ThreadContext* tc = thread->getTC();
 
-    if (checkInterrupts(tc)) {
-        Fault interrupt = interrupts[curThread]->getInterrupt(tc);
+    if (checkInterrupts(curThread)) {
+        Fault interrupt = interrupts[curThread]->getInterrupt();
 
         if (interrupt != NoFault) {
+            // hardware transactional memory
+            // Postpone taking interrupts while executing transactions.
+            assert(!std::dynamic_pointer_cast<GenericHtmFailureFault>(
+                interrupt));
+            if (t_info.inHtmTransactionalState()) {
+                DPRINTF(HtmCpu, "Deferring pending interrupt - %s -"
+                    "due to transactional state\n",
+                    interrupt->name());
+                return;
+            }
+
             t_info.fetchOffset = 0;
-            interrupts[curThread]->updateIntrInfo(tc);
+            interrupts[curThread]->updateIntrInfo();
             interrupt->invoke(tc);
             thread->decoder.reset();
         }
@@ -479,8 +486,8 @@ BaseSimpleCPU::setupFetchRequest(const RequestPtr &req)
     // set up memory request for instruction fetch
     DPRINTF(Fetch, "Fetch: Inst PC:%08p, Fetch PC:%08p\n", instAddr, fetchPC);
 
-    req->setVirt(0, fetchPC, sizeof(MachInst), Request::INST_FETCH,
-                 instMasterId(), instAddr);
+    req->setVirt(fetchPC, sizeof(MachInst), Request::INST_FETCH,
+                 instRequestorId(), instAddr);
 }
 
 
@@ -492,23 +499,21 @@ BaseSimpleCPU::preExecute()
 
     // maintain $r0 semantics
     thread->setIntReg(ZeroReg, 0);
-#if THE_ISA == ALPHA_ISA
-    thread->setFloatReg(ZeroReg, 0.0);
-#endif // ALPHA_ISA
+
+    // resets predicates
+    t_info.setPredicate(true);
+    t_info.setMemAccPredicate(true);
 
     // check for instruction-count-based events
-    comInstEventQueue[curThread]->serviceEvents(t_info.numInst);
-    system->instEventQueue.serviceEvents(system->totalNumInsts);
+    thread->comInstEventQueue.serviceEvents(t_info.numInst);
 
     // decode the instruction
-    inst = gtoh(inst);
-
     TheISA::PCState pcState = thread->pcState();
 
     if (isRomMicroPC(pcState.microPC())) {
         t_info.stayAtPC = false;
-        curStaticInst = microcodeRom.fetchMicroop(pcState.microPC(),
-                                                  curMacroStaticInst);
+        curStaticInst = thread->decoder.fetchRomMicroop(
+                pcState.microPC(), curMacroStaticInst);
     } else if (!curMacroStaticInst) {
         //We're not in the middle of a macro instruction
         StaticInstPtr instPtr = NULL;
@@ -578,20 +583,11 @@ void
 BaseSimpleCPU::postExecute()
 {
     SimpleExecContext &t_info = *threadInfo[curThread];
-    SimpleThread* thread = t_info.thread;
 
     assert(curStaticInst);
 
     TheISA::PCState pc = threadContexts[curThread]->pcState();
     Addr instAddr = pc.instAddr();
-    if (FullSystem && thread->profile) {
-        bool usermode = TheISA::inUserMode(threadContexts[curThread]);
-        thread->profilePC = usermode ? 1 : instAddr;
-        ProfileNode *node = thread->profile->consume(threadContexts[curThread],
-                                                     curStaticInst);
-        if (node)
-            thread->profileNode = node;
-    }
 
     if (curStaticInst->isMemRef()) {
         t_info.numMemRefs++;
@@ -599,11 +595,6 @@ BaseSimpleCPU::postExecute()
 
     if (curStaticInst->isLoad()) {
         ++t_info.numLoad;
-        comLoadEventQueue[curThread]->serviceEvents(t_info.numLoad);
-    }
-
-    if (CPA::available()) {
-        CPA::cpa()->swAutoBegin(threadContexts[curThread], pc.nextInstAddr());
     }
 
     if (curStaticInst->isControl()) {
@@ -644,7 +635,7 @@ BaseSimpleCPU::postExecute()
         t_info.numLoadInsts++;
     }
 
-    if (curStaticInst->isStore()){
+    if (curStaticInst->isStore() || curStaticInst->isAtomic()){
         t_info.numStoreInsts++;
     }
     /* End power model statistics */
@@ -661,7 +652,7 @@ BaseSimpleCPU::postExecute()
     }
 
     // Call CPU instruction commit probes
-    probeInstCommit(curStaticInst);
+    probeInstCommit(curStaticInst, instAddr);
 }
 
 void
@@ -702,12 +693,4 @@ BaseSimpleCPU::advancePC(const Fault &fault)
             ++t_info.numBranchMispred;
         }
     }
-}
-
-void
-BaseSimpleCPU::startup()
-{
-    BaseCPU::startup();
-    for (auto& t_info : threadInfo)
-        t_info->thread->startup();
 }

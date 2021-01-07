@@ -24,25 +24,24 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Javier Bueno
  */
 
 #include "mem/cache/prefetch/signature_path.hh"
 
 #include <cassert>
+#include <climits>
 
 #include "debug/HWPrefetch.hh"
 #include "mem/cache/prefetch/associative_set_impl.hh"
 #include "params/SignaturePathPrefetcher.hh"
 
-SignaturePathPrefetcher::SignaturePathPrefetcher(
-    const SignaturePathPrefetcherParams *p)
-    : QueuedPrefetcher(p),
+namespace Prefetcher {
+
+SignaturePath::SignaturePath(const SignaturePathPrefetcherParams *p)
+    : Queued(p),
       stridesPerPatternEntry(p->strides_per_pattern_entry),
       signatureShift(p->signature_shift),
       signatureBits(p->signature_bits),
-      maxCounterValue(p->max_counter_value),
       prefetchConfidenceThreshold(p->prefetch_confidence_threshold),
       lookaheadConfidenceThreshold(p->lookahead_confidence_threshold),
       signatureTable(p->signature_table_assoc, p->signature_table_entries,
@@ -51,7 +50,7 @@ SignaturePathPrefetcher::SignaturePathPrefetcher(
       patternTable(p->pattern_table_assoc, p->pattern_table_entries,
                    p->pattern_table_indexing_policy,
                    p->pattern_table_replacement_policy,
-                   PatternEntry(stridesPerPatternEntry))
+                   PatternEntry(stridesPerPatternEntry, p->num_counter_bits))
 {
     fatal_if(prefetchConfidenceThreshold < 0,
         "The prefetch confidence threshold must be greater than 0\n");
@@ -63,9 +62,8 @@ SignaturePathPrefetcher::SignaturePathPrefetcher(
         "The lookahead confidence threshold must be less than 1\n");
 }
 
-SignaturePathPrefetcher::PatternStrideEntry &
-SignaturePathPrefetcher::PatternEntry::getStrideEntry(stride_t stride,
-                                                     uint8_t max_counter_value)
+SignaturePath::PatternStrideEntry &
+SignaturePath::PatternEntry::getStrideEntry(stride_t stride)
 {
     PatternStrideEntry *pstride_entry = findStride(stride);
     if (pstride_entry == nullptr) {
@@ -76,25 +74,23 @@ SignaturePathPrefetcher::PatternEntry::getStrideEntry(stride_t stride,
         // If all counters have the max value, this will be the pick
         PatternStrideEntry *victim_pstride_entry = &(strideEntries[0]);
 
-        uint8_t current_counter = max_counter_value;
+        unsigned long current_counter = ULONG_MAX;
         for (auto &entry : strideEntries) {
             if (entry.counter < current_counter) {
                 victim_pstride_entry = &entry;
                 current_counter = entry.counter;
             }
-            if (entry.counter > 0) {
-                entry.counter -= 1;
-            }
+            entry.counter--;
         }
         pstride_entry = victim_pstride_entry;
-        pstride_entry->counter = 0;
+        pstride_entry->counter.reset();
         pstride_entry->stride = stride;
     }
     return *pstride_entry;
 }
 
 void
-SignaturePathPrefetcher::addPrefetch(Addr ppn, stride_t last_block,
+SignaturePath::addPrefetch(Addr ppn, stride_t last_block,
     stride_t delta, double path_confidence, signature_t signature,
     bool is_secure, std::vector<AddrPriority> &addresses)
 {
@@ -135,7 +131,7 @@ SignaturePathPrefetcher::addPrefetch(Addr ppn, stride_t last_block,
 }
 
 void
-SignaturePathPrefetcher::handleSignatureTableMiss(stride_t current_block,
+SignaturePath::handleSignatureTableMiss(stride_t current_block,
     signature_t &new_signature, double &new_conf, stride_t &new_stride)
 {
     new_signature = current_block;
@@ -144,27 +140,24 @@ SignaturePathPrefetcher::handleSignatureTableMiss(stride_t current_block,
 }
 
 void
-SignaturePathPrefetcher::increasePatternEntryCounter(
+SignaturePath::increasePatternEntryCounter(
         PatternEntry &pattern_entry, PatternStrideEntry &pstride_entry)
 {
-    if (pstride_entry.counter < maxCounterValue) {
-        pstride_entry.counter += 1;
-    }
+    pstride_entry.counter++;
 }
 
 void
-SignaturePathPrefetcher::updatePatternTable(Addr signature, stride_t stride)
+SignaturePath::updatePatternTable(Addr signature, stride_t stride)
 {
     assert(stride != 0);
     // The pattern table is indexed by signatures
     PatternEntry &p_entry = getPatternEntry(signature);
-    PatternStrideEntry &ps_entry = p_entry.getStrideEntry(stride,
-                                                          maxCounterValue);
+    PatternStrideEntry &ps_entry = p_entry.getStrideEntry(stride);
     increasePatternEntryCounter(p_entry, ps_entry);
 }
 
-SignaturePathPrefetcher::SignatureEntry &
-SignaturePathPrefetcher::getSignatureEntry(Addr ppn, bool is_secure,
+SignaturePath::SignatureEntry &
+SignaturePath::getSignatureEntry(Addr ppn, bool is_secure,
         stride_t block, bool &miss, stride_t &stride,
         double &initial_confidence)
 {
@@ -188,8 +181,8 @@ SignaturePathPrefetcher::getSignatureEntry(Addr ppn, bool is_secure,
     return *signature_entry;
 }
 
-SignaturePathPrefetcher::PatternEntry &
-SignaturePathPrefetcher::getPatternEntry(Addr signature)
+SignaturePath::PatternEntry &
+SignaturePath::getPatternEntry(Addr signature)
 {
     PatternEntry* pattern_entry = patternTable.findEntry(signature, false);
     if (pattern_entry != nullptr) {
@@ -206,32 +199,30 @@ SignaturePathPrefetcher::getPatternEntry(Addr signature)
 }
 
 double
-SignaturePathPrefetcher::calculatePrefetchConfidence(PatternEntry const &sig,
+SignaturePath::calculatePrefetchConfidence(PatternEntry const &sig,
         PatternStrideEntry const &entry) const
 {
-    return ((double) entry.counter) / maxCounterValue;
+    return entry.counter.calcSaturation();
 }
 
 double
-SignaturePathPrefetcher::calculateLookaheadConfidence(PatternEntry const &sig,
+SignaturePath::calculateLookaheadConfidence(PatternEntry const &sig,
         PatternStrideEntry const &lookahead) const
 {
-    double lookahead_confidence;
-    if (lookahead.counter == maxCounterValue) {
+    double lookahead_confidence = lookahead.counter.calcSaturation();
+    if (lookahead_confidence > 0.95) {
         /**
          * maximum confidence is 0.95, guaranteeing that
          * current confidence will eventually fall beyond
          * the threshold
          */
         lookahead_confidence = 0.95;
-    } else {
-        lookahead_confidence = ((double) lookahead.counter / maxCounterValue);
     }
     return lookahead_confidence;
 }
 
 void
-SignaturePathPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
+SignaturePath::calculatePrefetch(const PrefetchInfo &pfi,
                                  std::vector<AddrPriority> &addresses)
 {
     Addr request_addr = pfi.getAddr();
@@ -280,7 +271,7 @@ SignaturePathPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
             patternTable.findEntry(current_signature, false);
         PatternStrideEntry const *lookahead = nullptr;
         if (current_pattern_entry != nullptr) {
-            uint8_t max_counter = 0;
+            unsigned long max_counter = 0;
             for (auto const &entry : current_pattern_entry->strideEntries) {
                 //select the entry with the maximum counter value as lookahead
                 if (max_counter < entry.counter) {
@@ -315,7 +306,7 @@ SignaturePathPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
 }
 
 void
-SignaturePathPrefetcher::auxiliaryPrefetcher(Addr ppn, stride_t current_block,
+SignaturePath::auxiliaryPrefetcher(Addr ppn, stride_t current_block,
         bool is_secure, std::vector<AddrPriority> &addresses)
 {
     if (addresses.empty()) {
@@ -325,8 +316,10 @@ SignaturePathPrefetcher::auxiliaryPrefetcher(Addr ppn, stride_t current_block,
     }
 }
 
-SignaturePathPrefetcher*
+} // namespace Prefetcher
+
+Prefetcher::SignaturePath*
 SignaturePathPrefetcherParams::create()
 {
-    return new SignaturePathPrefetcher(this);
+    return new Prefetcher::SignaturePath(this);
 }

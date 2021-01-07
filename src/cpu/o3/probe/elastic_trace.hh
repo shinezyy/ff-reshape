@@ -33,10 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Radhika Jagtap
- *          Andreas Hansson
- *          Thomas Grass
  */
 
 /**
@@ -90,6 +86,7 @@ class ElasticTrace : public ProbeListenerObject
 
   public:
     typedef typename O3CPUImpl::DynInstPtr DynInstPtr;
+    typedef typename O3CPUImpl::DynInstConstPtr DynInstConstPtr;
     typedef typename std::pair<InstSeqNum, PhysRegIndex> SeqNumRegPair;
 
     /** Trace record types corresponding to instruction node types */
@@ -132,7 +129,7 @@ class ElasticTrace : public ProbeListenerObject
      *
      * @param dyn_inst pointer to dynamic instruction in flight
      */
-    void recordExecTick(const DynInstPtr &dyn_inst);
+    void recordExecTick(const DynInstConstPtr& dyn_inst);
 
     /**
      * Populate the timestamp field in an InstExecInfo object for an
@@ -141,7 +138,7 @@ class ElasticTrace : public ProbeListenerObject
      *
      * @param dyn_inst pointer to dynamic instruction in flight
      */
-    void recordToCommTick(const DynInstPtr &dyn_inst);
+    void recordToCommTick(const DynInstConstPtr& dyn_inst);
 
     /**
      * Record a Read After Write physical register dependency if there has
@@ -152,7 +149,7 @@ class ElasticTrace : public ProbeListenerObject
      *
      * @param dyn_inst pointer to dynamic instruction in flight
      */
-    void updateRegDep(const DynInstPtr &dyn_inst);
+    void updateRegDep(const DynInstConstPtr& dyn_inst);
 
     /**
      * When an instruction gets squashed the destination register mapped to it
@@ -169,17 +166,14 @@ class ElasticTrace : public ProbeListenerObject
      *
      * @param head_inst pointer to dynamic instruction to be squashed
      */
-    void addSquashedInst(const DynInstPtr &head_inst);
+    void addSquashedInst(const DynInstConstPtr& head_inst);
 
     /**
      * Add an instruction that is at the head of the ROB and is committed.
      *
      * @param head_inst pointer to dynamic instruction to be committed
      */
-    void addCommittedInst(const DynInstPtr &head_inst);
-
-    /** Register statistics for the elastic trace. */
-    void regStats();
+    void addCommittedInst(const DynInstConstPtr& head_inst);
 
     /** Event to trigger registering this listener for all probe points. */
     EventFunctionWrapper regEtraceListenersEvent;
@@ -295,8 +289,6 @@ class ElasticTrace : public ProbeListenerObject
         Addr physAddr;
         /* Request virtual address in case of a load/store instruction */
         Addr virtAddr;
-        /* Address space id in case of a load/store instruction */
-        uint32_t asid;
         /* Request size in case of a load/store instruction */
         unsigned size;
 
@@ -390,7 +382,7 @@ class ElasticTrace : public ProbeListenerObject
      * @param exec_info_ptr Pointer to InstExecInfo for that instruction
      * @param commit        True if instruction is committed, false if squashed
      */
-    void addDepTraceRecord(const DynInstPtr &head_inst,
+    void addDepTraceRecord(const DynInstConstPtr& head_inst,
                            InstExecInfo* exec_info_ptr, bool commit);
 
     /**
@@ -399,7 +391,7 @@ class ElasticTrace : public ProbeListenerObject
      *
      * @param head_inst pointer to dynamic instruction
      */
-    void clearTempStoreUntil(const DynInstPtr head_inst);
+    void clearTempStoreUntil(const DynInstConstPtr& head_inst);
 
     /**
      * Calculate the computational delay between an instruction and a
@@ -517,50 +509,54 @@ class ElasticTrace : public ProbeListenerObject
      */
     bool hasCompCompleted(TraceInfo* past_record, Tick execute_tick) const;
 
-    /** Number of register dependencies recorded during tracing */
-    Stats::Scalar numRegDep;
+    struct ElasticTraceStats : public Stats::Group {
+        ElasticTraceStats(Stats::Group *parent);
 
-    /**
-     * Number of stores that got assigned a commit order dependency
-     * on a past load/store.
-     */
-    Stats::Scalar numOrderDepStores;
+        /** Number of register dependencies recorded during tracing */
+        Stats::Scalar numRegDep;
 
-    /**
-     * Number of load insts that got assigned an issue order dependency
-     * because they were dependency-free.
-     */
-    Stats::Scalar numIssueOrderDepLoads;
+        /**
+         * Number of stores that got assigned a commit order dependency
+         * on a past load/store.
+         */
+        Stats::Scalar numOrderDepStores;
 
-    /**
-     * Number of store insts that got assigned an issue order dependency
-     * because they were dependency-free.
-     */
-    Stats::Scalar numIssueOrderDepStores;
+        /**
+         * Number of load insts that got assigned an issue order dependency
+         * because they were dependency-free.
+         */
+        Stats::Scalar numIssueOrderDepLoads;
 
-    /**
-     * Number of non load/store insts that got assigned an issue order
-     * dependency because they were dependency-free.
-     */
-    Stats::Scalar numIssueOrderDepOther;
+        /**
+         * Number of store insts that got assigned an issue order dependency
+         * because they were dependency-free.
+         */
+        Stats::Scalar numIssueOrderDepStores;
 
-    /** Number of filtered nodes */
-    Stats::Scalar numFilteredNodes;
+        /**
+         * Number of non load/store insts that got assigned an issue order
+         * dependency because they were dependency-free.
+         */
+        Stats::Scalar numIssueOrderDepOther;
 
-    /** Maximum number of dependents on any instruction */
-    Stats::Scalar maxNumDependents;
+        /** Number of filtered nodes */
+        Stats::Scalar numFilteredNodes;
 
-    /**
-     * Maximum size of the temporary store mostly useful as a check that it is
-     * not growing
-     */
-    Stats::Scalar maxTempStoreSize;
+        /** Maximum number of dependents on any instruction */
+        Stats::Scalar maxNumDependents;
 
-    /**
-     * Maximum size of the map that holds the last writer to a physical
-     * register.
-     * */
-    Stats::Scalar maxPhysRegDepMapSize;
+        /**
+         * Maximum size of the temporary store mostly useful as a check that
+         * it is not growing
+         */
+        Stats::Scalar maxTempStoreSize;
+
+        /**
+         * Maximum size of the map that holds the last writer to a physical
+         * register.
+         */
+        Stats::Scalar maxPhysRegDepMapSize;
+    } stats;
 
 };
 #endif//__CPU_O3_PROBE_ELASTIC_TRACE_HH__

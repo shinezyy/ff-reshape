@@ -36,9 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Erik Hallnor
- *          Andreas Sandberg
  */
 
 /** @file
@@ -76,6 +73,8 @@ enum CacheBlkStatusBits : unsigned {
     BlkHWPrefetched =   0x20,
     /** block holds data from the secure memory space */
     BlkSecure =         0x40,
+    /** block holds compressed data */
+    BlkCompressed =     0x80
 };
 
 /**
@@ -115,7 +114,7 @@ class CacheBlk : public ReplaceableEntry
     unsigned refCount;
 
     /** holds the source requestor ID for this block. */
-    int srcMasterId;
+    int srcRequestorId;
 
     /**
      * Tick on which the block was inserted in the cache. Its value is only
@@ -216,7 +215,7 @@ class CacheBlk : public ReplaceableEntry
         status = 0;
         whenReady = MaxTick;
         refCount = 0;
-        srcMasterId = Request::invldMasterId;
+        srcRequestorId = Request::invldRequestorId;
         lockList.clear();
     }
 
@@ -272,6 +271,7 @@ class CacheBlk : public ReplaceableEntry
      */
     Tick getWhenReady() const
     {
+        assert(whenReady != MaxTick);
         return whenReady;
     }
 
@@ -296,11 +296,11 @@ class CacheBlk : public ReplaceableEntry
      *
      * @param tag Block address tag.
      * @param is_secure Whether the block is in secure space or not.
-     * @param src_master_ID The source requestor ID.
+     * @param src_requestor_ID The source requestor ID.
      * @param task_ID The new task ID.
      */
     virtual void insert(const Addr tag, const bool is_secure,
-                        const int src_master_ID, const uint32_t task_ID);
+                        const int src_requestor_ID, const uint32_t task_ID);
 
     /**
      * Track the fact that a local locked was issued to the
@@ -342,7 +342,8 @@ class CacheBlk : public ReplaceableEntry
      *
      * @return string with basic state information
      */
-    virtual std::string print() const
+    std::string
+    print() const override
     {
         /**
          *  state       M   O   E   S   I
@@ -379,9 +380,9 @@ class CacheBlk : public ReplaceableEntry
           default:    s = 'T'; break; // @TODO add other types
         }
         return csprintf("state: %x (%c) valid: %d writable: %d readable: %d "
-                        "dirty: %d | tag: %#x set: %#x way: %#x", status, s,
+                        "dirty: %d | tag: %#x %s", status, s,
                         isValid(), isWritable(), isReadable(), isDirty(), tag,
-                        getSet(), getWay());
+                        ReplaceableEntry::print());
     }
 
     /**
@@ -468,7 +469,8 @@ class TempCacheBlk final : public CacheBlk
     }
 
     void insert(const Addr addr, const bool is_secure,
-                const int src_master_ID=0, const uint32_t task_ID=0) override
+                const int src_requestor_ID=0, const uint32_t task_ID=0)
+                override
     {
         // Make sure that the block has been properly invalidated
         assert(status == 0);

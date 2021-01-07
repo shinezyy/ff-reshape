@@ -23,8 +23,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #include "systemc/core/scheduler.hh"
@@ -32,6 +30,7 @@
 #include "base/fiber.hh"
 #include "base/logging.hh"
 #include "sim/eventq.hh"
+#include "sim/sim_exit.hh"
 #include "systemc/core/kernel.hh"
 #include "systemc/core/sc_main_fiber.hh"
 #include "systemc/ext/core/messages.hh"
@@ -47,12 +46,14 @@ namespace sc_gem5
 Scheduler::Scheduler() :
     eq(nullptr), readyEvent(this, false, ReadyPriority),
     pauseEvent(this, false, PausePriority),
-    stopEvent(this, false, StopPriority), _throwToScMain(nullptr),
+    stopEvent(this, false, StopPriority), _throwUp(nullptr),
     starvationEvent(this, false, StarvationPriority),
     _elaborationDone(false), _started(false), _stopNow(false),
-    _status(StatusOther), maxTickEvent(this, false, MaxTickPriority),
+    _status(StatusOther), maxTick(::MaxTick),
+    maxTickEvent(this, false, MaxTickPriority),
     timeAdvancesEvent(this, false, TimeAdvancesPriority), _numCycles(0),
-    _changeStamp(0), _current(nullptr), initDone(false), runOnce(false)
+    _changeStamp(0), _current(nullptr), initDone(false), runToTime(true),
+    runOnce(false)
 {}
 
 Scheduler::~Scheduler()
@@ -108,6 +109,8 @@ Scheduler::clear()
 void
 Scheduler::initPhase()
 {
+    runUpdate();
+
     for (Process *p = initList.getNext(); p; p = initList.getNext()) {
         p->popListNode();
 
@@ -121,7 +124,6 @@ Scheduler::initPhase()
         }
     }
 
-    runUpdate();
     runDelta();
 
     for (auto ets: eventsToSchedule)
@@ -179,7 +181,7 @@ Scheduler::yield()
             try {
                 _current->run();
             } catch (...) {
-                throwToScMain();
+                throwUp();
             }
         }
     }
@@ -254,6 +256,13 @@ Scheduler::requestUpdate(Channel *c)
 }
 
 void
+Scheduler::asyncRequestUpdate(Channel *c)
+{
+    std::lock_guard<std::mutex> lock(asyncListMutex);
+    asyncUpdateList.pushLast(c);
+}
+
+void
 Scheduler::scheduleReadyEvent()
 {
     // Schedule the evaluate and update phases.
@@ -317,6 +326,12 @@ void
 Scheduler::runUpdate()
 {
     status(StatusUpdate);
+    {
+        std::lock_guard<std::mutex> lock(asyncListMutex);
+        Channel *channel;
+        while ((channel = asyncUpdateList.getNext()) != nullptr)
+            updateList.pushLast(channel);
+    }
 
     try {
         Channel *channel = updateList.getNext();
@@ -326,7 +341,7 @@ Scheduler::runUpdate()
             channel = updateList.getNext();
         }
     } catch (...) {
-        throwToScMain();
+        throwUp();
     }
 }
 
@@ -339,7 +354,7 @@ Scheduler::runDelta()
         while (!deltas.empty())
             deltas.back()->run();
     } catch (...) {
-        throwToScMain();
+        throwUp();
     }
 }
 
@@ -349,8 +364,15 @@ Scheduler::pause()
     status(StatusPaused);
     kernel->status(::sc_core::SC_PAUSED);
     runOnce = false;
-    if (scMainFiber.called() && !scMainFiber.finished())
-        scMainFiber.run();
+    if (scMainFiber.called()) {
+        if (!scMainFiber.finished())
+            scMainFiber.run();
+    } else {
+        if (scMainFiber.finished())
+            fatal("Pausing systemc after sc_main completed.");
+        else
+            exitSimLoopNow("systemc pause");
+    }
 }
 
 void
@@ -362,8 +384,15 @@ Scheduler::stop()
     clear();
 
     runOnce = false;
-    if (scMainFiber.called() && !scMainFiber.finished())
-        scMainFiber.run();
+    if (scMainFiber.called()) {
+        if (!scMainFiber.finished())
+            scMainFiber.run();
+    } else {
+        if (scMainFiber.finished())
+            fatal("Stopping systemc after sc_main completed.");
+        else
+            exitSimLoopNow("systemc stop");
+    }
 }
 
 void
@@ -397,9 +426,9 @@ Scheduler::start(Tick max_tick, bool run_to_time)
     if (starvationEvent.scheduled())
         deschedule(&starvationEvent);
 
-    if (_throwToScMain) {
-        const ::sc_core::sc_report *to_throw = _throwToScMain;
-        _throwToScMain = nullptr;
+    if (_throwUp) {
+        const ::sc_core::sc_report *to_throw = _throwUp;
+        _throwUp = nullptr;
         throw *to_throw;
     }
 }
@@ -422,12 +451,17 @@ Scheduler::schedulePause()
 }
 
 void
-Scheduler::throwToScMain()
+Scheduler::throwUp()
 {
-    ::sc_core::sc_report report = reportifyException();
-    _throwToScMain = &report;
-    status(StatusOther);
-    scMainFiber.run();
+    if (scMainFiber.called() && !scMainFiber.finished()) {
+        ::sc_core::sc_report report = reportifyException();
+        _throwUp = &report;
+        status(StatusOther);
+        scMainFiber.run();
+    } else {
+        reportHandlerProc(reportifyException(),
+                ::sc_core::sc_report_handler::get_catch_actions());
+    }
 }
 
 void

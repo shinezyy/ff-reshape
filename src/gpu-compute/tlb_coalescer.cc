@@ -29,20 +29,19 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Lisa Hsu
  */
 
 #include "gpu-compute/tlb_coalescer.hh"
 
 #include <cstring>
 
+#include "arch/x86/isa_traits.hh"
+#include "base/logging.hh"
 #include "debug/GPUTLB.hh"
 #include "sim/process.hh"
 
 TLBCoalescer::TLBCoalescer(const Params *p)
-    : MemObject(p),
-      clock(p->clk_domain->clockPeriod()),
+    : ClockedObject(p),
       TLBProbesPerCycle(p->probesPerCycle),
       coalescingWindow(p->coalescingWindow),
       disableCoalescing(p->disableCoalescing),
@@ -53,44 +52,36 @@ TLBCoalescer::TLBCoalescer(const Params *p)
                    "Cleanup issuedTranslationsTable hashmap",
                    false, Event::Maximum_Pri)
 {
-    // create the slave ports based on the number of connected ports
-    for (size_t i = 0; i < p->port_slave_connection_count; ++i) {
+    // create the response ports based on the number of connected ports
+    for (size_t i = 0; i < p->port_cpu_side_ports_connection_count; ++i) {
         cpuSidePort.push_back(new CpuSidePort(csprintf("%s-port%d", name(), i),
                                               this, i));
     }
 
-    // create the master ports based on the number of connected ports
-    for (size_t i = 0; i < p->port_master_connection_count; ++i) {
+    // create the request ports based on the number of connected ports
+    for (size_t i = 0; i < p->port_mem_side_ports_connection_count; ++i) {
         memSidePort.push_back(new MemSidePort(csprintf("%s-port%d", name(), i),
                                               this, i));
     }
 }
 
-BaseSlavePort&
-TLBCoalescer::getSlavePort(const std::string &if_name, PortID idx)
+Port &
+TLBCoalescer::getPort(const std::string &if_name, PortID idx)
 {
-    if (if_name == "slave") {
+    if (if_name == "cpu_side_ports") {
         if (idx >= static_cast<PortID>(cpuSidePort.size())) {
-            panic("TLBCoalescer::getSlavePort: unknown index %d\n", idx);
+            panic("TLBCoalescer::getPort: unknown index %d\n", idx);
         }
 
         return *cpuSidePort[idx];
-    } else {
-        panic("TLBCoalescer::getSlavePort: unknown port %s\n", if_name);
-    }
-}
-
-BaseMasterPort&
-TLBCoalescer::getMasterPort(const std::string &if_name, PortID idx)
-{
-    if (if_name == "master") {
+    } else  if (if_name == "mem_side_ports") {
         if (idx >= static_cast<PortID>(memSidePort.size())) {
-            panic("TLBCoalescer::getMasterPort: unknown index %d\n", idx);
+            panic("TLBCoalescer::getPort: unknown index %d\n", idx);
         }
 
         return *memSidePort[idx];
     } else {
-        panic("TLBCoalescer::getMasterPort: unknown port %s\n", if_name);
+        panic("TLBCoalescer::getPort: unknown port %s\n", if_name);
     }
 }
 
@@ -208,7 +199,7 @@ TLBCoalescer::updatePhysAddresses(PacketPtr pkt)
             sender_state->hitLevel = first_hit_level;
         }
 
-        SlavePort *return_port = sender_state->ports.back();
+        ResponsePort *return_port = sender_state->ports.back();
         sender_state->ports.pop_back();
 
         // Translation is done - Convert to a response pkt if necessary and
@@ -326,7 +317,7 @@ TLBCoalescer::CpuSidePort::recvTimingReq(PacketPtr pkt)
     //coalesced requests to the TLB
     if (!coalescer->probeTLBEvent.scheduled()) {
         coalescer->schedule(coalescer->probeTLBEvent,
-                curTick() + coalescer->ticks(1));
+                curTick() + coalescer->clockPeriod());
     }
 
     return true;
@@ -335,7 +326,7 @@ TLBCoalescer::CpuSidePort::recvTimingReq(PacketPtr pkt)
 void
 TLBCoalescer::CpuSidePort::recvReqRetry()
 {
-    assert(false);
+    panic("recvReqRetry called");
 }
 
 void
@@ -368,7 +359,7 @@ TLBCoalescer::CpuSidePort::recvFunctional(PacketPtr pkt)
 AddrRangeList
 TLBCoalescer::CpuSidePort::getAddrRanges() const
 {
-    // currently not checked by the master
+    // currently not checked by the requestor
     AddrRangeList ranges;
 
     return ranges;
@@ -389,7 +380,7 @@ TLBCoalescer::MemSidePort::recvReqRetry()
     //we've receeived a retry. Schedule a probeTLBEvent
     if (!coalescer->probeTLBEvent.scheduled())
         coalescer->schedule(coalescer->probeTLBEvent,
-                curTick() + coalescer->ticks(1));
+                curTick() + coalescer->clockPeriod());
 }
 
 void
@@ -457,7 +448,7 @@ TLBCoalescer::processProbeTLBEvent()
 
             // send the coalesced request for virt_page_addr
             if (!memSidePort[0]->sendTimingReq(first_packet)) {
-                DPRINTF(GPUTLB, "Failed to send TLB request for page %#x",
+                DPRINTF(GPUTLB, "Failed to send TLB request for page %#x\n",
                        virt_page_addr);
 
                 // No need for a retries queue since we are already buffering
@@ -532,7 +523,7 @@ TLBCoalescer::processCleanupEvent()
 void
 TLBCoalescer::regStats()
 {
-    MemObject::regStats();
+    ClockedObject::regStats();
 
     uncoalescedAccesses
         .name(name() + ".uncoalesced_accesses")

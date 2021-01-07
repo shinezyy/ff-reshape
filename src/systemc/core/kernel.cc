@@ -23,8 +23,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #include "systemc/core/kernel.hh"
@@ -103,7 +101,7 @@ Kernel::regStats()
         for (auto c: sc_gem5::allChannels)
             c->sc_chan()->end_of_elaboration();
     } catch (...) {
-        ::sc_gem5::scheduler.throwToScMain();
+        ::sc_gem5::scheduler.throwUp();
     }
 }
 
@@ -127,7 +125,7 @@ Kernel::startup()
         for (auto c: sc_gem5::allChannels)
             c->sc_chan()->start_of_simulation();
     } catch (...) {
-        ::sc_gem5::scheduler.throwToScMain();
+        ::sc_gem5::scheduler.throwUp();
     }
 
     startComplete = true;
@@ -159,7 +157,7 @@ Kernel::stopWork()
         for (auto c: sc_gem5::allChannels)
             c->sc_chan()->end_of_simulation();
     } catch (...) {
-        ::sc_gem5::scheduler.throwToScMain();
+        ::sc_gem5::scheduler.throwUp();
     }
 
     endComplete = true;

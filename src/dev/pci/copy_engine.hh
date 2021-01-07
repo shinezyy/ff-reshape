@@ -36,8 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ali Saidi
  */
 
 /* @file
@@ -50,7 +48,6 @@
 
 #include <vector>
 
-#include "base/cp_annotate.hh"
 #include "base/statistics.hh"
 #include "dev/pci/copy_engine_defs.hh"
 #include "dev/pci/device.hh"
@@ -95,7 +92,7 @@ class CopyEngine : public PciDevice
       public:
         CopyEngineChannel(CopyEngine *_ce, int cid);
         virtual ~CopyEngineChannel();
-        BaseMasterPort &getMasterPort();
+        Port &getPort();
 
         std::string name() { assert(ce); return ce->name() + csprintf("-chan%d", channelId); }
         virtual Tick read(PacketPtr pkt)
@@ -138,36 +135,6 @@ class CopyEngine : public PciDevice
         void recvCommand();
         bool inDrain();
         void restartStateMachine();
-        inline void anBegin(const char *s)
-        {
-            CPA::cpa()->hwBegin(CPA::FL_NONE, ce->sys,
-                         channelId, "CopyEngine", s);
-        }
-
-        inline void anWait()
-        {
-            CPA::cpa()->hwWe(CPA::FL_NONE, ce->sys,
-                     channelId, "CopyEngine", "DMAUnusedDescQ", channelId);
-        }
-
-        inline void anDq()
-        {
-            CPA::cpa()->hwDq(CPA::FL_NONE, ce->sys,
-                      channelId, "CopyEngine", "DMAUnusedDescQ", channelId);
-        }
-
-        inline void anPq()
-        {
-            CPA::cpa()->hwDq(CPA::FL_NONE, ce->sys,
-                      channelId, "CopyEngine", "DMAUnusedDescQ", channelId);
-        }
-
-        inline void anQ(const char * s, uint64_t id, int size = 1)
-        {
-            CPA::cpa()->hwQ(CPA::FL_NONE, ce->sys, channelId,
-                    "CopyEngine", s, id, NULL, size);
-        }
-
     };
 
   private:
@@ -193,8 +160,8 @@ class CopyEngine : public PciDevice
 
     void regStats() override;
 
-    BaseMasterPort &getMasterPort(const std::string &if_name,
-                                  PortID idx = InvalidPortID) override;
+    Port &getPort(const std::string &if_name,
+            PortID idx = InvalidPortID) override;
 
     Tick read(PacketPtr pkt) override;
     Tick write(PacketPtr pkt) override;

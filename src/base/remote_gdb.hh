@@ -1,4 +1,15 @@
 /*
+ * Copyright (c) 2018 ARM Limited
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
+ *
  * Copyright 2015 LabWare
  * Copyright 2014 Google, Inc.
  * Copyright (c) 2002-2005 The Regents of The University of Michigan
@@ -26,9 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Nathan Binkert
- *          Boris Shingarov
  */
 
 #ifndef __REMOTE_GDB_HH__
@@ -67,23 +75,31 @@ class BaseGdbRegCache
      * Return the pointer to the raw bytes buffer containing the
      * register values.  Each byte of this buffer is literally
      * encoded as two hex digits in the g or G RSP packet.
+     *
+     * @ingroup api_remote_gdb
      */
     virtual char *data() const = 0;
 
     /**
      * Return the size of the raw buffer, in bytes
      * (i.e., half of the number of digits in the g/G packet).
+     *
+     * @ingroup api_remote_gdb
      */
     virtual size_t size() const = 0;
 
     /**
      * Fill the raw buffer from the registers in the ThreadContext.
+     *
+     * @ingroup api_remote_gdb
      */
     virtual void getRegs(ThreadContext*) = 0;
 
     /**
      * Set the ThreadContext's registers from the values
      * in the raw buffer.
+     *
+     * @ingroup api_remote_gdb
      */
     virtual void setRegs(ThreadContext*) const = 0;
 
@@ -92,9 +108,14 @@ class BaseGdbRegCache
      * Having each concrete superclass redefine this member
      * is useful in situations where the class of the regCache
      * can change on the fly.
+     *
+     * @ingroup api_remote_gdb
      */
     virtual const std::string name() const = 0;
 
+    /**
+     * @ingroup api_remote_gdb
+     */
     BaseGdbRegCache(BaseRemoteGDB *g) : gdb(g)
     {}
     virtual ~BaseGdbRegCache()
@@ -109,7 +130,12 @@ class BaseRemoteGDB
     friend class HardBreakpoint;
   public:
 
-    /*
+    /**
+     * @ingroup api_remote_gdb
+     * @{
+     */
+
+    /**
      * Interface to other parts of the simulator.
      */
     BaseRemoteGDB(System *system, ThreadContext *context, int _port);
@@ -130,6 +156,8 @@ class BaseRemoteGDB
 
     bool trap(int type);
     bool breakpoint() { return trap(SIGTRAP); }
+
+    /** @} */ // end of api_remote_gdb
 
   private:
     /*
@@ -171,7 +199,7 @@ class BaseRemoteGDB
     uint8_t getbyte();
     void putbyte(uint8_t b);
 
-    int recv(char *data, int len);
+    void recv(std::vector<char> &bp);
     void send(const char *data);
 
     /*
@@ -276,12 +304,30 @@ class BaseRemoteGDB
     ThreadContext *context() { return tc; }
     System *system() { return sys; }
 
+    void encodeBinaryData(const std::string &unencoded,
+            std::string &encoded) const;
+
+    void encodeXferResponse(const std::string &unencoded,
+        std::string &encoded, size_t offset, size_t unencoded_length) const;
+
     // To be implemented by subclasses.
     virtual bool checkBpLen(size_t len);
 
     virtual BaseGdbRegCache *gdbRegs() = 0;
 
     virtual bool acc(Addr addr, size_t len) = 0;
+
+    virtual std::vector<std::string> availableFeatures() const;
+
+    /**
+     * Get an XML target description.
+     *
+     * @param[in] annex the XML filename
+     * @param[out] output set to the decoded XML
+     * @return true if the given annex was found
+     */
+    virtual bool getXferFeaturesRead(const std::string &annex,
+            std::string &output);
 };
 
 template <class T>

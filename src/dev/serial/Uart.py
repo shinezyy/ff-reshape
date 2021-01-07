@@ -35,13 +35,12 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Nathan Binkert
 
 from m5.params import *
 from m5.proxy import *
-from Device import BasicPioDevice
-from Serial import SerialDevice
+
+from m5.objects.Device import BasicPioDevice
+from m5.objects.Serial import SerialDevice
 
 class Uart(BasicPioDevice):
     type = 'Uart'
@@ -53,7 +52,7 @@ class Uart(BasicPioDevice):
 class SimpleUart(Uart):
     type = 'SimpleUart'
     cxx_header = "dev/serial/simple.hh"
-    big_endian = Param.Bool(False, "Is the device Big Endian?")
+    byte_order = Param.ByteOrder("little", "Device byte order")
     pio_size = Param.Addr(0x4, "Size of address range")
     end_on_eot = Param.Bool(False, "End the simulation when a EOT is "\
                             "received on the UART")
@@ -61,3 +60,9 @@ class SimpleUart(Uart):
 class Uart8250(Uart):
     type = 'Uart8250'
     cxx_header = "dev/serial/uart8250.hh"
+
+class UartLite(BasicPioDevice):
+    type = 'UartLite'
+    cxx_header = "dev/serial/uartlite.hh"
+    pio_addr = 0x40600000
+    pio_size = Param.Addr(0xd, "Size of address range")

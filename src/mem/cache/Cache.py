@@ -35,19 +35,16 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Nathan Binkert
-#          Andreas Hansson
 
 from m5.params import *
 from m5.proxy import *
 from m5.SimObject import SimObject
 
-from m5.objects.MemObject import MemObject
+from m5.objects.ClockedObject import ClockedObject
+from m5.objects.Compressors import BaseCacheCompressor
 from m5.objects.Prefetcher import BasePrefetcher
 from m5.objects.ReplacementPolicies import *
 from m5.objects.Tags import *
-
 
 # Enum for cache clusivity, currently mostly inclusive or mostly
 # exclusive.
@@ -72,7 +69,7 @@ class WriteAllocator(SimObject):
     block_size = Param.Int(Parent.cache_line_size, "block size in bytes")
 
 
-class BaseCache(MemObject):
+class BaseCache(ClockedObject):
     type = 'BaseCache'
     abstract = True
     cxx_header = "mem/cache/base.hh"
@@ -105,11 +102,13 @@ class BaseCache(MemObject):
     replacement_policy = Param.BaseReplacementPolicy(LRURP(),
         "Replacement policy")
 
+    compressor = Param.BaseCacheCompressor(NULL, "Cache compressor.")
+
     sequential_access = Param.Bool(False,
         "Whether to access tags and data sequentially")
 
-    cpu_side = SlavePort("Upstream port closer to the CPU and/or device")
-    mem_side = MasterPort("Downstream port closer to memory")
+    cpu_side = ResponsePort("Upstream port closer to the CPU and/or device")
+    mem_side = RequestPort("Downstream port closer to memory")
 
     addr_ranges = VectorParam.AddrRange([AllMemory],
          "Address range for the CPU-side port (to allow striping)")

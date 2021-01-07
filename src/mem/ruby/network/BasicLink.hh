@@ -33,13 +33,14 @@
 #include <string>
 #include <vector>
 
+#include "mem/ruby/network/BasicRouter.hh"
+#include "mem/ruby/slicc_interface/AbstractController.hh"
 #include "params/BasicExtLink.hh"
 #include "params/BasicIntLink.hh"
 #include "params/BasicLink.hh"
-#include "mem/ruby/network/BasicRouter.hh"
-#include "mem/ruby/network/Topology.hh"
-#include "mem/ruby/slicc_interface/AbstractController.hh"
 #include "sim/sim_object.hh"
+
+class Topology;
 
 class BasicLink : public SimObject
 {
@@ -55,6 +56,7 @@ class BasicLink : public SimObject
     Cycles m_latency;
     int m_bandwidth_factor;
     int m_weight;
+    std::vector<int> mVnets;
 };
 
 inline std::ostream&
