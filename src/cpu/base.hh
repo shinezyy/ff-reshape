@@ -615,6 +615,10 @@ class BaseCPU : public ClockedObject
     EventFunctionWrapper enterPwrGatingEvent;
 
     const uint64_t warmUpInstCount;
+
+    const uint64_t repeatDumpInstCount;
+
+    uint64_t nextDumpInstCount{0};
 };
 
 #endif // THE_ISA == NULL_ISA

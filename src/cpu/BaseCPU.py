@@ -187,6 +187,8 @@ class BaseCPU(ClockedObject):
 
     GCptWarmupInstCount = Param.Counter(0,
         "reset stats when any thread has reached this inst count")
+    GCptRepeatInstCount = Param.Counter(0,
+        "reset stats periadically when any thread has reached this inst count")
 
     if buildEnv['TARGET_ISA'] == 'x86':
         _uncached_interrupt_response_ports += ["interrupts[0].pio",

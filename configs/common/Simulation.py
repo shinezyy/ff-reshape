@@ -507,6 +507,7 @@ def run(options, root, testsys, cpu_class):
     for i in range(np):
         if options.gcpt_warmup != None:
             testsys.cpu[i].GCptWarmupInstCount = options.gcpt_warmup
+            testsys.cpu[i].GCptRepeatInstCount = options.gcpt_repeat_interval
 
     if options.repeat_switch:
         switch_class = getCPUClass(options.cpu_type)[0]
