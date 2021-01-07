@@ -652,6 +652,10 @@ Process::fullPath(const std::string &file_name)
 
     std::string full = cwd;
 
+    if (file_name.size() == 1 && file_name[0] == '.') {
+        return full;
+    }
+
     if (cwd[cwd.size() - 1] != '/')
         full += '/';
 

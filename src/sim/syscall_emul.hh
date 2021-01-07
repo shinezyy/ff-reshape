@@ -666,6 +666,8 @@ openImpl(SyscallDesc *desc, int callnum, Process *p, ThreadContext *tc,
     int tgt_flags = p->getSyscallArg(tc, index);
     for (int i = 0; i < OS::NUM_OPEN_FLAGS; i++) {
         if (tgt_flags & OS::openFlagTable[i].tgtFlag) {
+            DPRINTF_SYSCALL(Verbose, "Translate tgt flag %i to host flag %i\n",
+                    OS::openFlagTable[i].tgtFlag, OS::openFlagTable[i].hostFlag);
             tgt_flags &= ~OS::openFlagTable[i].tgtFlag;
             host_flags |= OS::openFlagTable[i].hostFlag;
         }
@@ -692,14 +694,22 @@ openImpl(SyscallDesc *desc, int callnum, Process *p, ThreadContext *tc,
      * In every case, we should have a full path (which is relevant to the
      * host) to work with after this block has been passed.
      */
+    std::string old_path = path;
     if (!isopenat || (isopenat && tgt_dirfd == OS::TGT_AT_FDCWD)) {
+        DPRINTF_SYSCALL(Verbose, "Full path %i\n", 1);
+        DPRINTF_SYSCALL(Verbose, "Path before: %s\n", path.c_str());
         path = p->fullPath(path);
+        DPRINTF_SYSCALL(Verbose, "Path after: %s\n", path.c_str());
+
     } else if (!startswith(path, "/")) {
+        DPRINTF_SYSCALL(Verbose, "Full path %i\n", 2);
+        DPRINTF_SYSCALL(Verbose, "Path before: %s\n", path.c_str());
         std::shared_ptr<FDEntry> fdep = ((*p->fds)[tgt_dirfd]);
         auto ffdp = std::dynamic_pointer_cast<FileFDEntry>(fdep);
         if (!ffdp)
             return -EBADF;
         path.insert(0, ffdp->getFileName() + "/");
+        DPRINTF_SYSCALL(Verbose, "Path after: %s\n", path.c_str());
     }
 
     /**
@@ -740,7 +750,11 @@ openImpl(SyscallDesc *desc, int callnum, Process *p, ThreadContext *tc,
             sim_fd = OS::openSpecialFile(path, p, tc);
     }
     if (sim_fd == -1) {
-        sim_fd = open(path.c_str(), host_flags, mode);
+        auto tmp_flag = host_flags;
+        if (old_path.size() == 1 && old_path[0] == '.') {
+            tmp_flag |= O_DIRECTORY;
+        }
+        sim_fd = open(path.c_str(), tmp_flag, mode);
     }
     if (sim_fd == -1) {
         int local = -errno;

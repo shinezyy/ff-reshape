@@ -415,13 +415,16 @@ getcwdFunc(SyscallDesc *desc, int num, Process *p, ThreadContext *tc)
     string cwd = p->getcwd();
     if (!cwd.empty()) {
         if (cwd.length() >= size) {
+            warn("getcwd buffer too small\n");
             // Buffer too small
             return -ERANGE;
         }
+        warn("getcwd returning %s\n", cwd.c_str());
         strncpy((char *)buf.bufferPtr(), cwd.c_str(), size);
         result = cwd.length();
     } else {
         if (getcwd((char *)buf.bufferPtr(), size)) {
+            warn("getcwd returning %s\n", (const char *) buf.bufferPtr());
             result = strlen((char *)buf.bufferPtr());
         } else {
             result = -1;
@@ -1175,7 +1178,9 @@ chdirFunc(SyscallDesc *desc, int num, Process *p, ThreadContext *tc)
 
     path = p->fullPath(path);
 
+    DPRINTF_SYSCALL(Verbose, "Chdir to %s\n", path.c_str());
     auto result = chdir(path.c_str());
+    p->cwd = path.c_str();
     return (result == -1) ? -errno : result;
 }
 
