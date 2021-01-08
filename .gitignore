@@ -39,3 +39,4 @@ valgrind*.txt
 util/run_sh_scrpits/spec_exe/
 util/run_sh_scrpits/spec06_exe/
 util/run_sh_scrpits/spec17_exe/
+/system/arm/aarch64_bootloader/boot_emm_v2.arm64

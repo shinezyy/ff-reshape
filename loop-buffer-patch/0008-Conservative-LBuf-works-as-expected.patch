@@ -1,0 +1,171 @@
+From 7c4810f51d1c7bd458ffa3c6ec79ac4c4c780209 Mon Sep 17 00:00:00 2001
+From: Zhou Yaoyang <shinezyy@qq.com>
+Date: Mon, 6 Jul 2020 18:32:45 +0800
+Subject: [PATCH 08/13] Conservative LBuf works as expected
+
+Change-Id: Ic0d9a465367aa454aed5b6407c63091609c5215b
+---
+ src/cpu/o3/fetch.hh       |  2 ++
+ src/cpu/o3/fetch_impl.hh  | 41 +++++++++++++++++++++++----------------
+ src/cpu/o3/loop_buffer.cc |  9 +++++++++
+ src/cpu/o3/loop_buffer.hh |  2 ++
+ 4 files changed, 37 insertions(+), 17 deletions(-)
+
+diff --git a/src/cpu/o3/fetch.hh b/src/cpu/o3/fetch.hh
+index fead258a5..01db8ee04 100644
+--- a/src/cpu/o3/fetch.hh
++++ b/src/cpu/o3/fetch.hh
+@@ -581,6 +581,8 @@ class DefaultFetch
+     LoopBuffer *lbuf;
+ 
+     uint8_t *foundLine;
++
++    Addr lbufStartPC{};
+ };
+ 
+ #endif //__CPU_O3_FETCH_HH__
+diff --git a/src/cpu/o3/fetch_impl.hh b/src/cpu/o3/fetch_impl.hh
+index d41f72b23..47617a01e 100644
+--- a/src/cpu/o3/fetch_impl.hh
++++ b/src/cpu/o3/fetch_impl.hh
+@@ -1199,13 +1199,17 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+ 
+     bool inRom = isRomMicroPC(thisPC.microPC());
+ 
+-    foundLine = lbuf->enable ? lbuf->getBufferedLine(fetchAddr) : nullptr;
+-
+     Addr loop_branch_pc;
++    if (lbuf->enable && lbufStartPC && lbuf->inRange(lbufStartPC, fetchAddr)) {
++        loop_branch_pc = lbuf->getBufferedLineBranchPC(lbufStartPC);
++        // leave foundLine without updating
++    } else {
++        foundLine = lbuf->enable ? lbuf->getBufferedLine(fetchAddr) : nullptr;
++        if (foundLine) {
+ 
+-    if (foundLine) {
+-        loop_branch_pc = lbuf->getBufferedLineBranchPC(fetchAddr);
+-        assert(loop_branch_pc);
++            loop_branch_pc = lbuf->getBufferedLineBranchPC(fetchAddr);
++            assert(loop_branch_pc);
++        }
+     }
+ 
+     // If returning from the delay of a cache miss, then update the status
+@@ -1282,7 +1286,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+     const unsigned numInsts = fetchBufferSize / instSize;
+     unsigned blkOffset =
+         (fetchAddr - fetchBufferPC[tid]) / instSize;
+-    Addr lbuf_start_pc = 0;
++
+     // Loop through instruction memory from the cache.
+     // Keep issuing while fetchWidth is available and branch is not
+     // predicted taken
+@@ -1302,34 +1306,33 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+             // to the next cache block then start fetch from icache.
+             if (lbuf->enable && foundLine) {
+ 
+-                if (!lbuf_start_pc) {
+-
++                if (!lbufStartPC) {
+                     if (lbuf->loopFiltering) {
+-                        lbuf_start_pc = fetchAddr;
++                        lbufStartPC = fetchAddr;
+                         DPRINTF(LoopBuffer,
+                                 "Fetching from filtered loop buffer "
+                                 "starting from: 0x%x\n", fetchAddr);
+                     } else {
+-                        lbuf_start_pc = lbuf->align(fetchAddr);
++                        lbufStartPC = lbuf->align(fetchAddr);
+                     }
+ 
+-                } else if (fetchAddr < lbuf_start_pc ||
+-                        fetchAddr > loop_branch_pc) {
++                } else if (!lbuf->inRange(lbufStartPC, fetchAddr)) {
+                     DPRINTF(LoopBuffer,
+                             "Fetching from outside of lbuf,"
+                             "fetchAddr: 0x%x, lbuf start: 0x%x, lbuf end: 0x%x\n",
+-                            fetchAddr, lbuf_start_pc, loop_branch_pc);
++                            fetchAddr, lbufStartPC, loop_branch_pc);
++                    foundLine = nullptr;
++                    lbufStartPC = 0;
+                     break;
+                 }
+-
+-                blkOffset = (fetchAddr - lbuf_start_pc) / instSize;
++                blkOffset = (fetchAddr - lbufStartPC) / instSize;
+ 
+                 DPRINTF(LoopBuffer,
+                         "Fetching from loop buffer: line %p,"
+                         " block start: 0x%x, end: 0x%x"
+                         " fetching: 0x%x, blkOffset: %u, instSize: %u\n",
+                         (void *)foundLine,
+-                        lbuf_start_pc, loop_branch_pc, fetchAddr, blkOffset, instSize);
++                        lbufStartPC, loop_branch_pc, fetchAddr, blkOffset, instSize);
+                 unsigned lbuf_entry_insts = lbuf->entrySize / instSize;
+                 cacheInsts = reinterpret_cast<TheISA::MachInst *>(foundLine);
+ 
+@@ -1400,6 +1403,9 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+                 newMacro |= staticInst->isLastMicroop();
+             }
+ 
++            if (lbuf->enable && foundLine) {
++                fetchFromLoopBuffer++;
++            }
+             DynInstPtr instruction =
+                 buildInst(tid, staticInst, curMacroop,
+                           thisPC, nextPC, true);
+@@ -1438,9 +1444,10 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+             if (this_is_branch) {
+                 if (lbuf->enable) {
+                     if (cpc == loop_branch_pc) {
+-
++                        // loop back
+                     } else {
+                         foundLine = lbuf->getBufferedLine(npc);
++                        lbufStartPC = 0;
+ 
+                         if (!foundLine) {
+                             // mark a Txn
+diff --git a/src/cpu/o3/loop_buffer.cc b/src/cpu/o3/loop_buffer.cc
+index 036e0b79a..a66bd74bf 100644
+--- a/src/cpu/o3/loop_buffer.cc
++++ b/src/cpu/o3/loop_buffer.cc
+@@ -246,6 +246,7 @@ LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
+         clearPending();
+         txn.offset = 0;
+         txn.expectedPC = 0;
++        table[txn.targetPC].branchPC = txn.branchPC;
+         return;
+     }
+     txn.offset += inst_size;
+@@ -268,6 +269,14 @@ LoopBuffer::getBufferedLineBranchPC(Addr target_pc)
+     }
+ }
+ 
++bool
++LoopBuffer::inRange(Addr target, Addr fetch_pc)
++{
++    assert(table.count(target));
++    auto end_pc = table[target].branchPC;
++    return fetch_pc >= target && fetch_pc <= end_pc;
++}
++
+ LoopBuffer *
+ LoopBufferParams::create()
+ {
+diff --git a/src/cpu/o3/loop_buffer.hh b/src/cpu/o3/loop_buffer.hh
+index 4116312c8..bfb754cbd 100644
+--- a/src/cpu/o3/loop_buffer.hh
++++ b/src/cpu/o3/loop_buffer.hh
+@@ -110,6 +110,8 @@ class LoopBuffer : public SimObject
+     void recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size);
+ 
+     static bool isBackward(Addr branch_pc, Addr target_pc);
++
++    bool inRange(Addr target, Addr fetch_pc);
+ };
+ 
+ #endif //__CPU_O3_LOOPBUFFER_HH__
+-- 
+2.29.2
+

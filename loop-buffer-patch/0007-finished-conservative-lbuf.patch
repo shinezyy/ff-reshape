@@ -1,0 +1,63 @@
+From 5f63ad7a9c2751cb02dba70088f13bbf6446ea91 Mon Sep 17 00:00:00 2001
+From: Zhou Yaoyang <shinezyy@qq.com>
+Date: Mon, 6 Jul 2020 11:19:51 +0800
+Subject: [PATCH 07/13] finished conservative lbuf
+
+Change-Id: I1961723c5b594b84b1edf687941e2f937f3c3393
+---
+ src/cpu/o3/fetch_impl.hh  | 4 ++--
+ src/cpu/o3/loop_buffer.cc | 7 +++++--
+ 2 files changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/src/cpu/o3/fetch_impl.hh b/src/cpu/o3/fetch_impl.hh
+index 78b8f8ff7..d41f72b23 100644
+--- a/src/cpu/o3/fetch_impl.hh
++++ b/src/cpu/o3/fetch_impl.hh
+@@ -584,7 +584,7 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
+     predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
+                                         nextPC, tid);
+ 
+-    if (lbuf->loopFiltering) {
++    if (lbuf->loopFiltering && predict_taken) {
+         lbuf->probe(branch_pc, nextPC.pc());
+     }
+ 
+@@ -1325,7 +1325,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+                 blkOffset = (fetchAddr - lbuf_start_pc) / instSize;
+ 
+                 DPRINTF(LoopBuffer,
+-                        "Fetching from loop buffer: line 0x%x,"
++                        "Fetching from loop buffer: line %p,"
+                         " block start: 0x%x, end: 0x%x"
+                         " fetching: 0x%x, blkOffset: %u, instSize: %u\n",
+                         (void *)foundLine,
+diff --git a/src/cpu/o3/loop_buffer.cc b/src/cpu/o3/loop_buffer.cc
+index ab3b7298e..036e0b79a 100644
+--- a/src/cpu/o3/loop_buffer.cc
++++ b/src/cpu/o3/loop_buffer.cc
+@@ -181,6 +181,7 @@ LoopBuffer::probe(Addr branch_pc, Addr target_pc)
+                     txn.state = Recording;
+                     // buffer size?
+                     processNewControl(branch_pc, target_pc);
++                    pendingTarget = target_pc;
+                     txn.expectedPC = target_pc;
+                     txn.offset = 0;
+                 }
+@@ -227,10 +228,12 @@ LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
+         txn.count = 0;
+         txn.offset = 0;
+         txn.expectedPC = 0;
++        return;
+     }
+ 
+-    DPRINTF(LoopBuffer, "0x%x|__>0x%x: recording 0x%x\n",
+-            txn.branchPC, txn.targetPC, pc);
++    DPRINTF(LoopBuffer, "0x%x|__>0x%x: recording 0x%x to 0x%x (offset: %u)\n",
++            txn.branchPC, txn.targetPC, pc,
++            getPendingEntryTarget(), txn.offset);
+     memcpy(getPendingEntryPtr() + txn.offset,
+             building_inst, inst_size);
+ 
+-- 
+2.29.2
+

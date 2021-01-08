@@ -1,0 +1,198 @@
+From 72fb8ccb98ade951faa61d11ff8f20b24a639386 Mon Sep 17 00:00:00 2001
+From: Zhou Yaoyang <shinezyy@qq.com>
+Date: Thu, 25 Jun 2020 16:48:53 +0800
+Subject: [PATCH 02/13] fix fetching only one inst for a line
+
+Change-Id: I91620d7e56cd2f73f21c3d51c4cd707e9efb448a
+---
+ src/cpu/o3/LoopBuffer.py  |  3 ++-
+ src/cpu/o3/SConscript     |  2 ++
+ src/cpu/o3/fetch_impl.hh  | 35 +++++++++++++++++++++++------------
+ src/cpu/o3/loop_buffer.cc | 17 ++++++++++++++++-
+ src/cpu/o3/loop_buffer.hh |  2 ++
+ 5 files changed, 45 insertions(+), 14 deletions(-)
+
+diff --git a/src/cpu/o3/LoopBuffer.py b/src/cpu/o3/LoopBuffer.py
+index 5daf79d98..be22e9d92 100644
+--- a/src/cpu/o3/LoopBuffer.py
++++ b/src/cpu/o3/LoopBuffer.py
+@@ -6,5 +6,6 @@ class LoopBuffer(SimObject):
+     cxx_class = 'LoopBuffer'
+     cxx_header = 'cpu/o3/loop_buffer.hh'
+ 
+-    numEntries = Param.Unsigned(32, "Number of entries")
++    numEntries = Param.Unsigned(64, "Number of entries")
+     entrySize = Param.Unsigned(64, "Size of entries in bytes")
++    enable = Param.Bool(True, "Enable")
+diff --git a/src/cpu/o3/SConscript b/src/cpu/o3/SConscript
+index b029051c4..c8e14b7ec 100755
+--- a/src/cpu/o3/SConscript
++++ b/src/cpu/o3/SConscript
+@@ -77,6 +77,8 @@ if 'O3CPU' in env['CPU_MODELS']:
+     DebugFlag('BranchResolve')
+     DebugFlag('LoopBuffer')
+ 
++    DebugFlag('LoopBufferStack')
++
+     CompoundFlag('O3CPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
+         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',
+         'DynInst', 'O3CPU', 'Activity', 'Scoreboard', 'Writeback', 'DLarge'])
+diff --git a/src/cpu/o3/fetch_impl.hh b/src/cpu/o3/fetch_impl.hh
+index 5813bb437..e07396a65 100644
+--- a/src/cpu/o3/fetch_impl.hh
++++ b/src/cpu/o3/fetch_impl.hh
+@@ -401,7 +401,7 @@ DefaultFetch<Impl>::processCacheCompletion(PacketPtr pkt)
+     memcpy(fetchBuffer[tid], pkt->getConstPtr<uint8_t>(), fetchBufferSize);
+     fetchBufferValid[tid] = true;
+ 
+-    if (lbuf->hasPendingRecordTxn() &&
++    if (lbuf->enable && lbuf->hasPendingRecordTxn() &&
+             (lbuf->align(lbuf->getPendingEntryTarget())) == fetchBufferPC[tid]) {
+         memcpy(lbuf->getPendingEntryPtr(), pkt->getConstPtr<uint8_t>(),
+                 lbuf->entrySize);
+@@ -1188,11 +1188,9 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+ 
+     bool inRom = isRomMicroPC(thisPC.microPC());
+ 
+-    foundLine = lbuf->getBufferedLine(fetchAddr);
++    foundLine = lbuf->enable ? lbuf->getBufferedLine(fetchAddr) : nullptr;
+ 
+-    bool used_loopbuffer = foundLine != nullptr;
+-
+-    Addr lbuf_start_pc = foundLine ? lbuf->align(fetchAddr) : 0;
++    unsigned used_loopbuffer = foundLine != nullptr;
+ 
+     // If returning from the delay of a cache miss, then update the status
+     // to running, otherwise do the cache access.  Possibly move this up
+@@ -1268,7 +1266,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+     const unsigned numInsts = fetchBufferSize / instSize;
+     unsigned blkOffset =
+         (fetchAddr - fetchBufferPC[tid]) / instSize;
+-
++    Addr lbuf_start_pc = 0;
+     // Loop through instruction memory from the cache.
+     // Keep issuing while fetchWidth is available and branch is not
+     // predicted taken
+@@ -1287,7 +1285,16 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+             // If buffer is no longer valid or fetchAddr has moved to point
+             // to the next cache block then start fetch from icache.
+             if (foundLine) {
+-                fetchFromLoopBuffer++;
++
++                Addr new_lbuf_start_pc = foundLine ? lbuf->align(fetchAddr) : 0;
++
++                if (!lbuf_start_pc) {
++                    lbuf_start_pc = new_lbuf_start_pc;
++
++                } else if (lbuf_start_pc != new_lbuf_start_pc) {
++                    break;
++                }
++
+                 blkOffset = (fetchAddr - lbuf_start_pc) / instSize;
+                 unsigned lbuf_entry_insts = lbuf->entrySize / instSize;
+                 cacheInsts = reinterpret_cast<TheISA::MachInst *>(foundLine);
+@@ -1369,9 +1376,11 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+ 
+             // If we're branching after this instruction, quit fetching
+             // from the same block.
+-            predictedBranch |= thisPC.branching();
+-            predictedBranch |=
++
++            bool this_is_branch = thisPC.branching() ||
+                 lookupAndUpdateNextPC(instruction, nextPC);
++            predictedBranch |= this_is_branch;
++
+ 
+             if (predictedBranch) {
+                 // predicted backward branch
+@@ -1379,7 +1388,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+             }
+ 
+             Addr npc = nextPC.instAddr();
+-            if (predictedBranch && thisPC.instAddr() > npc) {
++            if (lbuf->enable && predictedBranch && thisPC.instAddr() > npc) {
+                 DPRINTF(Fetch, "Backward branch detected with PC = %s\n", thisPC);
+ 
+                 foundLine = lbuf->getBufferedLine(npc);
+@@ -1388,12 +1397,14 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+                     // mark a Txn
+                     lbuf->processNewControl(npc);
+                 } else {
+-                    lbuf->updateControl(npc);
++                    if (this_is_branch) {
++                        lbuf->updateControl(npc);
++                    }
+ 
+                     if (used_loopbuffer) {
+                         foundLine = nullptr; // port limitation -> cannot read anymore
+                     } else {
+-                        used_loopbuffer = true;
++                        used_loopbuffer += 1;
+                     }
+                 }
+             }
+diff --git a/src/cpu/o3/loop_buffer.cc b/src/cpu/o3/loop_buffer.cc
+index fa196452b..6c833736a 100644
+--- a/src/cpu/o3/loop_buffer.cc
++++ b/src/cpu/o3/loop_buffer.cc
+@@ -1,4 +1,6 @@
++
+ #include "cpu/o3/loop_buffer.hh"
++#include "debug/LoopBufferStack.hh"
+ 
+ LoopBuffer::LoopBuffer(LoopBufferParams *params)
+     :
+@@ -6,7 +8,8 @@ LoopBuffer::LoopBuffer(LoopBufferParams *params)
+         numEntries(params->numEntries),
+         _name("LoopBuffer"),
+         entrySize(params->entrySize),
+-        mask(~(entrySize - 1))
++        mask(~(entrySize - 1)),
++        enable(params->enable)
+ {
+     assert(numEntries >= 2 * evictRange);
+ }
+@@ -30,8 +33,18 @@ LoopBuffer::processNewControl(Addr target)
+ 
+     rank.emplace_back(table.find(target));
+ 
++    if (Debug::LoopBufferStack) {
++
++        DPRINTF(LoopBufferStack, "Inserted PC: 0x%x\n", target);
++        for (const auto &ele: rank) {
++            DPRINTFR(LoopBufferStack, "PC: 0x%x, used: %u\n",
++                    ele->first, ele->second.used);
++        }
++    }
++
+     if (table.size() > numEntries) {
+         auto evicted = random_mt.random<unsigned>(1, 1 + evictRange);
++        DPRINTF(LoopBufferStack, "Evicting -%u\n", evicted - 1);
+         OrderRIt it = rank.rbegin(); // pointed to newly inserted
+         std::advance(it, evicted);
+ 
+@@ -72,6 +85,8 @@ LoopBuffer::updateControl(Addr target)
+         assert(ele_pos != e);
+ 
+         rank.splice(insert_pos, rank, ele_pos, std::next(ele_pos));
++        // rank.insert(insert_pos, *ele_pos);
++        // rank.erase(ele_pos);
+     }
+ 
+     assert(rank.size() == table.size());
+diff --git a/src/cpu/o3/loop_buffer.hh b/src/cpu/o3/loop_buffer.hh
+index 5593bae83..a301c46a2 100644
+--- a/src/cpu/o3/loop_buffer.hh
++++ b/src/cpu/o3/loop_buffer.hh
+@@ -61,6 +61,8 @@ class LoopBuffer : public SimObject
+ 
+     const unsigned evictRange{10};
+ 
++    const bool enable;
++
+     void processNewControl(Addr target);
+ 
+     void updateControl(Addr target);
+-- 
+2.29.2
+

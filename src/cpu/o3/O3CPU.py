@@ -1,4 +1,4 @@
-# Copyright (c) 2016 ARM Limited
+# Copyright (c) 2016, 2019 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -49,6 +49,15 @@ from O3Checker import O3Checker
 from BranchPredictor import *
 from BranchTrace import *
 from LoopBuffer import *
+
+class FetchPolicy(ScopedEnum):
+    vals = [ 'SingleThread', 'RoundRobin', 'Branch', 'IQCount', 'LSQCount' ]
+
+class SMTQueuePolicy(ScopedEnum):
+    vals = [ 'Dynamic', 'Partitioned', 'Threshold' ]
+
+class CommitPolicy(ScopedEnum):
+    vals = [ 'Aggressive', 'RoundRobin', 'OldestReady' ]
 
 class DerivO3CPU(BaseCPU):
     type = 'DerivO3CPU'
@@ -155,29 +164,22 @@ class DerivO3CPU(BaseCPU):
     numROBEntries = Param.Unsigned(224, "Number of reorder buffer entries")
 
     smtNumFetchingThreads = Param.Unsigned(1, "SMT Number of Fetching Threads")
-    smtFetchPolicy = Param.String('SingleThread', "SMT Fetch policy")
-    smtLSQPolicy    = Param.String('Partitioned', "SMT LSQ Sharing Policy")
+    smtFetchPolicy = Param.FetchPolicy('SingleThread', "SMT Fetch policy")
+    smtLSQPolicy    = Param.SMTQueuePolicy('Partitioned',
+                                           "SMT LSQ Sharing Policy")
     smtLSQThreshold = Param.Int(100, "SMT LSQ Threshold Sharing Parameter")
-    smtIQPolicy    = Param.String('Partitioned', "SMT IQ Sharing Policy")
+    smtIQPolicy    = Param.SMTQueuePolicy('Partitioned',
+                                          "SMT IQ Sharing Policy")
     smtIQThreshold = Param.Int(100, "SMT IQ Threshold Sharing Parameter")
-    smtROBPolicy   = Param.String('Partitioned', "SMT ROB Sharing Policy")
+    smtROBPolicy   = Param.SMTQueuePolicy('Partitioned',
+                                          "SMT ROB Sharing Policy")
     smtROBThreshold = Param.Int(100, "SMT ROB Threshold Sharing Parameter")
-    smtCommitPolicy = Param.String('RoundRobin', "SMT Commit Policy")
+    smtCommitPolicy = Param.CommitPolicy('RoundRobin', "SMT Commit Policy")
 
     #branchPred = Param.BranchPredictor(TournamentBP(numThreads =
     #                                                   Parent.numThreads),
-    #branchPred = Param.BranchPredictor(LTAGE(numThreads =
-    #                                                   Parent.numThreads),
-    #branchPred = Param.BranchPredictor(PerceptronLocalBP(numThreads =
-    #                                                  Parent.numThreads),
-    branchPred = Param.BranchPredictor(MyPerceptron(numThreads =
+    branchPred = Param.BranchPredictor(LTAGE(numThreads =
                                                        Parent.numThreads),
-    #branchPred = Param.BranchPredictor(PathPerceptron(numThreads =
-    #                                                    Parent.numThreads),
-    #branchPred = Param.BranchPredictor(Perceptron(numThreads =
-    #                                                    Parent.numThreads),
-    #branchPred = Param.BranchPredictor(LocalBP(numThreads =
-    #                                                   Parent.numThreads),
                                        "Branch Predictor")
     loopBuffer = Param.LoopBuffer(LoopBuffer(), "Loopo Buffer")
     needsTSO = Param.Bool(buildEnv['TARGET_ISA'] == 'x86',

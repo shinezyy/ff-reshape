@@ -1,0 +1,98 @@
+From cf5c72dde6de2ba122e0b2da8139afacfc6998c0 Mon Sep 17 00:00:00 2001
+From: Zhou Yaoyang <shinezyy@qq.com>
+Date: Fri, 26 Jun 2020 15:13:54 +0800
+Subject: [PATCH 03/13] arch-riscv: fixed RVC false "branching"
+
+Change-Id: Id4dd4b4334f5fa335e2f06755e354a700e763627
+---
+ src/arch/riscv/decoder.cc |  2 ++
+ src/cpu/o3/commit_impl.hh |  7 ++++++-
+ src/cpu/o3/fetch_impl.hh  | 17 +++++++++++++----
+ 3 files changed, 21 insertions(+), 5 deletions(-)
+
+diff --git a/src/arch/riscv/decoder.cc b/src/arch/riscv/decoder.cc
+index 41a52020e..41a31a7e5 100644
+--- a/src/arch/riscv/decoder.cc
++++ b/src/arch/riscv/decoder.cc
+@@ -101,8 +101,10 @@ Decoder::decode(RiscvISA::PCState &nextPC)
+ 
+     if (compressed(emi)) {
+         nextPC.npc(nextPC.instAddr() + sizeof(MachInst) / 2);
++        nextPC.compressed(true);
+     } else {
+         nextPC.npc(nextPC.instAddr() + sizeof(MachInst));
++        nextPC.compressed(false);
+     }
+ 
+     return decode(emi, nextPC.instAddr());
+diff --git a/src/cpu/o3/commit_impl.hh b/src/cpu/o3/commit_impl.hh
+index 7a5fb5ac6..55d9a4b70 100644
+--- a/src/cpu/o3/commit_impl.hh
++++ b/src/cpu/o3/commit_impl.hh
+@@ -1311,8 +1311,13 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
+     if (head_inst->isControl()) {
+         TheISA::PCState tempPC = head_inst->pcState();
+         TheISA::advancePC(tempPC, head_inst->staticInst);
++
+         if (Debug::BranchResolve) {
+-            bool taken = head_inst->nextInstAddr() - head_inst->instAddr() != 4;
++            bool taken =
++                head_inst->pcState().compressed() ?
++                head_inst->nextInstAddr() - head_inst->instAddr() != 2:
++                head_inst->nextInstAddr() - head_inst->instAddr() != 4;
++
+             branchTrace->writeRecord(branchCounter++, taken,
+                     head_inst->instAddr(), head_inst->nextInstAddr());
+         }
+diff --git a/src/cpu/o3/fetch_impl.hh b/src/cpu/o3/fetch_impl.hh
+index e07396a65..88c331c62 100644
+--- a/src/cpu/o3/fetch_impl.hh
++++ b/src/cpu/o3/fetch_impl.hh
+@@ -568,7 +568,10 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
+     bool predict_taken;
+ 
+     if (!inst->isControl()) {
++        DPRINTF(Fetch, "Advancing PC from %s", nextPC);
+         TheISA::advancePC(nextPC, inst->staticInst);
++        DPRINTFR(Fetch, " to %s\n", nextPC);
++
+         inst->setPredTarg(nextPC);
+         inst->setPredTaken(false);
+         return false;
+@@ -582,8 +585,9 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
+         DPRINTF(Fetch, "[tid:%i]: [sn:%i]: Branch predicted to be taken to %s.\n",
+                 tid, inst->seqNum, nextPC);
+     } else {
+-        DPRINTF(Fetch, "[tid:%i]: [sn:%i]: Branch predicted to be not taken.\n",
+-                tid, inst->seqNum);
++        DPRINTF(Fetch, "[tid:%i]: [sn:%i]: Branch predicted to be not taken, "
++                "NPC: 0x%s.\n",
++                tid, inst->seqNum, nextPC);
+     }
+ 
+     DPRINTF(Fetch, "[tid:%i]: [sn:%i] Branch predicted to go to %s.\n",
+@@ -1377,14 +1381,19 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+             // If we're branching after this instruction, quit fetching
+             // from the same block.
+ 
++            DPRINTF(Fetch, "Compressed: %i, This PC: 0x%x, NPC: 0x%x\n",
++                    thisPC.compressed(),
++                    thisPC.pc(),
++                    thisPC.npc());
+             bool this_is_branch = thisPC.branching() ||
+                 lookupAndUpdateNextPC(instruction, nextPC);
+             predictedBranch |= this_is_branch;
+ 
+ 
+-            if (predictedBranch) {
++            if (this_is_branch) {
+                 // predicted backward branch
+-                DPRINTF(Fetch, "Branch detected with PC = %s\n", thisPC);
++                DPRINTF(Fetch, "Branch detected with PC : 0x%x => 0x%x\n",
++                        cpc, npc);
+             }
+ 
+             Addr npc = nextPC.instAddr();
+-- 
+2.29.2
+

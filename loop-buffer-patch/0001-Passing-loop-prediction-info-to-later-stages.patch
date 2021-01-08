@@ -1,0 +1,208 @@
+From 7d7dde5f238b7874a697ab5ed0c6b4846aeb0cc1 Mon Sep 17 00:00:00 2001
+From: Zhou Yaoyang <shinezyy@qq.com>
+Date: Thu, 12 Nov 2020 16:50:33 +0800
+Subject: [PATCH] Passing loop prediction info to later stages
+
+Change-Id: Id62c7e57176ccccf195d61e7cb29ddfd7ce9aba9
+---
+ src/cpu/forwardflow/dyn_inst.hh   |  3 +++
+ src/cpu/forwardflow/fetch_impl.hh |  3 +++
+ src/cpu/pred/bpred_unit.cc        |  4 ++++
+ src/cpu/pred/bpred_unit.hh        |  7 +++++++
+ src/cpu/pred/loop_info.hh         | 19 +++++++++++++++++++
+ src/cpu/pred/ltage.cc             | 19 ++++++++++++++++++-
+ src/cpu/pred/ltage.hh             |  8 ++++++++
+ 7 files changed, 62 insertions(+), 1 deletion(-)
+ create mode 100644 src/cpu/pred/loop_info.hh
+
+diff --git a/src/cpu/forwardflow/dyn_inst.hh b/src/cpu/forwardflow/dyn_inst.hh
+index c46a94712..02e58510e 100644
+--- a/src/cpu/forwardflow/dyn_inst.hh
++++ b/src/cpu/forwardflow/dyn_inst.hh
+@@ -53,6 +53,7 @@
+ #include "cpu/forwardflow/cpu.hh"
+ #include "cpu/forwardflow/isa_specific.hh"
+ #include "cpu/inst_seq.hh"
++#include "cpu/pred/loop_info.hh"
+ #include "cpu/pred/mem_dep_pred.hh"
+ #include "cpu/reg_class.hh"
+ #include "debug/FFExec.hh"
+@@ -520,6 +521,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
+ 
+     std::unique_ptr<MemPredHistory> memPredHistory;
+ 
++    std::unique_ptr<LoopInfo> loopInfo{};
++
+     bool loadVerified{false};
+     bool loadVerifying{false};
+ 
+diff --git a/src/cpu/forwardflow/fetch_impl.hh b/src/cpu/forwardflow/fetch_impl.hh
+index 7a307f4d8..88127aefb 100644
+--- a/src/cpu/forwardflow/fetch_impl.hh
++++ b/src/cpu/forwardflow/fetch_impl.hh
+@@ -586,6 +586,9 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
+     Addr branch_pc = nextPC.pc();
+     predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
+                                         nextPC, tid);
++    if (branchPred->canPredictLoop()){
++        inst->loopInfo = branchPred->moveLastLoopInfo();
++    }
+ 
+     if (lbuf->enable) {
+         lbuf->probe(branch_pc, nextPC.pc(), predict_taken);
+diff --git a/src/cpu/pred/bpred_unit.cc b/src/cpu/pred/bpred_unit.cc
+index 2b97a4d3e..772536745 100644
+--- a/src/cpu/pred/bpred_unit.cc
++++ b/src/cpu/pred/bpred_unit.cc
+@@ -535,3 +535,7 @@ BPredUnit::getLastCallsite(ThreadID tid)
+     return rasTop.pc();
+ }
+ 
++std::unique_ptr<LoopInfo> BPredUnit::moveLastLoopInfo() {
++    return nullptr;
++}
++
+diff --git a/src/cpu/pred/bpred_unit.hh b/src/cpu/pred/bpred_unit.hh
+index 13cb3adb7..7a01a9810 100644
+--- a/src/cpu/pred/bpred_unit.hh
++++ b/src/cpu/pred/bpred_unit.hh
+@@ -55,6 +55,7 @@
+ #include "base/types.hh"
+ #include "cpu/pred/btb.hh"
+ #include "cpu/pred/indirect.hh"
++#include "cpu/pred/loop_info.hh"
+ #include "cpu/pred/ras.hh"
+ #include "cpu/inst_seq.hh"
+ #include "cpu/static_inst.hh"
+@@ -212,6 +213,12 @@ class BPredUnit : public SimObject
+         return false;
+     }
+ 
++    virtual bool canPredictLoop() {
++        return false;
++    }
++
++    virtual std::unique_ptr<LoopInfo> moveLastLoopInfo();
++
+   private:
+     struct PredictorHistory {
+         /**
+diff --git a/src/cpu/pred/loop_info.hh b/src/cpu/pred/loop_info.hh
+new file mode 100644
+index 000000000..de8b1e2aa
+--- /dev/null
++++ b/src/cpu/pred/loop_info.hh
+@@ -0,0 +1,19 @@
++//
++// Created by zyy on 11/9/20.
++//
++
++#ifndef __GEM5_LOOP_INFO_HH__
++#define __GEM5_LOOP_INFO_HH__
++
++#include <base/types.hh>
++
++struct LoopInfo
++{
++    bool valid;
++    unsigned loopSize;
++    int restIterations;
++    Addr loopStart;
++    Addr loopEnd;
++};
++
++#endif //__GEM5_LOOP_INFO_HH__
+diff --git a/src/cpu/pred/ltage.cc b/src/cpu/pred/ltage.cc
+index 63fca3313..fd320c293 100644
+--- a/src/cpu/pred/ltage.cc
++++ b/src/cpu/pred/ltage.cc
+@@ -59,7 +59,8 @@ LTAGE::LTAGE(const LTAGEParams *params)
+     minHist(params->minHist),
+     maxHist(params->maxHist),
+     minTagWidth(params->minTagWidth),
+-    threadHistory(params->numThreads)
++    threadHistory(params->numThreads),
++    lastControlLoopInfo(nullptr)
+ {
+     assert(params->histBufferSize > params->maxHist * 2);
+     useAltPredForNewlyAllocated = 0;
+@@ -300,6 +301,14 @@ LTAGE::getLoop(Addr pc, BranchInfo* bi) const
+         if (ltable[bi->loopIndex + i].tag == bi->loopTag) {
+             bi->loopHit = i;
+             bi->loopPredValid = (ltable[bi->loopIndex + i].confidence >= 3);
++
++            lastControlLoopInfo->valid = bi->loopPredValid;
++            if (bi->loopPredValid) {
++                lastControlLoopInfo->loopEnd = pc;
++                lastControlLoopInfo->restIterations =
++                        ltable[bi->loopIndex + i].numIter - ltable[bi->loopIndex + i].currentIterSpec;
++            }
++
+             bi->currentIter = ltable[bi->loopIndex + i].currentIterSpec;
+             if (ltable[bi->loopIndex + i].currentIterSpec + 1 ==
+                 ltable[bi->loopIndex + i].numIter) {
+@@ -458,6 +467,7 @@ bool
+ LTAGE::predict(ThreadID tid, Addr branch_pc, bool cond_branch, void* &b)
+ {
+     BranchInfo *bi = new BranchInfo(nHistoryTables+1);
++    lastControlLoopInfo = new LoopInfo();
+     b = (void*)(bi);
+     Addr pc = branch_pc;
+     bool pred_taken = true;
+@@ -794,6 +804,13 @@ LTAGE::uncondBranch(ThreadID tid, Addr br_pc, void* &bp_history)
+            &threadHistory[tid].globalHistory[threadHistory[tid].ptGhist]);
+ }
+ 
++std::unique_ptr<LoopInfo> LTAGE::moveLastLoopInfo() {
++    DPRINTF(LTage, "Getting loop info\n");
++    auto ptr = lastControlLoopInfo;
++    lastControlLoopInfo = nullptr;
++    return std::unique_ptr<LoopInfo>(ptr);
++}
++
+ LTAGE*
+ LTAGEParams::create()
+ {
+diff --git a/src/cpu/pred/ltage.hh b/src/cpu/pred/ltage.hh
+index a810fb5fd..8c3a4af93 100644
+--- a/src/cpu/pred/ltage.hh
++++ b/src/cpu/pred/ltage.hh
+@@ -56,6 +56,7 @@
+ 
+ #include "base/types.hh"
+ #include "cpu/pred/bpred_unit.hh"
++#include "cpu/pred/loop_info.hh"
+ #include "params/LTAGE.hh"
+ 
+ class LTAGE: public BPredUnit
+@@ -72,6 +73,10 @@ class LTAGE: public BPredUnit
+     void squash(ThreadID tid, void *bp_history) override;
+     unsigned getGHR(ThreadID tid, void *bp_history) const override;
+ 
++    bool canPredictLoop() override { return true; }
++
++    std::unique_ptr<LoopInfo> moveLastLoopInfo() override;
++
+   private:
+     // Prediction Structures
+     // Loop Predictor Entry
+@@ -345,6 +350,7 @@ class LTAGE: public BPredUnit
+      */
+     void specLoopUpdate(Addr pc, bool taken, BranchInfo* bi);
+ 
++
+     const unsigned logSizeBiMP;
+     const unsigned logRatioBiModalHystEntries;
+     const unsigned logSizeTagTables;
+@@ -396,6 +402,8 @@ class LTAGE: public BPredUnit
+     int8_t useAltPredForNewlyAllocated;
+     int tCounter;
+     int logTick;
++
++    LoopInfo *lastControlLoopInfo;
+ };
+ 
+ #endif // __CPU_PRED_LTAGE
+-- 
+2.29.2
+

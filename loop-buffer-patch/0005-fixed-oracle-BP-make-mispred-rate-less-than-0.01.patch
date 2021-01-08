@@ -1,0 +1,56 @@
+From 1a85c59b8e7580b89ba9d38fe86b613280464178 Mon Sep 17 00:00:00 2001
+From: Zhou Yaoyang <shinezyy@qq.com>
+Date: Mon, 29 Jun 2020 17:08:39 +0800
+Subject: [PATCH 05/13] fixed oracle BP; make mispred rate less than 0.01%
+
+Change-Id: Ie683dbe4e36675305e923eb105acb95f07c3ca49
+---
+ src/cpu/pred/oracle.cc | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/src/cpu/pred/oracle.cc b/src/cpu/pred/oracle.cc
+index fa53008be..30ded4dc6 100644
+--- a/src/cpu/pred/oracle.cc
++++ b/src/cpu/pred/oracle.cc
+@@ -112,6 +112,10 @@ OracleBP::update(ThreadID tid, Addr branch_addr, bool taken, void *bp_history,
+                     "pred: %i, executed: %i\n",
+                     branch_addr,
+                     history_state->predTaken, taken);
++            DPRINTF(OracleBP, "Predicted direction is overridden unexpectedly! @0x%x:"
++                    "pred: %i, executed: %i\n",
++                    branch_addr,
++                    history_state->predTaken, taken);
+         }
+ 
+         delete history_state;
+@@ -180,7 +184,13 @@ void OracleBP::syncFront() {
+ }
+ 
+ bool OracleBP::getFrontDirection() {
+-    return orderedOracleEntries.front().taken;
++    DPRINTF(OracleBP, "Current front direction: %i, front branch addr: 0x%x, "
++            "front target addr: 0x%x\n",
++            frontPointer->taken,
++            frontPointer->branchAddr,
++            frontPointer->targetAddr
++           );
++    return frontPointer->taken;
+ }
+ 
+ void OracleBP::advanceFront() {
+@@ -200,6 +210,12 @@ void OracleBP::readNextBranch() {
+ }
+ 
+ Addr OracleBP::getFrontTarget() {
++    DPRINTF(OracleBP, "Current front direction: %i, front branch addr: 0x%x, "
++            "front target addr: 0x%x\n",
++            frontPointer->taken,
++            frontPointer->branchAddr,
++            frontPointer->targetAddr
++           );
+     return frontPointer->targetAddr;
+ }
+ 
+-- 
+2.29.2
+

@@ -1,0 +1,648 @@
+From 13e6395224b226b5c39cc6491c5b007c0eba1f7a Mon Sep 17 00:00:00 2001
+From: Zhou Yaoyang <shinezyy@qq.com>
+Date: Sun, 12 Jul 2020 22:56:08 +0800
+Subject: [PATCH 11/13] lbuf with fjump working now
+
+Change-Id: Id7c7908672f886650e6ad0fa39a76f6b1bb70812
+---
+ src/cpu/o3/fetch.hh       |   4 -
+ src/cpu/o3/fetch_impl.hh  | 203 ++++++++++++--------------------------
+ src/cpu/o3/loop_buffer.cc | 164 ++++++++++++++++++++++++++++--
+ src/cpu/o3/loop_buffer.hh |  36 +++++--
+ 4 files changed, 249 insertions(+), 158 deletions(-)
+
+diff --git a/src/cpu/o3/fetch.hh b/src/cpu/o3/fetch.hh
+index 5d733392b..7bab84d83 100644
+--- a/src/cpu/o3/fetch.hh
++++ b/src/cpu/o3/fetch.hh
+@@ -580,10 +580,6 @@ class DefaultFetch
+ 
+     LoopBuffer *lbuf;
+ 
+-    uint8_t *foundLine;
+-
+-    Addr lbufStartPC{};
+-
+     enum FetchSource {
+         CacheLine = 0,
+         LoopBuf
+diff --git a/src/cpu/o3/fetch_impl.hh b/src/cpu/o3/fetch_impl.hh
+index 299ec1856..5579719f2 100644
+--- a/src/cpu/o3/fetch_impl.hh
++++ b/src/cpu/o3/fetch_impl.hh
+@@ -95,8 +95,7 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivO3CPUParams *params)
+       fetchQueueSize(params->fetchQueueSize),
+       numThreads(params->numThreads),
+       numFetchingThreads(params->smtNumFetchingThreads),
+-      finishTranslationEvent(this),
+-      foundLine(nullptr)
++      finishTranslationEvent(this)
+ {
+     if (numThreads > Impl::MaxThreads)
+         fatal("numThreads (%d) is larger than compiled limit (%d),\n"
+@@ -402,15 +401,6 @@ DefaultFetch<Impl>::processCacheCompletion(PacketPtr pkt)
+     memcpy(fetchBuffer[tid], pkt->getConstPtr<uint8_t>(), fetchBufferSize);
+     fetchBufferValid[tid] = true;
+ 
+-    if (lbuf->enable && !lbuf->loopFiltering &&
+-            lbuf->hasPendingRecordTxn() &&
+-            (lbuf->align(lbuf->getPendingEntryTarget())) == fetchBufferPC[tid]) {
+-        memcpy(lbuf->getPendingEntryPtr(), pkt->getConstPtr<uint8_t>(),
+-                lbuf->entrySize);
+-        lbuf->setFetched(lbuf->getPendingEntryTarget());
+-        lbuf->clearPending();
+-    }
+-
+     // Wake up the CPU (if it went to sleep and was waiting on
+     // this completion event).
+     cpu->wakeCPU();
+@@ -584,9 +574,7 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
+     predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
+                                         nextPC, tid);
+ 
+-    if (lbuf->loopFiltering) {
+-        lbuf->probe(branch_pc, nextPC.pc(), predict_taken);
+-    }
++    lbuf->probe(branch_pc, nextPC.pc(), predict_taken);
+ 
+     if (predict_taken) {
+         DPRINTF(Fetch, "[tid:%i]: [sn:%i]: Branch predicted to be taken to %s.\n",
+@@ -818,6 +806,8 @@ DefaultFetch<Impl>::doSquash(const TheISA::PCState &newPC,
+     delayedCommit[tid] = true;
+ 
+     ++fetchSquashCycles;
++
++    fetchSource = CacheLine;
+ }
+ 
+ template<class Impl>
+@@ -1199,22 +1189,15 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+ 
+     bool inRom = isRomMicroPC(thisPC.microPC());
+ 
+-    Addr loop_branch_pc = 0;
+-    // if (lbuf->enable && lbufStartPC && lbuf->inRange(lbufStartPC, fetchAddr)) {
+     if (lbuf->enable && fetchSource == LoopBuf &&
+-            lbuf->inRange(lbufStartPC, fetchAddr)) {
+-        loop_branch_pc = lbuf->getBufferedLineBranchPC(lbufStartPC);
+-        // leave foundLine without updating
+-    } else {
+-        if (lbuf->enable && lbuf->getBufferedLine(fetchAddr)) {
+-            fetchSource = LoopBuf;
+-            foundLine = lbuf->getBufferedLine(fetchAddr);
+-            loop_branch_pc = lbuf->getBufferedLineBranchPC(fetchAddr);
+-            assert(loop_branch_pc);
++            lbuf->canContinueOnPC(fetchAddr)) {
++        // pass
+ 
+-        } else {
+-            fetchSource = CacheLine;
+-        }
++    } else if (lbuf->enable && lbuf->canProvide(fetchAddr)) {
++        fetchSource = LoopBuf;
++
++    } else {
++        fetchSource = CacheLine;
+     }
+ 
+     // If returning from the delay of a cache miss, then update the status
+@@ -1225,6 +1208,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+ 
+         fetchStatus[tid] = Running;
+         status_change = true;
++
+     } else if (fetchStatus[tid] == Running) {
+         // Align the fetch PC so its at the start of a fetch buffer segment.
+         Addr fetchBufferBlockPC = bufferAlignPC(fetchAddr, fetchBufferMask);
+@@ -1289,8 +1273,11 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+         reinterpret_cast<TheISA::MachInst *>(fetchBuffer[tid]);
+ 
+     unsigned numInsts = fetchBufferSize / instSize;
+-    unsigned blkOffset =
+-        (fetchAddr - fetchBufferPC[tid]) / instSize;
++    unsigned blkOffset = 0;
++    if (fetchSource == CacheLine) {
++        blkOffset =
++            (fetchAddr - fetchBufferPC[tid]) / instSize;
++    }
+ 
+     // Loop through instruction memory from the cache.
+     // Keep issuing while fetchWidth is available and branch is not
+@@ -1310,65 +1297,43 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+             // If buffer is no longer valid or fetchAddr has moved to point
+             // to the next cache block then start fetch from icache.
+             if (lbuf->enable && fetchSource == LoopBuf) {
+-                // fetchSource is set either before the while loop or at the end of it
+-                if (!lbufStartPC) { // it is set when entering loop buf
+-                    if (lbuf->loopFiltering) {
+-                        lbufStartPC = fetchAddr;
+-                        DPRINTF(LoopBuffer,
+-                                "Fetching from filtered loop buffer "
+-                                "starting from: 0x%x\n", fetchAddr);
+-                    } else {
+-                        lbufStartPC = lbuf->align(fetchAddr);
+-                    }
+-
+-                } else if (!lbuf->inRange(lbufStartPC, fetchAddr)) {
+-                    DPRINTF(LoopBuffer,
+-                            "Fetching from outside of lbuf,"
+-                            "fetchAddr: 0x%x, lbuf start: 0x%x, lbuf end: 0x%x\n",
+-                            fetchAddr, lbufStartPC, loop_branch_pc);
+-                    foundLine = nullptr;
+-                    lbufStartPC = 0;
++                if (!lbuf->canContinueOnPC(fetchAddr)) {
+                     fetchSource = CacheLine;
+                     break;
+                 }
+ 
+-                if (lbufStartPC == fetchAddr) { // is just entering
+-                    blkOffset = 0;
+-
+-                } else {
+-                    blkOffset += instSize;
+-                }
++                uint8_t *found_line = lbuf->getInst(fetchAddr, instSize);
++                assert(found_line);
++                cacheInsts = reinterpret_cast<TheISA::MachInst *>(found_line);
+ 
+                 DPRINTF(LoopBuffer,
+-                        "Fetching from loop buffer: line %p,"
+-                        " block start: 0x%x, end: 0x%x"
+-                        " fetching: 0x%x, blkOffset: %u, instSize: %u\n",
+-                        (void *)foundLine,
+-                        lbufStartPC, loop_branch_pc, fetchAddr, blkOffset, instSize);
+-
+-                unsigned lbuf_entry_insts = lbuf->entrySize / instSize;
+-                cacheInsts = reinterpret_cast<TheISA::MachInst *>(foundLine);
+-                numInsts = lbuf_entry_insts;
++                        "Fetching from loop buffer: fetching: 0x%x\n",
++                        fetchAddr);
+ 
+             } else if (!fetchBufferValid[tid] ||
+                 fetchBufferBlockPC != fetchBufferPC[tid]) {
+                 break;
+             }
+ 
+-            if (blkOffset >= numInsts) {
++            if (fetchSource == CacheLine && blkOffset >= numInsts) {
+                 // We need to process more memory, but we've run out of the
+                 // current block.
+                 break;
+             }
+ 
+-            if (lbuf->loopFiltering) {
++            MachInst inst;
++            if (fetchSource == CacheLine) {
+                 lbuf->recordInst(
+                         reinterpret_cast<uint8_t *>(cacheInsts + blkOffset),
+-                        fetchAddr,
+-                        instSize);
++                        fetchAddr, instSize);
++                inst = TheISA::gtoh(cacheInsts[blkOffset]);
++            } else {
++                lbuf->recordInst(
++                        reinterpret_cast<uint8_t *>(cacheInsts),
++                        fetchAddr, instSize);
++                inst = TheISA::gtoh(cacheInsts[0]);
+             }
+ 
+-            MachInst inst = TheISA::gtoh(cacheInsts[blkOffset]);
+             decoder[tid]->moreBytes(thisPC, fetchAddr, inst);
+ 
+             if (decoder[tid]->needMoreBytes()) {
+@@ -1378,6 +1343,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+             }
+         }
+ 
++        Addr cpc = thisPC.instAddr();
+         // Extract as many instructions and/or microops as we can from
+         // the memory we've processed so far.
+         do {
+@@ -1429,7 +1395,6 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+             }
+ #endif
+ 
+-            Addr cpc = thisPC.instAddr();
+             nextPC = thisPC;
+ 
+             // If we're branching after this instruction, quit fetching
+@@ -1443,74 +1408,11 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+                 lookupAndUpdateNextPC(instruction, nextPC);
+             predictedBranch = this_is_branch;
+ 
+-            Addr npc = nextPC.instAddr();
+-
+             if (this_is_branch) {
+                 // predicted backward branch
+-                DPRINTF(Fetch, "Branch detected with PC : 0x%x => 0x%x\n",
+-                        cpc, npc);
+-            }
+-
+-            if (this_is_branch) {
+-                if (lbuf->enable) {
+-                    if (cpc == loop_branch_pc) {
+-                        // loop back
+-                    } else {
+-                        if (lbuf->isBackward(cpc, npc)) {
+-                            foundLine = lbuf->getBufferedLine(npc);
+-                            lbufStartPC = 0;
+-
+-                            if (!foundLine) {
+-                                fetchSource = CacheLine;
+-                                // mark a Txn
+-                                if (!lbuf->loopFiltering) {
+-                                    lbuf->processNewControl(cpc, npc);
+-                                }
+-                            } else {
+-                                fetchSource = LoopBuf;
+-                                loop_branch_pc = lbuf->getBufferedLineBranchPC(npc);
+-                                assert(loop_branch_pc);
+-
+-                                if (this_is_branch && !lbuf->loopFiltering) {
+-                                    lbuf->updateControl(npc);
+-                                }
+-                            }
+-                        } else if (lbuf->isForward(cpc, npc)) {
+-                            if (fetchSource == LoopBuf &&
+-                                    lbuf->inRange(lbufStartPC, npc)) {
+-                                // a in-loop forward branch
+-                                if (lbuf->expectedForwardBranch.valid &&
+-                                        cpc == lbuf->expectedForwardBranch.pair.branch) {
+-                                    // TODO: let it fetch from here, offset modification
+-                                    // should be changed
+-
+-                                } else {
+-                                    foundLine = nullptr;
+-                                    lbufStartPC = 0;
+-                                    fetchSource = CacheLine;
+-                                    DPRINTF(LoopBuffer,
+-                                            "Fw branch is not expected to taken"
+-                                            " in trace cache\n");
+-                                    break;
+-                                }
+-                            }
+-                        }
+-                    }
+-
+-                } else { // no lbuf
+-                    foundLine = nullptr;
+-                    fetchSource = CacheLine;
+-                }
+-            }
+-
+-            if (lbuf->expectedForwardBranch.valid &&
+-                    cpc == lbuf->expectedForwardBranch.pair.branch &&
+-                    npc != lbuf->expectedForwardBranch.pair.target) {
+-                foundLine = nullptr;
+-                lbufStartPC = 0;
+-                fetchSource = CacheLine;
+-                DPRINTF(LoopBuffer, "Branch does not go as the trace cache\n");
+-                break;
++                DPRINTF(Fetch, "Taken branch detected with PC : 0x%x => 0x%x\n",
++                        thisPC.pc(),
++                        thisPC.npc());
+             }
+ 
+             newMacro |= thisPC.instAddr() != nextPC.instAddr();
+@@ -1519,7 +1421,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+             thisPC = nextPC;
+             inRom = isRomMicroPC(thisPC.microPC());
+ 
+-            if (newMacro) {
++            if (newMacro && fetchSource == CacheLine) {
+                 fetchAddr = thisPC.instAddr() & BaseCPU::PCMask;
+                 blkOffset = (fetchAddr - fetchBufferPC[tid]) / instSize;
+                 pcOffset = 0;
+@@ -1541,9 +1443,32 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+         // Re-evaluate whether the next instruction to fetch is in micro-op ROM
+         // or not.
+         inRom = isRomMicroPC(thisPC.microPC());
++
++        Addr npc = nextPC.instAddr();
++
++        if (lbuf->enable && fetchSource == LoopBuf) {
++            if (!lbuf->canContinueOnNPC(cpc, npc, predictedBranch)) {
++                if (!lbuf->canProvide(npc)) {
++                    fetchSource = CacheLine;
++                    DPRINTF(LoopBuffer, "Will switch to fetch from cache line\n");
++                    break;
++                } else {
++                    DPRINTF(LoopBuffer, "Will switch to Another loop\n");
++                }
++            }
++        } else { // from cache line
++            if (predictedBranch && lbuf->canProvide(npc)) {
++                DPRINTF(LoopBuffer, "Will switch to fetch from lbuf\n");
++                fetchSource = LoopBuf;
++            }
++        }
+     }
+ 
+-    if (predictedBranch) {
++
++    if (fetchSource == LoopBuf) {
++        DPRINTF(Fetch, "[tid:%i]: Done fetching, still in lbuf.\n", tid);
++
++    } else if (predictedBranch) {
+         DPRINTF(Fetch, "[tid:%i]: Done fetching, predicted branch "
+                 "instruction encountered.\n", tid);
+ 
+@@ -1568,7 +1493,9 @@ DefaultFetch<Impl>::fetch(bool &status_change)
+     // a state that would preclude fetching
+     fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
+     Addr fetchBufferBlockPC = bufferAlignPC(fetchAddr, fetchBufferMask);
+-    issuePipelinedIfetch[tid] = fetchBufferBlockPC != fetchBufferPC[tid] &&
++    issuePipelinedIfetch[tid] =
++        fetchSource == CacheLine &&
++        fetchBufferBlockPC != fetchBufferPC[tid] &&
+         fetchStatus[tid] != IcacheWaitResponse &&
+         fetchStatus[tid] != ItlbWait &&
+         fetchStatus[tid] != IcacheWaitRetry &&
+diff --git a/src/cpu/o3/loop_buffer.cc b/src/cpu/o3/loop_buffer.cc
+index 01124e4ef..4a17fa97e 100644
+--- a/src/cpu/o3/loop_buffer.cc
++++ b/src/cpu/o3/loop_buffer.cc
+@@ -1,4 +1,3 @@
+-
+ #include "cpu/o3/loop_buffer.hh"
+ #include "debug/LoopBuffer.hh"
+ #include "debug/LoopBufferStack.hh"
+@@ -15,7 +14,7 @@ LoopBuffer::LoopBuffer(LoopBufferParams *params)
+         maxForwardBranches(params->maxForwardBranches)
+ {
+     assert(numEntries >= 2 * evictRange);
+-    expectedForwardBranch.invalidate();
++    instSupply.invalidate();
+ }
+ 
+ LoopBuffer::~LoopBuffer()
+@@ -140,6 +139,41 @@ LoopBuffer::getBufferedLine(Addr pc)
+     }
+ }
+ 
++void
++LoopBuffer::switchTo(Addr target_pc)
++{
++    instSupply.valid    = true;
++
++    instSupply.buf      = getBufferedLine(target_pc);
++    assert(instSupply.buf);
++    instSupply.offset   = 0;
++
++    instSupply.start    = target_pc;
++    instSupply.end      = getBufferedLineBranchPC(target_pc);
++    DPRINTF(LoopBuffer, "Switch to loop 0x%x|_>0x%x\n",
++            instSupply.end, instSupply.start);
++
++    instSupply.expectedPC = target_pc;
++
++    auto fb_state = table[target_pc].forwardBranchState;
++    instSupply.forwardBranchIndex = 0;
++    if (fb_state->valid) {
++        instSupply.expectedForwardBranch.set(
++                fb_state->forwardBranches[instSupply.forwardBranchIndex]);
++    }
++}
++
++bool
++LoopBuffer::canProvide(Addr pc)
++{
++    if (table.count(pc) && table[pc].valid && table[pc].fetched) {
++        switchTo(pc);
++        return true;
++    } else {
++        return false;
++    }
++}
++
+ void
+ LoopBuffer::setFetched(Addr target)
+ {
+@@ -194,16 +228,22 @@ LoopBuffer::probe(Addr branch_pc, Addr target_pc, bool pred_taken)
+                     txn.offset = 0;
+                 }
+ 
+-            } else if (isBackward(branch_pc, target_pc) &&
++            } else if (pred_taken && isBackward(branch_pc, target_pc) &&
+                     (branch_pc - target_pc) < entrySize) {
+                 txn.reset();
+-                txn.branchPC = branch_pc;
+-                txn.targetPC = target_pc;
+-                txn.state = Observing;
+-                DPRINTF(LoopBuffer, "Switch to 0x%x|__>0x%x: %u\n",
+-                        txn.branchPC, txn.targetPC, txn.count);
++                if (!table.count(target_pc)) {
++                    txn.branchPC = branch_pc;
++                    txn.targetPC = target_pc;
++                    txn.state = Observing;
++                    DPRINTF(LoopBuffer, "Switch to observe 0x%x|__>0x%x: %u\n",
++                            txn.branchPC, txn.targetPC, txn.count);
++                } else {
++                    txn.abort();
++                    DPRINTF(LoopBuffer, "Loop 0x%x|__>? is in current loop, "
++                            "do not support nested loop, abort\n", target_pc);
++                }
+ 
+-            } else if (isForward(branch_pc, target_pc) &&
++            } else if (pred_taken && isForward(branch_pc, target_pc) &&
+                     target_pc < txn.branchPC) { // in-loop forward branch
+                 bool new_f_jump = false;
+                 auto &fb_state = txn.forwardBranchState;
+@@ -310,6 +350,8 @@ LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
+         setFetched(txn.targetPC);
+         clearPending();
+         table[txn.targetPC].branchPC = txn.branchPC;
++        table[txn.targetPC].forwardBranchState = txn.forwardBranchState;
++        txn.forwardBranchState = nullptr;
+         return;
+     }
+     txn.offset += inst_size;
+@@ -321,7 +363,7 @@ LoopBuffer::recordInst(uint8_t *building_inst, Addr pc, unsigned inst_size)
+             pc == fw_branches[fb_state->recordIndex].branch) {
+         txn.expectedPC = fw_branches[fb_state->recordIndex].target;
+         DPRINTF(LoopBuffer, "0x%x|__>0x%x: recording will jump to 0x%x (offset: %u)\n",
+-                txn.branchPC, txn.targetPC, txn.expectedPC);
++                txn.branchPC, txn.targetPC, txn.expectedPC, txn.offset);
+         fb_state->recordIndex++;
+ 
+     } else {
+@@ -359,6 +401,108 @@ LoopBuffer::inRange(Addr target, Addr fetch_pc)
+     return fetch_pc >= target && fetch_pc <= end_pc;
+ }
+ 
++bool
++LoopBuffer::canContinueOnPC(Addr pc)
++{
++    bool cont = pc == instSupply.expectedPC;
++    if (!cont) {
++        instSupply.invalidate();
++    }
++    return cont;
++}
++
++uint8_t*
++LoopBuffer::getInst(Addr pc, unsigned inst_size)
++{
++    assert(pc == instSupply.expectedPC);
++    auto ret = instSupply.buf + instSupply.offset;
++
++    DPRINTF(LoopBuffer, "Supplying with loop 0x%x|_>0x%x offset: %u\n",
++            instSupply.end, instSupply.start, instSupply.offset);
++    instSupply.offset += inst_size;
++
++    auto &efb = instSupply.expectedForwardBranch;
++    if (pc == instSupply.end) {
++        instSupply.expectedPC = instSupply.start;
++        instSupply.offset = 0;
++
++    } else if (efb.valid && efb.pair.branch == pc) {
++        instSupply.expectedPC = efb.pair.target;
++        instSupply.forwardBranchIndex++;
++        auto fb_state = table[instSupply.start].forwardBranchState;
++        if (fb_state->valid &&
++                fb_state->forwardBranches.size() > instSupply.forwardBranchIndex) {
++            // switch to next fb
++            instSupply.expectedForwardBranch.set(
++                    fb_state->forwardBranches[instSupply.forwardBranchIndex]);
++        } else {
++            instSupply.expectedForwardBranch.invalidate();
++        }
++
++    } else {
++        instSupply.expectedPC += inst_size;
++    }
++    return ret;
++}
++
++bool
++LoopBuffer::canContinueOnNPC(Addr cpc, Addr npc, bool is_taken)
++{
++    auto &efb = instSupply.expectedForwardBranch;
++    bool cont;
++    if (is_taken) {
++        if (!instSupply.valid) {
++            cont = false;
++        } else if (cpc == instSupply.end) {
++            // normal loop back
++            cont = true;
++        } else if (isBackward(cpc, npc)) {
++            // do not support loop in loop
++            cont = false;
++        } else if (isForward(cpc, npc)) {
++            if (efb.valid && efb.pair.branch == cpc
++                    && efb.pair.target == npc) {
++                DPRINTF(LoopBuffer, "Forward branch: 0x%x|_>0x%x matched\n",
++                        cpc, npc);
++                cont = true;
++            } else {
++                DPRINTF(LoopBuffer, "Forward branch(T): 0x%x|_>0x%x mismatched"
++                        ", expected(T): 0x%x|_>0x%x\n",
++                        cpc, npc, efb.pair.branch, efb.pair.target);
++                cont = false;
++            }
++
++        } else {
++            panic("Unexpected path\n");
++            cont = false;
++        }
++    } else {
++        if (efb.valid && cpc == efb.pair.branch) {
++            DPRINTF(LoopBuffer, "Forward branch(NT): 0x%x|_>0x%x mismatched"
++                    ", expected(T): 0x%x|_>0x%x\n",
++                    cpc, npc, efb.pair.branch, efb.pair.target);
++            cont = false;
++
++        } else if (cpc == instSupply.end) {
++            cont = false;
++
++        } else {
++            cont = true;
++        }
++    }
++    if (!cont) {
++        instSupply.invalidate();
++    }
++    return cont;
++}
++
++void
++InstSupplyState::invalidate()
++{
++    valid = false;
++    expectedForwardBranch.invalidate();
++}
++
+ LoopBuffer *
+ LoopBufferParams::create()
+ {
+diff --git a/src/cpu/o3/loop_buffer.hh b/src/cpu/o3/loop_buffer.hh
+index d34a7f12b..265898634 100644
+--- a/src/cpu/o3/loop_buffer.hh
++++ b/src/cpu/o3/loop_buffer.hh
+@@ -78,10 +78,8 @@ struct LoopRecordTransaction {
+         count = 0;
+         offset = 0;
+         expectedPC = 0;
+-        if (!forwardBranchState) {
+-            forwardBranchState =
+-                std::make_shared<ForwardBranchState>();
+-        }
++        forwardBranchState =
++            std::make_shared<ForwardBranchState>();
+         forwardBranchState->clear();
+     }
+ 
+@@ -96,6 +94,22 @@ struct LoopEntry {
+     bool fetched{};
+     uint32_t used{};
+     Addr branchPC;
++
++    std::shared_ptr<ForwardBranchState> forwardBranchState;
++};
++
++struct InstSupplyState {
++    bool valid{};
++    Addr start; // target
++    Addr end; // branch
++    unsigned offset;
++    uint8_t *buf;
++    Addr lastPC;
++    Addr expectedPC;
++    ExpectedForwardBranch expectedForwardBranch;
++    unsigned forwardBranchIndex;
++
++    void invalidate();
+ };
+ 
+ class LoopBuffer : public SimObject
+@@ -144,8 +158,6 @@ class LoopBuffer : public SimObject
+ 
+     const unsigned maxForwardBranches;
+ 
+-    ExpectedForwardBranch expectedForwardBranch;
+-
+     void processNewControl(Addr branch_pc, Addr target);
+ 
+     void updateControl(Addr target);
+@@ -179,6 +191,18 @@ class LoopBuffer : public SimObject
+     static bool isForward(Addr branch_pc, Addr target_pc);
+ 
+     bool inRange(Addr target, Addr fetch_pc);
++
++    InstSupplyState instSupply;
++
++    void switchTo(Addr target_pc);
++
++    bool canProvide(Addr pc);
++
++    bool canContinueOnPC(Addr pc);
++
++    bool canContinueOnNPC(Addr cpc, Addr npc, bool is_taken);
++
++    uint8_t* getInst(Addr pc, unsigned inst_size);
+ };
+ 
+ #endif //__CPU_O3_LOOPBUFFER_HH__
+-- 
+2.29.2
+

@@ -1245,14 +1245,14 @@ FullO3CPU<Impl>::verifyMemoryMode() const
 }
 
 template <class Impl>
-TheISA::MiscReg
+RegVal
 FullO3CPU<Impl>::readMiscRegNoEffect(int misc_reg, ThreadID tid) const
 {
     return this->isa[tid]->readMiscRegNoEffect(misc_reg);
 }
 
 template <class Impl>
-TheISA::MiscReg
+RegVal
 FullO3CPU<Impl>::readMiscReg(int misc_reg, ThreadID tid)
 {
     miscRegfileReads++;
@@ -1261,23 +1261,21 @@ FullO3CPU<Impl>::readMiscReg(int misc_reg, ThreadID tid)
 
 template <class Impl>
 void
-FullO3CPU<Impl>::setMiscRegNoEffect(int misc_reg,
-        const TheISA::MiscReg &val, ThreadID tid)
+FullO3CPU<Impl>::setMiscRegNoEffect(int misc_reg, RegVal val, ThreadID tid)
 {
     this->isa[tid]->setMiscRegNoEffect(misc_reg, val);
 }
 
 template <class Impl>
 void
-FullO3CPU<Impl>::setMiscReg(int misc_reg,
-        const TheISA::MiscReg &val, ThreadID tid)
+FullO3CPU<Impl>::setMiscReg(int misc_reg, RegVal val, ThreadID tid)
 {
     miscRegfileWrites++;
     this->isa[tid]->setMiscReg(misc_reg, val, tcBase(tid));
 }
 
 template <class Impl>
-uint64_t
+RegVal
 FullO3CPU<Impl>::readIntReg(PhysRegIdPtr phys_reg)
 {
     intRegfileReads++;
@@ -1285,15 +1283,7 @@ FullO3CPU<Impl>::readIntReg(PhysRegIdPtr phys_reg)
 }
 
 template <class Impl>
-FloatReg
-FullO3CPU<Impl>::readFloatReg(PhysRegIdPtr phys_reg)
-{
-    fpRegfileReads++;
-    return regFile.readFloatReg(phys_reg);
-}
-
-template <class Impl>
-FloatRegBits
+RegVal
 FullO3CPU<Impl>::readFloatRegBits(PhysRegIdPtr phys_reg)
 {
     fpRegfileReads++;
@@ -1336,7 +1326,7 @@ FullO3CPU<Impl>::readCCReg(PhysRegIdPtr phys_reg)
 
 template <class Impl>
 void
-FullO3CPU<Impl>::setIntReg(PhysRegIdPtr phys_reg, uint64_t val)
+FullO3CPU<Impl>::setIntReg(PhysRegIdPtr phys_reg, RegVal val)
 {
     intRegfileWrites++;
     regFile.setIntReg(phys_reg, val);
@@ -1344,15 +1334,7 @@ FullO3CPU<Impl>::setIntReg(PhysRegIdPtr phys_reg, uint64_t val)
 
 template <class Impl>
 void
-FullO3CPU<Impl>::setFloatReg(PhysRegIdPtr phys_reg, FloatReg val)
-{
-    fpRegfileWrites++;
-    regFile.setFloatReg(phys_reg, val);
-}
-
-template <class Impl>
-void
-FullO3CPU<Impl>::setFloatRegBits(PhysRegIdPtr phys_reg, FloatRegBits val)
+FullO3CPU<Impl>::setFloatRegBits(PhysRegIdPtr phys_reg, RegVal val)
 {
     fpRegfileWrites++;
     regFile.setFloatRegBits(phys_reg, val);
@@ -1383,7 +1365,7 @@ FullO3CPU<Impl>::setCCReg(PhysRegIdPtr phys_reg, CCReg val)
 }
 
 template <class Impl>
-uint64_t
+RegVal
 FullO3CPU<Impl>::readArchIntReg(int reg_idx, ThreadID tid)
 {
     intRegfileReads++;
@@ -1394,19 +1376,8 @@ FullO3CPU<Impl>::readArchIntReg(int reg_idx, ThreadID tid)
 }
 
 template <class Impl>
-float
-FullO3CPU<Impl>::readArchFloatReg(int reg_idx, ThreadID tid)
-{
-    fpRegfileReads++;
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-        RegId(FloatRegClass, reg_idx));
-
-    return regFile.readFloatReg(phys_reg);
-}
-
-template <class Impl>
-uint64_t
-FullO3CPU<Impl>::readArchFloatRegInt(int reg_idx, ThreadID tid)
+RegVal
+FullO3CPU<Impl>::readArchFloatRegBits(int reg_idx, ThreadID tid)
 {
     fpRegfileReads++;
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
@@ -1458,7 +1429,7 @@ FullO3CPU<Impl>::readArchCCReg(int reg_idx, ThreadID tid)
 
 template <class Impl>
 void
-FullO3CPU<Impl>::setArchIntReg(int reg_idx, uint64_t val, ThreadID tid)
+FullO3CPU<Impl>::setArchIntReg(int reg_idx, RegVal val, ThreadID tid)
 {
     intRegfileWrites++;
     DPRINTF(FFInit, "write %llu to int reg(%i)\n", val, reg_idx);
@@ -1470,19 +1441,7 @@ FullO3CPU<Impl>::setArchIntReg(int reg_idx, uint64_t val, ThreadID tid)
 
 template <class Impl>
 void
-FullO3CPU<Impl>::setArchFloatReg(int reg_idx, float val, ThreadID tid)
-{
-    fpRegfileWrites++;
-    DPRINTF(FFInit, "write %f to float reg(%i)\n", val, reg_idx);
-    PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-            RegId(FloatRegClass, reg_idx));
-
-    regFile.setFloatReg(phys_reg, val);
-}
-
-template <class Impl>
-void
-FullO3CPU<Impl>::setArchFloatRegInt(int reg_idx, uint64_t val, ThreadID tid)
+FullO3CPU<Impl>::setArchFloatRegBits(int reg_idx, RegVal val, ThreadID tid)
 {
     fpRegfileWrites++;
     DPRINTF(FFInit, "write %llu to float reg(%i)\n", val, reg_idx);
@@ -1508,7 +1467,7 @@ FullO3CPU<Impl>::setArchVecElem(const RegIndex& reg_idx, const ElemIndex& ldx,
                                 const VecElem& val, ThreadID tid)
 {
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
-                RegId(VecRegClass, reg_idx, ldx));
+                RegId(VecElemClass, reg_idx, ldx));
     setVecElem(phys_reg, val);
 }
 
@@ -1568,7 +1527,7 @@ FullO3CPU<Impl>::squashFromTC(ThreadID tid)
 
 template <class Impl>
 typename FullO3CPU<Impl>::ListIt
-FullO3CPU<Impl>::addInst(DynInstPtr &inst)
+FullO3CPU<Impl>::addInst(const DynInstPtr &inst)
 {
     instList.push_back(inst);
 
@@ -1577,7 +1536,7 @@ FullO3CPU<Impl>::addInst(DynInstPtr &inst)
 
 template <class Impl>
 void
-FullO3CPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
+FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
 {
     // Keep an instruction count.
     if (!inst->isMicroop() || inst->isLastMicroop()) {
@@ -1599,7 +1558,7 @@ FullO3CPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
 
 template <class Impl>
 void
-FullO3CPU<Impl>::removeFrontInst(DynInstPtr &inst)
+FullO3CPU<Impl>::removeFrontInst(const DynInstPtr &inst)
 {
     DPRINTF(O3CPU, "Removing committed instruction [tid:%i] PC %s "
             "[sn:%lli]\n",
@@ -1755,7 +1714,7 @@ FullO3CPU<Impl>::dumpInsts()
 /*
 template <class Impl>
 void
-FullO3CPU<Impl>::wakeDependents(DynInstPtr &inst)
+FullO3CPU<Impl>::wakeDependents(const DynInstPtr &inst)
 {
     iew.wakeDependents(inst);
 }
