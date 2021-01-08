@@ -140,17 +140,17 @@ class MemDepUnit
     void setIQ(InstructionQueue *iq_ptr);
 
     /** Inserts a memory instruction. */
-    PointerPair insert(DynInstPtr &inst);
+    PointerPair insert(const DynInstPtr &inst);
 
     /** Inserts a non-speculative memory instruction. */
-    void insertNonSpec(DynInstPtr &inst);
+    void insertNonSpec(const DynInstPtr &inst);
 
     /** Inserts a barrier instruction. */
-    void insertBarrier(DynInstPtr &barr_inst);
+    void insertBarrier(const DynInstPtr &barr_inst);
 
 
     /** Reschedules an instruction to be re-executed. */
-    void reschedule(DynInstPtr &inst);
+    void reschedule(const DynInstPtr &inst);
 
     /** Replays all instructions that have been rescheduled by moving them to
      *  the ready list.
@@ -158,7 +158,7 @@ class MemDepUnit
     void replay();
 
     /** Completes a barrier instruction. */
-    void completeBarrier(DynInstPtr &inst);
+    void completeBarrier(const DynInstPtr &inst);
 
     /** Squashes all instructions up until a given sequence number for a
      *  specific thread.
@@ -179,7 +179,7 @@ class MemDepUnit
     class MemDepEntry {
       public:
         /** Constructs a memory dependence entry. */
-        MemDepEntry(DynInstPtr &new_inst)
+        MemDepEntry(const DynInstPtr &new_inst)
             : inst(new_inst), regsReady(false), memDepReady(false),
               completed(false), squashed(false)
         {
@@ -244,7 +244,7 @@ class MemDepUnit
     };
 
     /** Moves an entry to the ready list. */
-    inline void moveToReady(DynInstPtr &ready_inst_entry);
+    inline void moveToReady(const DynInstPtr &ready_inst_entry);
 
     typedef std::unordered_map<InstSeqNum, MemDepEntryPtr, SNHash> MemDepHash;
 

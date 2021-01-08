@@ -66,7 +66,7 @@
 
 namespace FF{
 template<class Impl>
-LSQUnit<Impl>::WritebackEvent::WritebackEvent(DynInstPtr &_inst, PacketPtr _pkt,
+LSQUnit<Impl>::WritebackEvent::WritebackEvent(const DynInstPtr &_inst, PacketPtr _pkt,
                                               LSQUnit *lsq_ptr)
     : Event(Default_Pri, AutoDelete),
       inst(_inst), pkt(_pkt), lsqPtr(lsq_ptr)
@@ -348,7 +348,7 @@ LSQUnit<Impl>::resizeSQ(unsigned size)
 
 template <class Impl>
 void
-LSQUnit<Impl>::insert(DynInstPtr &inst)
+LSQUnit<Impl>::insert(const DynInstPtr &inst)
 {
     assert(inst->isMemRef());
 
@@ -365,7 +365,7 @@ LSQUnit<Impl>::insert(DynInstPtr &inst)
 
 template <class Impl>
 void
-LSQUnit<Impl>::insertLoad(DynInstPtr &load_inst)
+LSQUnit<Impl>::insertLoad(const DynInstPtr &load_inst)
 {
     assert((loadTail + 1) % LQEntries != loadHead);
     assert(loads < LQEntries);
@@ -390,7 +390,7 @@ LSQUnit<Impl>::insertLoad(DynInstPtr &load_inst)
 
 template <class Impl>
 void
-LSQUnit<Impl>::insertStore(DynInstPtr &store_inst)
+LSQUnit<Impl>::insertStore(const DynInstPtr &store_inst)
 {
     // Make sure it is not full before inserting an instruction.
     assert((storeTail + 1) % SQEntries != storeHead);
@@ -534,7 +534,7 @@ LSQUnit<Impl>::checkSnoop(PacketPtr pkt)
 
 template <class Impl>
 Fault
-LSQUnit<Impl>::checkViolations(int load_idx, DynInstPtr &inst)
+LSQUnit<Impl>::checkViolations(int load_idx, const DynInstPtr &inst)
 {
     assert(inst);
     Addr inst_eff_addr1 = inst->effAddr >> depCheckShift;
@@ -630,7 +630,7 @@ LSQUnit<Impl>::checkViolations(int load_idx, DynInstPtr &inst)
 
 template <class Impl>
 Fault
-LSQUnit<Impl>::executeLoad(DynInstPtr &inst)
+LSQUnit<Impl>::executeLoad(const DynInstPtr &inst)
 {
     using namespace TheISA;
     // Execute a specific load.
@@ -689,7 +689,7 @@ LSQUnit<Impl>::executeLoad(DynInstPtr &inst)
 
 template <class Impl>
 Fault
-LSQUnit<Impl>::executeStore(DynInstPtr &store_inst)
+LSQUnit<Impl>::executeStore(const DynInstPtr &store_inst)
 {
     using namespace TheISA;
     // Make sure that a store exists.
@@ -1148,7 +1148,7 @@ LSQUnit<Impl>::storePostSend(PacketPtr pkt)
 
 template <class Impl>
 void
-LSQUnit<Impl>::writeback(DynInstPtr &inst, PacketPtr pkt)
+LSQUnit<Impl>::writeback(const DynInstPtr &inst, PacketPtr pkt)
 {
     iewStage->wakeCPU();
 

@@ -132,7 +132,7 @@ public:
 
     void tick();
 
-    void squash(DynInstPtr &inst);
+    void squash(const DynInstPtr &inst);
 
     void squashInFlight();
 
@@ -239,7 +239,7 @@ private:
 
     unsigned width;
 
-    bool commitHead(DynInstPtr &head_inst, unsigned inst_num);
+    bool commitHead(const DynInstPtr &head_inst, unsigned inst_num);
 
     bool committedStores;
 
@@ -276,7 +276,7 @@ private:
     bool canHandleInterrupts;
     InstSeqNum lastCommitedSeqNum;
 
-    void squashAfter(DynInstPtr &inst);
+    void squashAfter(const DynInstPtr &inst);
 
     bool drainPending;
     bool drainImminent;
@@ -331,16 +331,16 @@ public:
      /** Tells memory dependence unit that a memory instruction needs to be
      * rescheduled. It will re-execute once replayMemInst() is called.
      */
-    void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive = false);
+    void rescheduleMemInst(const DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive = false);
 
     /** Re-executes all rescheduled memory instructions. */
-    void replayMemInst(DynInstPtr &inst);
+    void replayMemInst(const DynInstPtr &inst);
 
     /** Moves memory instruction onto the list of cache blocked instructions */
-    void blockMemInst(DynInstPtr &inst);
+    void blockMemInst(const DynInstPtr &inst);
 
     // this
-    void instToWriteback(DynInstPtr &inst);
+    void instToWriteback(const DynInstPtr &inst);
 
     bool updateLSQNextCycle;
 
@@ -348,7 +348,7 @@ public:
 
     void wakeCPU();
 
-    void checkMisprediction(DynInstPtr &inst);
+    void checkMisprediction(const DynInstPtr &inst);
 
     std::string name() const;
 
@@ -389,13 +389,13 @@ public:
     DynInstPtr readTailInst(ThreadID tid);
 
 private:
-    void updateComInstStats(DynInstPtr &ffdiewc);
+    void updateComInstStats(const DynInstPtr &ffdiewc);
 
     void insertPointerPairs(const std::list<PointerPair>&);
 
     void insertPointerPair(const PointerPair&);
 
-    void squashDueToBranch(DynInstPtr &ffdiewc);
+    void squashDueToBranch(const DynInstPtr &ffdiewc);
 
     std::list <ThreadID> *activeThreads;
 
@@ -496,9 +496,9 @@ public:
 
     DQTop *getDQ() {return &dq;}
 
-    void executeInst(DynInstPtr &inst);
+    void executeInst(const DynInstPtr &inst);
 
-    void squashDueToMemMissPred(DynInstPtr &violator);
+    void squashDueToMemMissPred(const DynInstPtr &violator);
 
 private:
     void sendBackwardInfo();
@@ -528,7 +528,7 @@ public:
 
     void checkDQHalfSquash();
 
-    void updateExeInstStats(DynInstPtr &inst);
+    void updateExeInstStats(const DynInstPtr &inst);
 
     bool anySuccessfulCommit;
 
@@ -536,7 +536,7 @@ public:
 
     const unsigned largeFanoutThreshold;
 
-    DynInstPtr insertForwarder(DynInstPtr &inst, DynInstPtr &anchor);
+    DynInstPtr insertForwarder(const DynInstPtr &inst, const DynInstPtr &anchor);
 
     bool EnableReshape;
 
@@ -553,10 +553,10 @@ public:
 
     void tryVerifyTailLoads();
 
-    bool tryVerifyTailLoad(DynInstPtr &load, bool is_tail);
+    bool tryVerifyTailLoad(const DynInstPtr &load, bool is_tail);
 
 
-    void setUpLoad(DynInstPtr &inst);
+    void setUpLoad(const DynInstPtr &inst);
 
     InstSeqNum lastCompletedStoreSN{};
 
@@ -568,11 +568,11 @@ public:
     InstSeqNum getLastCompletedStoreSN() {return lastCompletedStoreSSN;}
   private:
 
-    bool checkViolation(DynInstPtr &inst);
+    bool checkViolation(const DynInstPtr &inst);
 
-    void setupPointerLink(DynInstPtr &inst, bool jumped, const PointerPair &pair);
+    void setupPointerLink(const DynInstPtr &inst, bool jumped, const PointerPair &pair);
   public:
-    void squashLoad(DynInstPtr &inst);
+    void squashLoad(const DynInstPtr &inst);
 };
 
 

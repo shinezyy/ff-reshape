@@ -1089,7 +1089,7 @@ FFCPU<Impl>::verifyMemoryMode() const
 }
 
 template <class Impl>
-TheISA::MiscReg
+RegVal
 FFCPU<Impl>::readMiscRegNoEffect(int misc_reg, ThreadID tid) const
 {
     DPRINTF(FFExec, "reading misc reg with no effect\n");
@@ -1097,27 +1097,25 @@ FFCPU<Impl>::readMiscRegNoEffect(int misc_reg, ThreadID tid) const
 }
 
 template <class Impl>
-TheISA::MiscReg
+RegVal
 FFCPU<Impl>::readMiscReg(int misc_reg, ThreadID tid)
 {
+    miscRegfileReads++;
     DPRINTF(FFExec, "reading misc reg for tid %i\n", tid);
     assert(this->isa[tid]);
-    miscRegfileReads++;
     return this->isa[tid]->readMiscReg(misc_reg, tcBase(tid));
 }
 
 template <class Impl>
 void
-FFCPU<Impl>::setMiscRegNoEffect(int misc_reg,
-        const TheISA::MiscReg &val, ThreadID tid)
+FFCPU<Impl>::setMiscRegNoEffect(int misc_reg, RegVal val, ThreadID tid)
 {
     this->isa[tid]->setMiscRegNoEffect(misc_reg, val);
 }
 
 template <class Impl>
 void
-FFCPU<Impl>::setMiscReg(int misc_reg,
-        const TheISA::MiscReg &val, ThreadID tid)
+FFCPU<Impl>::setMiscReg(int misc_reg, RegVal val, ThreadID tid)
 {
     miscRegfileWrites++;
     this->isa[tid]->setMiscReg(misc_reg, val, tcBase(tid));
@@ -1125,7 +1123,7 @@ FFCPU<Impl>::setMiscReg(int misc_reg,
 
 
 template <class Impl>
-uint64_t
+RegVal
 FFCPU<Impl>::readArchIntReg(int reg_idx, ThreadID tid)
 {
     intRegfileReads++;
@@ -1143,8 +1141,8 @@ FFCPU<Impl>::readArchFloatReg(int reg_idx, ThreadID tid)
 }
 
 template <class Impl>
-uint64_t
-FFCPU<Impl>::readArchFloatRegInt(int reg_idx, ThreadID tid)
+RegVal
+FFCPU<Impl>::readArchFloatRegBits(int reg_idx, ThreadID tid)
 {
     fpRegfileReads++;
 
@@ -1184,7 +1182,7 @@ FFCPU<Impl>::readArchCCReg(int reg_idx, ThreadID tid)
 
 template <class Impl>
 void
-FFCPU<Impl>::setArchIntReg(int reg_idx, uint64_t val, ThreadID tid)
+FFCPU<Impl>::setArchIntReg(int reg_idx, RegVal val, ThreadID tid)
 {
     intRegfileWrites++;
     DPRINTF(FFInit, "write %llu to int reg(%i)\n", val, reg_idx);
@@ -1204,7 +1202,7 @@ FFCPU<Impl>::setArchFloatReg(int reg_idx, float val, ThreadID tid)
 
 template <class Impl>
 void
-FFCPU<Impl>::setArchFloatRegInt(int reg_idx, uint64_t val, ThreadID tid)
+FFCPU<Impl>::setArchFloatRegBits(int reg_idx, RegVal val, ThreadID tid)
 {
     fpRegfileWrites++;
     DPRINTF(FFInit, "write %llu to float reg(%i)\n", val, reg_idx);
@@ -1281,7 +1279,7 @@ FFCPU<Impl>::squashFromTC(ThreadID tid)
 
 template <class Impl>
 typename FFCPU<Impl>::ListIt
-FFCPU<Impl>::addInst(DynInstPtr &inst)
+FFCPU<Impl>::addInst(const DynInstPtr &inst)
 {
     instList.push_back(inst);
 
@@ -1290,7 +1288,7 @@ FFCPU<Impl>::addInst(DynInstPtr &inst)
 
 template <class Impl>
 typename FFCPU<Impl>::ListIt
-FFCPU<Impl>::addInstAfter(DynInstPtr &inst, ListIt anchor)
+FFCPU<Impl>::addInstAfter(const DynInstPtr &inst, ListIt anchor)
 {
     auto younger = std::next(anchor);
 
@@ -1306,7 +1304,7 @@ FFCPU<Impl>::addInstAfter(DynInstPtr &inst, ListIt anchor)
 
 template <class Impl>
 void
-FFCPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
+FFCPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
 {
     // Keep an instruction count.
     if ((!inst->isMicroop() || inst->isLastMicroop()) &&
@@ -1331,7 +1329,7 @@ FFCPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
 
 template <class Impl>
 void
-FFCPU<Impl>::removeFrontInst(DynInstPtr &inst)
+FFCPU<Impl>::removeFrontInst(const DynInstPtr &inst)
 {
     DPRINTF(FFCommit, "Adding committed instruction PC %s "
             "[sn:%lli] to remove list @addr: %p\n",

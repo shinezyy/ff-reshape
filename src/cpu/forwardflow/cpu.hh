@@ -399,20 +399,20 @@ class FFCPU : public BaseO3CPU
     TheISA::MiscReg readMiscReg(int misc_reg, ThreadID tid);
 
     /** Sets a miscellaneous register. */
-    void setMiscRegNoEffect(int misc_reg, const TheISA::MiscReg &val,
+    void setMiscRegNoEffect(int misc_reg, RegVal val,
             ThreadID tid);
 
     /** Sets a misc. register, including any side effects the write
      * might have as defined by the architecture.
      */
-    void setMiscReg(int misc_reg, const TheISA::MiscReg &val,
+    void setMiscReg(int misc_reg, RegVal val,
             ThreadID tid);
 
     uint64_t readArchIntReg(int reg_idx, ThreadID tid);
 
     double readArchFloatReg(int reg_idx, ThreadID tid);
 
-    uint64_t readArchFloatRegInt(int reg_idx, ThreadID tid);
+    RegVal readArchFloatRegBits(int reg_idx, ThreadID tid);
 
     uint64_t readIntReg(DQPointer);
 
@@ -461,7 +461,7 @@ class FFCPU : public BaseO3CPU
 
     void setArchFloatReg(int reg_idx, float val, ThreadID tid);
 
-    void setArchFloatRegInt(int reg_idx, uint64_t val, ThreadID tid);
+    void setArchFloatRegBits(int reg_idx, RegVal val, ThreadID tid);
 
     void setArchVecReg(int reg_idx, const VecRegContainer& val, ThreadID tid);
 
@@ -494,17 +494,17 @@ class FFCPU : public BaseO3CPU
     /** Function to add instruction onto the head of the list of the
      *  instructions.  Used when new instructions are fetched.
      */
-    ListIt addInst(DynInstPtr &inst);
+    ListIt addInst(const DynInstPtr &inst);
 
-    ListIt addInstAfter(DynInstPtr &inst, ListIt anchor);
+    ListIt addInstAfter(const DynInstPtr &inst, ListIt anchor);
 
     /** Function to tell the CPU that an instruction has completed. */
-    void instDone(ThreadID tid, DynInstPtr &inst);
+    void instDone(ThreadID tid, const DynInstPtr &inst);
 
     /** Remove an instruction from the front end of the list.  There's
      *  no restriction on location of the instruction.
      */
-    void removeFrontInst(DynInstPtr &inst);
+    void removeFrontInst(const DynInstPtr &inst);
 
     /** Remove all instructions that are not currently in the ROB.
      *  There's also an option to not squash delay slot instructions.*/

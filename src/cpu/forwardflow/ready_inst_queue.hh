@@ -36,9 +36,9 @@ public:
 
     DynInstPtr getInst(FF::OpGroups group);
 
-    void insertInst(FF::OpGroups group, DynInstPtr &inst);
+    void insertInst(FF::OpGroups group, const DynInstPtr &inst);
 
-    void insertEmpirically(DynInstPtr &inst);
+    void insertEmpirically(const DynInstPtr &inst);
 
     const std::size_t maxReadyQueueSize;
 

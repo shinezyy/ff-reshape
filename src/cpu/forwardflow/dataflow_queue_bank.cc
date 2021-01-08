@@ -698,7 +698,7 @@ DataflowQueueBank<Impl>::findInst(InstSeqNum num) const
 template<class Impl>
 void
 DataflowQueueBank<Impl>::writeInstsToBank(
-        const BasePointer &pointer, DataflowQueueBank::DynInstPtr &inst)
+        const BasePointer &pointer, const DataflowQueueBank::DynInstPtr &inst)
 {
     DPRINTF(DQWrite || Debug::FFDisp, "insert inst[%llu] to" ptrfmt "\n",
             inst->seqNum, extptr(pointer));
@@ -794,7 +794,7 @@ void DataflowQueueBank<Impl>::cycleStart()
 }
 
 template<class Impl>
-void DataflowQueueBank<Impl>::clearPending(DynInstPtr &inst)
+void DataflowQueueBank<Impl>::clearPending(const DynInstPtr &inst)
 {
     for (auto &q: readyInstsQueue->preScheduledQueues) {
         if (!q.empty() && inst->seqNum == q.front()->seqNum) {

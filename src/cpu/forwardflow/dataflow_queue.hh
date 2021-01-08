@@ -173,7 +173,7 @@ public:
     void squashReady(InstSeqNum seq);
 
     void squashAll();
-//    void recordProducer(DynInstPtr &inst);
+//    void recordProducer(const DynInstPtr &inst);
 
     void insertForwardPointer(PointerPair pair);
 
@@ -228,7 +228,7 @@ public:
 //    std::vector<FFRegValue> regFile;
 
     void markFwPointers(std::array<DQPointer, 4> &pointers,
-            PointerPair &pair, DynInstPtr &inst);
+            PointerPair &pair, const DynInstPtr &inst);
 
 
     void readPairQueueHeads();
@@ -371,7 +371,7 @@ private:
 
     void shuffleNeighbors();
 public:
-    void countCycles(DynInstPtr &inst, WKPointer *wk);
+    void countCycles(const DynInstPtr &inst, WKPointer *wk);
 
 
     bool matchInGroup(OpClass op, OpGroups op_group);
@@ -432,8 +432,9 @@ public:
     std::string name() const { return _name; }
 
 private:
-    void pointerMeetsInst(TermedPointer &pointer, PointerPair &pair, DataflowQueues::DynInstPtr &inst,
-                          unsigned op, bool adapting_premature);
+    void pointerMeetsInst(TermedPointer &pointer, PointerPair &pair,
+            const DataflowQueues::DynInstPtr &inst,
+            unsigned op, bool adapting_premature);
 
     void pickInterGroupPointers();
 

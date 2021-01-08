@@ -27,7 +27,7 @@ namespace FF{
 using namespace std;
 
 template<class Impl>
-bool FUWrapper<Impl>::canServe(DynInstPtr &inst, InstSeqNum &waitee) {
+bool FUWrapper<Impl>::canServe(const DynInstPtr &inst, InstSeqNum &waitee) {
     assert(inst);
     DPRINTF(FUW2, "FUW , opclass:%d\n", inst->opClass());
     auto has_capability = capabilityList[inst->opClass()];
@@ -61,7 +61,7 @@ bool FUWrapper<Impl>::canServe(DynInstPtr &inst, InstSeqNum &waitee) {
 }
 
 template<class Impl>
-bool FUWrapper<Impl>::consume(FUWrapper::DynInstPtr &inst)
+bool FUWrapper<Impl>::consume(const FUWrapper::DynInstPtr &inst)
 {
     auto lat = opLat[inst->opClass()];
     SingleFUWrapper *wrapper = wrappers[inst->opClass()];

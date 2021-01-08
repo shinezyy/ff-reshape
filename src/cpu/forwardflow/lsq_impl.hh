@@ -71,49 +71,10 @@ LSQ<Impl>::LSQ(O3CPU *cpu_ptr, IEW *iew_ptr, DerivFFCPUParams *params)
     //**********************************************/
     //************ Handle SMT Parameters ***********/
     //**********************************************/
-    std::string policy = params->smtLSQPolicy;
-
-    //Convert string to lowercase
-    std::transform(policy.begin(), policy.end(), policy.begin(),
-                   (int(*)(int)) tolower);
 
     //Figure out fetch policy
-    if (policy == "dynamic") {
-        lsqPolicy = Dynamic;
-
-        maxLQEntries = LQEntries;
-        maxSQEntries = SQEntries;
-
-        DPRINTF(LSQ, "LSQ sharing policy set to Dynamic\n");
-    } else if (policy == "partitioned") {
-        lsqPolicy = Partitioned;
-
-        //@todo:make work if part_amt doesnt divide evenly.
-        maxLQEntries = LQEntries / numThreads;
-        maxSQEntries = SQEntries / numThreads;
-
-        DPRINTF(Fetch, "LSQ sharing policy set to Partitioned: "
-                "%i entries per LQ | %i entries per SQ\n",
-                maxLQEntries,maxSQEntries);
-    } else if (policy == "threshold") {
-        lsqPolicy = Threshold;
-
-        assert(params->smtLSQThreshold > LQEntries);
-        assert(params->smtLSQThreshold > SQEntries);
-
-        //Divide up by threshold amount
-        //@todo: Should threads check the max and the total
-        //amount of the LSQ
-        maxLQEntries  = params->smtLSQThreshold;
-        maxSQEntries  = params->smtLSQThreshold;
-
-        DPRINTF(LSQ, "LSQ sharing policy set to Threshold: "
-                "%i entries per LQ | %i entries per SQ\n",
-                maxLQEntries,maxSQEntries);
-    } else {
-        assert(0 && "Invalid LSQ Sharing Policy.Options Are:{Dynamic,"
-                    "Partitioned, Threshold}");
-    }
+    maxLQEntries = LQEntries;
+    maxSQEntries = SQEntries;
 
     //Initialize LSQs
     thread = new LSQUnit[numThreads];
@@ -259,7 +220,7 @@ LSQ<Impl>::tick()
 
 template<class Impl>
 void
-LSQ<Impl>::insertLoad(DynInstPtr &load_inst)
+LSQ<Impl>::insertLoad(const DynInstPtr &load_inst)
 {
     ThreadID tid = load_inst->threadNumber;
 
@@ -268,7 +229,7 @@ LSQ<Impl>::insertLoad(DynInstPtr &load_inst)
 
 template<class Impl>
 void
-LSQ<Impl>::insertStore(DynInstPtr &store_inst)
+LSQ<Impl>::insertStore(const DynInstPtr &store_inst)
 {
     ThreadID tid = store_inst->threadNumber;
 
@@ -277,7 +238,7 @@ LSQ<Impl>::insertStore(DynInstPtr &store_inst)
 
 template<class Impl>
 Fault
-LSQ<Impl>::executeLoad(DynInstPtr &inst)
+LSQ<Impl>::executeLoad(const DynInstPtr &inst)
 {
     ThreadID tid = inst->threadNumber;
 
@@ -286,7 +247,7 @@ LSQ<Impl>::executeLoad(DynInstPtr &inst)
 
 template<class Impl>
 Fault
-LSQ<Impl>::executeStore(DynInstPtr &inst)
+LSQ<Impl>::executeStore(const DynInstPtr &inst)
 {
     ThreadID tid = inst->threadNumber;
 

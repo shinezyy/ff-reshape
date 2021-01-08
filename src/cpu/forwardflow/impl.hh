@@ -70,6 +70,7 @@ struct FFCPUImpl
      *  what should be used, and not DynInst *.
      */
     typedef RefCountingPtr<DynInst> DynInstPtr;
+    typedef RefCountingPtr<const DynInst> DynInstConstPtr;
 
     /** The O3CPU type to be used. */
     typedef FF::FFCPU<FFCPUImpl> O3CPU;

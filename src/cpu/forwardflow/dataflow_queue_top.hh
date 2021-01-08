@@ -87,12 +87,12 @@ public:
     void tick();
 
     /** Re-executes all rescheduled memory instructions. */
-    void replayMemInst(DynInstPtr &inst);
+    void replayMemInst(const DynInstPtr &inst);
 
     void scheduleNonSpec();
 
     // 1: sent reexec pointer; 2: canceling bypassing
-    std::pair<bool, bool> reExecTailLoad(DynInstPtr &inst, bool is_tail);
+    std::pair<bool, bool> reExecTailLoad(const DynInstPtr &inst, bool is_tail);
 
     void centralizedExtraWakeup(const WKPointer &wk);
 
@@ -148,11 +148,11 @@ public:
 
     // dispatch
 
-    std::pair<bool, PointerPair> insertBarrier(DynInstPtr &inst);
+    std::pair<bool, PointerPair> insertBarrier(const DynInstPtr &inst);
 
-    std::pair<bool, PointerPair> insertNonSpec(DynInstPtr &inst);
+    std::pair<bool, PointerPair> insertNonSpec(const DynInstPtr &inst);
 
-    std::pair<bool, PointerPair> insert(DynInstPtr &inst, bool non_spec);
+    std::pair<bool, PointerPair> insert(const DynInstPtr &inst, bool non_spec);
 
     void insertForwardPointer(PointerPair pair);
 
@@ -190,23 +190,23 @@ public:
 
 
     // Mem related
-    void deferMemInst(DynInstPtr &inst);
+    void deferMemInst(const DynInstPtr &inst);
 
     DynInstPtr getDeferredMemInstToExecute();
 
     DynInstPtr getBlockedMemInst();
 
-    void rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive = false);
+    void rescheduleMemInst(const DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive = false);
 
     void replayMemInsts();
 
-    void blockMemInst(DynInstPtr &inst);
+    void blockMemInst(const DynInstPtr &inst);
 
     void cacheUnblocked();
 
-    bool writebackLoad(DynInstPtr &inst);
+    bool writebackLoad(const DynInstPtr &inst);
 
-    void completeMemInst(DynInstPtr &inst);
+    void completeMemInst(const DynInstPtr &inst);
 
     // Drain, Switch, Initiation
     void takeOverFrom();
@@ -248,7 +248,7 @@ private:
 
     DynInstPtr switchOn{};
 
-    void schedSwitchDispatchingGroup(DynInstPtr &inst);
+    void schedSwitchDispatchingGroup(const DynInstPtr &inst);
 
     void switchDispatchingGroup();
 public:
@@ -338,7 +338,7 @@ public:
 
     void checkSanity() const;
 
-    void squashLoad(DynInstPtr &inst);
+    void squashLoad(const DynInstPtr &inst);
 
     InstSeqNum walkThroughStores(std::deque<RecentStore> &recentStoreTable);
 };
