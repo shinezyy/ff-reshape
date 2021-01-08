@@ -382,7 +382,7 @@ std::map<int, SyscallDesc> RiscvLinuxProcess64::syscallDescs = {
     {273,  SyscallDesc("finit_module")},
     {274,  SyscallDesc("sched_setattr")},
     {275,  SyscallDesc("sched_getattr")},
-    {276,  SyscallDesc("renameat2", renameat2Func<RiscvLinux>)},
+    {276,  SyscallDesc("renameat2", renameat2Func<RiscvLinux64>)},
     {277,  SyscallDesc("seccomp")},
     {278,  SyscallDesc("getrandom")},
     {279,  SyscallDesc("memfd_create")},

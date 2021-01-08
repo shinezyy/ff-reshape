@@ -391,12 +391,12 @@ class FFCPU : public BaseO3CPU
     /** Register accessors.  Index refers to the physical register index. */
 
     /** Reads a miscellaneous register. */
-    TheISA::MiscReg readMiscRegNoEffect(int misc_reg, ThreadID tid) const;
+    RegVal readMiscRegNoEffect(int misc_reg, ThreadID tid) const;
 
     /** Reads a misc. register, including any side effects the read
      * might have as defined by the architecture.
      */
-    TheISA::MiscReg readMiscReg(int misc_reg, ThreadID tid);
+    RegVal readMiscReg(int misc_reg, ThreadID tid);
 
     /** Sets a miscellaneous register. */
     void setMiscRegNoEffect(int misc_reg, RegVal val,
