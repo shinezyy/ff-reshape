@@ -1,0 +1,113 @@
+CONFLICT (content): Merge conflict in src/sim/syscall_emul.hh
+CONFLICT (content): Merge conflict in src/sim/syscall_emul.cc
+CONFLICT (content): Merge conflict in src/sim/process.cc
+CONFLICT (modify/delete): src/sim/eventq_impl.hh deleted in xiangshan/main and modified in HEAD. Version HEAD of src/sim/eventq_impl.hh left in tree.
+CONFLICT (content): Merge conflict in src/mem/ruby/system/Sequencer.py
+CONFLICT (content): Merge conflict in src/mem/ruby/system/RubySystem.py
+CONFLICT (content): Merge conflict in src/mem/ruby/structures/RubyPrefetcher.py
+CONFLICT (content): Merge conflict in src/mem/ruby/structures/RubyCache.py
+CONFLICT (modify/delete): src/mem/ruby/structures/PseudoLRUReplacementPolicy.py deleted in xiangshan/main and modified in HEAD. Version HEAD of src/mem/ruby/structures/PseudoLRUReplacementPolicy.py left in tree.
+CONFLICT (content): Merge conflict in src/mem/ruby/structures/CacheMemory.cc
+CONFLICT (content): Merge conflict in src/mem/ruby/slicc_interface/Controller.py
+CONFLICT (content): Merge conflict in src/mem/ruby/slicc_interface/AbstractController.cc
+CONFLICT (content): Merge conflict in src/mem/ruby/protocol/MESI_Three_Level-msg.sm
+CONFLICT (content): Merge conflict in src/mem/ruby/protocol/MESI_Three_Level-L0cache.sm
+CONFLICT (modify/delete): src/mem/ruby/network/garnet2.0/GarnetLink.py deleted in xiangshan/main and modified in HEAD. Version HEAD of src/mem/ruby/network/garnet2.0/GarnetLink.py left in tree.
+CONFLICT (content): Merge conflict in src/mem/ruby/network/garnet/RoutingUnit.cc
+CONFLICT (content): Merge conflict in src/mem/ruby/network/Topology.cc
+CONFLICT (modify/delete): src/mem/ruby/filters/MultiBitSelBloomFilter.cc deleted in xiangshan/main and modified in HEAD. Version HEAD of src/mem/ruby/filters/MultiBitSelBloomFilter.cc left in tree.
+CONFLICT (content): Merge conflict in src/mem/qos/mem_sink.cc
+CONFLICT (content): Merge conflict in src/mem/qos/mem_ctrl.cc
+CONFLICT (content): Merge conflict in src/mem/qos/QoSMemSinkCtrl.py
+CONFLICT (content): Merge conflict in src/mem/qos/QoSMemCtrl.py
+CONFLICT (content): Merge conflict in src/mem/packet_queue.hh
+CONFLICT (content): Merge conflict in src/mem/packet_queue.cc
+CONFLICT (modify/delete): src/mem/dram_ctrl.cc deleted in xiangshan/main and modified in HEAD. Version HEAD of src/mem/dram_ctrl.cc left in tree.
+CONFLICT (content): Merge conflict in src/mem/comm_monitor.hh
+CONFLICT (content): Merge conflict in src/mem/comm_monitor.cc
+CONFLICT (content): Merge conflict in src/mem/cache/tags/sector_tags.cc
+CONFLICT (content): Merge conflict in src/mem/cache/tags/sector_blk.hh
+CONFLICT (content): Merge conflict in src/mem/cache/tags/sector_blk.cc
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/tagged.hh
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/tagged.cc
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/stride.cc
+CONFLICT (rename/add): Rename src/arch/sparc/mmapped_ipr.hh->src/mem/cache/prefetch/slim_ampm.hh in xiangshan/main.  Added src/mem/cache/prefetch/slim_ampm.hh in HEAD
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/slim_ampm.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/signature_path_v2.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/signature_path_v2.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/signature_path.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/signature_path.cc
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/queued.hh
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/queued.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/irregular_stream_buffer.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/irregular_stream_buffer.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/delta_correlating_prediction_tables.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/delta_correlating_prediction_tables.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/bop.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/bop.cc
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/base.hh
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/base.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/associative_set_impl.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/associative_set.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/access_map_pattern_matching.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/access_map_pattern_matching.cc
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/SConscript
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/Prefetcher.py
+CONFLICT (content): Merge conflict in src/mem/cache/cache_blk.hh
+CONFLICT (content): Merge conflict in src/mem/cache/base.cc
+CONFLICT (content): Merge conflict in src/mem/cache/Cache.py
+CONFLICT (content): Merge conflict in src/mem/XBar.py
+CONFLICT (content): Merge conflict in src/mem/SerialLink.py
+CONFLICT (content): Merge conflict in src/mem/MemDelay.py
+CONFLICT (content): Merge conflict in src/mem/MemChecker.py
+CONFLICT (content): Merge conflict in src/mem/ExternalSlave.py
+CONFLICT (content): Merge conflict in src/mem/ExternalMaster.py
+CONFLICT (content): Merge conflict in src/mem/DRAMInterface.py
+CONFLICT (content): Merge conflict in src/mem/CommMonitor.py
+CONFLICT (content): Merge conflict in src/mem/Bridge.py
+CONFLICT (content): Merge conflict in src/mem/AddrMapper.py
+CONFLICT (content): Merge conflict in src/mem/AbstractMemory.py
+CONFLICT (content): Merge conflict in src/dev/hsa/HSADriver.py
+CONFLICT (content): Merge conflict in src/cpu/thread_context.cc
+CONFLICT (modify/delete): src/cpu/pred/sat_counter.hh deleted in xiangshan/main and modified in HEAD. Version HEAD of src/cpu/pred/sat_counter.hh left in tree.
+CONFLICT (content): Merge conflict in src/cpu/pred/ltage.hh
+CONFLICT (content): Merge conflict in src/cpu/pred/ltage.cc
+CONFLICT (content): Merge conflict in src/cpu/pred/bpred_unit.hh
+CONFLICT (content): Merge conflict in src/cpu/pred/bpred_unit.cc
+CONFLICT (content): Merge conflict in src/cpu/pred/SConscript
+CONFLICT (content): Merge conflict in src/cpu/pred/BranchPredictor.py
+CONFLICT (content): Merge conflict in src/cpu/o3/rename_impl.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/lsq_unit.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/inst_queue_impl.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/iew_impl.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/fetch_impl.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/fetch.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/cpu.cc
+CONFLICT (content): Merge conflict in src/cpu/o3/commit_impl.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/commit.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/O3CPU.py
+CONFLICT (content): Merge conflict in src/cpu/o3/FuncUnitConfig.py
+CONFLICT (content): Merge conflict in src/cpu/o3/FUPool.py
+CONFLICT (content): Merge conflict in src/cpu/StaticInstFlags.py
+CONFLICT (content): Merge conflict in src/cpu/SConscript
+CONFLICT (content): Merge conflict in src/cpu/FuncUnit.py
+CONFLICT (content): Merge conflict in src/cpu/BaseCPU.py
+CONFLICT (content): Merge conflict in src/base/types.hh
+CONFLICT (content): Merge conflict in src/base/stl_helpers.hh
+CONFLICT (content): Merge conflict in src/base/refcnt.hh
+CONFLICT (content): Merge conflict in src/base/filters/h3_bloom_filter.cc
+CONFLICT (content): Merge conflict in src/arch/riscv/utility.hh
+CONFLICT (content): Merge conflict in src/arch/riscv/linux/process.cc
+CONFLICT (content): Merge conflict in src/arch/riscv/isa/formats/fp.isa
+--
+CONFLICT (content): Merge conflict in src/arch/riscv/isa/formats/amo.isa
+TODO: LRSC and Amo flags might not work any more:
+IsRVAmoLoadHalf IsRVAmoStoreHalf IsLoadReserved
+--
+CONFLICT (content): Merge conflict in src/arch/arm/fastmodel/GIC/SConscript
+---
+CONFLICT (content): Merge conflict in configs/common/Simulation.py
+CONFLICT (content): Merge conflict in configs/common/Options.py
+CONFLICT (content): Merge conflict in configs/common/CpuConfig.py
+CONFLICT (content): Merge conflict in configs/common/CacheConfig.py
+CONFLICT (content): Merge conflict in .gitignore

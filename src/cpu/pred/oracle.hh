@@ -47,9 +47,9 @@
 #include <fstream>
 #include <vector>
 
+#include "base/sat_counter.hh"
 #include "base/types.hh"
 #include "cpu/pred/bpred_unit.hh"
-#include "cpu/pred/sat_counter.hh"
 #include "params/OracleBP.hh"
 #include "proto/branch_outcome.pb.h"
 #include "proto/packet.pb.h"

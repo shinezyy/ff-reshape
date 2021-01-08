@@ -139,7 +139,7 @@ class FFCPU : public BaseO3CPU
     /**
      * IcachePort class for instruction fetch.
      */
-    class IcachePort : public MasterPort
+    class IcachePort : public RequestorPort
     {
       protected:
         /** Pointer to fetch. */
@@ -148,7 +148,7 @@ class FFCPU : public BaseO3CPU
       public:
         /** Default constructor. */
         IcachePort(DefaultFetch<Impl> *_fetch, FFCPU<Impl>* _cpu)
-            : MasterPort(_cpu->name() + ".icache_port", _cpu), fetch(_fetch)
+            : RequestorPort(_cpu->name() + ".icache_port", _cpu), fetch(_fetch)
         { }
 
       protected:
@@ -164,7 +164,7 @@ class FFCPU : public BaseO3CPU
     /**
      * DcachePort class for the load/store queue.
      */
-    class DcachePort : public MasterPort
+    class DcachePort : public RequestorPort
     {
       protected:
 
@@ -175,7 +175,7 @@ class FFCPU : public BaseO3CPU
       public:
         /** Default constructor. */
         DcachePort(LSQ<Impl> *_lsq, FFCPU<Impl>* _cpu)
-            : MasterPort(_cpu->name() + ".dcache_port", _cpu), lsq(_lsq),
+            : RequestorPort(_cpu->name() + ".dcache_port", _cpu), lsq(_lsq),
               cpu(_cpu)
         { }
 
@@ -709,10 +709,10 @@ class FFCPU : public BaseO3CPU
     }
 
     /** Used by the fetch unit to get a hold of the instruction port. */
-    MasterPort &getInstPort() override { return icachePort; }
+    RequestorPort &getInstPort() override { return icachePort; }
 
     /** Get the dcache port (used to find block size for translations). */
-    MasterPort &getDataPort() override { return dcachePort; }
+    RequestorPort &getDataPort() override { return dcachePort; }
 
     /** Stat for total number of times the CPU is descheduled. */
     Stats::Scalar timesIdled;

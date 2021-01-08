@@ -46,7 +46,6 @@
 #include <string>
 
 #include "arch/utility.hh"
-#include "base/cp_annotate.hh"
 #include "base/loader/symtab.hh"
 #include "base/logging.hh"
 #include "commit.hh"
@@ -178,8 +177,8 @@ DefaultCommit<Impl>::CommitStats::CommitStats(O3CPU *cpu,
       ADD_STAT(functionCalls, "Number of function calls committed."),
       ADD_STAT(committedInstType, "Class of committed instruction"),
       ADD_STAT(commitEligibleSamples, "number cycles where commit BW limit"
-          " reached")
-      ADD_STAT(HeadNotExec, "HeadNotExec");
+          " reached"),
+      ADD_STAT(HeadNotExec, "HeadNotExec")
 {
     using namespace Stats;
 
@@ -1031,7 +1030,7 @@ DefaultCommit<Impl>::commitInsts()
 
         if (commit_thread == -1 || !rob->isHeadReady(commit_thread)) {
             DPRINTF(Commit, "commit_thread = %i || ROB head not ready.\n", commit_thread);
-            HeadNotExec++;
+            stats.HeadNotExec++;
             break;
         }
 

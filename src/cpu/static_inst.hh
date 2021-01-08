@@ -391,7 +391,7 @@ public:
         //pass
     }
 
-    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const override
+    std::string generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
     {
         return mnemonic;
     }

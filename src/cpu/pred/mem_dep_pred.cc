@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "base/intmath.hh"
+#include "base/logging.hh"
 #include "base/random.hh"
 #include "debug/NoSQHash.hh"
 #include "debug/NoSQPred.hh"

@@ -73,9 +73,6 @@ if 'O3CPU' in env['CPU_MODELS']:
     DebugFlag('Writeback')
     DebugFlag('DLarge')
     DebugFlag('BranchResolve')
-    DebugFlag('LoopBuffer')
-
-    DebugFlag('LoopBufferStack')
 
     CompoundFlag('O3CPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
         'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',

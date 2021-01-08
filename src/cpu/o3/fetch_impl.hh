@@ -1304,12 +1304,12 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 lbuf->recordInst(
                         reinterpret_cast<uint8_t *>(cacheInsts + blkOffset),
                         fetchAddr, instSize);
-                inst = TheISA::gtoh(cacheInsts[blkOffset]);
+                inst = cacheInsts[blkOffset];
             } else {
                 lbuf->recordInst(
                         reinterpret_cast<uint8_t *>(cacheInsts),
                         fetchAddr, instSize);
-                inst = TheISA::gtoh(cacheInsts[0]);
+                inst = cacheInsts[0];
             }
 
             decoder[tid]->moreBytes(thisPC, fetchAddr, inst);
@@ -1358,7 +1358,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             }
 
             if (lbuf->enable && fetchSource == LoopBuf) {
-                fetchFromLoopBuffer++;
+                fetchStats.fetchFromLoopBuffer++;
             }
             DynInstPtr instruction =
                 buildInst(tid, staticInst, curMacroop,

@@ -271,7 +271,7 @@ LSQUnit<Impl>::regStats()
 
 template<class Impl>
 void
-LSQUnit<Impl>::setDcachePort(MasterPort *dcache_port)
+LSQUnit<Impl>::setDcachePort(RequestorPort *dcache_port)
 {
     dcachePort = dcache_port;
 }

@@ -45,7 +45,6 @@
  */
 #include "cpu/forwardflow/cpu.hh"
 #include "arch/generic/traits.hh"
-#include "arch/kernel_stats.hh"
 #include "config/the_isa.hh"
 #include "cpu/activity.hh"
 #include "cpu/checker/cpu.hh"

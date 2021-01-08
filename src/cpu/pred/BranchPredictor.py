@@ -75,47 +75,47 @@ class LocalBP(BranchPredictor):
     localPredictorSize = Param.Unsigned(2048, "Size of local predictor")
     localCtrBits = Param.Unsigned(2, "Bits per counter")
 
-class PerceptronLocalBP(BranchPredictor):
-    type = 'PerceptronLocalBP'
-    cxx_class = 'PerceptronLocalBP'
-    cxx_header = "cpu/pred/perceptron_local.hh"
-
-    localPredictorSize = Param.Unsigned(2048, "Size of local predictor")
-    localPercepSize = Param.Unsigned(64, "Bits per counter")
-
-class Perceptron(BranchPredictor):
-    type = 'Perceptron'
-    cxx_class = 'Perceptron'
-    cxx_header = "cpu/pred/perceptron.hh"
-
-    globalPredictorSize = Param.Unsigned(64, "Size of global Perdictor")
-    numberOfPerceptrons = Param.Unsigned(8192, "Number of Perceptrons")
-
-class MyPerceptron(BranchPredictor):
-    type = 'MyPerceptron'
-    cxx_class = 'MyPerceptron'
-    cxx_header = "cpu/pred/myperceptron.hh"
-
-    globalPredictorSize = Param.Unsigned(256, "Size of global Perdictor")
-    sizeOfPerceptrons   = Param.Unsigned(16, "Size of each Perceptron")
-    pseudoTaggingBit    = Param.Unsigned(0, "Numeber of pseudo-tagging bits")
-    indexMethod         = Param.String('MODULO', "Indexing method")
-    bitsPerWeight       = Param.Unsigned(8, "Bits used to store each weight")
-    lamda               = Param.Unsigned(1, "Learning rate")
-    dynamicThresholdBit = Param.Unsigned(0, "Log of number of thresholds")
-    thresholdCounterBit = Param.Unsigned(0, "Bits used to store TC")
-    redundantBit        = Param.Unsigned(0,
-                            "n-bits to represent a history bit")
-    maxHisLen           = Param.Unsigned(128,
-                            "max record length of global his")
-
-class PathPerceptron(BranchPredictor):
-    type = 'PathPerceptron'
-    cxx_class = 'PathPerceptron'
-    cxx_header = "cpu/pred/pathperceptron.hh"
-
-    globalPredictorSize = Param.Unsigned(8192, "Size of global Perdictor")
-    numberOfPerceptrons = Param.Unsigned(128, "Number of Perceptrons")
+# class PerceptronLocalBP(BranchPredictor):
+#     type = 'PerceptronLocalBP'
+#     cxx_class = 'PerceptronLocalBP'
+#     cxx_header = "cpu/pred/perceptron_local.hh"
+# 
+#     localPredictorSize = Param.Unsigned(2048, "Size of local predictor")
+#     localPercepSize = Param.Unsigned(64, "Bits per counter")
+# 
+# class Perceptron(BranchPredictor):
+#     type = 'Perceptron'
+#     cxx_class = 'Perceptron'
+#     cxx_header = "cpu/pred/perceptron.hh"
+# 
+#     globalPredictorSize = Param.Unsigned(64, "Size of global Perdictor")
+#     numberOfPerceptrons = Param.Unsigned(8192, "Number of Perceptrons")
+# 
+# class MyPerceptron(BranchPredictor):
+#     type = 'MyPerceptron'
+#     cxx_class = 'MyPerceptron'
+#     cxx_header = "cpu/pred/myperceptron.hh"
+# 
+#     globalPredictorSize = Param.Unsigned(256, "Size of global Perdictor")
+#     sizeOfPerceptrons   = Param.Unsigned(16, "Size of each Perceptron")
+#     pseudoTaggingBit    = Param.Unsigned(0, "Numeber of pseudo-tagging bits")
+#     indexMethod         = Param.String('MODULO', "Indexing method")
+#     bitsPerWeight       = Param.Unsigned(8, "Bits used to store each weight")
+#     lamda               = Param.Unsigned(1, "Learning rate")
+#     dynamicThresholdBit = Param.Unsigned(0, "Log of number of thresholds")
+#     thresholdCounterBit = Param.Unsigned(0, "Bits used to store TC")
+#     redundantBit        = Param.Unsigned(0,
+#                             "n-bits to represent a history bit")
+#     maxHisLen           = Param.Unsigned(128,
+#                             "max record length of global his")
+# 
+# class PathPerceptron(BranchPredictor):
+#     type = 'PathPerceptron'
+#     cxx_class = 'PathPerceptron'
+#     cxx_header = "cpu/pred/pathperceptron.hh"
+# 
+#     globalPredictorSize = Param.Unsigned(8192, "Size of global Perdictor")
+#     numberOfPerceptrons = Param.Unsigned(128, "Number of Perceptrons")
 
 class TournamentBP(BranchPredictor):
     type = 'TournamentBP'
@@ -192,37 +192,37 @@ class TAGEBase(SimObject):
     speculativeHistUpdate = Param.Bool(True,
         "Use speculative update for histories")
 
-class OGBBP(BranchPredictor):
-    type = 'OGBBP'
-    cxx_class = 'OGBBP'
-    cxx_header = "cpu/pred/online_gradient_boosting.hh"
-
-    globalHistoryLenLog = Param.Unsigned(7, "global history length log")
-    globalHistoryLen = Param.Unsigned(128, "global history length")
-    treeHeight = Param.Unsigned(1, "base tree model height")
-    localHistoryLen = Param.Unsigned(10, "local history length")
-    tableSize = Param.Unsigned(512,
-            "table size for local history and predictor")
-    factorBits = Param.Unsigned(6, "bits for sigma")
-    nTrees = Param.Unsigned(16, "number of weak tree learners")
-    nLocal = Param.Unsigned(5, "number of weak tree learners")
-    ctrBits = Param.Unsigned(2, "width of saturating counter")
-
-class NBBP(BranchPredictor):
-    type = 'NBBP'
-    cxx_class = 'NBBP'
-    cxx_header = "cpu/pred/naive_bayes.hh"
-
-    globalHistoryLenLog = Param.Unsigned(8, "global history length log")
-    globalHistoryLen = Param.Unsigned(256, "global history length")
-    localHistoryLen = Param.Unsigned(10, "local history length")
-
-    nLocalCounter = Param.Unsigned(10, "local history counter numbert")
-    nGlobalCounter = Param.Unsigned(20, "global history counter numbert")
-
-    tableSize = Param.Unsigned(512,
-            "table size for local history and predictor")
-    ctrBits = Param.Unsigned(5, "width of saturating counter")
+# class OGBBP(BranchPredictor):
+#     type = 'OGBBP'
+#     cxx_class = 'OGBBP'
+#     cxx_header = "cpu/pred/online_gradient_boosting.hh"
+# 
+#     globalHistoryLenLog = Param.Unsigned(7, "global history length log")
+#     globalHistoryLen = Param.Unsigned(128, "global history length")
+#     treeHeight = Param.Unsigned(1, "base tree model height")
+#     localHistoryLen = Param.Unsigned(10, "local history length")
+#     tableSize = Param.Unsigned(512,
+#             "table size for local history and predictor")
+#     factorBits = Param.Unsigned(6, "bits for sigma")
+#     nTrees = Param.Unsigned(16, "number of weak tree learners")
+#     nLocal = Param.Unsigned(5, "number of weak tree learners")
+#     ctrBits = Param.Unsigned(2, "width of saturating counter")
+# 
+# class NBBP(BranchPredictor):
+#     type = 'NBBP'
+#     cxx_class = 'NBBP'
+#     cxx_header = "cpu/pred/naive_bayes.hh"
+# 
+#     globalHistoryLenLog = Param.Unsigned(8, "global history length log")
+#     globalHistoryLen = Param.Unsigned(256, "global history length")
+#     localHistoryLen = Param.Unsigned(10, "local history length")
+# 
+#     nLocalCounter = Param.Unsigned(10, "local history counter numbert")
+#     nGlobalCounter = Param.Unsigned(20, "global history counter numbert")
+# 
+#     tableSize = Param.Unsigned(512,
+#             "table size for local history and predictor")
+#     ctrBits = Param.Unsigned(5, "width of saturating counter")
 
 class ZPerceptron(BranchPredictor):
     type = 'ZPerceptron'
@@ -238,26 +238,26 @@ class ZPerceptron(BranchPredictor):
     lamda               = Param.Unsigned(1, "Learning rate")
     # thresholdCounterBit = Param.Unsigned(0, "Bits used to store TC")
 
-class SNN(BranchPredictor):
-    type = 'SNN'
-    cxx_class = 'SNN'
-    cxx_header = "cpu/pred/snn.hh"
-
-    tableSize = Param.Unsigned(256, "Size of global Perdictor")
-    localHistoryLen = Param.Unsigned(1, "local history length")
-    ctrBits = Param.Unsigned(8, "width of saturating counter")
-
-    denseGlobalHistoryLen = Param.Unsigned(0, "global history length")
-    sparseGHSegLen = Param.Unsigned(5,
-            "sparse global history length per segment")
-    sparseGHNSegs = Param.Unsigned(12,
-            "number of sparse global history segments")
-    activeTerm = Param.Unsigned(11, "number of updates to observe")
-    convThreshold = Param.Unsigned(3, "threshold to update conv kernel")
-
-    pseudoTaggingBit    = Param.Unsigned(0, "Number of pseudo-tagging bits")
-    lamda               = Param.Unsigned(1, "Learning rate")
-    # thresholdCounterBit = Param.Unsigned(0, "Bits used to store TC")
+# class SNN(BranchPredictor):
+#     type = 'SNN'
+#     cxx_class = 'SNN'
+#     cxx_header = "cpu/pred/snn.hh"
+# 
+#     tableSize = Param.Unsigned(256, "Size of global Perdictor")
+#     localHistoryLen = Param.Unsigned(1, "local history length")
+#     ctrBits = Param.Unsigned(8, "width of saturating counter")
+# 
+#     denseGlobalHistoryLen = Param.Unsigned(0, "global history length")
+#     sparseGHSegLen = Param.Unsigned(5,
+#             "sparse global history length per segment")
+#     sparseGHNSegs = Param.Unsigned(12,
+#             "number of sparse global history segments")
+#     activeTerm = Param.Unsigned(11, "number of updates to observe")
+#     convThreshold = Param.Unsigned(3, "threshold to update conv kernel")
+# 
+#     pseudoTaggingBit    = Param.Unsigned(0, "Number of pseudo-tagging bits")
+#     lamda               = Param.Unsigned(1, "Learning rate")
+#     # thresholdCounterBit = Param.Unsigned(0, "Bits used to store TC")
 
 
 class OracleBP(BranchPredictor):

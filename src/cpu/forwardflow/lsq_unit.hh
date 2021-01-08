@@ -53,7 +53,6 @@
 #include "arch/generic/debugfaults.hh"
 #include "arch/isa_traits.hh"
 #include "arch/locked_mem.hh"
-#include "arch/mmapped_ipr.hh"
 #include "arch/riscv/faults.hh"
 #include "config/the_isa.hh"
 #include "cpu/forwardflow/dataflow_queue_common.hh"
@@ -108,7 +107,7 @@ class LSQUnit {
     void regStats();
 
     /** Sets the pointer to the dcache port. */
-    void setDcachePort(MasterPort *dcache_port);
+    void setDcachePort(RequestorPort *dcache_port);
 
     /** Perform sanity checks after a drain. */
     void drainSanityCheck() const;
@@ -279,7 +278,7 @@ class LSQUnit {
     LSQ *lsq;
 
     /** Pointer to the dcache port.  Used only for sending. */
-    MasterPort *dcachePort;
+    RequestorPort *dcachePort;
 
     /** Derived class to hold any sender state the LSQ needs. */
     class LSQSenderState : public Packet::SenderState
@@ -829,5 +828,190 @@ LSQUnit<Impl>::write(const RequestPtr &req,
     // can happen here.
     return NoFault;
 }
+}
+
+template <class Impl>
+Fault
+FF::LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
+{
+    LQEntry& load_req = loadQueue[load_idx];
+    const DynInstPtr& load_inst = load_req.instruction();
+
+    load_req.setRequest(req);
+    assert(load_inst);
+
+    assert(!load_inst->isExecuted() || load_inst->loadVerifying);
+
+    if (load_inst->isNormalBypass() && !load_inst->loadVerifying) {
+        DPRINTF(NoSQSMB, "Skip mem read for bypassing load [sn:%lli]\n",
+                load_inst->seqNum);
+        return NoFault;
+    }
+
+    // Make sure this isn't a strictly ordered load
+    // A bit of a hackish way to get strictly ordered accesses to work
+    // only if they're at the head of the LSQ and are ready to commit
+    // (at the head of the ROB too).
+
+    if (req->mainRequest()->isStrictlyOrdered() &&
+        (load_idx != loadQueue.head() || !load_inst->isAtCommit())) {
+        // Tell IQ/mem dep unit that this instruction will need to be
+        // rescheduled eventually
+        iewStage->rescheduleMemInst(load_inst, true);
+        load_inst->clearIssued();
+        load_inst->effAddrValid(false);
+        ++stats.rescheduledLoads;
+        DPRINTF(LSQUnit, "Strictly ordered load [sn:%lli] PC %s\n",
+                load_inst->seqNum, load_inst->pcState());
+
+        // Must delete request now that it wasn't handed off to
+        // memory.  This is quite ugly.  @todo: Figure out the proper
+        // place to really handle request deletes.
+        load_req.setRequest(nullptr);
+        req->discard();
+        return std::make_shared<GenericISA::M5PanicFault>(
+            "Strictly ordered load [sn:%llx] PC %s\n",
+            load_inst->seqNum, load_inst->pcState());
+    }
+
+    DPRINTF(LSQUnit, "Read called, load idx: %i, store idx: %i, "
+            "storeHead: %i addr: %#x%s\n",
+            load_idx - 1, load_inst->sqIt._idx, storeQueue.head() - 1,
+            req->mainRequest()->getPaddr(), req->isSplit() ? " split" : "");
+
+    if (req->mainRequest()->isLLSC()) {
+// #if THE_ISA == RISCV_ISA
+//         if (sreqLow) {
+//             return std::make_shared<RiscvISA::AddressFault>(
+//                     req->getPaddr(), RiscvISA::AMO_ADDR_MISALIGNED);
+//         }
+// #else
+//         assert(!sreqLow);
+// #endif
+        // Disable recording the result temporarily.  Writing to misc
+        // regs normally updates the result, but this is not the
+        // desired behavior when handling store conditionals.
+        load_inst->recordResult(false);
+        TheISA::handleLockedRead(load_inst.get(), req->mainRequest());
+        load_inst->recordResult(true);
+    }
+
+    if (req->mainRequest()->isLocalAccess()) {
+        assert(!load_inst->memData);
+        assert(!load_inst->inHtmTransactionalState());
+        load_inst->memData = new uint8_t[MaxDataBytes];
+
+        ThreadContext *thread = cpu->tcBase(lsqID);
+        PacketPtr main_pkt = new Packet(req->mainRequest(), MemCmd::ReadReq);
+
+        main_pkt->dataStatic(load_inst->memData);
+
+        Cycles delay = req->mainRequest()->localAccessor(thread, main_pkt);
+
+        WritebackEvent *wb = new WritebackEvent(load_inst, main_pkt, this);
+        cpu->schedule(wb, cpu->clockEdge(delay));
+        return NoFault;
+    }
+
+    // hardware transactional memory
+    if (req->mainRequest()->isHTMStart() || req->mainRequest()->isHTMCommit())
+    {
+        // don't want to send nested transactionStarts and
+        // transactionStops outside of core, e.g. to Ruby
+        if (req->mainRequest()->getFlags().isSet(Request::NO_ACCESS)) {
+            Cycles delay(0);
+            PacketPtr data_pkt =
+                new Packet(req->mainRequest(), MemCmd::ReadReq);
+
+            // Allocate memory if this is the first time a load is issued.
+            if (!load_inst->memData) {
+                load_inst->memData =
+                    new uint8_t[req->mainRequest()->getSize()];
+                // sanity checks espect zero in request's data
+                memset(load_inst->memData, 0, req->mainRequest()->getSize());
+            }
+
+            data_pkt->dataStatic(load_inst->memData);
+            if (load_inst->inHtmTransactionalState()) {
+                data_pkt->setHtmTransactional(
+                    load_inst->getHtmTransactionUid());
+            }
+            data_pkt->makeResponse();
+
+            WritebackEvent *wb = new WritebackEvent(load_inst, data_pkt, this);
+            cpu->schedule(wb, cpu->clockEdge(delay));
+            return NoFault;
+        }
+    }
+
+    // we do not perform store-to-load bypassing in LSQ when using NoSQ
+    DPRINTF(LSQUnit, "Doing memory access for inst [sn:%lli] PC %s\n",
+            load_inst->seqNum, load_inst->pcState());
+
+    // Allocate memory if this is the first time a load is issued.
+    if (!load_inst->memData) {
+        load_inst->memData = new uint8_t[req->mainRequest()->getSize()];
+    }
+
+
+    // hardware transactional memory
+    if (req->mainRequest()->isHTMCmd()) {
+        // this is a simple sanity check
+        // the Ruby cache controller will set
+        // memData to 0x0ul if successful.
+        *load_inst->memData = (uint64_t) 0x1ull;
+    }
+
+    // For now, load throughput is constrained by the number of
+    // load FUs only, and loads do not consume a cache port (only
+    // stores do).
+    // @todo We should account for cache port contention
+    // and arbitrate between loads and stores.
+
+    // if we the cache is not blocked, do cache access
+    if (req->senderState() == nullptr) {
+        LQSenderState *state = new LQSenderState(
+                loadQueue.getIterator(load_idx));
+        state->isLoad = true;
+        state->inst = load_inst;
+        state->isSplit = req->isSplit();
+        req->senderState(state);
+    }
+    req->buildPackets();
+    req->sendPacketToCache();
+    if (!req->isSent())
+        iewStage->blockMemInst(load_inst);
+
+    return NoFault;
+}
+
+template <class Impl>
+Fault
+LSQUnit<Impl>::write(LSQRequest *req, uint8_t *data, int store_idx)
+{
+    assert(storeQueue[store_idx].valid());
+
+    DPRINTF(LSQUnit, "Doing write to store idx %i, addr %#x | storeHead:%i "
+            "[sn:%llu]\n",
+            store_idx - 1, req->request()->getPaddr(), storeQueue.head() - 1,
+            storeQueue[store_idx].instruction()->seqNum);
+
+    storeQueue[store_idx].setRequest(req);
+    unsigned size = req->_size;
+    storeQueue[store_idx].size() = size;
+    bool store_no_data =
+        req->mainRequest()->getFlags() & Request::STORE_NO_DATA;
+    storeQueue[store_idx].isAllZeros() = store_no_data;
+    assert(size <= SQEntry::DataSize || store_no_data);
+
+    // copy data into the storeQueue only if the store request has valid data
+    if (!(req->request()->getFlags() & Request::CACHE_BLOCK_ZERO) &&
+        !req->request()->isCacheMaintenance() &&
+        !req->request()->isAtomic())
+        memcpy(storeQueue[store_idx].data(), data, size);
+
+    // This function only writes the data to the store queue, so no fault
+    // can happen here.
+    return NoFault;
 }
 #endif // __CPU_FF_LSQ_UNIT_HH__

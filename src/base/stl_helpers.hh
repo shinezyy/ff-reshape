@@ -67,15 +67,6 @@ class ContainerPrint
     }
 };
 
-// Treat all objects in an stl container as pointers to heap objects,
-// calling delete on each one and zeroing the pointers along the way
-template <template <typename T, typename A> class C, typename T, typename A>
-void
-deletePointers(C<T,A> &container)
-{
-    std::for_each(container.begin(), container.end(), deletePointer<T>);
-}
-
 // Write out all elements in an stl container as a space separated
 // list enclosed in square brackets
 #if (defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >1900 && defined(_HAS_CXX17) && _HAS_CXX17 == 1)

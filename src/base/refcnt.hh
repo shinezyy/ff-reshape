@@ -95,11 +95,11 @@ class RefCounted
 
     /// Increment the reference count
 
-    void incref() const { ++count; }
+    virtual void incref() { ++count; }
 
     /// Decrement the reference count and destroy the object if all
     /// references are gone.
-    void decref() const { if (--count <= 0) delete this; }
+    virtual void decref() { if (--count <= 0) delete this; }
 
 };
 

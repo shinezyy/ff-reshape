@@ -56,6 +56,7 @@
 #include "cpu/pred/loop_info.hh"
 #include "cpu/pred/loop_predictor.hh"
 #include "cpu/pred/tage.hh"
+#include "params/LTAGE.hh"
 
 class LTAGE : public TAGE
 {

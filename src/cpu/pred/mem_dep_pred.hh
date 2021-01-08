@@ -8,11 +8,12 @@
 
 #include <boost/dynamic_bitset.hpp>
 
+#include "base/logging.hh"
 #include "base/random.hh"
 #include "base/types.hh"
 #include "cpu/forwardflow/dq_pointer.hh"
 #include "cpu/inst_seq.hh"
-#include "cpu/pred/sat_counter.hh"
+#include "base/sat_counter.hh"
 #include "debug/NoSQPred.hh"
 #include "params/MemDepPredictor.hh"
 #include "sim/sim_object.hh"

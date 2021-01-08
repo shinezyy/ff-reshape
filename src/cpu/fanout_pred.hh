@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "cpu/fanout_pred_features.hh"
-#include "cpu/pred/sat_counter.hh"
+#include "base/sat_counter.hh"
 
 struct BaseCPUParams;
 

@@ -55,7 +55,6 @@
 #include "arch/generic/tlb.hh"
 #include "arch/isa_traits.hh"
 #include "arch/utility.hh"
-#include "arch/vtophys.hh"
 #include "base/random.hh"
 #include "base/types.hh"
 #include "config/the_isa.hh"
@@ -651,7 +650,7 @@ DefaultFetch<Impl>::fetchCacheLine(Addr vaddr, ThreadID tid, Addr pc)
     // Build request here.
     RequestPtr mem_req = std::make_shared<Request>(
         tid, fetchBufferBlockPC, fetchBufferSize,
-        Request::INST_FETCH, cpu->instMasterId(), pc,
+        Request::INST_FETCH, cpu->instRequestorId(), pc,
         cpu->thread[tid]->contextId());
 
     mem_req->taskId(cpu->taskId());

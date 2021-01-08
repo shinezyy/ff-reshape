@@ -195,8 +195,8 @@ ForwarderInst::execute(
                 xc->setVecRegOperand(this, 0, val);
 
         } else if (_srcRegIdx[0].isFloatReg()) {
-                auto val = xc->readFloatRegOperand(this, 0);
-                xc->setFloatRegOperand(this, 0, val);
+                auto val = xc->readFloatRegOperandBits(this, 0);
+                xc->setFloatRegOperandBits(this, 0, val);
 
         } else if (_srcRegIdx[0].isIntReg()) {
                 auto val = xc->readIntRegOperand(this, 0);

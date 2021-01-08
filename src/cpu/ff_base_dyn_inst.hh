@@ -445,7 +445,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     uint32_t socketId() const { return cpu->socketId(); }
 
     /** Read this CPU's data requestor ID */
-    MasterID masterId() const { return cpu->dataMasterId(); }
+    RequestorID requestorId() const { return cpu->dataRequestorId(); }
 
     /** Read this context's system-wide ID **/
     ContextID contextId() const { return thread->contextId(); }
@@ -940,7 +940,7 @@ BaseDynInst<Impl>::initiateMemRead(Addr addr, unsigned size,
         sreqHigh = savedSreqHigh;
     } else {
         req = std::make_shared<Request>(
-            asid, addr, size, flags, masterId(),
+            asid, addr, size, flags, requestorId(),
             this->pc.instAddr(), thread->contextId());
 
         req->taskId(cpu->taskId());
@@ -997,7 +997,7 @@ BaseDynInst<Impl>::writeMem(uint8_t *data, unsigned size, Addr addr,
         sreqHigh = savedSreqHigh;
     } else {
         req = std::make_shared<Request>(
-            asid, addr, size, flags, masterId(),
+            asid, addr, size, flags, requestorId(),
             this->pc.instAddr(), thread->contextId());
 
         req->taskId(cpu->taskId());

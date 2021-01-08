@@ -171,16 +171,8 @@ class DerivFFCPU(BaseCPU):
 
     #branchPred = Param.BranchPredictor(TournamentBP(numThreads =
     #                                                   Parent.numThreads),
-    #branchPred = Param.BranchPredictor(LTAGE(numThreads =
-    #                                                   Parent.numThreads),
-    #branchPred = Param.BranchPredictor(PerceptronLocalBP(numThreads =
-    #                                                  Parent.numThreads),
-    branchPred = Param.BranchPredictor(MyPerceptron(numThreads =
+    branchPred = Param.BranchPredictor(LTAGE(numThreads =
                                                        Parent.numThreads),
-    #branchPred = Param.BranchPredictor(PathPerceptron(numThreads =
-    #                                                    Parent.numThreads),
-    #branchPred = Param.BranchPredictor(Perceptron(numThreads =
-    #                                                    Parent.numThreads),
     #branchPred = Param.BranchPredictor(LocalBP(numThreads =
     #                                                   Parent.numThreads),
                                        "Branch Predictor")
