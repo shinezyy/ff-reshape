@@ -52,6 +52,9 @@ class OpClass(Enum):
             'SimdFloatReduceAdd', 'SimdFloatReduceCmp',
             'SimdAes', 'SimdAesMix', 'SimdSha1Hash', 'SimdSha1Hash2',
             'SimdSha256Hash', 'SimdSha256Hash2', 'SimdShaSigma2',
+
+            'Forwarder',
+
             'SimdShaSigma3',
             'SimdPredAlu',
             'MemRead', 'MemWrite', 'FloatMemRead', 'FloatMemWrite',

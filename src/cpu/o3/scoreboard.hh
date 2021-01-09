@@ -76,7 +76,7 @@ class Scoreboard
     /** Checks if the register is ready. */
     bool getReg(PhysRegIdPtr phys_reg) const
     {
-        assert(phys_reg->flatIndex() < numPhysRegs);
+        assert((uint32_t) phys_reg->flatIndex() < numPhysRegs);
 
         if (phys_reg->isFixedMapping()) {
             // Fixed mapping regs are always ready
@@ -94,7 +94,7 @@ class Scoreboard
     /** Sets the register as ready. */
     void setReg(PhysRegIdPtr phys_reg)
     {
-        assert(phys_reg->flatIndex() < numPhysRegs);
+        assert((uint32_t) phys_reg->flatIndex() < numPhysRegs);
 
         if (phys_reg->isFixedMapping()) {
             // Fixed mapping regs are always ready, ignore attempts to change
@@ -111,7 +111,7 @@ class Scoreboard
     /** Sets the register as not ready. */
     void unsetReg(PhysRegIdPtr phys_reg)
     {
-        assert(phys_reg->flatIndex() < numPhysRegs);
+        assert((uint32_t)phys_reg->flatIndex() < numPhysRegs);
 
         if (phys_reg->isFixedMapping()) {
             // Fixed mapping regs are always ready, ignore attempts to

@@ -55,6 +55,7 @@
 #include "cpu/o3/iew.hh"
 #include "cpu/timebuf.hh"
 #include "debug/Activity.hh"
+#include "debug/DLarge.hh"
 #include "debug/Drain.hh"
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
@@ -630,11 +631,17 @@ DefaultIEW<Impl>::instToCommit(const DynInstPtr& inst)
     // keep looking back to see where's the first time there's a
     // free slot.
     while ((*iewQueue)[wbCycle].insts[wbNumInst]) {
+        DPRINTF(DLarge, "start: wb cycle: %i, width: %i,"
+                " numInst: %i\nwbActual:%i\n",
+                wbCycle, wbWidth, wbNumInst, wbCycle * wbWidth + wbNumInst);
         ++wbNumInst;
         if (wbNumInst == wbWidth) {
             ++wbCycle;
             wbNumInst = 0;
         }
+        DPRINTF(DLarge, "end: wb cycle: %i, width: %i,"
+                " numInst: %i\nwbActual:%i\n",
+                wbCycle, wbWidth, wbNumInst, wbCycle * wbWidth + wbNumInst);
     }
 
     DPRINTF(IEW, "Current wb cycle: %i, width: %i, numInst: %i\nwbActual:%i\n",
@@ -768,6 +775,7 @@ DefaultIEW<Impl>::checkStall(ThreadID tid)
         ret_val = true;
     } else if (instQueue.isFull(tid)) {
         DPRINTF(IEW,"[tid:%i] Stall: IQ  is full.\n",tid);
+        ++iewIQFullEvents;
         ret_val = true;
     }
 
@@ -1330,6 +1338,7 @@ DefaultIEW<Impl>::executeInsts()
                     // Send this instruction to commit, also make sure iew stage
                     // realizes there is activity.
                     inst->setExecuted();
+                    DPRINTF(DLarge, "Inst to commit call site 1\n");
                     instToCommit(inst);
                     activityThisCycle();
                 }
@@ -1354,6 +1363,7 @@ DefaultIEW<Impl>::executeInsts()
 
             inst->setExecuted();
 
+            DPRINTF(DLarge, "Inst to commit call site 2\n");
             instToCommit(inst);
         }
 

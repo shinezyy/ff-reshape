@@ -56,7 +56,7 @@
  */
 class RefCounted
 {
-  private:
+  protected:
     // The reference count is mutable because one may want to
     // reference count a const pointer.  This really is OK because
     // const is about logical constness of the object not really about
@@ -78,7 +78,8 @@ class RefCounted
      * @attention A memory leak will occur if you never assign a newly
      * constructed object to a reference counting pointer.
      */
-    RefCounted() : count(0) {}
+    RefCounted() : count(0) {
+    }
 
     /**
      * We make the destructor virtual because we're likely to have

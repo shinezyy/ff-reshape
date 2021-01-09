@@ -41,11 +41,13 @@
 #ifndef __CPU_O3_COMMIT_HH__
 #define __CPU_O3_COMMIT_HH__
 
+#include <array>
 #include <queue>
 
 #include "base/statistics.hh"
 #include "cpu/exetrace.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/o3/probe/branch_trace.hh"
 #include "cpu/timebuf.hh"
 #include "enums/CommitPolicy.hh"
 #include "sim/probe/probe.hh"
@@ -524,7 +526,22 @@ class DefaultCommit
 
         /** Number of cycles where the commit bandwidth limit is reached. */
         Stats::Scalar commitEligibleSamples;
+
+        Stats::Scalar HeadNotExec;
     } stats;
+
+
+private:
+    std::array<bool, Impl::MaxThreads> skipThisCycle;
+
+    const unsigned commitTraceInterval;
+    unsigned commitCounter;
+
+    uint64_t commitAll{};
+
+    BranchTrace *branchTrace;
+
+    uint32_t branchCounter{};
 };
 
 #endif // __CPU_O3_COMMIT_HH__

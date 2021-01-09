@@ -47,6 +47,7 @@
 
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
+#include "cpu/o3/scoreboard.hh"
 #include "cpu/timebuf.hh"
 #include "sim/probe/probe.hh"
 
@@ -470,6 +471,7 @@ class DefaultRename
         IQ,
         LQ,
         SQ,
+        Register,
         NONE
     };
 

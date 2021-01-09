@@ -77,6 +77,17 @@ class PCState : public GenericISA::UPCState<MachInst>
                     nupc() != upc() + 1;
         }
     }
+
+	void instNPC(Addr val)
+	{
+		_npc = val;
+	}
+
+	Addr instNPC() const
+	{
+		return npc();
+	}
+
 };
 
 }

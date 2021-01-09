@@ -41,6 +41,8 @@
 #ifndef __CPU_O3_COMMIT_IMPL_HH__
 #define __CPU_O3_COMMIT_IMPL_HH__
 
+#include "cpu/o3/commit.hh"
+
 #include <algorithm>
 #include <set>
 #include <string>
@@ -49,19 +51,20 @@
 #include "base/loader/symtab.hh"
 #include "base/logging.hh"
 #include "config/the_isa.hh"
-#include "cpu/checker/cpu.hh"
-#include "cpu/o3/commit.hh"
-#include "cpu/o3/thread_state.hh"
 #include "cpu/base.hh"
+#include "cpu/checker/cpu.hh"
 #include "cpu/exetrace.hh"
+#include "cpu/o3/thread_state.hh"
 #include "cpu/timebuf.hh"
 #include "debug/Activity.hh"
+#include "debug/BranchResolve.hh"
 #include "debug/Commit.hh"
 #include "debug/CommitRate.hh"
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
 #include "debug/HtmCpu.hh"
 #include "debug/O3PipeView.hh"
+#include "debug/ValueCommit.hh"
 #include "params/DerivO3CPU.hh"
 #include "sim/faults.hh"
 #include "sim/full_system.hh"
@@ -94,6 +97,8 @@ DefaultCommit<Impl>::DefaultCommit(O3CPU *_cpu, DerivO3CPUParams *params)
       canHandleInterrupts(true),
       avoidQuiesceLiveLock(false),
       stats(_cpu, this)
+      , commitTraceInterval(params->commitTraceInterval)
+      , commitCounter(0)
 {
     if (commitWidth > Impl::MaxWidth)
         fatal("commitWidth (%d) is larger than compiled limit (%d),\n"
@@ -127,6 +132,8 @@ DefaultCommit<Impl>::DefaultCommit(O3CPU *_cpu, DerivO3CPUParams *params)
         htmStops[tid] = 0;
     }
     interrupt = NoFault;
+
+    branchTrace = params->branchTrace;
 }
 
 template <class Impl>
@@ -171,6 +178,8 @@ DefaultCommit<Impl>::CommitStats::CommitStats(O3CPU *cpu,
       ADD_STAT(committedInstType, "Class of committed instruction"),
       ADD_STAT(commitEligibleSamples, "number cycles where commit BW limit"
           " reached")
+
+      , ADD_STAT(HeadNotExec, "HeadNotExec")
 {
     using namespace Stats;
 
@@ -221,16 +230,6 @@ DefaultCommit<Impl>::CommitStats::CommitStats(O3CPU *cpu,
     integer
         .init(cpu->numThreads)
         .flags(total);
-
-    functionCalls
-        .init(commit->numThreads)
-        .flags(total);
-
-    committedInstType
-        .init(commit->numThreads,Enums::Num_OpClass)
-        .flags(total | pdf | dist);
-
-    committedInstType.ysubnames(Enums::OpClassStrings);
 }
 
 template <class Impl>
@@ -331,6 +330,7 @@ DefaultCommit<Impl>::startupStage()
     cpu->activateStage(O3CPU::CommitIdx);
 
     cpu->activityThisCycle();
+    commitCounter = 0;
 }
 
 template <class Impl>
@@ -661,6 +661,8 @@ DefaultCommit<Impl>::tick()
     if (activeThreads->empty())
         return;
 
+    std::fill(skipThisCycle.begin(), skipThisCycle.end(), false);
+
     list<ThreadID>::iterator threads = activeThreads->begin();
     list<ThreadID>::iterator end = activeThreads->end();
 
@@ -734,6 +736,7 @@ template <class Impl>
 void
 DefaultCommit<Impl>::handleInterrupt()
 {
+    DPRINTF(Commit, "handleInterrupt entry.\n");
     // Verify that we still have an interrupt to handle
     if (!cpu->checkInterrupts(0)) {
         DPRINTF(Commit, "Pending interrupt is cleared by requestor before "
@@ -1016,8 +1019,11 @@ DefaultCommit<Impl>::commitInsts()
 
         // ThreadID commit_thread = getCommittingThread();
 
-        if (commit_thread == -1 || !rob->isHeadReady(commit_thread))
+        if (commit_thread == -1 || !rob->isHeadReady(commit_thread)) {
+            DPRINTF(Commit, "commit_thread = %i || ROB head not ready.\n", commit_thread);
+            HeadNotExec++;
             break;
+        }
 
         head_inst = rob->readHeadInst(commit_thread);
 
@@ -1147,7 +1153,8 @@ DefaultCommit<Impl>::commitInsts()
                     if (count > 1) {
                         DPRINTF(Commit,
                                 "PC skip function event, stopping commit\n");
-                        break;
+                        skipThisCycle[tid] = true;
+                        continue;
                     }
                 }
 
@@ -1165,7 +1172,9 @@ DefaultCommit<Impl>::commitInsts()
                 DPRINTF(Commit, "Unable to commit head instruction PC:%s "
                         "[tid:%i] [sn:%llu].\n",
                         head_inst->pcState(), tid ,head_inst->seqNum);
-                break;
+
+                skipThisCycle[tid] = true;
+                continue;
             }
         }
     }
@@ -1334,6 +1343,43 @@ DefaultCommit<Impl>::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
     DPRINTF(Commit,
             "[tid:%i] [sn:%llu] Committing instruction with PC %s\n",
             tid, head_inst->seqNum, head_inst->pcState());
+
+    if (commitCounter == commitTraceInterval) {
+        DPRINTFR(ValueCommit, "%llu VCommitting %llu instruction with sn:%lli PC:%s",
+                curTick(), commitAll, head_inst->seqNum, head_inst->pcState());
+        if (head_inst->numDestRegs() > 0) {
+            DPRINTFR(ValueCommit, ", with wb value: %llu",
+                    head_inst->getResult().asIntegerNoAssert());
+        } else {
+            DPRINTFR(ValueCommit, ", with wb value: none");
+        }
+        if (head_inst->isMemRef()) {
+            DPRINTFR(ValueCommit, ", with v_addr: 0x%x\n", head_inst->effAddr);
+        } else {
+            DPRINTFR(ValueCommit, ", with v_addr: none\n");
+        }
+        commitCounter = 0;
+    } else {
+        commitCounter++;
+    }
+
+    if (head_inst->isControl()) {
+        TheISA::PCState tempPC = head_inst->pcState();
+        TheISA::advancePC(tempPC, head_inst->staticInst);
+
+        if (Debug::BranchResolve) {
+            bool taken =
+                head_inst->pcState().compressed() ?
+                head_inst->nextInstAddr() - head_inst->instAddr() != 2:
+                head_inst->nextInstAddr() - head_inst->instAddr() != 4;
+
+            branchTrace->writeRecord(branchCounter++, taken,
+                    head_inst->instAddr(), head_inst->nextInstAddr());
+        }
+    }
+
+    commitAll++;
+
     if (head_inst->traceData) {
         head_inst->traceData->setFetchSeq(head_inst->seqNum);
         head_inst->traceData->setCPSeq(thread[tid]->numOp);
@@ -1519,9 +1565,10 @@ DefaultCommit<Impl>::getCommittingThread()
         assert(!activeThreads->empty());
         ThreadID tid = activeThreads->front();
 
-        if (commitStatus[tid] == Running ||
+        if ((commitStatus[tid] == Running ||
             commitStatus[tid] == Idle ||
-            commitStatus[tid] == FetchTrapPending) {
+            commitStatus[tid] == FetchTrapPending) &&
+                !skipThisCycle[tid]) {
             return tid;
         } else {
             return InvalidThreadID;
@@ -1575,7 +1622,7 @@ DefaultCommit<Impl>::oldestReady()
              commitStatus[tid] == Idle ||
              commitStatus[tid] == FetchTrapPending)) {
 
-            if (rob->isHeadReady(tid)) {
+            if (rob->isHeadReady(tid) && !skipThisCycle[tid]) {
 
                 const DynInstPtr &head_inst = rob->readHeadInst(tid);
 

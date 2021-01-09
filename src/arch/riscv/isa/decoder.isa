@@ -1464,7 +1464,12 @@ decode QUADRANT default Unknown::unknown() {
                             Rd_sd = numeric_limits<int32_t>::min();
                             FFLAGS |= FloatInvalid;
                         } else {
-                            Rd_sd = (int32_t)fs1;
+                            if (!rmm_demand) {
+                                Rd_sd = (int32_t)fs1;
+                            } else {
+                                rmm_resolved = true;
+                                Rd_sd = (int32_t) roundf(fs1);
+                            }
                         }
                     }}, FloatCvtOp);
                     0x1: fcvt_wu_s({{
@@ -1482,7 +1487,12 @@ decode QUADRANT default Unknown::unknown() {
                             Rd = numeric_limits<uint64_t>::max();
                             FFLAGS |= FloatInvalid;
                         } else {
-                            Rd = (uint32_t)fs1;
+                            if (!rmm_demand) {
+                                Rd = (uint32_t) fs1;
+                            } else {
+                                rmm_resolved = true;
+                                Rd = (uint32_t) roundf(fs1);
+                            }
                         }
                     }}, FloatCvtOp);
                     0x2: fcvt_l_s({{
@@ -1501,7 +1511,12 @@ decode QUADRANT default Unknown::unknown() {
                             Rd_sd = numeric_limits<int64_t>::min();
                             FFLAGS |= FloatInvalid;
                         } else {
-                            Rd_sd = (int64_t)fs1;
+                            if (!rmm_demand) {
+                                Rd_sd = (int64_t)fs1;
+                            } else {
+                                rmm_resolved = true;
+                                Rd_sd = (int64_t) roundf(fs1);
+                            }
                         }
                     }}, FloatCvtOp);
                     0x3: fcvt_lu_s({{
@@ -1519,7 +1534,12 @@ decode QUADRANT default Unknown::unknown() {
                             Rd = numeric_limits<uint64_t>::max();
                             FFLAGS |= FloatInvalid;
                         } else {
-                            Rd = (uint64_t)fs1;
+                            if (!rmm_demand) {
+                                Rd = (uint64_t) fs1;
+                            } else {
+                                rmm_resolved = true;
+                                Rd = (uint64_t) roundf(fs1);
+                            }
                         }
                     }}, FloatCvtOp);
                 }
@@ -1537,7 +1557,12 @@ decode QUADRANT default Unknown::unknown() {
                             Rd_sd = numeric_limits<int32_t>::min();
                             FFLAGS |= FloatInvalid;
                         } else {
-                            Rd_sd = (int32_t)Fs1;
+                            if (!rmm_demand) {
+                                Rd_sd = (int32_t)Fs1;
+                            } else {
+                                rmm_resolved = true;
+                                Rd_sd = (int32_t) round(Fs1);
+                            }
                         }
                     }}, FloatCvtOp);
                     0x1: fcvt_wu_d({{
@@ -1552,7 +1577,12 @@ decode QUADRANT default Unknown::unknown() {
                             Rd = numeric_limits<uint64_t>::max();
                             FFLAGS |= FloatInvalid;
                         } else {
-                            Rd = (uint32_t)Fs1;
+                            if (!rmm_demand) {
+                                Rd = (uint32_t) Fs1;
+                            } else {
+                                rmm_resolved = true;
+                                Rd = (uint32_t) round(Fs1);
+                            }
                         }
                     }}, FloatCvtOp);
                     0x2: fcvt_l_d({{
@@ -1568,7 +1598,12 @@ decode QUADRANT default Unknown::unknown() {
                             Rd_sd = numeric_limits<int64_t>::min();
                             FFLAGS |= FloatInvalid;
                         } else {
-                            Rd_sd = Fs1;
+                            if (!rmm_demand) {
+                                Rd_sd = (int64_t)Fs1;
+                            } else {
+                                rmm_resolved = true;
+                                Rd_sd = (int64_t) round(Fs1);
+                            }
                         }
                     }}, FloatCvtOp);
                     0x3: fcvt_lu_d({{
@@ -1583,7 +1618,12 @@ decode QUADRANT default Unknown::unknown() {
                             Rd = numeric_limits<uint64_t>::max();
                             FFLAGS |= FloatInvalid;
                         } else {
-                            Rd = Fs1;
+                            if (!rmm_demand) {
+                                Rd = (uint64_t) Fs1;
+                            } else {
+                                rmm_resolved = true;
+                                Rd = (uint64_t) round(Fs1);
+                            }
                         }
                     }}, FloatCvtOp);
                 }
@@ -1613,7 +1653,12 @@ decode QUADRANT default Unknown::unknown() {
                         Fd = (double)Rs1_uw;
                     }}, FloatCvtOp);
                     0x2: fcvt_d_l({{
-                        Fd = (double)Rs1_sd;
+                        if (!rmm_demand) {
+                            Fd = (double)Rs1_sd;
+                        } else {
+                            rmm_resolved = true;
+                            Fd = round((double)Rs1_sd);
+                        }
                     }}, FloatCvtOp);
                     0x3: fcvt_d_lu({{
                         Fd = (double)Rs1;

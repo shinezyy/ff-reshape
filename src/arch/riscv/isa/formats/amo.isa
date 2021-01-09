@@ -468,7 +468,7 @@ def format LoadReserved(memacc_code, postacc_code={{ }}, ea_code={{EA = Rs1;}},
     exec_output = ''
 
     mem_flags = makeList(mem_flags)
-    inst_flags = makeList(inst_flags)
+    inst_flags = makeList(inst_flags) + ["IsLoadReserved"]
     iop = InstObjParams(name, Name, 'LoadReserved',
         {'ea_code': ea_code, 'memacc_code': memacc_code,
         'postacc_code': postacc_code}, inst_flags)
@@ -538,4 +538,5 @@ def format AtomicMemOp(memacc_code, amoop_code, postacc_code={{ }},
     exec_output += AtomicMemOpRMWExecute.subst(rmw_iop) \
                  + AtomicMemOpRMWInitiateAcc.subst(rmw_iop) \
                  + AtomicMemOpRMWCompleteAcc.subst(rmw_iop)
+
 }};

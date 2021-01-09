@@ -161,7 +161,10 @@ class StaticInst : public RefCounted, public StaticInstFlags
     bool isLoad()         const { return flags[IsLoad]; }
     bool isStore()        const { return flags[IsStore]; }
     bool isAtomic()       const { return flags[IsAtomic]; }
-    bool isStoreConditional()     const { return flags[IsStoreConditional]; }
+    bool isLoadReserved()         const { return flags[IsLoadReserved]; }
+    bool isRVAmoStoreHalf()         const { return flags[IsRVAmoStoreHalf]; }
+    bool isRVAmoLoadHalf()         const { return flags[IsRVAmoLoadHalf]; }
+    bool isStoreConditional()       const { return flags[IsStoreConditional]; }
     bool isInstPrefetch() const { return flags[IsInstPrefetch]; }
     bool isDataPrefetch() const { return flags[IsDataPrefetch]; }
     bool isPrefetch()     const { return isInstPrefetch() ||
@@ -200,6 +203,7 @@ class StaticInst : public RefCounted, public StaticInstFlags
     bool isDelayedCommit() const { return flags[IsDelayedCommit]; }
     bool isLastMicroop() const { return flags[IsLastMicroop]; }
     bool isFirstMicroop() const { return flags[IsFirstMicroop]; }
+    bool isForwarder() const { return flags[IsForwarder]; }
     //This flag doesn't do anything yet
     bool isMicroBranch() const { return flags[IsMicroBranch]; }
     // hardware transactional memory
@@ -374,5 +378,27 @@ class StaticInst : public RefCounted, public StaticInstFlags
      */
     virtual size_t asBytes(void *buf, size_t max_size) { return 0; }
 };
+
+class ForwarderInst : public StaticInst
+{
+public:
+    ForwarderInst(const RegId &src_reg);
+
+    Fault execute(ExecContext *xc, Trace::InstRecord *traceData) const override;
+
+    void advancePC(TheISA::PCState &pcState) const override
+    {
+        //pass
+    }
+
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const override
+    {
+        return mnemonic;
+    }
+
+private:
+};
+
+
 
 #endif // __CPU_STATIC_INST_HH__

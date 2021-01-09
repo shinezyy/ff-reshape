@@ -1,0 +1,138 @@
+# -*- mode:python -*-
+
+# Copyright (c) 2006 The Regents of The University of Michigan
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met: redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer;
+# redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution;
+# neither the name of the copyright holders nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Authors: Nathan Binkert
+
+import sys
+
+Import('*')
+
+if 'FFCPU' in env['CPU_MODELS']:
+    SimObject('FFFUPool.py')
+    SimObject('FFFuncUnitConfig.py')
+    SimObject('GroupedFUConfig.py')
+    SimObject('FFCPU.py')
+
+    Source('base_dyn_inst.cc')
+    Source('cpu.cc')
+    Source('deriv.cc')
+    Source('decode.cc')
+    Source('dyn_inst.cc')
+    Source('fetch.cc')
+    Source('fu_pool.cc')
+    Source('lsq.cc')
+    Source('lsq_unit.cc')
+    Source('mem_dep_unit.cc')
+    Source('store_set.cc')
+    Source('thread_context.cc')
+
+    Source('arch_state.cc')
+    Source('allocation.cc')
+
+    Source('dataflow_queue_common.cc')
+    Source('dataflow_queue_bank.cc')
+    Source('dataflow_queue.cc')
+    Source('dataflow_queue_top.cc')
+
+    Source('ready_inst_queue.cc')
+
+    Source('diewc.cc')
+    Source('fu_wrapper.cc')
+    Source('network.cc')
+    Source('dq_pointer.cc')
+
+    # DebugFlag('CommitRate')
+    # DebugFlag('IEW')
+    # DebugFlag('IQ')
+    # DebugFlag('LSQ')
+    # DebugFlag('LSQUnit')
+    # DebugFlag('MemDepUnit')
+    # DebugFlag('ROB')
+    # DebugFlag('Rename')
+    # DebugFlag('Scoreboard')
+    # DebugFlag('StoreSet')
+    # DebugFlag('Writeback')
+    # DebugFlag('DLarge')
+    DebugFlag('FFCPU')
+    DebugFlag('DAllocation')
+    DebugFlag('DIEWC')
+    DebugFlag('DQ')
+    DebugFlag('DQB')
+    DebugFlag('DQRead')
+    DebugFlag('DQWake')
+    DebugFlag('DQWrite')
+    DebugFlag('Omega')
+    DebugFlag('DQOmega')
+    DebugFlag('FUW')
+    DebugFlag('FUW2')
+    DebugFlag('FUPipe')
+    DebugFlag('FFCommit')
+    DebugFlag('FUSched')
+    DebugFlag('FFSquash')
+    DebugFlag('FFInit')
+    DebugFlag('FFReg')
+    DebugFlag('FFExec')
+    DebugFlag('FFLSQ')
+    DebugFlag('FanoutPred')
+    DebugFlag('FanoutPred1')
+    DebugFlag('FanoutLog')
+    DebugFlag('Reshape')
+    DebugFlag('Reshape2')
+    DebugFlag('QClog')
+    DebugFlag('DQWakeV1')
+    DebugFlag('RSProbe1')
+    DebugFlag('RSProbe2')
+    DebugFlag('RSProbe3')
+    DebugFlag('ReadyHint')
+    DebugFlag('CrossBar')
+    DebugFlag('CrossBarNarrow')
+
+    DebugFlag('DQGDisp')
+    DebugFlag('DQGDL')
+    DebugFlag('DQGOF')
+    DebugFlag('DQV2')
+    DebugFlag('DQPair')
+    DebugFlag('FFDisp')
+
+    DebugFlag('ObFU')
+    DebugFlag('CommitObserve')
+    DebugFlag('ObExec')
+
+    DebugFlag('NoSQPred')
+    DebugFlag('NoSQSMB')
+    DebugFlag('NoSQHash')
+    DebugFlag('ASMCommit')
+
+    CompoundFlag('FFCPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',
+        'IQ', 'ROB', 'FreeList', 'LSQ', 'LSQUnit', 'StoreSet', 'MemDepUnit',
+        'DynInst', 'FFCPU', 'Activity', 'Scoreboard', 'Writeback', 'DLarge'])
+
+    SimObject('FFChecker.py')
+    Source('checker.cc')
+else:
+    print "FFCPU not in CPU models!"

@@ -1,0 +1,254 @@
+Auto-merging util/style/verifiers.py
+Auto-merging src/sim/syscall_emul.hh
+Auto-merging src/sim/syscall_emul.cc
+CONFLICT (content): Merge conflict in src/sim/syscall_emul.cc
+Auto-merging src/sim/simulate.cc
+Auto-merging src/sim/fd_array.cc
+CONFLICT (modify/delete): src/sim/eventq_impl.hh deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/sim/eventq_impl.hh left in tree.
+Auto-merging src/proto/SConscript
+Auto-merging src/mem/slicc/symbols/Type.py
+Auto-merging src/mem/slicc/symbols/StateMachine.py
+CONFLICT (modify/delete): src/mem/ruby/system/WeightedLRUReplacementPolicy.py deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/ruby/system/WeightedLRUReplacementPolicy.py left in tree.
+Auto-merging src/mem/ruby/system/VIPERCoalescer.py
+Auto-merging src/mem/ruby/system/Sequencer.py
+CONFLICT (content): Merge conflict in src/mem/ruby/system/Sequencer.py
+Auto-merging src/mem/ruby/system/RubySystem.py
+CONFLICT (content): Merge conflict in src/mem/ruby/system/RubySystem.py
+Auto-merging src/mem/ruby/system/GPUCoalescer.py
+Auto-merging src/mem/ruby/structures/RubyPrefetcher.py
+CONFLICT (content): Merge conflict in src/mem/ruby/structures/RubyPrefetcher.py
+Auto-merging src/mem/ruby/structures/RubyCache.py
+CONFLICT (content): Merge conflict in src/mem/ruby/structures/RubyCache.py
+CONFLICT (modify/delete): src/mem/ruby/structures/PseudoLRUReplacementPolicy.py deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/ruby/structures/PseudoLRUReplacementPolicy.py left in tree.
+CONFLICT (modify/delete): src/mem/ruby/structures/LRUReplacementPolicy.py deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/ruby/structures/LRUReplacementPolicy.py left in tree.
+Auto-merging src/mem/ruby/structures/CacheMemory.cc
+CONFLICT (content): Merge conflict in src/mem/ruby/structures/CacheMemory.cc
+Auto-merging src/mem/ruby/slicc_interface/Controller.py
+CONFLICT (content): Merge conflict in src/mem/ruby/slicc_interface/Controller.py
+Auto-merging src/mem/ruby/slicc_interface/AbstractController.cc
+CONFLICT (content): Merge conflict in src/mem/ruby/slicc_interface/AbstractController.cc
+Auto-merging src/mem/ruby/network/simple/SimpleNetwork.py
+Auto-merging src/mem/ruby/network/simple/SimpleLink.py
+CONFLICT (modify/delete): src/mem/ruby/network/garnet2.0/RoutingUnit.cc deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/ruby/network/garnet2.0/RoutingUnit.cc left in tree.
+CONFLICT (modify/delete): src/mem/ruby/network/garnet2.0/GarnetNetwork.py deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/ruby/network/garnet2.0/GarnetNetwork.py left in tree.
+CONFLICT (modify/delete): src/mem/ruby/network/garnet2.0/GarnetLink.py deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/ruby/network/garnet2.0/GarnetLink.py left in tree.
+Auto-merging src/mem/ruby/network/Topology.cc
+CONFLICT (content): Merge conflict in src/mem/ruby/network/Topology.cc
+Auto-merging src/mem/ruby/network/Network.py
+Auto-merging src/mem/ruby/network/BasicRouter.py
+CONFLICT (modify/delete): src/mem/ruby/filters/MultiBitSelBloomFilter.cc deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/ruby/filters/MultiBitSelBloomFilter.cc left in tree.
+CONFLICT (modify/delete): src/mem/ruby/filters/H3BloomFilter.cc deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/ruby/filters/H3BloomFilter.cc left in tree.
+Auto-merging src/mem/qport.hh
+Auto-merging src/mem/qos/q_policy.hh
+Auto-merging src/mem/qos/mem_sink.cc
+CONFLICT (content): Merge conflict in src/mem/qos/mem_sink.cc
+Auto-merging src/mem/qos/mem_ctrl.cc
+CONFLICT (content): Merge conflict in src/mem/qos/mem_ctrl.cc
+Auto-merging src/mem/qos/QoSMemSinkCtrl.py
+CONFLICT (content): Merge conflict in src/mem/qos/QoSMemSinkCtrl.py
+Auto-merging src/mem/qos/QoSMemCtrl.py
+CONFLICT (content): Merge conflict in src/mem/qos/QoSMemCtrl.py
+CONFLICT (modify/delete): src/mem/protocol/MI_example-dir.sm deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/protocol/MI_example-dir.sm left in tree.
+CONFLICT (modify/delete): src/mem/protocol/MESI_Three_Level-msg.sm deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/protocol/MESI_Three_Level-msg.sm left in tree.
+CONFLICT (modify/delete): src/mem/protocol/MESI_Three_Level-L1cache.sm deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/protocol/MESI_Three_Level-L1cache.sm left in tree.
+CONFLICT (modify/delete): src/mem/protocol/MESI_Three_Level-L0cache.sm deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/protocol/MESI_Three_Level-L0cache.sm left in tree.
+Auto-merging src/mem/probes/StackDistProbe.py
+Auto-merging src/mem/probes/MemTraceProbe.py
+Auto-merging src/mem/probes/MemFootprintProbe.py
+Auto-merging src/mem/packet_queue.hh
+CONFLICT (content): Merge conflict in src/mem/packet_queue.hh
+Auto-merging src/mem/packet_queue.cc
+CONFLICT (content): Merge conflict in src/mem/packet_queue.cc
+Auto-merging src/mem/mem_checker_monitor.cc
+CONFLICT (modify/delete): src/mem/dram_ctrl.cc deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/dram_ctrl.cc left in tree.
+Auto-merging src/mem/comm_monitor.hh
+CONFLICT (content): Merge conflict in src/mem/comm_monitor.hh
+Auto-merging src/mem/comm_monitor.cc
+CONFLICT (content): Merge conflict in src/mem/comm_monitor.cc
+Auto-merging src/mem/cache/tags/sector_tags.cc
+CONFLICT (content): Merge conflict in src/mem/cache/tags/sector_tags.cc
+Auto-merging src/mem/cache/tags/sector_blk.hh
+CONFLICT (content): Merge conflict in src/mem/cache/tags/sector_blk.hh
+Auto-merging src/mem/cache/tags/sector_blk.cc
+CONFLICT (content): Merge conflict in src/mem/cache/tags/sector_blk.cc
+Auto-merging src/mem/cache/tags/Tags.py
+Auto-merging src/mem/cache/queue.hh
+Auto-merging src/mem/cache/prefetch/tagged.hh
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/tagged.hh
+Auto-merging src/mem/cache/prefetch/tagged.cc
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/tagged.cc
+Auto-merging src/mem/cache/prefetch/stride.hh
+Auto-merging src/mem/cache/prefetch/stride.cc
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/stride.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/slim_ampm.hh
+Auto-merging src/mem/cache/prefetch/slim_ampm.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/slim_ampm.cc
+Auto-merging src/mem/cache/prefetch/slim_ampm.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/signature_path_v2.hh
+Auto-merging src/mem/cache/prefetch/signature_path_v2.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/signature_path_v2.cc
+Auto-merging src/mem/cache/prefetch/signature_path_v2.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/signature_path.hh
+Auto-merging src/mem/cache/prefetch/signature_path.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/signature_path.cc
+Auto-merging src/mem/cache/prefetch/signature_path.cc
+Auto-merging src/mem/cache/prefetch/queued.hh
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/queued.hh
+Auto-merging src/mem/cache/prefetch/queued.cc
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/queued.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/irregular_stream_buffer.hh
+Auto-merging src/mem/cache/prefetch/irregular_stream_buffer.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/irregular_stream_buffer.cc
+Auto-merging src/mem/cache/prefetch/irregular_stream_buffer.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/delta_correlating_prediction_tables.hh
+Auto-merging src/mem/cache/prefetch/delta_correlating_prediction_tables.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/delta_correlating_prediction_tables.cc
+Auto-merging src/mem/cache/prefetch/delta_correlating_prediction_tables.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/bop.hh
+Auto-merging src/mem/cache/prefetch/bop.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/bop.cc
+Auto-merging src/mem/cache/prefetch/bop.cc
+Auto-merging src/mem/cache/prefetch/base.hh
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/base.hh
+Auto-merging src/mem/cache/prefetch/base.cc
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/base.cc
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/associative_set_impl.hh
+Auto-merging src/mem/cache/prefetch/associative_set_impl.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/associative_set.hh
+Auto-merging src/mem/cache/prefetch/associative_set.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/access_map_pattern_matching.hh
+Auto-merging src/mem/cache/prefetch/access_map_pattern_matching.hh
+CONFLICT (add/add): Merge conflict in src/mem/cache/prefetch/access_map_pattern_matching.cc
+Auto-merging src/mem/cache/prefetch/access_map_pattern_matching.cc
+Auto-merging src/mem/cache/prefetch/SConscript
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/SConscript
+Auto-merging src/mem/cache/prefetch/Prefetcher.py
+CONFLICT (content): Merge conflict in src/mem/cache/prefetch/Prefetcher.py
+Auto-merging src/mem/cache/noncoherent_cache.hh
+Auto-merging src/mem/cache/noncoherent_cache.cc
+Auto-merging src/mem/cache/cache_blk.hh
+CONFLICT (content): Merge conflict in src/mem/cache/cache_blk.hh
+Auto-merging src/mem/cache/cache_blk.cc
+Auto-merging src/mem/cache/cache.hh
+Auto-merging src/mem/cache/cache.cc
+Auto-merging src/mem/cache/base.hh
+Auto-merging src/mem/cache/base.cc
+CONFLICT (content): Merge conflict in src/mem/cache/base.cc
+Auto-merging src/mem/cache/Cache.py
+CONFLICT (content): Merge conflict in src/mem/cache/Cache.py
+Auto-merging src/mem/abstract_mem.cc
+Auto-merging src/mem/XBar.py
+CONFLICT (content): Merge conflict in src/mem/XBar.py
+Auto-merging src/mem/SimpleMemory.py
+Auto-merging src/mem/SerialLink.py
+CONFLICT (content): Merge conflict in src/mem/SerialLink.py
+Auto-merging src/mem/MemObject.py
+Auto-merging src/mem/MemDelay.py
+CONFLICT (content): Merge conflict in src/mem/MemDelay.py
+Auto-merging src/mem/MemChecker.py
+CONFLICT (content): Merge conflict in src/mem/MemChecker.py
+Auto-merging src/mem/HMCController.py
+Auto-merging src/mem/ExternalSlave.py
+CONFLICT (content): Merge conflict in src/mem/ExternalSlave.py
+Auto-merging src/mem/ExternalMaster.py
+CONFLICT (content): Merge conflict in src/mem/ExternalMaster.py
+CONFLICT (modify/delete): src/mem/DRAMCtrl.py deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/mem/DRAMCtrl.py left in tree.
+Auto-merging src/mem/CommMonitor.py
+CONFLICT (content): Merge conflict in src/mem/CommMonitor.py
+Auto-merging src/mem/Bridge.py
+CONFLICT (content): Merge conflict in src/mem/Bridge.py
+Auto-merging src/mem/AddrMapper.py
+CONFLICT (content): Merge conflict in src/mem/AddrMapper.py
+Auto-merging src/mem/AbstractMemory.py
+CONFLICT (content): Merge conflict in src/mem/AbstractMemory.py
+Auto-merging src/cpu/thread_context.cc
+CONFLICT (content): Merge conflict in src/cpu/thread_context.cc
+Auto-merging src/cpu/static_inst.hh
+Auto-merging src/cpu/static_inst.cc
+Auto-merging src/cpu/reg_class.hh
+CONFLICT (modify/delete): src/cpu/pred/sat_counter.hh deleted in HEAD and modified in omegaflow/master. Version omegaflow/master of src/cpu/pred/sat_counter.hh left in tree.
+Auto-merging src/cpu/pred/ltage.hh
+CONFLICT (content): Merge conflict in src/cpu/pred/ltage.hh
+Auto-merging src/cpu/pred/ltage.cc
+CONFLICT (content): Merge conflict in src/cpu/pred/ltage.cc
+Auto-merging src/cpu/pred/bpred_unit.hh
+CONFLICT (content): Merge conflict in src/cpu/pred/bpred_unit.hh
+Auto-merging src/cpu/pred/bpred_unit.cc
+CONFLICT (content): Merge conflict in src/cpu/pred/bpred_unit.cc
+Auto-merging src/cpu/pred/bi_mode.cc
+Auto-merging src/cpu/pred/SConscript
+CONFLICT (content): Merge conflict in src/cpu/pred/SConscript
+Auto-merging src/cpu/pred/BranchPredictor.py
+CONFLICT (content): Merge conflict in src/cpu/pred/BranchPredictor.py
+Auto-merging src/cpu/op_class.hh
+Auto-merging src/cpu/o3/scoreboard.hh
+Auto-merging src/cpu/o3/rename_impl.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/rename_impl.hh
+Auto-merging src/cpu/o3/rename.hh
+Auto-merging src/cpu/o3/probe/elastic_trace.hh
+Auto-merging src/cpu/o3/probe/elastic_trace.cc
+Auto-merging src/cpu/o3/probe/SConscript
+Auto-merging src/cpu/o3/lsq_unit.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/lsq_unit.hh
+Auto-merging src/cpu/o3/inst_queue_impl.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/inst_queue_impl.hh
+Auto-merging src/cpu/o3/impl.hh
+Auto-merging src/cpu/o3/iew_impl.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/iew_impl.hh
+Auto-merging src/cpu/o3/fetch_impl.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/fetch_impl.hh
+Auto-merging src/cpu/o3/fetch.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/fetch.hh
+Auto-merging src/cpu/o3/cpu.cc
+CONFLICT (content): Merge conflict in src/cpu/o3/cpu.cc
+Auto-merging src/cpu/o3/commit_impl.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/commit_impl.hh
+Auto-merging src/cpu/o3/commit.hh
+CONFLICT (content): Merge conflict in src/cpu/o3/commit.hh
+Auto-merging src/cpu/o3/SConscript
+Auto-merging src/cpu/o3/O3CPU.py
+CONFLICT (content): Merge conflict in src/cpu/o3/O3CPU.py
+Auto-merging src/cpu/o3/FuncUnitConfig.py
+CONFLICT (content): Merge conflict in src/cpu/o3/FuncUnitConfig.py
+Auto-merging src/cpu/o3/FUPool.py
+CONFLICT (content): Merge conflict in src/cpu/o3/FUPool.py
+Auto-merging src/cpu/base_dyn_inst_impl.hh
+Auto-merging src/cpu/base_dyn_inst.hh
+Auto-merging src/cpu/StaticInstFlags.py
+CONFLICT (content): Merge conflict in src/cpu/StaticInstFlags.py
+Auto-merging src/cpu/SConscript
+CONFLICT (content): Merge conflict in src/cpu/SConscript
+Auto-merging src/cpu/FuncUnit.py
+CONFLICT (content): Merge conflict in src/cpu/FuncUnit.py
+Auto-merging src/cpu/BaseCPU.py
+CONFLICT (content): Merge conflict in src/cpu/BaseCPU.py
+Auto-merging src/base/types.hh
+CONFLICT (content): Merge conflict in src/base/types.hh
+Auto-merging src/base/stl_helpers.hh
+CONFLICT (content): Merge conflict in src/base/stl_helpers.hh
+Auto-merging src/base/refcnt.hh
+CONFLICT (content): Merge conflict in src/base/refcnt.hh
+Auto-merging src/arch/riscv/utility.hh
+CONFLICT (content): Merge conflict in src/arch/riscv/utility.hh
+Auto-merging src/arch/riscv/types.hh
+Auto-merging src/arch/riscv/linux/process.cc
+CONFLICT (content): Merge conflict in src/arch/riscv/linux/process.cc
+Auto-merging src/arch/riscv/isa/formats/fp.isa
+CONFLICT (content): Merge conflict in src/arch/riscv/isa/formats/fp.isa
+Auto-merging src/arch/riscv/isa/formats/amo.isa
+CONFLICT (content): Merge conflict in src/arch/riscv/isa/formats/amo.isa
+Auto-merging src/arch/riscv/isa/decoder.isa
+Auto-merging src/arch/riscv/decoder.cc
+Auto-merging configs/common/Simulation.py
+CONFLICT (content): Merge conflict in configs/common/Simulation.py
+Auto-merging configs/common/Options.py
+CONFLICT (content): Merge conflict in configs/common/Options.py
+Auto-merging configs/common/CpuConfig.py
+CONFLICT (content): Merge conflict in configs/common/CpuConfig.py
+Auto-merging configs/common/Caches.py
+Auto-merging configs/common/CacheConfig.py
+CONFLICT (content): Merge conflict in configs/common/CacheConfig.py
+Auto-merging SConstruct
+Auto-merging .gitignore
+CONFLICT (content): Merge conflict in .gitignore
+Automatic merge failed; fix conflicts and then commit the result.

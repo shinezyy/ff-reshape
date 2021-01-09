@@ -749,3 +749,25 @@ class MultiperspectivePerceptronTAGE8KB(MultiperspectivePerceptronTAGE):
     tage = MPP_TAGE_8KB()
     loop_predictor = MPP_LoopPredictor_8KB()
     statistical_corrector = MPP_StatisticalCorrector_8KB()
+
+class ZPerceptron(BranchPredictor):
+    type = 'ZPerceptron'
+    cxx_class = 'ZPerceptron'
+    cxx_header = "cpu/pred/zperceptron.hh"
+
+    tableSize = Param.Unsigned(256, "Size of global Perdictor")
+    globalHistoryLen = Param.Unsigned(64, "global history length")
+    localHistoryLen = Param.Unsigned(1, "local history length")
+    ctrBits = Param.Unsigned(8, "width of saturating counter")
+
+    pseudoTaggingBit    = Param.Unsigned(0, "Numeber of pseudo-tagging bits")
+    lamda               = Param.Unsigned(1, "Learning rate")
+    # thresholdCounterBit = Param.Unsigned(0, "Bits used to store TC")
+
+class OracleBP(BranchPredictor):
+    type = 'OracleBP'
+    cxx_class = 'OracleBP'
+    cxx_header = "cpu/pred/oracle.hh"
+
+    checkAddr = Param.Bool(True, "check addr of branch inst before return")
+    outcomePath = Param.String('None', 'The branch outcome file')

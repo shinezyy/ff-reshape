@@ -45,6 +45,7 @@
 #include "arch/utility.hh"
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
+#include "cpu/o3/loop_buffer.hh"
 #include "cpu/pc_event.hh"
 #include "cpu/pred/bpred_unit.hh"
 #include "cpu/timebuf.hh"
@@ -368,9 +369,9 @@ class DefaultFetch
     void fetch(bool &status_change);
 
     /** Align a PC to the start of a fetch buffer block. */
-    Addr fetchBufferAlignPC(Addr addr)
+    Addr bufferAlignPC(Addr addr, Addr mask)
     {
-        return (addr & ~(fetchBufferMask));
+        return (addr & ~mask);
     }
 
     /** The decoder. */
@@ -603,7 +604,23 @@ class DefaultFetch
         Stats::Formula branchRate;
         /** Number of instruction fetched per cycle. */
         Stats::Formula rate;
+
+
+        Stats::Scalar fetchFromLoopBuffer;
+
+
     } fetchStats;
+
+  private:
+
+    LoopBuffer *lbuf;
+
+    enum FetchSource {
+        CacheLine = 0,
+        LoopBuf
+    };
+
+    FetchSource fetchSource;
 };
 
 #endif //__CPU_O3_FETCH_HH__

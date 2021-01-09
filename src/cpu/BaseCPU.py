@@ -177,6 +177,26 @@ class BaseCPU(ClockedObject):
 
     icache_port = RequestPort("Instruction Port")
     dcache_port = RequestPort("Data Port")
+
+    #commitTraceInterval = Param.Unsigned(19, 'commitTraceInterval')
+    commitTraceInterval = Param.Unsigned(49, 'commitTraceInterval')
+
+    FanoutPredLambda = Param.Float(0.2, 'FanoutPredTableSize')
+    FanoutPredTableSize = Param.Unsigned(8 * 2**10, 'FanoutPredTableSize')
+
+    FPPathLen = Param.Unsigned(5, 'The number of history branch PC')
+    FPPathBits = Param.Unsigned(5, 'The number of bits per path history')
+
+    FPGHRLen = Param.Unsigned(64, 'The length of GHR used for Fanout prediction')
+    FPLPHLen = Param.Unsigned(0, 'The length of local pattern history used for Fanout prediction')
+
+    FPCtrBits = Param.Unsigned(8, 'The bits per weight')
+
+    LargeFanoutThreshold = Param.Unsigned(3, "LargeFanoutThreshold")
+
+    ProfitDiscount = Param.Float(15.0, "ProfitDiscount")
+
+
     _cached_ports = ['icache_port', 'dcache_port']
 
     if buildEnv['TARGET_ISA'] in ['x86', 'arm', 'riscv']:

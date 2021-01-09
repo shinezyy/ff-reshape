@@ -44,10 +44,13 @@
 
 #include <deque>
 
+#include <boost/dynamic_bitset.hpp>
+
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "cpu/pred/btb.hh"
 #include "cpu/pred/indirect.hh"
+#include "cpu/pred/loop_info.hh"
 #include "cpu/pred/ras.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/static_inst.hh"
@@ -182,7 +185,33 @@ class BPredUnit : public SimObject
     { BTB.update(instPC, target, 0); }
 
 
+    virtual unsigned getGHR(ThreadID tid, void* bp_history) const { return 0; }
+
+    virtual Addr getLastCallsite(ThreadID tid);
+
+
+    virtual boost::dynamic_bitset<> getCurrentGHR(ThreadID tid) const {
+        panic("Not implemented\n");
+    };
+
     void dump();
+
+    virtual bool isOracle() {
+        return false;
+    }
+
+    virtual Addr getOracleAddr() {
+        return 0;
+    }
+    virtual bool getLastDirection() {
+        return false;
+    }
+
+    virtual bool canPredictLoop() {
+        return false;
+    }
+
+    virtual std::unique_ptr<LoopInfo> moveLastLoopInfo();
 
   private:
     struct PredictorHistory {

@@ -364,6 +364,8 @@ DefaultRename<Impl>::squash(const InstSeqNum &squash_seq_num, ThreadID tid)
         }
     }
 
+    serializeOnNextInst[tid] = false;
+
     // Set the status to Squashing.
     renameStatus[tid] = Squashing;
 
@@ -1233,12 +1235,19 @@ DefaultRename<Impl>::checkStall(ThreadID tid)
         DPRINTF(Rename,"[tid:%i] Stall from IEW stage detected.\n", tid);
         ret_val = true;
     } else if (calcFreeROBEntries(tid) <= 0) {
+        incrFullStat(FullSource::ROB);
         DPRINTF(Rename,"[tid:%i] Stall: ROB has 0 free entries.\n", tid);
         ret_val = true;
     } else if (calcFreeIQEntries(tid) <= 0) {
+        incrFullStat(FullSource::IQ);
         DPRINTF(Rename,"[tid:%i] Stall: IQ has 0 free entries.\n", tid);
         ret_val = true;
     } else if (calcFreeLQEntries(tid) <= 0 && calcFreeSQEntries(tid) <= 0) {
+        if (calcFreeLQEntries(tid) <= 0) {
+            incrFullStat(FullSource::LQ);
+        } else {
+            incrFullStat(FullSource::SQ);
+        }
         DPRINTF(Rename,"[tid:%i] Stall: LSQ has 0 free entries.\n", tid);
         ret_val = true;
     } else if (renameMap[tid]->numFreeEntries() <= 0) {
@@ -1421,6 +1430,9 @@ DefaultRename<Impl>::incrFullStat(const FullSource &source)
         break;
       case SQ:
         ++stats.SQFullEvents;
+        break;
+      case FullSource::Register:
+        ++renameFullRegistersEvents;
         break;
       default:
         panic("Rename full stall stat should be incremented for a reason!");

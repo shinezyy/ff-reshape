@@ -32,6 +32,7 @@ if env['TARGET_ISA'] == 'null':
     Return()
 
 SimObject('BranchPredictor.py')
+SimObject('MemDepPredictor.py')
 
 DebugFlag('Indirect')
 Source('bpred_unit.cc')
@@ -56,8 +57,20 @@ Source('statistical_corrector.cc')
 Source('tage_sc_l.cc')
 Source('tage_sc_l_8KB.cc')
 Source('tage_sc_l_64KB.cc')
+
+
+Source('zperceptron.cc')
+Source('oracle.cc')
+Source('mem_dep_pred.cc')
+
+
 DebugFlag('FreeList')
 DebugFlag('Branch')
 DebugFlag('Tage')
 DebugFlag('LTage')
 DebugFlag('TageSCL')
+
+
+DebugFlag('ZPerceptron')
+DebugFlag('PrcpDump')
+DebugFlag('OracleBP')

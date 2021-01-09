@@ -52,6 +52,8 @@ import m5
 from m5.defines import buildEnv
 from m5.objects import *
 from m5.util import *
+from m5.params import *
+# from BranchPredictor import *
 
 if six.PY3:
     long = int
@@ -175,12 +177,15 @@ def findCptDir(options, cptdir, testsys):
             weight_inst = float(match.group(3))
             interval_length = int(match.group(4))
             warmup_length = int(match.group(5))
+            if options.override_interval:
+                interval_length = options.simpoint_interval
+
         print("Resuming from", checkpoint_dir)
         simpoint_start_insts = []
         simpoint_start_insts.append(warmup_length)
         simpoint_start_insts.append(warmup_length + interval_length)
         testsys.cpu[0].simpoint_start_insts = simpoint_start_insts
-        if testsys.switch_cpus != None:
+        if hasattr(testsys, 'switch_cpus') and testsys.switch_cpus != None:
             testsys.switch_cpus[0].simpoint_start_insts = simpoint_start_insts
 
         print("Resuming from SimPoint", end=' ')
@@ -432,6 +437,7 @@ def repeatSwitch(testsys, repeat_switch_cpu_list, maxtick, switch_freq):
             return exit_event
 
 def run(options, root, testsys, cpu_class):
+    print("Gem5 run with pid", os.getpid())
     if options.checkpoint_dir:
         cptdir = options.checkpoint_dir
     elif m5.options.outdir:
@@ -495,6 +501,11 @@ def run(options, root, testsys, cpu_class):
                     options.indirect_bp_type)
                 switch_cpus[i].branchPred.indirectBranchPred = \
                     IndirectBPClass()
+
+            if options.branch_trace_en:
+                CpuConfig.config_branch_trace(cpu_class, switch_cpus[i], options)
+            # O3 Config
+            SSConfig.modifyO3CPUConfig(options, switch_cpus[i])
 
         # If elastic tracing is enabled attach the elastic trace probe
         # to the switch CPUs

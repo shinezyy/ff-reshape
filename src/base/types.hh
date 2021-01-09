@@ -244,4 +244,9 @@ typedef std::shared_ptr<FaultBase> Fault;
 // we just create an alias.
 constexpr decltype(nullptr) NoFault = nullptr;
 
+typedef union {
+    double f;
+    uint64_t i;
+} FFRegValue;
+
 #endif // __BASE_TYPES_HH__

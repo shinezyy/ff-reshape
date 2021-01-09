@@ -317,9 +317,14 @@ if main['GCC'] or main['CLANG']:
     # Enable -Wall and -Wextra and then disable the few warnings that
     # we consistently violate
     main.Append(CCFLAGS=['-Wall', '-Wundef', '-Wextra',
-                         '-Wno-sign-compare', '-Wno-unused-parameter'])
-    # We always compile using C++11
-    main.Append(CXXFLAGS=['-std=c++11'])
+                         '-Wno-sign-compare', '-Wno-unused-parameter',
+                         ])
+    # We compile using C++17 for structure binding
+    main.Append(CXXFLAGS=['-std=c++17', '-Wno-register',
+        '-Wno-deprecated-copy',
+        '-Wno-address-of-packed-member',
+        '-Wno-array-bounds',
+        ])
     if sys.platform.startswith('freebsd'):
         main.Append(CCFLAGS=['-I/usr/local/include'])
         main.Append(CXXFLAGS=['-I/usr/local/include'])

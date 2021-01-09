@@ -61,6 +61,7 @@
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
 #include "debug/Fetch.hh"
+#include "debug/LoopBuffer.hh"
 #include "debug/O3CPU.hh"
 #include "debug/O3PipeView.hh"
 #include "mem/packet.hh"
@@ -135,6 +136,7 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivO3CPUParams *params)
     }
 
     branchPred = params->branchPred;
+    lbuf = params->loopBuffer;
 
     for (ThreadID tid = 0; tid < numThreads; tid++) {
         decoder[tid] = new TheISA::Decoder(
@@ -205,6 +207,11 @@ FetchStatGroup::FetchStatGroup(O3CPU *cpu, DefaultFetch *fetch)
      branches / cpu->numCycles),
     ADD_STAT(rate, "Number of inst fetches per cycle",
      insts / cpu->numCycles)
+
+
+    , ADD_STAT(fetchFromLoopBuffer, "Times to fetch from loop buffer")
+
+
 {
         icacheStallCycles
             .prereq(icacheStallCycles);
@@ -529,15 +536,23 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     bool predict_taken;
 
     if (!inst->isControl()) {
+        DPRINTF(Fetch, "Advancing PC from %s", nextPC);
         TheISA::advancePC(nextPC, inst->staticInst);
+        DPRINTFR(Fetch, " to %s\n", nextPC);
+
         inst->setPredTarg(nextPC);
         inst->setPredTaken(false);
         return false;
     }
 
     ThreadID tid = inst->threadNumber;
+    Addr branch_pc = nextPC.pc();
     predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
                                         nextPC, tid);
+
+    if (lbuf->enable) {
+        lbuf->probe(branch_pc, nextPC.pc(), predict_taken);
+    }
 
     if (predict_taken) {
         DPRINTF(Fetch, "[tid:%i] [sn:%llu] Branch at PC %#x "
@@ -589,7 +604,7 @@ DefaultFetch<Impl>::fetchCacheLine(Addr vaddr, ThreadID tid, Addr pc)
     }
 
     // Align the fetch address to the start of a fetch buffer segment.
-    Addr fetchBufferBlockPC = fetchBufferAlignPC(vaddr);
+    Addr fetchBufferBlockPC = bufferAlignPC(vaddr, fetchBufferMask);
 
     DPRINTF(Fetch, "[tid:%i] Fetching cache line %#x for addr %#x\n",
             tid, fetchBufferBlockPC, vaddr);
@@ -771,6 +786,8 @@ DefaultFetch<Impl>::doSquash(const TheISA::PCState &newPC,
     delayedCommit[tid] = true;
 
     ++fetchStats.squashCycles;
+
+    fetchSource = CacheLine;
 }
 
 template<class Impl>
@@ -852,7 +869,10 @@ DefaultFetch<Impl>::squash(const TheISA::PCState &newPC,
     DPRINTF(Fetch, "[tid:%i] Squash from commit.\n", tid);
 
     doSquash(newPC, squashInst, tid);
-
+    if (squashInst) {
+        DPRINTF(Fetch, "Squash from commit on inst[%llu] PC: %s\n",
+                squashInst->seqNum, squashInst->pcState());
+    }
     // Tell the CPU to remove any instructions that are not in the ROB.
     cpu->removeInstsNotInROB(tid);
 }
@@ -1138,15 +1158,27 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         return;
     }
 
-    DPRINTF(Fetch, "Attempting to fetch from [tid:%i]\n", tid);
-
     // The current PC.
     TheISA::PCState thisPC = pc[tid];
+
+    DPRINTF(Fetch, "Attempting to fetch from [tid:%i] PC: %s\n",
+            tid, thisPC);
 
     Addr pcOffset = fetchOffset[tid];
     Addr fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
 
     bool inRom = isRomMicroPC(thisPC.microPC());
+
+    if (lbuf->enable && fetchSource == LoopBuf &&
+            lbuf->canContinueOnPC(fetchAddr)) {
+        // pass
+
+    } else if (lbuf->enable && lbuf->canProvide(fetchAddr)) {
+        fetchSource = LoopBuf;
+
+    } else {
+        fetchSource = CacheLine;
+    }
 
     // If returning from the delay of a cache miss, then update the status
     // to running, otherwise do the cache access.  Possibly move this up
@@ -1156,15 +1188,16 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
         fetchStatus[tid] = Running;
         status_change = true;
+
     } else if (fetchStatus[tid] == Running) {
         // Align the fetch PC so its at the start of a fetch buffer segment.
-        Addr fetchBufferBlockPC = fetchBufferAlignPC(fetchAddr);
+        Addr fetchBufferBlockPC = bufferAlignPC(fetchAddr, fetchBufferMask);
 
         // If buffer is no longer valid or fetchAddr has moved to point
         // to the next cache block, AND we have no remaining ucode
         // from a macro-op, then start fetch from icache.
         if (!(fetchBufferValid[tid] && fetchBufferBlockPC == fetchBufferPC[tid])
-            && !inRom && !macroop[tid]) {
+            && !inRom && !macroop[tid] && fetchSource != LoopBuf) {
             DPRINTF(Fetch, "[tid:%i] Attempting to translate and read "
                     "instruction, starting at PC %s.\n", tid, thisPC);
 
@@ -1219,36 +1252,69 @@ DefaultFetch<Impl>::fetch(bool &status_change)
     TheISA::MachInst *cacheInsts =
         reinterpret_cast<TheISA::MachInst *>(fetchBuffer[tid]);
 
-    const unsigned numInsts = fetchBufferSize / instSize;
-    unsigned blkOffset = (fetchAddr - fetchBufferPC[tid]) / instSize;
+    unsigned numInsts = fetchBufferSize / instSize;
+    unsigned blkOffset = 0;
+    if (fetchSource == CacheLine) {
+        blkOffset =
+            (fetchAddr - fetchBufferPC[tid]) / instSize;
+    }
 
     // Loop through instruction memory from the cache.
     // Keep issuing while fetchWidth is available and branch is not
     // predicted taken
     while (numInst < fetchWidth && fetchQueue[tid].size() < fetchQueueSize
-           && !predictedBranch && !quiesce) {
+           && !(predictedBranch && fetchSource != LoopBuf) && !quiesce) {
         // We need to process more memory if we aren't going to get a
         // StaticInst from the rom, the current macroop, or what's already
         // in the decoder.
         bool needMem = !inRom && !curMacroop &&
             !decoder[tid]->instReady();
         fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
-        Addr fetchBufferBlockPC = fetchBufferAlignPC(fetchAddr);
+
+        Addr fetchBufferBlockPC = bufferAlignPC(fetchAddr, fetchBufferMask);
 
         if (needMem) {
             // If buffer is no longer valid or fetchAddr has moved to point
             // to the next cache block then start fetch from icache.
-            if (!fetchBufferValid[tid] ||
-                fetchBufferBlockPC != fetchBufferPC[tid])
-                break;
+            if (lbuf->enable && fetchSource == LoopBuf) {
+                if (!lbuf->canContinueOnPC(fetchAddr)) {
+                    fetchSource = CacheLine;
+                    break;
+                }
 
-            if (blkOffset >= numInsts) {
+                uint8_t *found_line = lbuf->getInst(fetchAddr, instSize);
+                assert(found_line);
+                cacheInsts = reinterpret_cast<TheISA::MachInst *>(found_line);
+
+                DPRINTF(LoopBuffer,
+                        "Fetching from loop buffer: fetching: 0x%x\n",
+                        fetchAddr);
+
+            } else if (!fetchBufferValid[tid] ||
+                fetchBufferBlockPC != fetchBufferPC[tid]) {
+                break;
+            }
+
+            if (fetchSource == CacheLine && blkOffset >= numInsts) {
                 // We need to process more memory, but we've run out of the
                 // current block.
                 break;
             }
 
-            decoder[tid]->moreBytes(thisPC, fetchAddr, cacheInsts[blkOffset]);
+            MachInst inst;
+            if (fetchSource == CacheLine) {
+                lbuf->recordInst(
+                        reinterpret_cast<uint8_t *>(cacheInsts + blkOffset),
+                        fetchAddr, instSize);
+                inst = cacheInsts[blkOffset];
+            } else {
+                lbuf->recordInst(
+                        reinterpret_cast<uint8_t *>(cacheInsts),
+                        fetchAddr, instSize);
+                inst = cacheInsts[0];
+            }
+
+            decoder[tid]->moreBytes(thisPC, fetchAddr, inst);
 
             if (decoder[tid]->needMoreBytes()) {
                 blkOffset++;
@@ -1257,6 +1323,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             }
         }
 
+        Addr cpc = thisPC.instAddr();
         // Extract as many instructions and/or microops as we can from
         // the memory we've processed so far.
         do {
@@ -1292,6 +1359,9 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 newMacro |= staticInst->isLastMicroop();
             }
 
+            if (lbuf->enable && fetchSource == LoopBuf) {
+                fetchFromLoopBuffer++;
+            }
             DynInstPtr instruction =
                 buildInst(tid, staticInst, curMacroop,
                           thisPC, nextPC, true);
@@ -1309,11 +1379,20 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
             // If we're branching after this instruction, quit fetching
             // from the same block.
-            predictedBranch |= thisPC.branching();
-            predictedBranch |=
+
+            DPRINTF(Fetch, "Compressed: %i, This PC: 0x%x, NPC: 0x%x\n",
+                    thisPC.compressed(),
+                    thisPC.pc(),
+                    thisPC.npc());
+            bool this_is_branch = thisPC.branching() ||
                 lookupAndUpdateNextPC(instruction, nextPC);
-            if (predictedBranch) {
-                DPRINTF(Fetch, "Branch detected with PC = %s\n", thisPC);
+            predictedBranch = this_is_branch;
+
+            if (this_is_branch) {
+                // predicted backward branch
+                DPRINTF(Fetch, "Taken branch detected with PC : 0x%x => 0x%x\n",
+                        thisPC.pc(),
+                        thisPC.npc());
             }
 
             newMacro |= thisPC.instAddr() != nextPC.instAddr();
@@ -1344,11 +1423,34 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         // Re-evaluate whether the next instruction to fetch is in micro-op ROM
         // or not.
         inRom = isRomMicroPC(thisPC.microPC());
+
+        Addr npc = nextPC.instAddr();
+
+        if (lbuf->enable && fetchSource == LoopBuf) {
+            if (!lbuf->canContinueOnNPC(cpc, npc, predictedBranch)) {
+                if (!lbuf->canProvide(npc)) {
+                    fetchSource = CacheLine;
+                    DPRINTF(LoopBuffer, "Will switch to fetch from cache line\n");
+                    break;
+                } else {
+                    DPRINTF(LoopBuffer, "Will switch to Another loop\n");
+                }
+            }
+        } else { // from cache line
+            if (lbuf->enable && predictedBranch && lbuf->canProvide(npc)) {
+                DPRINTF(LoopBuffer, "Will switch to fetch from lbuf\n");
+                fetchSource = LoopBuf;
+            }
+        }
     }
 
-    if (predictedBranch) {
+    if (fetchSource == LoopBuf) {
+        DPRINTF(Fetch, "[tid:%i] Done fetching, still in lbuf.\n", tid);
+
+    } else if (predictedBranch) {
         DPRINTF(Fetch, "[tid:%i] Done fetching, predicted branch "
                 "instruction encountered.\n", tid);
+
     } else if (numInst >= fetchWidth) {
         DPRINTF(Fetch, "[tid:%i] Done fetching, reached fetch bandwidth "
                 "for this cycle.\n", tid);
@@ -1369,8 +1471,10 @@ DefaultFetch<Impl>::fetch(bool &status_change)
     // pipeline a fetch if we're crossing a fetch buffer boundary and not in
     // a state that would preclude fetching
     fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
-    Addr fetchBufferBlockPC = fetchBufferAlignPC(fetchAddr);
-    issuePipelinedIfetch[tid] = fetchBufferBlockPC != fetchBufferPC[tid] &&
+    Addr fetchBufferBlockPC = bufferAlignPC(fetchAddr, fetchBufferMask);
+    issuePipelinedIfetch[tid] =
+        fetchSource == CacheLine &&
+        fetchBufferBlockPC != fetchBufferPC[tid] &&
         fetchStatus[tid] != IcacheWaitResponse &&
         fetchStatus[tid] != ItlbWait &&
         fetchStatus[tid] != IcacheWaitRetry &&
@@ -1575,7 +1679,7 @@ DefaultFetch<Impl>::pipelineIcacheAccesses(ThreadID tid)
     Addr fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
 
     // Align the fetch PC so its at the start of a fetch buffer segment.
-    Addr fetchBufferBlockPC = fetchBufferAlignPC(fetchAddr);
+    Addr fetchBufferBlockPC = bufferAlignPC(fetchAddr, fetchBufferMask);
 
     // Unless buffer already got the block, fetch it from icache.
     if (!(fetchBufferValid[tid] && fetchBufferBlockPC == fetchBufferPC[tid])) {

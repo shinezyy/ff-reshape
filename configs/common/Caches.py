@@ -55,24 +55,43 @@ class L1Cache(Cache):
     data_latency = 2
     response_latency = 2
     mshrs = 4
-    tgts_per_mshr = 20
+    tgts_per_mshr = 16
+    writeback_clean = True
 
 class L1_ICache(L1Cache):
+    assoc = 4
     is_read_only = True
     # Writeback clean lines as well
     writeback_clean = True
 
 class L1_DCache(L1Cache):
-    pass
+    write_buffers = 16
 
 class L2Cache(Cache):
-    assoc = 8
+    writeback_clean = True
+    assoc = 16
+    tag_latency = 12
+    data_latency = 12
+    response_latency = 5
+    mshrs = 32
+    tgts_per_mshr = 8
+    write_buffers = 8
+    size = '1MB'
+    clusivity='mostly_excl'
+
+    prefetcher = BOPPrefetcher()
+
+class L3Cache(Cache):
+    assoc = 16
     tag_latency = 20
     data_latency = 20
     response_latency = 20
     mshrs = 20
     tgts_per_mshr = 12
     write_buffers = 8
+    size = '16MB'
+    clusivity='mostly_excl'
+
 
 class IOCache(Cache):
     assoc = 8

@@ -49,6 +49,7 @@
 #include "base/trace.hh"
 #include "config/the_isa.hh"
 #include "debug/Branch.hh"
+#include "debug/OracleBP.hh"
 
 BPredUnit::BPredUnit(const Params *params)
     : SimObject(params),
@@ -134,6 +135,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
         DPRINTF(Branch, "[tid:%i] [sn:%llu] "
             "Unconditional control\n",
             tid,seqNum);
+        DPRINTF(Debug::OracleBP, "[tid:%i]: Unconditional control.\n", tid);
         pred_taken = true;
         // Tell the BP there was an unconditional branch.
         uncondBranch(tid, pc.instAddr(), bp_history);
@@ -144,6 +146,8 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
         DPRINTF(Branch, "[tid:%i] [sn:%llu] "
                 "Branch predictor predicted %i for PC %s\n",
                 tid, seqNum,  pred_taken, pc);
+        DPRINTF(Debug::OracleBP, "[tid:%i]: [sn:%i] Branch predictor"
+                " predicted %i for PC %s\n", tid, seqNum,  pred_taken, pc);
     }
 
     const bool orig_pred_taken = pred_taken;
@@ -175,7 +179,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
 
             RAS[tid].pop();
 
-            DPRINTF(Branch, "[tid:%i] [sn:%llu] Instruction %s is a return, "
+            DPRINTF(Branch || Debug::OracleBP, "[tid:%i] [sn:%llu] Instruction %s is a return, "
                     "RAS predicted target: %s, RAS index: %i\n",
                     tid, seqNum, pc, target, predict_record.RASIndex);
         } else {
@@ -188,7 +192,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                 // be popped off if the speculation is incorrect.
                 predict_record.wasCall = true;
 
-                DPRINTF(Branch,
+                DPRINTF(Branch || Debug::OracleBP,
                         "[tid:%i] [sn:%llu] Instruction %s was a call, adding "
                         "%s to the RAS index: %i\n",
                         tid, seqNum, pc, pc, RAS[tid].topIdx());
@@ -201,12 +205,12 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                     ++stats.BTBHits;
                     // If it's not a return, use the BTB to get target addr.
                     target = BTB.lookup(pc.instAddr(), tid);
-                    DPRINTF(Branch,
+                    DPRINTF(Branch || Debug::OracleBP,
                             "[tid:%i] [sn:%llu] Instruction %s predicted "
                             "target is %s\n",
                             tid, seqNum, pc, target);
                 } else {
-                    DPRINTF(Branch, "[tid:%i] [sn:%llu] BTB doesn't have a "
+                    DPRINTF(Branch || Debug::OracleBP, "[tid:%i] [sn:%llu] BTB doesn't have a "
                             "valid entry\n",tid,seqNum);
                     pred_taken = false;
                     predict_record.predTaken = pred_taken;
@@ -232,7 +236,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                 if (iPred->lookup(pc.instAddr(), target, tid)) {
                     // Indirect predictor hit
                     ++stats.indirectHits;
-                    DPRINTF(Branch,
+                    DPRINTF(Branch || Debug::OracleBP,
                             "[tid:%i] [sn:%llu] "
                             "Instruction %s predicted "
                             "indirect target is %s\n",
@@ -241,7 +245,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                     ++stats.indirectMisses;
                     pred_taken = false;
                     predict_record.predTaken = pred_taken;
-                    DPRINTF(Branch,
+                    DPRINTF(Branch || Debug::OracleBP,
                             "[tid:%i] [sn:%llu] "
                             "Instruction %s no indirect "
                             "target\n",
@@ -258,6 +262,21 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                         tid);
             }
         }
+
+        // let oracle override it
+        if (isOracle()) {
+            target.set(getOracleAddr());
+            if (inst->isUncondCtrl()) {
+                pred_taken = true;
+            } else {
+                pred_taken = getLastDirection();
+            }
+            DPRINTF(Branch || Debug::OracleBP, "Instruction (%s) %lli %s"
+                    " set target to %s by OracleBP.\n",
+                    pred_taken ? "taken": "not taken",
+                    seqNum, pc, target);
+        }
+
     } else {
         if (inst->isReturn()) {
            predict_record.wasReturn = true;
@@ -296,6 +315,8 @@ BPredUnit::update(const InstSeqNum &done_sn, ThreadID tid)
     while (!predHist[tid].empty() &&
            predHist[tid].back().seqNum <= done_sn) {
         // Update the branch predictor with the correct results.
+        DPRINTF(Branch || Debug::OracleBP, "Committing branch [sn:%lli].\n",
+                predHist[tid].back().seqNum);
         update(tid, predHist[tid].back().pc,
                     predHist[tid].back().predTaken,
                     predHist[tid].back().bpHistory, false,
@@ -508,5 +529,17 @@ BPredUnit::dump()
             cprintf("\n");
         }
     }
+}
+
+
+Addr
+BPredUnit::getLastCallsite(ThreadID tid)
+{
+    TheISA::PCState rasTop = RAS[tid].top();
+    return rasTop.pc();
+}
+
+std::unique_ptr<LoopInfo> BPredUnit::moveLastLoopInfo() {
+    return nullptr;
 }
 
