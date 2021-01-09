@@ -37,8 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Kevin Lim
  */
 
 #ifndef __CPU_FF_DYN_INST_HH__
@@ -46,7 +44,6 @@
 
 #include <array>
 
-#include "arch/isa_traits.hh"
 #include "config/the_isa.hh"
 #include "cpu/fanout_pred_features.hh"
 #include "cpu/ff_base_dyn_inst.hh"
@@ -73,16 +70,10 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     /** Binary machine instruction type. */
     typedef TheISA::MachInst MachInst;
     /** Register types. */
-    typedef TheISA::IntReg   IntReg;
-    typedef TheISA::FloatReg FloatReg;
-    typedef TheISA::FloatRegBits FloatRegBits;
-    typedef TheISA::CCReg   CCReg;
     using VecRegContainer = TheISA::VecRegContainer;
     using VecElem = TheISA::VecElem;
     static constexpr auto NumVecElemPerVecReg = TheISA::NumVecElemPerVecReg;
-
-    /** Misc register type. */
-    typedef TheISA::MiscReg  MiscReg;
+    using VecPredRegContainer = TheISA::VecPredRegContainer;
 
     enum {
         MaxInstSrcRegs = TheISA::MaxInstSrcRegs,        //< Max source regs
@@ -121,7 +112,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     using BaseDynInst<Impl>::_destRegIdx;
 
     /** Values to be written to the destination misc. registers. */
-    std::array<MiscReg, TheISA::MaxMiscDestRegs> _destMiscRegVal;
+    std::array<RegVal, TheISA::MaxMiscDestRegs> _destMiscRegVal;
 
     /** Indexes of the destination misc. registers. They are needed to defer
      * the write accesses to the misc. registers until the commit stage, when
@@ -149,7 +140,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     /** Reads a misc. register, including any side-effects the read
      * might have as defined by the architecture.
      */
-    MiscReg readMiscReg(int misc_reg)
+    RegVal
+    readMiscReg(int misc_reg) override
     {
         return this->cpu->readMiscReg(misc_reg, this->threadNumber);
     }
@@ -157,7 +149,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     /** Sets a misc. register, including any side-effects the write
      * might have as defined by the architecture.
      */
-    void setMiscReg(int misc_reg, const MiscReg &val)
+    void
+    setMiscReg(int misc_reg, RegVal val) override
     {
         /** Writes to misc. registers are recorded and deferred until the
          * commit stage, when updateMiscRegs() is called. First, check if
@@ -181,7 +174,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     /** Reads a misc. register, including any side-effects the read
      * might have as defined by the architecture.
      */
-    TheISA::MiscReg readMiscRegOperand(const StaticInst *si, int idx)
+    RegVal
+    readMiscRegOperand(const StaticInst *si, int idx) override
     {
         const RegId& reg = si->srcRegIdx(idx);
         assert(reg.isMiscReg());
@@ -191,8 +185,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     /** Sets a misc. register, including any side-effects the write
      * might have as defined by the architecture.
      */
-    void setMiscRegOperand(const StaticInst *si, int idx,
-                                     const MiscReg &val)
+    void
+    setMiscRegOperand(const StaticInst *si, int idx, RegVal val) override
     {
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.isMiscReg());
@@ -200,7 +194,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     }
 
     /** Called at the commit stage to update the misc. registers. */
-    void updateMiscRegs()
+    void
+    updateMiscRegs()
     {
         // @todo: Pretty convoluted way to avoid squashing from happening when
         // using the TC during an instruction's execution (specifically for
@@ -238,14 +233,14 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     // storage (which is pretty hard to imagine they would have reason
     // to do).
 
-    IntReg readIntRegOperand(const StaticInst *si, int idx);
+    RegVal
+    readIntRegOperand(const StaticInst *si, int idx) override;
 
-    FloatReg readFloatRegOperand(const StaticInst *si, int idx);
-
-    FloatRegBits readFloatRegOperandBits(const StaticInst *si, int idx);
+    RegVal
+    readFloatRegOperandBits(const StaticInst *si, int idx) override;
 
     const VecRegContainer&
-    readVecRegOperand(const StaticInst *si, int idx) const
+    readVecRegOperand(const StaticInst *si, int idx) const override
     {
         panic("No Vec support in RV-ForwardFlow");
     }
@@ -254,7 +249,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
      * Read destination vector register operand for modification.
      */
     VecRegContainer&
-    getWritableVecRegOperand(const StaticInst *si, int idx)
+    getWritableVecRegOperand(const StaticInst *si, int idx) override
     {
         panic("No Vec support in RV-ForwardFlow");
     }
@@ -263,28 +258,28 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     /** @{ */
     /** Reads source vector 8bit operand. */
     ConstVecLane8
-    readVec8BitLaneOperand(const StaticInst *si, int idx) const
+    readVec8BitLaneOperand(const StaticInst *si, int idx) const override
     {
         panic("No Vec support in RV-ForwardFlow");
     }
 
     /** Reads source vector 16bit operand. */
     ConstVecLane16
-    readVec16BitLaneOperand(const StaticInst *si, int idx) const
+    readVec16BitLaneOperand(const StaticInst *si, int idx) const override
     {
         panic("No Vec support in RV-ForwardFlow");
     }
 
     /** Reads source vector 32bit operand. */
     ConstVecLane32
-    readVec32BitLaneOperand(const StaticInst *si, int idx) const
+    readVec32BitLaneOperand(const StaticInst *si, int idx) const override
     {
         panic("No Vec support in RV-ForwardFlow");
     }
 
     /** Reads source vector 64bit operand. */
     ConstVecLane64
-    readVec64BitLaneOperand(const StaticInst *si, int idx) const
+    readVec64BitLaneOperand(const StaticInst *si, int idx) const override
     {
         panic("No Vec support in RV-ForwardFlow");
     }
@@ -327,7 +322,20 @@ class BaseO3DynInst : public BaseDynInst<Impl>
         panic("No Vec support in RV-ForwardFlow");
     }
 
-    CCReg readCCRegOperand(const StaticInst *si, int idx)
+    const VecPredRegContainer&
+    readVecPredRegOperand(const StaticInst *si, int idx) const override
+    {
+        panic("No Vec support in RV-ForwardFlow");
+    }
+
+    VecPredRegContainer&
+    getWritableVecPredRegOperand(const StaticInst *si, int idx) override
+    {
+        panic("No Vec support in RV-ForwardFlow");
+    }
+
+    RegVal
+    readCCRegOperand(const StaticInst *si, int idx)
     {
         panic("No CC support in RV-ForwardFlow");
     }
@@ -335,7 +343,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     /** @todo: Make results into arrays so they can handle multiple dest
      *  registers.
      */
-    void setIntRegOperand(const StaticInst *si, int idx, IntReg val)
+    void
+    setIntRegOperand(const StaticInst *si, int idx, RegVal val) override
     {
         DPRINTF(FFExec, "Inst [%llu] %s setting dest int reg(%i) to %llu\n",
                 this->seqNum, si->disassemble(this->instAddr()), idx, val);
@@ -346,20 +355,11 @@ class BaseO3DynInst : public BaseDynInst<Impl>
         BaseDynInst<Impl>::setIntRegOperand(si, idx, val);
     }
 
-    void setFloatRegOperand(const StaticInst *si, int idx, FloatReg val)
+    void
+    setFloatRegOperandBits(const StaticInst *si, int idx, RegVal val) override
     {
         // this->cpu->setFloatReg(this->_destRegIdx[idx], val);
         DPRINTF(FFExec, "Inst [%llu] %s setting dest float reg(%i) to %f\n",
-                this->seqNum, si->disassemble(this->instAddr()), idx, val);
-        destValue.f = val;
-        BaseDynInst<Impl>::setFloatRegOperand(si, idx, val);
-    }
-
-    void setFloatRegOperandBits(const StaticInst *si, int idx,
-                                FloatRegBits val)
-    {
-        // this->cpu->setFloatRegBits(this->_destRegIdx[idx], val);
-        DPRINTF(FFExec, "Inst [%llu] %s setting dest float reg(%i) to %llu\n",
                 this->seqNum, si->disassemble(this->instAddr()), idx, val);
         destValue.i = val;
         BaseDynInst<Impl>::setFloatRegOperandBits(si, idx, val);
@@ -367,34 +367,21 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
     void
     setVecRegOperand(const StaticInst *si, int idx,
-                     const VecRegContainer& val)
+                     const VecRegContainer& val) override
     {
         panic("No Vec support in RV-ForwardFlow");
     }
 
     void setVecElemOperand(const StaticInst *si, int idx,
-                           const VecElem val)
+                           const VecElem val) override
     {
         panic("No Vec support in RV-ForwardFlow");
     }
 
-    void setCCRegOperand(const StaticInst *si, int idx, CCReg val)
+    void setCCRegOperand(const StaticInst *si, int idx, RegVal val) override
     {
         panic("No CC support in RV-ForwardFlow");
     }
-
-#if THE_ISA == MIPS_ISA
-    MiscReg readRegOtherThread(const RegId& misc_reg, ThreadID tid)
-    {
-        panic("MIPS MT not defined for O3 CPU.\n");
-        return 0;
-    }
-
-    void setRegOtherThread(const RegId& misc_reg, MiscReg val, ThreadID tid)
-    {
-        panic("MIPS MT not defined for O3 CPU.\n");
-    }
-#endif
 
   public:
     std::array<DQPointer, 4> pointers;

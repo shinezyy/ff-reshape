@@ -325,4 +325,92 @@ class SatCounter
     uint8_t counter;
 };
 
+class SignedSatCounter
+{
+  public:
+
+    /**
+     * Constructor for the counter.
+     * @param bits How many bits the counter will have.
+     */
+    explicit SignedSatCounter(uint32_t bits)
+            : initialVal(0),
+              maxVal((1 << bits) - 1),
+              minVal(-(1 << bits)),
+              counter(0)
+    { }
+
+    /**
+     * Constructor for the counter.
+     * @param bits How many bits the counter will have.
+     * @param initial_val Starting value for each counter.
+     */
+    SignedSatCounter(unsigned bits, int32_t initial_val)
+            : initialVal(initial_val),
+              maxVal((1 << bits) - 1),
+              minVal(-(1 << bits)),
+              counter(initial_val)
+    {
+        // Check to make sure initial value doesn't exceed the max
+        // counter value.
+        if (initial_val > maxVal || initial_val < minVal) {
+            fatal("BP: Initial counter value exceeds max size.");
+        }
+    }
+
+    /**
+     * Sets the number of bits.
+     */
+    void reset() { counter = initialVal; }
+
+    /**
+     * Increments the counter's current value.
+     */
+
+    bool increment(int32_t x = 1)
+    {
+        counter = std::min(maxVal, counter + x);
+        return counter >= maxVal;
+    }
+
+    /**
+     * Decrements the counter's current value.
+     */
+    bool decrement(int32_t x = 1)
+    {
+        counter = std::max(minVal, counter - x);
+        return counter <= minVal;
+    }
+
+    bool add(int32_t x)
+    {
+        counter += x;
+        if (__glibc_unlikely(counter < minVal)) {
+            counter = minVal;
+            return true;
+        }
+        if (__glibc_unlikely(counter > maxVal)) {
+            counter = maxVal;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Read the counter's value.
+     */
+    int32_t read() const
+    { return counter; }
+
+    bool positive() const {
+        return counter > 0;
+    }
+
+  private:
+    const int32_t initialVal;
+    const int32_t maxVal;
+    const int32_t minVal;
+    int32_t counter;
+};
+
 #endif // __BASE_SAT_COUNTER_HH__

@@ -1021,7 +1021,7 @@ DefaultCommit<Impl>::commitInsts()
 
         if (commit_thread == -1 || !rob->isHeadReady(commit_thread)) {
             DPRINTF(Commit, "commit_thread = %i || ROB head not ready.\n", commit_thread);
-            HeadNotExec++;
+            stats.HeadNotExec++;
             break;
         }
 

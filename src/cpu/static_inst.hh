@@ -162,8 +162,8 @@ class StaticInst : public RefCounted, public StaticInstFlags
     bool isStore()        const { return flags[IsStore]; }
     bool isAtomic()       const { return flags[IsAtomic]; }
     bool isLoadReserved()         const { return flags[IsLoadReserved]; }
-    bool isRVAmoStoreHalf()         const { return flags[IsRVAmoStoreHalf]; }
-    bool isRVAmoLoadHalf()         const { return flags[IsRVAmoLoadHalf]; }
+    bool isRVAmoStoreHalf()         const { return false; }
+    bool isRVAmoLoadHalf()         const { return false; }
     bool isStoreConditional()       const { return flags[IsStoreConditional]; }
     bool isInstPrefetch() const { return flags[IsInstPrefetch]; }
     bool isDataPrefetch() const { return flags[IsDataPrefetch]; }
@@ -391,7 +391,7 @@ public:
         //pass
     }
 
-    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const override
+    std::string generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const override
     {
         return mnemonic;
     }

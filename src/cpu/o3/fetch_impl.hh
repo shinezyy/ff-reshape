@@ -1360,7 +1360,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             }
 
             if (lbuf->enable && fetchSource == LoopBuf) {
-                fetchFromLoopBuffer++;
+                fetchStats.fetchFromLoopBuffer++;
             }
             DynInstPtr instruction =
                 buildInst(tid, staticInst, curMacroop,

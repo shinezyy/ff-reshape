@@ -9,6 +9,7 @@
 #include <boost/dynamic_bitset.hpp>
 
 #include "base/random.hh"
+#include "base/trace.hh"
 #include "base/types.hh"
 #include "cpu/forwardflow/dq_pointer.hh"
 #include "cpu/inst_seq.hh"

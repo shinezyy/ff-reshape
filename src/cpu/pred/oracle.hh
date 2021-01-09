@@ -49,6 +49,7 @@
 
 #include "base/types.hh"
 #include "cpu/pred/bpred_unit.hh"
+#include "base/logging.hh"
 #include "base/sat_counter.hh"
 #include "params/OracleBP.hh"
 #include "proto/branch_outcome.pb.h"

@@ -1,3 +1,4 @@
+#include "base/trace.hh"
 #include "cpu/o3/loop_buffer.hh"
 #include "debug/LoopBuffer.hh"
 #include "debug/LoopBufferStack.hh"
@@ -37,13 +38,10 @@ LoopBuffer::processNewControl(Addr branch_pc, Addr target)
 
     rank.emplace_back(table.find(target));
 
-    if (Debug::LoopBufferStack) {
-
-        DPRINTF(LoopBufferStack, "Inserted PC: 0x%x\n", target);
-        for (const auto &ele: rank) {
-            DPRINTFR(LoopBufferStack, "PC: 0x%x, used: %u\n",
-                    ele->first, ele->second.used);
-        }
+    DPRINTF(LoopBufferStack, "Inserted PC: 0x%x\n", target);
+    for (const auto &ele: rank) {
+        DPRINTFR(LoopBufferStack, "PC: 0x%x, used: %u\n",
+                ele->first, ele->second.used);
     }
 
     if (table.size() > numEntries) {

@@ -362,7 +362,7 @@ FFRegValue BaseO3DynInst<Impl>::getOpValue(unsigned op)
 }
 
 template<class Impl>
-typename BaseO3DynInst<Impl>::FloatRegBits
+RegVal
 BaseO3DynInst<Impl>::readFloatRegOperandBits(const StaticInst *si, int idx)
 {
     assert(idx < 3);
@@ -372,17 +372,7 @@ BaseO3DynInst<Impl>::readFloatRegOperandBits(const StaticInst *si, int idx)
 }
 
 template<class Impl>
-typename BaseO3DynInst<Impl>::FloatReg
-BaseO3DynInst<Impl>::readFloatRegOperand(const StaticInst *si, int idx)
-{
-    assert(idx < 3);
-    // assert(opReady[idx + 1] || srcTakenWithInst[idx + 1]);
-    DPRINTFR(FFExec, "Reading float op %i: %f\n", idx, srcValues[idx].f);
-    return srcValues[idx].f;
-}
-
-template<class Impl>
-typename BaseO3DynInst<Impl>::IntReg
+RegVal
 BaseO3DynInst<Impl>::readIntRegOperand(const StaticInst *si, int idx)
 {
     assert(idx < 3);

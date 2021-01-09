@@ -9,6 +9,7 @@
 
 #include <boost/dynamic_bitset.hpp>
 
+#include "base/logging.hh"
 #include "base/types.hh"
 #include "cpu/pred/bpred_unit.hh"
 #include "base/sat_counter.hh"

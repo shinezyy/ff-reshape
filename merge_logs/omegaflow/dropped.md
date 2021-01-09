@@ -15,3 +15,14 @@ IsRVAmoStoreHalf
 
 ### must implement in omegaflow
 IsRVAmoStoreHalf -> IsAtomic
+
+### Important:
+c21bef6d4f9788bba51a45ee2192504020ba0e04
+fixed major memory corruption in NoSQ SMB
+
++            translationStarted(false);
++            translationCompleted(false);
++            loadIssueCount++;
+
+-        execCount++;
++        wbCount++;

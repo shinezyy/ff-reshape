@@ -1432,7 +1432,7 @@ DefaultRename<Impl>::incrFullStat(const FullSource &source)
         ++stats.SQFullEvents;
         break;
       case FullSource::Register:
-        ++renameFullRegistersEvents;
+        ++stats.fullRegistersEvents;
         break;
       default:
         panic("Rename full stall stat should be incremented for a reason!");

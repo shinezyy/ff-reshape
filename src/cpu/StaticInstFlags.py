@@ -114,7 +114,7 @@ class StaticInstFlags(Enum):
         # hardware transactional memory
         'IsHtmStart',       # Starts a HTM transaction
         'IsHtmStop',        # Stops (commits) a HTM transaction
-        'IsHtmCancel'       # Explicitely aborts a HTM transaction
+        'IsHtmCancel',       # Explicitely aborts a HTM transaction
 
         # Omegaflow
         'IsRVAmoStoreHalf',
