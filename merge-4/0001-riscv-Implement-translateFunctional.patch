@@ -1,0 +1,71 @@
+From c38298d93149e4bff129356545771e4b3a24cd1e Mon Sep 17 00:00:00 2001
+From: Gabe Black <gabeblack@google.com>
+Date: Tue, 10 Mar 2020 18:14:56 -0700
+Subject: [PATCH] riscv: Implement translateFunctional.
+
+Change-Id: Ibe8adea8f66c7de22ee2ab0da54e866cd05fc257
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/26547
+Reviewed-by: Jason Lowe-Power <power.jg@gmail.com>
+Reviewed-by: Matthew Poremba <matthew.poremba@amd.com>
+Maintainer: Gabe Black <gabeblack@google.com>
+Tested-by: kokoro <noreply+kokoro@google.com>
+---
+ src/arch/riscv/tlb.cc | 28 ++++++++++++++++++++++++++++
+ src/arch/riscv/tlb.hh |  2 ++
+ 2 files changed, 30 insertions(+)
+
+diff --git a/src/arch/riscv/tlb.cc b/src/arch/riscv/tlb.cc
+index aefa2dfb3..1bf557ae5 100644
+--- a/src/arch/riscv/tlb.cc
++++ b/src/arch/riscv/tlb.cc
+@@ -380,6 +380,34 @@ TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
+     translation->finish(translateAtomic(req, tc, mode), req, tc, mode);
+ }
+ 
++Fault
++TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc, Mode mode)
++{
++    panic_if(FullSystem,
++            "translateFunctional not implemented for full system.");
++
++    const Addr vaddr = req->getVaddr();
++    Process *process = tc->getProcessPtr();
++    const auto *pte = process->pTable->lookup(vaddr);
++
++    if (!pte && mode != Execute) {
++        // Check if we just need to grow the stack.
++        if (process->fixupStackFault(vaddr)) {
++            // If we did, lookup the entry for the new page.
++            pte = process->pTable->lookup(vaddr);
++        }
++    }
++
++    if (!pte)
++        return std::make_shared<GenericPageTableFault>(req->getVaddr());
++
++    Addr paddr = pte->paddr | process->pTable->pageOffset(vaddr);
++
++    DPRINTF(TLB, "Translated (functional) %#x -> %#x.\n", vaddr, paddr);
++    req->setPaddr(paddr);
++    return NoFault;
++}
++
+ Fault
+ TLB::finalizePhysical(const RequestPtr &req,
+                       ThreadContext *tc, Mode mode) const
+diff --git a/src/arch/riscv/tlb.hh b/src/arch/riscv/tlb.hh
+index bdd318192..c648123a5 100644
+--- a/src/arch/riscv/tlb.hh
++++ b/src/arch/riscv/tlb.hh
+@@ -111,6 +111,8 @@ class TLB : public BaseTLB
+     void translateTiming(
+             const RequestPtr &req, ThreadContext *tc,
+             Translation *translation, Mode mode) override;
++    Fault translateFunctional(
++            const RequestPtr &req, ThreadContext *tc, Mode mode) override;
+     Fault finalizePhysical(
+             const RequestPtr &req,
+             ThreadContext *tc, Mode mode) const override;
+-- 
+2.29.2
+

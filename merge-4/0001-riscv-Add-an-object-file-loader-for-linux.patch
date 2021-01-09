@@ -1,0 +1,70 @@
+From 45518cc26e02ed217c9a46c6978fe2fa64d4d7f2 Mon Sep 17 00:00:00 2001
+From: Gabe Black <gabeblack@google.com>
+Date: Thu, 2 May 2019 22:53:41 -0700
+Subject: [PATCH] riscv: Add an object file loader for linux.
+
+Change-Id: I3accca91cc4e02fa8e3a1169590cbe6696cf05e2
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/18628
+Tested-by: kokoro <noreply+kokoro@google.com>
+Reviewed-by: Alec Roelke <alec.roelke@gmail.com>
+Maintainer: Alec Roelke <alec.roelke@gmail.com>
+---
+ src/arch/riscv/linux/process.cc | 35 +++++++++++++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+diff --git a/src/arch/riscv/linux/process.cc b/src/arch/riscv/linux/process.cc
+index 72399201e..b2d030523 100644
+--- a/src/arch/riscv/linux/process.cc
++++ b/src/arch/riscv/linux/process.cc
+@@ -38,6 +38,7 @@
+ 
+ #include "arch/riscv/isa_traits.hh"
+ #include "arch/riscv/linux/linux.hh"
++#include "base/loader/object_file.hh"
+ #include "base/trace.hh"
+ #include "cpu/thread_context.hh"
+ #include "debug/SyscallVerbose.hh"
+@@ -51,6 +52,40 @@
+ using namespace std;
+ using namespace RiscvISA;
+ 
++namespace
++{
++
++class RiscvLinuxObjectFileLoader : public ObjectFile::Loader
++{
++  public:
++    Process *
++    load(ProcessParams *params, ObjectFile *obj_file) override
++    {
++        auto arch = obj_file->getArch();
++        auto opsys = obj_file->getOpSys();
++
++        if (arch != ObjectFile::Riscv64 && arch != ObjectFile::Riscv32)
++            return nullptr;
++
++        if (opsys == ObjectFile::UnknownOpSys) {
++            warn("Unknown operating system; assuming Linux.");
++            opsys = ObjectFile::Linux;
++        }
++
++        if (opsys != ObjectFile::Linux)
++            return nullptr;
++
++        if (arch == ObjectFile::Riscv64)
++            return new RiscvLinuxProcess64(params, obj_file);
++        else
++            return new RiscvLinuxProcess32(params, obj_file);
++    }
++};
++
++RiscvLinuxObjectFileLoader loader;
++
++} // anonymous namespace
++
+ /// Target uname() handler.
+ static SyscallReturn
+ unameFunc64(SyscallDesc *desc, int callnum, Process *process,
+-- 
+2.29.2
+

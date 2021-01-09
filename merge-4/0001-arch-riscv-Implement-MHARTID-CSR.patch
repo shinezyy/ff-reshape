@@ -1,0 +1,36 @@
+From 53e74695ac28e02d10594af0ef6afff6536a0d35 Mon Sep 17 00:00:00 2001
+From: Alec Roelke <alec.roelke@gmail.com>
+Date: Sun, 3 Mar 2019 15:13:51 -0500
+Subject: [PATCH] arch-riscv: Implement MHARTID CSR
+
+This patch implements the MHARTID CSR by intercepting attempts to access
+it, similar to the way accesses to the performance counters are
+intercepted, to return the thread's context ID.
+
+Change-Id: Ie14a31036fbe0e49fb3347ac0c3c508d9427a10d
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/16988
+Reviewed-by: Alec Roelke <alec.roelke@gmail.com>
+Reviewed-by: Jason Lowe-Power <jason@lowepower.com>
+Maintainer: Alec Roelke <alec.roelke@gmail.com>
+Maintainer: Jason Lowe-Power <jason@lowepower.com>
+Tested-by: kokoro <noreply+kokoro@google.com>
+---
+ src/arch/riscv/isa.cc | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/arch/riscv/isa.cc b/src/arch/riscv/isa.cc
+index 4e36d5596..cc86752ab 100644
+--- a/src/arch/riscv/isa.cc
++++ b/src/arch/riscv/isa.cc
+@@ -112,6 +112,8 @@ RegVal
+ ISA::readMiscReg(int misc_reg, ThreadContext *tc)
+ {
+     switch (misc_reg) {
++      case MISCREG_HARTID:
++        return tc->contextId();
+       case MISCREG_CYCLE:
+         if (hpmCounterEnabled(MISCREG_CYCLE)) {
+             DPRINTF(RiscvMisc, "Cycle counter at: %llu.\n",
+-- 
+2.29.2
+

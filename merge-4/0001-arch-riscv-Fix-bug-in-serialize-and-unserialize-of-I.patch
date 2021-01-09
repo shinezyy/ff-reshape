@@ -1,0 +1,58 @@
+From 0b39303f1c4dae8cb933e3eeac1a7e4be0cfe3ce Mon Sep 17 00:00:00 2001
+From: IanJiangICT <ianjiang.ict@gmail.com>
+Date: Wed, 6 Nov 2019 22:00:03 +0800
+Subject: [PATCH] arch-riscv: Fix bug in serialize and unserialize of
+ Interrutps
+
+When serialize and unserialize an variable, the parameters passed to
+SERIALIZE_SCALAR() and UNSERIALIZE_SCALAR() must be the same and should be a
+general variable name. If not, the expected item would not be found with
+UNSERIALIZE_SCALAR() and a fatal error would be introduced.
+This patch fix the bug in class Interrupts of RISCV.
+
+Change-Id: I7dd7ab6805651149304959bdf7ee9f3be9d9eaff
+Signed-off-by: Ian Jiang <ianjiang.ict@gmail.com>
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/22643
+Tested-by: kokoro <noreply+kokoro@google.com>
+Reviewed-by: Alec Roelke <alec.roelke@gmail.com>
+Maintainer: Alec Roelke <alec.roelke@gmail.com>
+---
+ src/arch/riscv/interrupts.hh | 17 ++++++++++-------
+ 1 file changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/src/arch/riscv/interrupts.hh b/src/arch/riscv/interrupts.hh
+index 509b48391..77079e11a 100644
+--- a/src/arch/riscv/interrupts.hh
++++ b/src/arch/riscv/interrupts.hh
+@@ -134,18 +134,21 @@ class Interrupts : public BaseInterrupts
+     void
+     serialize(CheckpointOut &cp) const
+     {
+-        SERIALIZE_SCALAR(ip.to_ulong());
+-        SERIALIZE_SCALAR(ie.to_ulong());
++        unsigned long ip_ulong = ip.to_ulong();
++        unsigned long ie_ulong = ie.to_ulong();
++        SERIALIZE_SCALAR(ip_ulong);
++        SERIALIZE_SCALAR(ie_ulong);
+     }
+ 
+     void
+     unserialize(CheckpointIn &cp)
+     {
+-        long reg;
+-        UNSERIALIZE_SCALAR(reg);
+-        ip = reg;
+-        UNSERIALIZE_SCALAR(reg);
+-        ie = reg;
++        unsigned long ip_ulong;
++        unsigned long ie_ulong;
++        UNSERIALIZE_SCALAR(ip_ulong);
++        ip = ip_ulong;
++        UNSERIALIZE_SCALAR(ie_ulong);
++        ie = ie_ulong;
+     }
+ };
+ 
+-- 
+2.29.2
+

@@ -1,0 +1,116 @@
+From b4b487e1ad4c3fa9b6295385a9d9899fb743c788 Mon Sep 17 00:00:00 2001
+From: Avishai Tvila <avishai.tvila@gmail.com>
+Date: Thu, 4 Apr 2019 13:20:24 -0700
+Subject: [PATCH] arch-riscv,isa: Fix for compressed jump (c_j) imm
+
+c_j(al) has a special format, called CJ.
+The jump offset format is instbits[12:2] --> offset[11|4|9:8|10|6|7|3:1|5]
+Currently in decoder.isa, c_j format is JOp, the imm and branchTarget are incorrect
+In the execute section (decoder.isa:228), the imm fields is ignored and the offset is calculated correctlly.
+As a result, we get decoder flush for each c_j instance
+I've added CJOp format in compressed.isa, and use it in execute section.
+In addition, c_j is mappped to jal zero, cj_imm, and actually is neither indirect control nor a function call
+I fixed the flags accordently.
+I'll fix all IsRet, IsCall and IsIndirectControl flags for rest of (c_)jal(r) in my next commit.
+I ran coremark -O0 before my fix and I got 37.7% branch miss-rate, after the fix the branch miss-rate is <13%
+
+Change-Id: I608d5894a78a1ebefe36f21e21aaea68b42bccfc
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/17808
+Maintainer: Jason Lowe-Power <jason@lowepower.com>
+Tested-by: kokoro <noreply+kokoro@google.com>
+Reviewed-by: Jason Lowe-Power <jason@lowepower.com>
+Reviewed-by: Alec Roelke <alec.roelke@gmail.com>
+---
+ src/arch/riscv/isa/bitfields.isa          |  8 ++++++++
+ src/arch/riscv/isa/decoder.isa            | 15 +++-----------
+ src/arch/riscv/isa/formats/compressed.isa | 24 ++++++++++++++++++++++-
+ 3 files changed, 34 insertions(+), 13 deletions(-)
+
+diff --git a/src/arch/riscv/isa/bitfields.isa b/src/arch/riscv/isa/bitfields.isa
+index 903fce385..20f1fc0de 100644
+--- a/src/arch/riscv/isa/bitfields.isa
++++ b/src/arch/riscv/isa/bitfields.isa
+@@ -104,6 +104,14 @@ def bitfield FC1 <11:7>;
+ def bitfield FC2 <6:2>;
+ def bitfield FP2 <4:2>;
+ def bitfield CJUMPIMM <12:2>;
++def bitfield CJUMPIMM3TO1 <5:3>;
++def bitfield CJUMPIMM4TO4 <11:11>;
++def bitfield CJUMPIMM5TO5 <2:2>;
++def bitfield CJUMPIMM6TO6 <7:7>;
++def bitfield CJUMPIMM7TO7 <6:6>;
++def bitfield CJUMPIMM9TO8 <10:9>;
++def bitfield CJUMPIMM10TO10 <8:8>;
++def bitfield CJUMPIMMSIGN <12:12>;
+ def bitfield CIMM8 <12:5>;
+ def bitfield CIMM6 <12:7>;
+ def bitfield CIMM5 <6:2>;
+diff --git a/src/arch/riscv/isa/decoder.isa b/src/arch/riscv/isa/decoder.isa
+index 8de4829a6..8fcfba6ca 100644
+--- a/src/arch/riscv/isa/decoder.isa
++++ b/src/arch/riscv/isa/decoder.isa
+@@ -224,18 +224,9 @@ decode QUADRANT default Unknown::unknown() {
+                 }
+             }
+         }
+-        0x5: JOp::c_j({{
+-            int64_t offset = CJUMPIMM<3:1> << 1 |
+-                             CJUMPIMM<9:9> << 4 |
+-                             CJUMPIMM<0:0> << 5 |
+-                             CJUMPIMM<5:5> << 6 |
+-                             CJUMPIMM<4:4> << 7 |
+-                             CJUMPIMM<8:7> << 8 |
+-                             CJUMPIMM<6:6> << 10;
+-            if (CJUMPIMM<10:10> > 0)
+-                offset |= ~((int64_t)0x7FF);
+-            NPC = PC + offset;
+-        }}, IsIndirectControl, IsUncondControl, IsCall);
++        0x5: CJOp::c_j({{
++            NPC = PC + imm;
++        }}, IsDirectControl, IsUncondControl);
+         format CBOp {
+             0x6: c_beqz({{
+                 if (Rp1 == 0)
+diff --git a/src/arch/riscv/isa/formats/compressed.isa b/src/arch/riscv/isa/formats/compressed.isa
+index 3ebc1c6ae..b520d53eb 100644
+--- a/src/arch/riscv/isa/formats/compressed.isa
++++ b/src/arch/riscv/isa/formats/compressed.isa
+@@ -47,6 +47,28 @@ def format CIOp(imm_code, code, imm_type='int64_t', *opt_flags) {{
+     exec_output = ImmExecute.subst(iop)
+ }};
+ 
++def format CJOp(code, *opt_flags) {{
++    regs = ['_destRegIdx[0]', '_srcRegIdx[0]']
++    imm_code = """
++           imm =             CJUMPIMM3TO1 << 1 |
++                             CJUMPIMM4TO4 << 4 |
++                             CJUMPIMM5TO5 << 5 |
++                             CJUMPIMM6TO6 << 6 |
++                             CJUMPIMM7TO7 << 7 |
++                             CJUMPIMM9TO8 << 8 |
++                             CJUMPIMM10TO10 << 10;
++            if (CJUMPIMMSIGN)
++                imm |= ~((int64_t)0x7FF);
++    """
++    iop = InstObjParams(name, Name, 'ImmOp<int64_t>',
++        {'code': code, 'imm_code': imm_code,
++         'regs': ','.join(regs)}, opt_flags)
++    header_output = BranchDeclare.subst(iop)
++    decoder_output = ImmConstructor.subst(iop)
++    decode_block = BasicDecode.subst(iop)
++    exec_output = BranchExecute.subst(iop)
++}};
++
+ def format CBOp(code, *opt_flags) {{
+     imm_code = """
+                 imm = CIMM5<2:1> << 1 |
+@@ -78,4 +100,4 @@ def format CompressedStore(sdisp_code, memacc_code,
+     (header_output, decoder_output, decode_block, exec_output) = \
+         LoadStoreBase(name, Name, sdisp_code, ea_code, memacc_code, mem_flags,
+         inst_flags, 'Store', exec_template_base='Store')
+-}};
+\ No newline at end of file
++}};
+-- 
+2.29.2
+

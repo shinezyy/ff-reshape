@@ -1,0 +1,42 @@
+From f4697687ed722768b527d20ed1efd2297a7df273 Mon Sep 17 00:00:00 2001
+From: Gabe Black <gabeblack@google.com>
+Date: Fri, 27 Mar 2020 04:01:38 -0700
+Subject: [PATCH] riscv: Fix RISCV builds by updating its use of pseudoInst().
+
+The signature of the function and RISCV's use of it changed
+simultaneously, were independently verified, and then separately merged.
+The combination of the two does not build successfully.
+
+This change updates RISCV so it uses the new signature.
+
+Change-Id: I6a944e664640c9086583d546870ed1fbfa84a3e7
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/27163
+Reviewed-by: Giacomo Travaglini <giacomo.travaglini@arm.com>
+Reviewed-by: Nils Asmussen <nils.asmussen@barkhauseninstitut.org>
+Maintainer: Gabe Black <gabeblack@google.com>
+Tested-by: Gem5 Cloud Project GCB service account <345032938727@cloudbuild.gserviceaccount.com>
+Tested-by: kokoro <noreply+kokoro@google.com>
+---
+ src/arch/riscv/isa/formats/m5ops.isa | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/arch/riscv/isa/formats/m5ops.isa b/src/arch/riscv/isa/formats/m5ops.isa
+index 2a16959c9..11834f67b 100644
+--- a/src/arch/riscv/isa/formats/m5ops.isa
++++ b/src/arch/riscv/isa/formats/m5ops.isa
+@@ -37,8 +37,10 @@
+ 
+ def format M5Op() {{
+     iop = InstObjParams(name, Name, 'PseudoOp',
+-                        'a0 = PseudoInst::pseudoInst<PseudoInstABI>('
+-                            + 'xc->tcBase(), M5FUNC)',
++                        'uint64_t result;\n'
++                        'PseudoInst::pseudoInst<PseudoInstABI>('
++                            'xc->tcBase(), M5FUNC, result);\n'
++                        'a0 = result',
+                         ['IsNonSpeculative', 'IsSerializeAfter'])
+     header_output = BasicDeclare.subst(iop)
+     decoder_output = BasicConstructor.subst(iop)
+-- 
+2.29.2
+

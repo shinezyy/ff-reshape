@@ -1,0 +1,43 @@
+From ea487f9bb7b35556a39ef25765859330e62b11ae Mon Sep 17 00:00:00 2001
+From: Tuan Ta <qtt2@cornell.edu>
+Date: Mon, 2 Apr 2018 15:19:51 -0400
+Subject: [PATCH] riscv: remove NonSpeculative flag from fence inst
+
+Fence instruction origially had two flags NonSpeculative and
+MemBarrier. In O3 model, MemBarrier instructions are inserted
+into the instruction queue by the InstructionQueue::insertBarrier (at
+src/cpu/o3/iew_impl.hh:1083). Barrier instructions are implicitly
+assumed to be non-speculative.
+
+Adding NonSpeculative flag to fence instruction makes it inserted into
+the instruction queue twice (at src/cpu/o3/iew_impl.hh:1083 and :1111).
+This can lead to a deadlock if both pointers to the instruction are not
+cleared from the queue when the instruction retires.
+
+This patch removes NonSpeculative flag from the fence inst.
+
+Change-Id: I26573d12a0b52f43b73c0e51158286dc98d05ea4
+Reviewed-on: https://gem5-review.googlesource.com/c/8183
+Reviewed-by: Jason Lowe-Power <jason@lowepower.com>
+Reviewed-by: Alec Roelke <ar4jc@virginia.edu>
+Maintainer: Alec Roelke <ar4jc@virginia.edu>
+---
+ src/arch/riscv/isa/decoder.isa | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/arch/riscv/isa/decoder.isa b/src/arch/riscv/isa/decoder.isa
+index 5acba6e7f..3a04a02de 100644
+--- a/src/arch/riscv/isa/decoder.isa
++++ b/src/arch/riscv/isa/decoder.isa
+@@ -411,7 +411,7 @@ decode QUADRANT default Unknown::unknown() {
+         0x03: decode FUNCT3 {
+             format IOp {
+                 0x0: fence({{
+-                }}, uint64_t, IsNonSpeculative, IsMemBarrier, No_OpClass);
++                }}, uint64_t, IsMemBarrier, No_OpClass);
+                 0x1: fence_i({{
+                 }}, uint64_t, IsNonSpeculative, IsSerializeAfter, No_OpClass);
+             }
+-- 
+2.29.2
+

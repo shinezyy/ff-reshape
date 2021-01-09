@@ -1,0 +1,201 @@
+From bee784dee932f66cefc702971a01a35f3436e929 Mon Sep 17 00:00:00 2001
+From: Ian Jiang <ianjiang.ict@gmail.com>
+Date: Thu, 31 Oct 2019 14:27:35 +0800
+Subject: [PATCH 1/2] arch-riscv: Fix disassembling of operand list for
+ compressed instructions
+
+In disassembling compressed instructions, the original Gem5 gives needless
+operands, such as register or immediate. This patch fixes the problem.
+- Existing formats fixed: CIOp, CJOp, CBOp and Jump.
+- New formats added: CIAddi4spnOp (for c.addi4spn only) and CompressedROp (with
+  templates CBasicDeclare and CBasicExecute)
+
+Change-Id: Ic293836983256a59d3a7aca091c8184b410516a4
+Signed-off-by: Ian Jiang <ianjiang.ict@gmail.com>
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/22566
+Tested-by: kokoro <noreply+kokoro@google.com>
+Reviewed-by: Jason Lowe-Power <jason@lowepower.com>
+Reviewed-by: Alec Roelke <alec.roelke@gmail.com>
+Maintainer: Alec Roelke <alec.roelke@gmail.com>
+---
+ src/arch/riscv/isa/decoder.isa            |  6 +-
+ src/arch/riscv/isa/formats/compressed.isa | 79 +++++++++++++++++++++--
+ src/arch/riscv/isa/formats/standard.isa   |  6 +-
+ 3 files changed, 78 insertions(+), 13 deletions(-)
+
+diff --git a/src/arch/riscv/isa/decoder.isa b/src/arch/riscv/isa/decoder.isa
+index 78cb78ce6..fd9c574e1 100644
+--- a/src/arch/riscv/isa/decoder.isa
++++ b/src/arch/riscv/isa/decoder.isa
+@@ -36,7 +36,7 @@
+ 
+ decode QUADRANT default Unknown::unknown() {
+     0x0: decode COPCODE {
+-        0x0: CIOp::c_addi4spn({{
++        0x0: CIAddi4spnOp::c_addi4spn({{
+             imm = CIMM8<1:1> << 2 |
+                   CIMM8<0:0> << 3 |
+                   CIMM8<7:6> << 4 |
+@@ -197,7 +197,7 @@ decode QUADRANT default Unknown::unknown() {
+                     Rp1 = Rp1 & imm;
+                 }}, uint64_t);
+             }
+-            format ROp {
++            format CompressedROp {
+                 0x3: decode CFUNCT1 {
+                     0x0: decode CFUNCT2LOW {
+                         0x0: c_sub({{
+@@ -328,7 +328,7 @@ decode QUADRANT default Unknown::unknown() {
+                         ra = NPC;
+                         NPC = Rc1;
+                     }}, IsIndirectControl, IsUncondControl, IsCall);
+-                    default: ROp::c_add({{
++                    default: CompressedROp::c_add({{
+                         Rc1_sd = Rc1_sd + Rc2_sd;
+                     }});
+                 }
+diff --git a/src/arch/riscv/isa/formats/compressed.isa b/src/arch/riscv/isa/formats/compressed.isa
+index b520d53eb..9c812e886 100644
+--- a/src/arch/riscv/isa/formats/compressed.isa
++++ b/src/arch/riscv/isa/formats/compressed.isa
+@@ -36,8 +36,8 @@ def format CROp(code, *opt_flags) {{
+     exec_output = BasicExecute.subst(iop)
+ }};
+ 
+-def format CIOp(imm_code, code, imm_type='int64_t', *opt_flags) {{
+-    regs = ['_destRegIdx[0]','_srcRegIdx[0]']
++def format CIAddi4spnOp(imm_code, code, imm_type='int64_t', *opt_flags) {{
++    regs = ['_destRegIdx[0]', '_srcRegIdx[0]']
+     iop = InstObjParams(name, Name, 'ImmOp<%s>' % imm_type,
+         {'code': code, 'imm_code': imm_code,
+          'regs': ','.join(regs)}, opt_flags)
+@@ -47,8 +47,17 @@ def format CIOp(imm_code, code, imm_type='int64_t', *opt_flags) {{
+     exec_output = ImmExecute.subst(iop)
+ }};
+ 
++def format CIOp(imm_code, code, imm_type='int64_t', *opt_flags) {{
++    iop = InstObjParams(name, Name, 'ImmOp<%s>' % imm_type,
++        {'code': code, 'imm_code': imm_code,
++         'regs': '_destRegIdx[0]'}, opt_flags)
++    header_output = ImmDeclare.subst(iop)
++    decoder_output = ImmConstructor.subst(iop)
++    decode_block = BasicDecode.subst(iop)
++    exec_output = ImmExecute.subst(iop)
++}};
++
+ def format CJOp(code, *opt_flags) {{
+-    regs = ['_destRegIdx[0]', '_srcRegIdx[0]']
+     imm_code = """
+            imm =             CJUMPIMM3TO1 << 1 |
+                              CJUMPIMM4TO4 << 4 |
+@@ -62,7 +71,7 @@ def format CJOp(code, *opt_flags) {{
+     """
+     iop = InstObjParams(name, Name, 'ImmOp<int64_t>',
+         {'code': code, 'imm_code': imm_code,
+-         'regs': ','.join(regs)}, opt_flags)
++         'regs': ''}, opt_flags)
+     header_output = BranchDeclare.subst(iop)
+     decoder_output = ImmConstructor.subst(iop)
+     decode_block = BasicDecode.subst(iop)
+@@ -78,10 +87,10 @@ def format CBOp(code, *opt_flags) {{
+                 if (CIMM3<2:2> > 0)
+                     imm |= ~((int64_t)0xFF);
+                """
+-    regs = ['_srcRegIdx[0]','_srcRegIdx[1]']
++    regs = '_srcRegIdx[0]'
+     iop = InstObjParams(name, Name, 'ImmOp<int64_t>',
+         {'code': code, 'imm_code': imm_code,
+-         'regs': ','.join(regs)}, opt_flags)
++         'regs': '_srcRegIdx[0]'}, opt_flags)
+     header_output = BranchDeclare.subst(iop)
+     decoder_output = ImmConstructor.subst(iop)
+     decode_block = BasicDecode.subst(iop)
+@@ -101,3 +110,61 @@ def format CompressedStore(sdisp_code, memacc_code,
+         LoadStoreBase(name, Name, sdisp_code, ea_code, memacc_code, mem_flags,
+         inst_flags, 'Store', exec_template_base='Store')
+ }};
++
++// Compressed basic instruction class declaration template.
++def template CBasicDeclare {{
++    //
++    // Static instruction class for "%(mnemonic)s".
++    //
++    class %(class_name)s : public %(base_class)s
++    {
++      public:
++        /// Constructor.
++        %(class_name)s(MachInst machInst);
++        Fault execute(ExecContext *, Trace::InstRecord *) const override;
++        std::string generateDisassembly(Addr pc,
++            const SymbolTable *symtab) const override;
++    };
++}};
++
++// Compressed basic instruction class execute method template.
++def template CBasicExecute {{
++    Fault
++    %(class_name)s::execute(ExecContext *xc,
++        Trace::InstRecord *traceData) const
++    {
++        Fault fault = NoFault;
++
++        %(op_decl)s;
++        %(op_rd)s;
++        if (fault == NoFault) {
++            %(code)s;
++            if (fault == NoFault) {
++                %(op_wb)s;
++            }
++        }
++        return fault;
++    }
++
++    std::string
++    %(class_name)s::generateDisassembly(Addr pc,
++            const SymbolTable *symtab) const
++    {
++        std::vector<RegId> indices = {%(regs)s};
++        std::stringstream ss;
++        ss << mnemonic << ' ';
++        ss << registerName(indices[0]) << ", ";
++        ss << registerName(indices[1]);
++        return ss.str();
++    }
++}};
++
++def format CompressedROp(code, *opt_flags) {{
++    regs = ['_destRegIdx[0]','_srcRegIdx[1]']
++    iop = InstObjParams(name, Name, 'RegOp',
++        {'code': code, 'regs': ','.join(regs)}, opt_flags)
++    header_output = CBasicDeclare.subst(iop)
++    decoder_output = BasicConstructor.subst(iop)
++    decode_block = BasicDecode.subst(iop)
++    exec_output = CBasicExecute.subst(iop)
++}};
+diff --git a/src/arch/riscv/isa/formats/standard.isa b/src/arch/riscv/isa/formats/standard.isa
+index 3c71fc8fb..e67fdfcbd 100644
+--- a/src/arch/riscv/isa/formats/standard.isa
++++ b/src/arch/riscv/isa/formats/standard.isa
+@@ -203,9 +203,7 @@ def template JumpExecute {{
+         std::vector<RegId> indices = {%(regs)s};
+         std::stringstream ss;
+         ss << mnemonic << ' ';
+-        for (const RegId& idx: indices)
+-            ss << registerName(idx) << ", ";
+-        ss << imm;
++        ss << registerName(indices[0]);
+         return ss.str();
+     }
+ }};
+@@ -328,7 +326,7 @@ def format BOp(code, *opt_flags) {{
+ }};
+ 
+ def format Jump(code, *opt_flags) {{
+-    regs = ['_destRegIdx[0]', '_srcRegIdx[0]']
++    regs = ['_srcRegIdx[0]']
+     iop = InstObjParams(name, Name, 'ImmOp<int64_t>',
+         {'code': code, 'imm_code': 'imm = sext<12>(IMM12);',
+          'regs': ','.join(regs)}, opt_flags)
+-- 
+2.29.2
+

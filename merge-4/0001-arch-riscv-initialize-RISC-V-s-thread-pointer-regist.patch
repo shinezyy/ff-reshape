@@ -1,0 +1,33 @@
+From 72d1d2930fc2b8ef6d32ec2ce2eabbac00684159 Mon Sep 17 00:00:00 2001
+From: Tuan Ta <qtt2@cornell.edu>
+Date: Mon, 2 Apr 2018 16:21:28 -0400
+Subject: [PATCH] arch-riscv: initialize RISC-V's thread pointer register in
+ clone syscall
+
+This patch initializes thread pointer register to Thread Local Storage
+(TLS)'s pointer given to a clone system call.
+
+Change-Id: I03e2cf4763e6a0ed31f357772a513a05e1e3461b
+Reviewed-on: https://gem5-review.googlesource.com/c/9622
+Reviewed-by: Brandon Potter <Brandon.Potter@amd.com>
+Maintainer: Brandon Potter <Brandon.Potter@amd.com>
+---
+ src/arch/riscv/linux/linux.hh | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/arch/riscv/linux/linux.hh b/src/arch/riscv/linux/linux.hh
+index 23b4fd562..441550a50 100644
+--- a/src/arch/riscv/linux/linux.hh
++++ b/src/arch/riscv/linux/linux.hh
+@@ -196,6 +196,8 @@ class RiscvLinux64 : public Linux
+               uint64_t stack, uint64_t tls)
+     {
+         RiscvISA::copyRegs(ptc, ctc);
++        if (flags & TGT_CLONE_SETTLS)
++            ctc->setIntReg(RiscvISA::ThreadPointerReg, tls);
+         if (stack)
+             ctc->setIntReg(RiscvISA::StackPointerReg, stack);
+     }
+-- 
+2.29.2
+

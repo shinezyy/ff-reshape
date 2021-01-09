@@ -1,0 +1,277 @@
+From 6362e8b2d2f1bfd3f6686fda8c43469b65b768c9 Mon Sep 17 00:00:00 2001
+From: Nils Asmussen <nils.asmussen@barkhauseninstitut.org>
+Date: Tue, 18 Feb 2020 08:54:41 +0100
+Subject: [PATCH] arch-riscv: added support for pseudo instructions.
+
+Change-Id: I4f73f8fcf62def8815e82555fc2a67f89efc09d1
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/25645
+Tested-by: Gem5 Cloud Project GCB service account <345032938727@cloudbuild.gserviceaccount.com>
+Tested-by: kokoro <noreply+kokoro@google.com>
+Reviewed-by: Gabe Black <gabeblack@google.com>
+Maintainer: Gabe Black <gabeblack@google.com>
+---
+ src/arch/riscv/insts/pseudo.hh         | 53 ++++++++++++++++++++++++++
+ src/arch/riscv/isa/bitfields.isa       |  4 ++
+ src/arch/riscv/isa/decoder.isa         |  3 ++
+ src/arch/riscv/isa/formats/formats.isa |  4 ++
+ src/arch/riscv/isa/formats/m5ops.isa   | 47 +++++++++++++++++++++++
+ src/arch/riscv/isa/includes.isa        |  3 ++
+ src/arch/riscv/isa/operands.isa        |  3 ++
+ src/arch/riscv/utility.hh              | 10 ++++-
+ 8 files changed, 126 insertions(+), 1 deletion(-)
+ create mode 100644 src/arch/riscv/insts/pseudo.hh
+ create mode 100644 src/arch/riscv/isa/formats/m5ops.isa
+
+diff --git a/src/arch/riscv/insts/pseudo.hh b/src/arch/riscv/insts/pseudo.hh
+new file mode 100644
+index 000000000..47b11adc7
+--- /dev/null
++++ b/src/arch/riscv/insts/pseudo.hh
+@@ -0,0 +1,53 @@
++/*
++ * Copyright (c) 2020 Barkhausen Institut
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions are
++ * met: redistributions of source code must retain the above copyright
++ * notice, this list of conditions and the following disclaimer;
++ * redistributions in binary form must reproduce the above copyright
++ * notice, this list of conditions and the following disclaimer in the
++ * documentation and/or other materials provided with the distribution;
++ * neither the name of the copyright holders nor the names of its
++ * contributors may be used to endorse or promote products derived from
++ * this software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#ifndef __ARCH_RISCV_INSTS_PSEUDO_HH__
++#define __ARCH_RISCV_INSTS_PSEUDO_HH__
++
++#include <string>
++
++#include "arch/riscv/insts/static_inst.hh"
++
++namespace RiscvISA
++{
++
++class PseudoOp : public RiscvStaticInst
++{
++  protected:
++    using RiscvStaticInst::RiscvStaticInst;
++
++    std::string generateDisassembly(
++        Addr pc, const SymbolTable *symtab) const override
++    {
++        return mnemonic;
++    }
++};
++
++}
++
++#endif // __ARCH_RISCV_INSTS_PSEUDO_HH__
+\ No newline at end of file
+diff --git a/src/arch/riscv/isa/bitfields.isa b/src/arch/riscv/isa/bitfields.isa
+index dae7fe1a3..e32c82de5 100644
+--- a/src/arch/riscv/isa/bitfields.isa
++++ b/src/arch/riscv/isa/bitfields.isa
+@@ -2,6 +2,7 @@
+ 
+ // Copyright (c) 2015 RISC-V Foundation
+ // Copyright (c) 2016 The University of Virginia
++// Copyright (c) 2020 Barkhausen Institut
+ // All rights reserved.
+ //
+ // Redistribution and use in source and binary forms, with or without
+@@ -119,3 +120,6 @@ def bitfield CIMM5 <6:2>;
+ def bitfield CIMM3 <12:10>;
+ def bitfield CIMM2 <6:5>;
+ def bitfield CIMM1 <12>;
++
++// Pseudo instructions
++def bitfield M5FUNC <31:25>;
+diff --git a/src/arch/riscv/isa/decoder.isa b/src/arch/riscv/isa/decoder.isa
+index 63cf1e45a..4f8fea2f9 100644
+--- a/src/arch/riscv/isa/decoder.isa
++++ b/src/arch/riscv/isa/decoder.isa
+@@ -2,6 +2,7 @@
+ 
+ // Copyright (c) 2015 RISC-V Foundation
+ // Copyright (c) 2017 The University of Virginia
++// Copyright (c) 2020 Barkhausen Institut
+ // All rights reserved.
+ //
+ // Redistribution and use in source and binary forms, with or without
+@@ -1832,5 +1833,7 @@ decode QUADRANT default Unknown::unknown() {
+                 }}, IsSerializeAfter, IsNonSpeculative, No_OpClass);
+             }
+         }
++
++        0x1e: M5Op::M5Op();
+     }
+ }
+diff --git a/src/arch/riscv/isa/formats/formats.isa b/src/arch/riscv/isa/formats/formats.isa
+index 0f7dc4274..2a6b91024 100644
+--- a/src/arch/riscv/isa/formats/formats.isa
++++ b/src/arch/riscv/isa/formats/formats.isa
+@@ -2,6 +2,7 @@
+ 
+ // Copyright (c) 2015 RISC-V Foundation
+ // Copyright (c) 2016-2017 The University of Virginia
++// Copyright (c) 2020 Barkhausen Institut
+ // All rights reserved.
+ //
+ // Redistribution and use in source and binary forms, with or without
+@@ -39,5 +40,8 @@
+ // Include formats for nonstandard extensions
+ ##include "compressed.isa"
+ 
++// Pseudo operations
++##include "m5ops.isa"
++
+ // Include the unknown
+ ##include "unknown.isa"
+diff --git a/src/arch/riscv/isa/formats/m5ops.isa b/src/arch/riscv/isa/formats/m5ops.isa
+new file mode 100644
+index 000000000..2a16959c9
+--- /dev/null
++++ b/src/arch/riscv/isa/formats/m5ops.isa
+@@ -0,0 +1,47 @@
++//
++// Copyright (c) 2020 Barkhausen Institut
++// All rights reserved
++//
++// The license below extends only to copyright in the software and shall
++// not be construed as granting a license to any other intellectual
++// property including but not limited to intellectual property relating
++// to a hardware implementation of the functionality of the software
++// licensed hereunder.  You may use the software subject to the license
++// terms below provided that you ensure that this notice is replicated
++// unmodified and in its entirety in all distributions of the software,
++// modified or unmodified, in source code or in binary form.
++//
++// Redistribution and use in source and binary forms, with or without
++// modification, are permitted provided that the following conditions are
++// met: redistributions of source code must retain the above copyright
++// notice, this list of conditions and the following disclaimer;
++// redistributions in binary form must reproduce the above copyright
++// notice, this list of conditions and the following disclaimer in the
++// documentation and/or other materials provided with the distribution;
++// neither the name of the copyright holders nor the names of its
++// contributors may be used to endorse or promote products derived from
++// this software without specific prior written permission.
++//
++// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++
++def format M5Op() {{
++    iop = InstObjParams(name, Name, 'PseudoOp',
++                        'a0 = PseudoInst::pseudoInst<PseudoInstABI>('
++                            + 'xc->tcBase(), M5FUNC)',
++                        ['IsNonSpeculative', 'IsSerializeAfter'])
++    header_output = BasicDeclare.subst(iop)
++    decoder_output = BasicConstructor.subst(iop)
++    decode_block = BasicDecode.subst(iop)
++    exec_output = BasicExecute.subst(iop)
++}};
+diff --git a/src/arch/riscv/isa/includes.isa b/src/arch/riscv/isa/includes.isa
+index 2d355bac0..16114c95b 100644
+--- a/src/arch/riscv/isa/includes.isa
++++ b/src/arch/riscv/isa/includes.isa
+@@ -2,6 +2,7 @@
+ 
+ // Copyright (c) 2015 RISC-V Foundation
+ // Copyright (c) 2016 The University of Virginia
++// Copyright (c) 2020 Barkhausen Institut
+ // All rights reserved.
+ //
+ // Redistribution and use in source and binary forms, with or without
+@@ -42,6 +43,7 @@ output header {{
+ #include "arch/riscv/insts/amo.hh"
+ #include "arch/riscv/insts/compressed.hh"
+ #include "arch/riscv/insts/mem.hh"
++#include "arch/riscv/insts/pseudo.hh"
+ #include "arch/riscv/insts/standard.hh"
+ #include "arch/riscv/insts/static_inst.hh"
+ #include "arch/riscv/insts/unknown.hh"
+@@ -90,6 +92,7 @@ output exec {{
+ #include "mem/request.hh"
+ #include "sim/eventq.hh"
+ #include "sim/full_system.hh"
++#include "sim/pseudo_inst.hh"
+ #include "sim/sim_events.hh"
+ #include "sim/sim_exit.hh"
+ #include "sim/system.hh"
+diff --git a/src/arch/riscv/isa/operands.isa b/src/arch/riscv/isa/operands.isa
+index 7c80b8acd..12f55778c 100644
+--- a/src/arch/riscv/isa/operands.isa
++++ b/src/arch/riscv/isa/operands.isa
+@@ -2,6 +2,7 @@
+ 
+ // Copyright (c) 2015 RISC-V Foundation
+ // Copyright (c) 2016 The University of Virginia
++// Copyright (c) 2020 Barkhausen Institut
+ // All rights reserved.
+ //
+ // Redistribution and use in source and binary forms, with or without
+@@ -53,6 +54,8 @@ def operands {{
+     'ra': ('IntReg', 'ud', 'ReturnAddrReg', 'IsInteger', 1),
+     'sp': ('IntReg', 'ud', 'StackPointerReg', 'IsInteger', 2),
+ 
++    'a0': ('IntReg', 'ud', '10', 'IsInteger', 1),
++
+     'Fd': ('FloatReg', 'df', 'FD', 'IsFloating', 1),
+     'Fd_bits': ('FloatReg', 'ud', 'FD', 'IsFloating', 1),
+     'Fs1': ('FloatReg', 'df', 'FS1', 'IsFloating', 2),
+diff --git a/src/arch/riscv/utility.hh b/src/arch/riscv/utility.hh
+index 7dcd5e2fd..32eaff644 100644
+--- a/src/arch/riscv/utility.hh
++++ b/src/arch/riscv/utility.hh
+@@ -2,6 +2,7 @@
+  * Copyright (c) 2013 ARM Limited
+  * Copyright (c) 2014-2015 Sven Karlsson
+  * Copyright (c) 2018 TU Dresden
++ * Copyright (c) 2020 Barkhausen Institut
+  * All rights reserved
+  *
+  * The license below extends only to copyright in the software and shall
+@@ -109,7 +110,14 @@ buildRetPC(const PCState &curPC, const PCState &callPC)
+ inline uint64_t
+ getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
+ {
+-    return 0;
++    panic_if(fp, "getArgument(): Floating point arguments not implemented");
++    panic_if(size != 8, "getArgument(): Can only handle 64-bit arguments.");
++    panic_if(number >= ArgumentRegs.size(),
++             "getArgument(): Don't know how to handle stack arguments");
++
++    // The first 8 integer arguments are passed in registers, the rest
++    // are passed on the stack.
++    return tc->readIntReg(ArgumentRegs[number]);
+ }
+ 
+ inline void startupCPU(ThreadContext *tc, int cpuId)
+-- 
+2.29.2
+

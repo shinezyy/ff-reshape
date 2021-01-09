@@ -1,0 +1,1146 @@
+From 9c5373ca61587409e4d0f6ad4c032e8d53be28ca Mon Sep 17 00:00:00 2001
+From: Austin Harris <austinharris@utexas.edu>
+Date: Wed, 26 Dec 2018 19:19:00 -0600
+Subject: [PATCH] arch-riscv: Enable support for riscv 32-bit in SE mode.
+
+This patch splits up the riscv SE mode support for 32 and 64-bit.
+A future patch will add support for decoding rv32 instructions.
+
+Change-Id: Ia79ae19f753caf94dc7e5830a6630efb94b419d7
+Signed-off-by: Austin Harris <austinharris@utexas.edu>
+Reviewed-on: https://gem5-review.googlesource.com/c/15355
+Reviewed-by: Jason Lowe-Power <jason@lowepower.com>
+Reviewed-by: Alec Roelke <alec.roelke@gmail.com>
+Maintainer: Alec Roelke <alec.roelke@gmail.com>
+---
+ src/arch/riscv/linux/linux.cc   |   6 +-
+ src/arch/riscv/linux/linux.hh   | 172 +++++++++++-
+ src/arch/riscv/linux/process.cc | 456 ++++++++++++++++++++++++++++----
+ src/arch/riscv/linux/process.hh |  22 +-
+ src/arch/riscv/process.cc       |  78 ++++--
+ src/arch/riscv/process.hh       |  17 +-
+ src/arch/riscv/types.hh         |  10 +-
+ src/base/loader/elf_object.cc   |   2 +-
+ src/base/loader/object_file.hh  |   3 +-
+ src/sim/process.cc              |   9 +-
+ 10 files changed, 691 insertions(+), 84 deletions(-)
+
+diff --git a/src/arch/riscv/linux/linux.cc b/src/arch/riscv/linux/linux.cc
+index 39fce22f4..65b430692 100644
+--- a/src/arch/riscv/linux/linux.cc
++++ b/src/arch/riscv/linux/linux.cc
+@@ -33,5 +33,9 @@
+ #include <fcntl.h>
+ #include <sys/mman.h>
+ 
+-#define TARGET RiscvLinux
++#define TARGET RiscvLinux64
++#include "kern/linux/flag_tables.hh"
++
++#undef TARGET
++#define TARGET RiscvLinux32
+ #include "kern/linux/flag_tables.hh"
+diff --git a/src/arch/riscv/linux/linux.hh b/src/arch/riscv/linux/linux.hh
+index 2dac1fe32..23b4fd562 100644
+--- a/src/arch/riscv/linux/linux.hh
++++ b/src/arch/riscv/linux/linux.hh
+@@ -34,7 +34,7 @@
+ #include "arch/riscv/utility.hh"
+ #include "kern/linux/linux.hh"
+ 
+-class RiscvLinux : public Linux
++class RiscvLinux64 : public Linux
+ {
+   public:
+     static const int TGT_SIGHUP         =  1;
+@@ -201,4 +201,174 @@ class RiscvLinux : public Linux
+     }
+ };
+ 
++class RiscvLinux32 : public Linux
++{
++  public:
++    static const int TGT_SIGHUP         =  1;
++    static const int TGT_SIGINT         =  2;
++    static const int TGT_SIGQUIT        =  3;
++    static const int TGT_SIGILL         =  4;
++    static const int TGT_SIGTRAP        =  5;
++    static const int TGT_SIGABRT        =  6;
++    static const int TGT_SIGIOT         =  6;
++    static const int TGT_SIGEMT         =  7;
++    static const int TGT_SIGFPE         =  8;
++    static const int TGT_SIGKILL        =  9;
++    static const int TGT_SIGBUS         = 10;
++    static const int TGT_SIGSEGV        = 11;
++    static const int TGT_SIGSYS         = 12;
++    static const int TGT_SIGPIPE        = 13;
++    static const int TGT_SIGALRM        = 14;
++    static const int TGT_SIGTERM        = 15;
++    static const int TGT_SIGURG         = 16;
++    static const int TGT_SIGSTOP        = 17;
++    static const int TGT_SIGTSTP        = 18;
++    static const int TGT_SIGCONT        = 19;
++    static const int TGT_SIGCHLD        = 20;
++    static const int TGT_SIGCLD         = 20;
++    static const int TGT_SIGTTIN        = 21;
++    static const int TGT_SIGTTOU        = 22;
++    static const int TGT_SIGPOLL        = 23;
++    static const int TGT_SIGIO          = 23;
++    static const int TGT_SIGXCPU        = 24;
++    static const int TGT_SIGXFSZ        = 25;
++    static const int TGT_SIGVTALRM      = 26;
++    static const int TGT_SIGPROF        = 27;
++    static const int TGT_SIGWINCH       = 28;
++    static const int TGT_SIGLOST        = 29;
++    static const int TGT_SIGPWR         = 29;
++    static const int TGT_SIGUSR1        = 30;
++    static const int TGT_SIGUSR2        = 31;
++
++    /// This table maps the target open() flags to the corresponding
++    /// host open() flags.
++    static SyscallFlagTransTable openFlagTable[];
++
++    /// Number of entries in openFlagTable[].
++    static const int NUM_OPEN_FLAGS;
++
++    //@{
++    /// open(2) flag values.
++    // The following values match newlib 3.0.0.
++    // Note that glibc has different values.
++    static const int TGT_O_RDONLY       = 0x000000; //!< O_RDONLY
++    static const int TGT_O_WRONLY       = 0x000001; //!< O_WRONLY
++    static const int TGT_O_RDWR         = 0x000002; //!< O_RDWR
++    static const int TGT_O_CREAT        = 0x000200; //!< O_CREAT
++    static const int TGT_O_EXCL         = 0x000800; //!< O_EXCL
++    static const int TGT_O_NOCTTY       = 0x008000; //!< O_NOCTTY
++    static const int TGT_O_TRUNC        = 0x000400; //!< O_TRUNC
++    static const int TGT_O_APPEND       = 0x000008; //!< O_APPEND
++    static const int TGT_O_NONBLOCK     = 0x004000; //!< O_NONBLOCK
++    static const int TGT_O_SYNC         = 0x002000; //!< O_SYNC
++    static const int TGT_FSYNC          = 0x002000; //!< FSYNC
++    static const int TGT_FASYNC         = 0x000040; //!< FASYNC
++    // The following are not present in riscv32-unknown-elf <fcntl.h>
++    static const int TGT_O_DSYNC        = 0x010000; //!< O_DSYNC
++    static const int TGT_O_CLOEXEC      = 0x040000; //!< O_CLOEXEC
++    static const int TGT_O_NOINHERIT    = 0x040000; //!< O_NOINHERIT
++    static const int TGT_O_DIRECT       = 0x080000; //!< O_DIRECT
++    static const int TGT_O_NOFOLLOW     = 0x100000; //!< O_NOFOLLOW
++    static const int TGT_O_DIRECTORY    = 0x200000; //!< O_DIRECTORY
++    // The following are not defined by riscv32-unknown-elf
++    static const int TGT_O_LARGEFILE    = 0x020000; //!< O_LARGEFILE
++    static const int TGT_O_NOATIME      = 0x800000; //!< O_NOATIME
++    static const int TGT_O_PATH         = 0x400000; //!< O_PATH
++    //@}
++
++    // Only defined in riscv-unknown-elf for proxy kernel and not linux kernel
++    static const unsigned TGT_MAP_SHARED        = 0x0001;
++    static const unsigned TGT_MAP_PRIVATE       = 0x0002;
++    static const unsigned TGT_MAP_FIXED         = 0x0010;
++    static const unsigned TGT_MAP_ANONYMOUS     = 0x0020;
++    static const unsigned TGT_MAP_POPULATE      = 0x1000;
++    static const unsigned TGT_MREMAP_FIXED      = 0x0020;
++
++    static const unsigned NUM_MMAP_FLAGS;
++
++    // Newlib 3.0.0 defaults to 64-bits for time_t.
++    // Currently time_t in glibc for riscv32 is 32-bits, but will be changed.
++    typedef int64_t time_t;
++
++    /// Limit struct for getrlimit/setrlimit.
++    struct rlimit {
++        uint32_t  rlim_cur;     //!< soft limit
++        uint32_t  rlim_max;     //!< hard limit
++    };
++
++    struct timespec {
++        time_t tv_sec;
++        int32_t tv_nsec;
++    };
++
++    typedef struct {
++        int32_t val[2];
++    } tgt_fsid_t;
++
++    typedef struct {
++        uint64_t st_dev;
++        uint64_t st_ino;
++        uint32_t st_mode;
++        uint32_t st_nlink;
++        uint32_t st_uid;
++        uint32_t st_gid;
++        uint64_t st_rdev;
++        uint64_t __pad1;
++        int64_t st_size;
++        int32_t st_blksize;
++        int32_t __pad2;
++        int64_t st_blocks;
++        time_t st_atimeX;
++        int32_t st_atime_nsec;
++        time_t st_mtimeX;
++        int32_t st_mtime_nsec;
++        time_t st_ctimeX;
++        int32_t st_ctime_nsec;
++        int32_t __unused4;
++        int32_t __unused5;
++    } tgt_stat;
++
++    typedef struct {
++        uint32_t f_type;
++        uint32_t f_bsize;
++        uint32_t f_blocks;
++        uint32_t f_bfree;
++        uint32_t f_bavail;
++        uint32_t f_files;
++        uint32_t f_ffree;
++        tgt_fsid_t f_fsid;
++        uint32_t f_namelen;
++        uint32_t f_frsize;
++        uint32_t f_flags;
++        uint32_t f_spare[4];
++    } tgt_statfs;
++
++    typedef struct {
++        int32_t uptime;
++        uint32_t loads[3];
++        uint32_t totalram;
++        uint32_t freeram;
++        uint32_t sharedram;
++        uint32_t bufferram;
++        uint32_t totalswap;
++        uint32_t freeswap;
++        uint16_t procs;
++        uint16_t pad;
++        uint32_t totalhigh;
++        uint32_t freehigh;
++        uint32_t mem_unit;
++    } tgt_sysinfo;
++
++    static void
++    archClone(uint64_t flags,
++              Process *pp, Process *cp,
++              ThreadContext *ptc, ThreadContext *ctc,
++              uint64_t stack, uint64_t tls)
++    {
++        RiscvISA::copyRegs(ptc, ctc);
++        if (stack)
++            ctc->setIntReg(RiscvISA::StackPointerReg, stack);
++    }
++};
++
+ #endif
+diff --git a/src/arch/riscv/linux/process.cc b/src/arch/riscv/linux/process.cc
+index 6806079a3..03104b232 100644
+--- a/src/arch/riscv/linux/process.cc
++++ b/src/arch/riscv/linux/process.cc
+@@ -53,7 +53,7 @@ using namespace RiscvISA;
+ 
+ /// Target uname() handler.
+ static SyscallReturn
+-unameFunc(SyscallDesc *desc, int callnum, Process *process,
++unameFunc64(SyscallDesc *desc, int callnum, Process *process,
+           ThreadContext *tc)
+ {
+     int index = 0;
+@@ -63,13 +63,31 @@ unameFunc(SyscallDesc *desc, int callnum, Process *process,
+     strcpy(name->nodename,"sim.gem5.org");
+     strcpy(name->release, "3.0.0");
+     strcpy(name->version, "#1 Mon Aug 18 11:32:15 EDT 2003");
+-    strcpy(name->machine, "riscv");
++    strcpy(name->machine, "riscv64");
+ 
+     name.copyOut(tc->getMemProxy());
+     return 0;
+ }
+ 
+-std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
++/// Target uname() handler.
++static SyscallReturn
++unameFunc32(SyscallDesc *desc, int callnum, Process *process,
++            ThreadContext *tc)
++{
++    int index = 0;
++    TypedBufferArg<Linux::utsname> name(process->getSyscallArg(tc, index));
++
++    strcpy(name->sysname, "Linux");
++    strcpy(name->nodename,"sim.gem5.org");
++    strcpy(name->release, "3.0.0");
++    strcpy(name->version, "#1 Mon Aug 18 11:32:15 EDT 2003");
++    strcpy(name->machine, "riscv32");
++
++    name.copyOut(tc->getMemProxy());
++    return 0;
++}
++
++std::map<int, SyscallDesc> RiscvLinuxProcess64::syscallDescs = {
+     {0,    SyscallDesc("io_setup")},
+     {1,    SyscallDesc("io_destroy")},
+     {2,    SyscallDesc("io_submit")},
+@@ -99,45 +117,45 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {26,   SyscallDesc("inotify_init1")},
+     {27,   SyscallDesc("inotify_add_watch")},
+     {28,   SyscallDesc("inotify_rm_watch")},
+-    {29,   SyscallDesc("ioctl", ioctlFunc<RiscvLinux>)},
++    {29,   SyscallDesc("ioctl", ioctlFunc<RiscvLinux64>)},
+     {30,   SyscallDesc("ioprio_get")},
+     {31,   SyscallDesc("ioprio_set")},
+     {32,   SyscallDesc("flock")},
+     {33,   SyscallDesc("mknodat")},
+     {34,   SyscallDesc("mkdirat", mkdiratFunc)},
+-    {35,   SyscallDesc("unlinkat", unlinkatFunc<RiscvLinux>)},
++    {35,   SyscallDesc("unlinkat", unlinkatFunc<RiscvLinux64>)},
+     {36,   SyscallDesc("symlinkat")},
+     {37,   SyscallDesc("linkat")},
+-    {38,   SyscallDesc("renameat", renameatFunc<RiscvLinux>)},
++    {38,   SyscallDesc("renameat", renameatFunc<RiscvLinux64>)},
+     {39,   SyscallDesc("umount2")},
+     {40,   SyscallDesc("mount")},
+     {41,   SyscallDesc("pivot_root")},
+     {42,   SyscallDesc("nfsservctl")},
+-    {43,   SyscallDesc("statfs", statfsFunc<RiscvLinux>)},
+-    {44,   SyscallDesc("fstatfs", fstatfsFunc<RiscvLinux>)},
++    {43,   SyscallDesc("statfs", statfsFunc<RiscvLinux64>)},
++    {44,   SyscallDesc("fstatfs", fstatfsFunc<RiscvLinux64>)},
+     {45,   SyscallDesc("truncate", truncateFunc)},
+     {46,   SyscallDesc("ftruncate", ftruncate64Func)},
+     {47,   SyscallDesc("fallocate", fallocateFunc)},
+-    {48,   SyscallDesc("faccessat", faccessatFunc<RiscvLinux>)},
++    {48,   SyscallDesc("faccessat", faccessatFunc<RiscvLinux64>)},
+     {49,   SyscallDesc("chdir", chdirFunc)},
+     {50,   SyscallDesc("fchdir")},
+     {51,   SyscallDesc("chroot")},
+-    {52,   SyscallDesc("fchmod", fchmodFunc<RiscvLinux>)},
++    {52,   SyscallDesc("fchmod", fchmodFunc<RiscvLinux64>)},
+     {53,   SyscallDesc("fchmodat")},
+     {54,   SyscallDesc("fchownat")},
+     {55,   SyscallDesc("fchown", fchownFunc)},
+-    {56,   SyscallDesc("openat", openatFunc<RiscvLinux>)},
++    {56,   SyscallDesc("openat", openatFunc<RiscvLinux64>)},
+     {57,   SyscallDesc("close", closeFunc)},
+     {58,   SyscallDesc("vhangup")},
+     {59,   SyscallDesc("pipe2")},
+     {60,   SyscallDesc("quotactl")},
+     {61,   SyscallDesc("getdents64")},
+     {62,   SyscallDesc("lseek", lseekFunc)},
+-    {63,   SyscallDesc("read", readFunc<RiscvLinux>)},
+-    {64,   SyscallDesc("write", writeFunc<RiscvLinux>)},
+-    {66,   SyscallDesc("writev", writevFunc<RiscvLinux>)},
++    {63,   SyscallDesc("read", readFunc<RiscvLinux64>)},
++    {64,   SyscallDesc("write", writeFunc<RiscvLinux64>)},
++    {66,   SyscallDesc("writev", writevFunc<RiscvLinux64>)},
+     {67,   SyscallDesc("pread64")},
+-    {68,   SyscallDesc("pwrite64", pwrite64Func<RiscvLinux>)},
++    {68,   SyscallDesc("pwrite64", pwrite64Func<RiscvLinux64>)},
+     {69,   SyscallDesc("preadv")},
+     {70,   SyscallDesc("pwritev")},
+     {71,   SyscallDesc("sendfile")},
+@@ -147,9 +165,9 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {75,   SyscallDesc("vmsplice")},
+     {76,   SyscallDesc("splice")},
+     {77,   SyscallDesc("tee")},
+-    {78,   SyscallDesc("readlinkat", readlinkatFunc<RiscvLinux>)},
+-    {79,   SyscallDesc("fstatat", fstatat64Func<RiscvLinux>)},
+-    {80,   SyscallDesc("fstat", fstat64Func<RiscvLinux>)},
++    {78,   SyscallDesc("readlinkat", readlinkatFunc<RiscvLinux64>)},
++    {79,   SyscallDesc("fstatat", fstatat64Func<RiscvLinux64>)},
++    {80,   SyscallDesc("fstat", fstat64Func<RiscvLinux64>)},
+     {81,   SyscallDesc("sync")},
+     {82,   SyscallDesc("fsync")},
+     {83,   SyscallDesc("fdatasync")},
+@@ -167,7 +185,7 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {95,   SyscallDesc("waitid")},
+     {96,   SyscallDesc("set_tid_address", setTidAddressFunc)},
+     {97,   SyscallDesc("unshare")},
+-    {98,   SyscallDesc("futex", futexFunc<RiscvLinux>)},
++    {98,   SyscallDesc("futex", futexFunc<RiscvLinux64>)},
+     {99,   SyscallDesc("set_robust_list", ignoreFunc, SyscallDesc::WarnOnce)},
+     {100,  SyscallDesc("get_robust_list", ignoreFunc, SyscallDesc::WarnOnce)},
+     {101,  SyscallDesc("nanosleep")},
+@@ -182,8 +200,8 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {110,  SyscallDesc("timer_settime")},
+     {111,  SyscallDesc("timer_delete")},
+     {112,  SyscallDesc("clock_settime")},
+-    {113,  SyscallDesc("clock_gettime", clock_gettimeFunc<RiscvLinux>)},
+-    {114,  SyscallDesc("clock_getres", clock_getresFunc<RiscvLinux>)},
++    {113,  SyscallDesc("clock_gettime", clock_gettimeFunc<RiscvLinux64>)},
++    {114,  SyscallDesc("clock_getres", clock_getresFunc<RiscvLinux64>)},
+     {115,  SyscallDesc("clock_nanosleep")},
+     {116,  SyscallDesc("syslog")},
+     {117,  SyscallDesc("ptrace")},
+@@ -200,7 +218,7 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {128,  SyscallDesc("restart_syscall")},
+     {129,  SyscallDesc("kill")},
+     {130,  SyscallDesc("tkill")},
+-    {131,  SyscallDesc("tgkill", tgkillFunc<RiscvLinux>)},
++    {131,  SyscallDesc("tgkill", tgkillFunc<RiscvLinux64>)},
+     {132,  SyscallDesc("sigaltstack")},
+     {133,  SyscallDesc("rt_sigsuspend", ignoreFunc, SyscallDesc::WarnOnce)},
+     {134,  SyscallDesc("rt_sigaction", ignoreFunc, SyscallDesc::WarnOnce)},
+@@ -222,23 +240,23 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {150,  SyscallDesc("getresgid")},
+     {151,  SyscallDesc("setfsuid")},
+     {152,  SyscallDesc("setfsgid")},
+-    {153,  SyscallDesc("times", timesFunc<RiscvLinux>)},
++    {153,  SyscallDesc("times", timesFunc<RiscvLinux64>)},
+     {154,  SyscallDesc("setpgid", setpgidFunc)},
+     {155,  SyscallDesc("getpgid")},
+     {156,  SyscallDesc("getsid")},
+     {157,  SyscallDesc("setsid")},
+     {158,  SyscallDesc("getgroups")},
+     {159,  SyscallDesc("setgroups")},
+-    {160,  SyscallDesc("uname", unameFunc)},
++    {160,  SyscallDesc("uname", unameFunc64)},
+     {161,  SyscallDesc("sethostname")},
+     {162,  SyscallDesc("setdomainname")},
+-    {163,  SyscallDesc("getrlimit", getrlimitFunc<RiscvLinux>)},
++    {163,  SyscallDesc("getrlimit", getrlimitFunc<RiscvLinux64>)},
+     {164,  SyscallDesc("setrlimit", ignoreFunc)},
+-    {165,  SyscallDesc("getrusage", getrusageFunc<RiscvLinux>)},
++    {165,  SyscallDesc("getrusage", getrusageFunc<RiscvLinux64>)},
+     {166,  SyscallDesc("umask", umaskFunc)},
+     {167,  SyscallDesc("prctl")},
+     {168,  SyscallDesc("getcpu")},
+-    {169,  SyscallDesc("gettimeofday", gettimeofdayFunc<RiscvLinux>)},
++    {169,  SyscallDesc("gettimeofday", gettimeofdayFunc<RiscvLinux64>)},
+     {170,  SyscallDesc("settimeofday")},
+     {171,  SyscallDesc("adjtimex")},
+     {172,  SyscallDesc("getpid", getpidFunc)},
+@@ -248,7 +266,7 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {176,  SyscallDesc("getgid", getgidFunc)},
+     {177,  SyscallDesc("getegid", getegidFunc)},
+     {178,  SyscallDesc("gettid", gettidFunc)},
+-    {179,  SyscallDesc("sysinfo", sysinfoFunc<RiscvLinux>)},
++    {179,  SyscallDesc("sysinfo", sysinfoFunc<RiscvLinux64>)},
+     {180,  SyscallDesc("mq_open")},
+     {181,  SyscallDesc("mq_unlink")},
+     {182,  SyscallDesc("mq_timedsend")},
+@@ -285,13 +303,13 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {213,  SyscallDesc("readahead")},
+     {214,  SyscallDesc("brk", brkFunc)},
+     {215,  SyscallDesc("munmap", munmapFunc)},
+-    {216,  SyscallDesc("mremap", mremapFunc<RiscvLinux>)},
++    {216,  SyscallDesc("mremap", mremapFunc<RiscvLinux64>)},
+     {217,  SyscallDesc("add_key")},
+     {218,  SyscallDesc("request_key")},
+     {219,  SyscallDesc("keyctl")},
+-    {220,  SyscallDesc("clone", cloneFunc<RiscvLinux>)},
+-    {221,  SyscallDesc("execve", execveFunc<RiscvLinux>)},
+-    {222,  SyscallDesc("mmap", mmapFunc<RiscvLinux>)},
++    {220,  SyscallDesc("clone", cloneFunc<RiscvLinux64>)},
++    {221,  SyscallDesc("execve", execveFunc<RiscvLinux64>)},
++    {222,  SyscallDesc("mmap", mmapFunc<RiscvLinux64>)},
+     {223,  SyscallDesc("fadvise64")},
+     {224,  SyscallDesc("swapon")},
+     {225,  SyscallDesc("swapoff")},
+@@ -314,7 +332,7 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {242,  SyscallDesc("accept4")},
+     {243,  SyscallDesc("recvmmsg")},
+     {260,  SyscallDesc("wait4")},
+-    {261,  SyscallDesc("prlimit64", prlimitFunc<RiscvLinux>)},
++    {261,  SyscallDesc("prlimit64", prlimitFunc<RiscvLinux64>)},
+     {262,  SyscallDesc("fanotify_init")},
+     {263,  SyscallDesc("fanotify_mark")},
+     {264,  SyscallDesc("name_to_handle_at")},
+@@ -341,11 +359,11 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {285,  SyscallDesc("copy_file_range")},
+     {286,  SyscallDesc("preadv2")},
+     {287,  SyscallDesc("pwritev2")},
+-    {1024, SyscallDesc("open", openFunc<RiscvLinux>)},
++    {1024, SyscallDesc("open", openFunc<RiscvLinux64>)},
+     {1025, SyscallDesc("link")},
+     {1026, SyscallDesc("unlink", unlinkFunc)},
+     {1027, SyscallDesc("mknod")},
+-    {1028, SyscallDesc("chmod", chmodFunc<RiscvLinux>)},
++    {1028, SyscallDesc("chmod", chmodFunc<RiscvLinux64>)},
+     {1029, SyscallDesc("chown", chownFunc)},
+     {1030, SyscallDesc("mkdir", mkdirFunc)},
+     {1031, SyscallDesc("rmdir")},
+@@ -354,9 +372,9 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {1034, SyscallDesc("rename", renameFunc)},
+     {1035, SyscallDesc("readlink", readlinkFunc)},
+     {1036, SyscallDesc("symlink")},
+-    {1037, SyscallDesc("utimes", utimesFunc<RiscvLinux>)},
+-    {1038, SyscallDesc("stat", stat64Func<RiscvLinux>)},
+-    {1039, SyscallDesc("lstat", lstat64Func<RiscvLinux>)},
++    {1037, SyscallDesc("utimes", utimesFunc<RiscvLinux64>)},
++    {1038, SyscallDesc("stat", stat64Func<RiscvLinux64>)},
++    {1039, SyscallDesc("lstat", lstat64Func<RiscvLinux64>)},
+     {1040, SyscallDesc("pipe", pipeFunc)},
+     {1041, SyscallDesc("dup2", dup2Func)},
+     {1042, SyscallDesc("epoll_create")},
+@@ -366,20 +384,351 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {1046, SyscallDesc("sendfile")},
+     {1047, SyscallDesc("ftruncate", ftruncate64Func)},
+     {1048, SyscallDesc("truncate", truncate64Func)},
+-    {1049, SyscallDesc("stat", stat64Func<RiscvLinux>)},
+-    {1050, SyscallDesc("lstat", lstat64Func<RiscvLinux>)},
+-    {1051, SyscallDesc("fstat", fstat64Func<RiscvLinux>)},
++    {1049, SyscallDesc("stat", stat64Func<RiscvLinux64>)},
++    {1050, SyscallDesc("lstat", lstat64Func<RiscvLinux64>)},
++    {1051, SyscallDesc("fstat", fstat64Func<RiscvLinux64>)},
+     {1052, SyscallDesc("fcntl", fcntl64Func)},
+     {1053, SyscallDesc("fadvise64")},
+     {1054, SyscallDesc("newfstatat")},
+-    {1055, SyscallDesc("fstatfs", fstatfsFunc<RiscvLinux>)},
+-    {1056, SyscallDesc("statfs", statfsFunc<RiscvLinux>)},
++    {1055, SyscallDesc("fstatfs", fstatfsFunc<RiscvLinux64>)},
++    {1056, SyscallDesc("statfs", statfsFunc<RiscvLinux64>)},
++    {1057, SyscallDesc("lseek", lseekFunc)},
++    {1058, SyscallDesc("mmap", mmapFunc<RiscvLinux64>)},
++    {1059, SyscallDesc("alarm")},
++    {1060, SyscallDesc("getpgrp")},
++    {1061, SyscallDesc("pause")},
++    {1062, SyscallDesc("time", timeFunc<RiscvLinux64>)},
++    {1063, SyscallDesc("utime")},
++    {1064, SyscallDesc("creat")},
++    {1065, SyscallDesc("getdents")},
++    {1066, SyscallDesc("futimesat")},
++    {1067, SyscallDesc("select")},
++    {1068, SyscallDesc("poll")},
++    {1069, SyscallDesc("epoll_wait")},
++    {1070, SyscallDesc("ustat")},
++    {1071, SyscallDesc("vfork")},
++    {1072, SyscallDesc("oldwait4")},
++    {1073, SyscallDesc("recv")},
++    {1074, SyscallDesc("send")},
++    {1075, SyscallDesc("bdflush")},
++    {1076, SyscallDesc("umount")},
++    {1077, SyscallDesc("uselib")},
++    {1078, SyscallDesc("sysctl")},
++    {1079, SyscallDesc("fork")},
++    {2011, SyscallDesc("getmainvars")}
++};
++
++std::map<int, SyscallDesc> RiscvLinuxProcess32::syscallDescs = {
++    {0,    SyscallDesc("io_setup")},
++    {1,    SyscallDesc("io_destroy")},
++    {2,    SyscallDesc("io_submit")},
++    {3,    SyscallDesc("io_cancel")},
++    {4,    SyscallDesc("io_getevents")},
++    {5,    SyscallDesc("setxattr")},
++    {6,    SyscallDesc("lsetxattr")},
++    {7,    SyscallDesc("fsetxattr")},
++    {8,    SyscallDesc("getxattr")},
++    {9,    SyscallDesc("lgetxattr")},
++    {10,   SyscallDesc("fgetxattr")},
++    {11,   SyscallDesc("listxattr")},
++    {12,   SyscallDesc("llistxattr")},
++    {13,   SyscallDesc("flistxattr")},
++    {14,   SyscallDesc("removexattr")},
++    {15,   SyscallDesc("lremovexattr")},
++    {16,   SyscallDesc("fremovexattr")},
++    {17,   SyscallDesc("getcwd", getcwdFunc)},
++    {18,   SyscallDesc("lookup_dcookie")},
++    {19,   SyscallDesc("eventfd2")},
++    {20,   SyscallDesc("epoll_create1")},
++    {21,   SyscallDesc("epoll_ctl")},
++    {22,   SyscallDesc("epoll_pwait")},
++    {23,   SyscallDesc("dup", dupFunc)},
++    {24,   SyscallDesc("dup3")},
++    {25,   SyscallDesc("fcntl", fcntlFunc)},
++    {26,   SyscallDesc("inotify_init1")},
++    {27,   SyscallDesc("inotify_add_watch")},
++    {28,   SyscallDesc("inotify_rm_watch")},
++    {29,   SyscallDesc("ioctl", ioctlFunc<RiscvLinux32>)},
++    {30,   SyscallDesc("ioprio_get")},
++    {31,   SyscallDesc("ioprio_set")},
++    {32,   SyscallDesc("flock")},
++    {33,   SyscallDesc("mknodat")},
++    {34,   SyscallDesc("mkdirat")},
++    {35,   SyscallDesc("unlinkat", unlinkatFunc<RiscvLinux32>)},
++    {36,   SyscallDesc("symlinkat")},
++    {37,   SyscallDesc("linkat")},
++    {38,   SyscallDesc("renameat", renameatFunc<RiscvLinux32>)},
++    {39,   SyscallDesc("umount2")},
++    {40,   SyscallDesc("mount")},
++    {41,   SyscallDesc("pivot_root")},
++    {42,   SyscallDesc("nfsservctl")},
++    {43,   SyscallDesc("statfs", statfsFunc<RiscvLinux32>)},
++    {44,   SyscallDesc("fstatfs", fstatfsFunc<RiscvLinux32>)},
++    {45,   SyscallDesc("truncate", truncateFunc)},
++    {46,   SyscallDesc("ftruncate", ftruncateFunc)},
++    {47,   SyscallDesc("fallocate", fallocateFunc)},
++    {48,   SyscallDesc("faccessat", faccessatFunc<RiscvLinux32>)},
++    {49,   SyscallDesc("chdir")},
++    {50,   SyscallDesc("fchdir")},
++    {51,   SyscallDesc("chroot")},
++    {52,   SyscallDesc("fchmod", fchmodFunc<RiscvLinux32>)},
++    {53,   SyscallDesc("fchmodat")},
++    {54,   SyscallDesc("fchownat")},
++    {55,   SyscallDesc("fchown", fchownFunc)},
++    {56,   SyscallDesc("openat", openatFunc<RiscvLinux32>)},
++    {57,   SyscallDesc("close", closeFunc)},
++    {58,   SyscallDesc("vhangup")},
++    {59,   SyscallDesc("pipe2")},
++    {60,   SyscallDesc("quotactl")},
++    {61,   SyscallDesc("getdents64")},
++    {62,   SyscallDesc("lseek", lseekFunc)},
++    {63,   SyscallDesc("read", readFunc<RiscvLinux32>)},
++    {64,   SyscallDesc("write", writeFunc<RiscvLinux32>)},
++    {66,   SyscallDesc("writev", writevFunc<RiscvLinux32>)},
++    {67,   SyscallDesc("pread64")},
++    {68,   SyscallDesc("pwrite64", pwrite64Func<RiscvLinux32>)},
++    {69,   SyscallDesc("preadv")},
++    {70,   SyscallDesc("pwritev")},
++    {71,   SyscallDesc("sendfile")},
++    {72,   SyscallDesc("pselect6")},
++    {73,   SyscallDesc("ppoll")},
++    {74,   SyscallDesc("signalfd64")},
++    {75,   SyscallDesc("vmsplice")},
++    {76,   SyscallDesc("splice")},
++    {77,   SyscallDesc("tee")},
++    {78,   SyscallDesc("readlinkat", readlinkatFunc<RiscvLinux32>)},
++    {79,   SyscallDesc("fstatat")},
++    {80,   SyscallDesc("fstat", fstatFunc<RiscvLinux32>)},
++    {81,   SyscallDesc("sync")},
++    {82,   SyscallDesc("fsync")},
++    {83,   SyscallDesc("fdatasync")},
++    {84,   SyscallDesc("sync_file_range2")},
++    {85,   SyscallDesc("timerfd_create")},
++    {86,   SyscallDesc("timerfd_settime")},
++    {87,   SyscallDesc("timerfd_gettime")},
++    {88,   SyscallDesc("utimensat")},
++    {89,   SyscallDesc("acct")},
++    {90,   SyscallDesc("capget")},
++    {91,   SyscallDesc("capset")},
++    {92,   SyscallDesc("personality")},
++    {93,   SyscallDesc("exit", exitFunc)},
++    {94,   SyscallDesc("exit_group", exitGroupFunc)},
++    {95,   SyscallDesc("waitid")},
++    {96,   SyscallDesc("set_tid_address", setTidAddressFunc)},
++    {97,   SyscallDesc("unshare")},
++    {98,   SyscallDesc("futex", futexFunc<RiscvLinux32>)},
++    {99,   SyscallDesc("set_robust_list", ignoreFunc, SyscallDesc::WarnOnce)},
++    {100,  SyscallDesc("get_robust_list", ignoreFunc, SyscallDesc::WarnOnce)},
++    {101,  SyscallDesc("nanosleep")},
++    {102,  SyscallDesc("getitimer")},
++    {103,  SyscallDesc("setitimer")},
++    {104,  SyscallDesc("kexec_load")},
++    {105,  SyscallDesc("init_module")},
++    {106,  SyscallDesc("delete_module")},
++    {107,  SyscallDesc("timer_create")},
++    {108,  SyscallDesc("timer_gettime")},
++    {109,  SyscallDesc("timer_getoverrun")},
++    {110,  SyscallDesc("timer_settime")},
++    {111,  SyscallDesc("timer_delete")},
++    {112,  SyscallDesc("clock_settime")},
++    {113,  SyscallDesc("clock_gettime", clock_gettimeFunc<RiscvLinux32>)},
++    {114,  SyscallDesc("clock_getres", clock_getresFunc<RiscvLinux32>)},
++    {115,  SyscallDesc("clock_nanosleep")},
++    {116,  SyscallDesc("syslog")},
++    {117,  SyscallDesc("ptrace")},
++    {118,  SyscallDesc("sched_setparam")},
++    {119,  SyscallDesc("sched_setscheduler")},
++    {120,  SyscallDesc("sched_getscheduler")},
++    {121,  SyscallDesc("sched_getparam")},
++    {122,  SyscallDesc("sched_setaffinity")},
++    {123,  SyscallDesc("sched_getaffinity")},
++    {124,  SyscallDesc("sched_yield", ignoreFunc, SyscallDesc::WarnOnce)},
++    {125,  SyscallDesc("sched_get_priority_max")},
++    {126,  SyscallDesc("sched_get_priority_min")},
++    {127,  SyscallDesc("scheD_rr_get_interval")},
++    {128,  SyscallDesc("restart_syscall")},
++    {129,  SyscallDesc("kill")},
++    {130,  SyscallDesc("tkill")},
++    {131,  SyscallDesc("tgkill", tgkillFunc<RiscvLinux32>)},
++    {132,  SyscallDesc("sigaltstack")},
++    {133,  SyscallDesc("rt_sigsuspend", ignoreFunc, SyscallDesc::WarnOnce)},
++    {134,  SyscallDesc("rt_sigaction", ignoreFunc, SyscallDesc::WarnOnce)},
++    {135,  SyscallDesc("rt_sigprocmask", ignoreFunc, SyscallDesc::WarnOnce)},
++    {136,  SyscallDesc("rt_sigpending", ignoreFunc, SyscallDesc::WarnOnce)},
++    {137,  SyscallDesc("rt_sigtimedwait", ignoreFunc,SyscallDesc::WarnOnce)},
++    {138,  SyscallDesc("rt_sigqueueinfo", ignoreFunc,SyscallDesc::WarnOnce)},
++    {139,  SyscallDesc("rt_sigreturn", ignoreFunc, SyscallDesc::WarnOnce)},
++    {140,  SyscallDesc("setpriority")},
++    {141,  SyscallDesc("getpriority")},
++    {142,  SyscallDesc("reboot")},
++    {143,  SyscallDesc("setregid")},
++    {144,  SyscallDesc("setgid")},
++    {145,  SyscallDesc("setreuid")},
++    {146,  SyscallDesc("setuid", setuidFunc)},
++    {147,  SyscallDesc("setresuid")},
++    {148,  SyscallDesc("getresuid")},
++    {149,  SyscallDesc("getresgid")},
++    {150,  SyscallDesc("getresgid")},
++    {151,  SyscallDesc("setfsuid")},
++    {152,  SyscallDesc("setfsgid")},
++    {153,  SyscallDesc("times", timesFunc<RiscvLinux32>)},
++    {154,  SyscallDesc("setpgid", setpgidFunc)},
++    {155,  SyscallDesc("getpgid")},
++    {156,  SyscallDesc("getsid")},
++    {157,  SyscallDesc("setsid")},
++    {158,  SyscallDesc("getgroups")},
++    {159,  SyscallDesc("setgroups")},
++    {160,  SyscallDesc("uname", unameFunc32)},
++    {161,  SyscallDesc("sethostname")},
++    {162,  SyscallDesc("setdomainname")},
++    {163,  SyscallDesc("getrlimit", getrlimitFunc<RiscvLinux32>)},
++    {164,  SyscallDesc("setrlimit", ignoreFunc)},
++    {165,  SyscallDesc("getrusage", getrusageFunc<RiscvLinux32>)},
++    {166,  SyscallDesc("umask", umaskFunc)},
++    {167,  SyscallDesc("prctl")},
++    {168,  SyscallDesc("getcpu")},
++    {169,  SyscallDesc("gettimeofday", gettimeofdayFunc<RiscvLinux32>)},
++    {170,  SyscallDesc("settimeofday")},
++    {171,  SyscallDesc("adjtimex")},
++    {172,  SyscallDesc("getpid", getpidFunc)},
++    {173,  SyscallDesc("getppid", getppidFunc)},
++    {174,  SyscallDesc("getuid", getuidFunc)},
++    {175,  SyscallDesc("geteuid", geteuidFunc)},
++    {176,  SyscallDesc("getgid", getgidFunc)},
++    {177,  SyscallDesc("getegid", getegidFunc)},
++    {178,  SyscallDesc("gettid", gettidFunc)},
++    {179,  SyscallDesc("sysinfo", sysinfoFunc<RiscvLinux32>)},
++    {180,  SyscallDesc("mq_open")},
++    {181,  SyscallDesc("mq_unlink")},
++    {182,  SyscallDesc("mq_timedsend")},
++    {183,  SyscallDesc("mq_timedrecieve")},
++    {184,  SyscallDesc("mq_notify")},
++    {185,  SyscallDesc("mq_getsetattr")},
++    {186,  SyscallDesc("msgget")},
++    {187,  SyscallDesc("msgctl")},
++    {188,  SyscallDesc("msgrcv")},
++    {189,  SyscallDesc("msgsnd")},
++    {190,  SyscallDesc("semget")},
++    {191,  SyscallDesc("semctl")},
++    {192,  SyscallDesc("semtimedop")},
++    {193,  SyscallDesc("semop")},
++    {194,  SyscallDesc("shmget")},
++    {195,  SyscallDesc("shmctl")},
++    {196,  SyscallDesc("shmat")},
++    {197,  SyscallDesc("shmdt")},
++    {198,  SyscallDesc("socket")},
++    {199,  SyscallDesc("socketpair")},
++    {200,  SyscallDesc("bind")},
++    {201,  SyscallDesc("listen")},
++    {202,  SyscallDesc("accept")},
++    {203,  SyscallDesc("connect")},
++    {204,  SyscallDesc("getsockname")},
++    {205,  SyscallDesc("getpeername")},
++    {206,  SyscallDesc("sendo")},
++    {207,  SyscallDesc("recvfrom")},
++    {208,  SyscallDesc("setsockopt")},
++    {209,  SyscallDesc("getsockopt")},
++    {210,  SyscallDesc("shutdown")},
++    {211,  SyscallDesc("sendmsg")},
++    {212,  SyscallDesc("recvmsg")},
++    {213,  SyscallDesc("readahead")},
++    {214,  SyscallDesc("brk", brkFunc)},
++    {215,  SyscallDesc("munmap", munmapFunc)},
++    {216,  SyscallDesc("mremap", mremapFunc<RiscvLinux32>)},
++    {217,  SyscallDesc("add_key")},
++    {218,  SyscallDesc("request_key")},
++    {219,  SyscallDesc("keyctl")},
++    {220,  SyscallDesc("clone", cloneFunc<RiscvLinux32>)},
++    {221,  SyscallDesc("execve", execveFunc<RiscvLinux32>)},
++    {222,  SyscallDesc("mmap", mmapFunc<RiscvLinux32>)},
++    {223,  SyscallDesc("fadvise64")},
++    {224,  SyscallDesc("swapon")},
++    {225,  SyscallDesc("swapoff")},
++    {226,  SyscallDesc("mprotect", ignoreFunc)},
++    {227,  SyscallDesc("msync", ignoreFunc)},
++    {228,  SyscallDesc("mlock", ignoreFunc)},
++    {229,  SyscallDesc("munlock", ignoreFunc)},
++    {230,  SyscallDesc("mlockall", ignoreFunc)},
++    {231,  SyscallDesc("munlockall", ignoreFunc)},
++    {232,  SyscallDesc("mincore", ignoreFunc)},
++    {233,  SyscallDesc("madvise", ignoreFunc)},
++    {234,  SyscallDesc("remap_file_pages")},
++    {235,  SyscallDesc("mbind", ignoreFunc)},
++    {236,  SyscallDesc("get_mempolicy")},
++    {237,  SyscallDesc("set_mempolicy")},
++    {238,  SyscallDesc("migrate_pages")},
++    {239,  SyscallDesc("move_pages")},
++    {240,  SyscallDesc("tgsigqueueinfo")},
++    {241,  SyscallDesc("perf_event_open")},
++    {242,  SyscallDesc("accept4")},
++    {243,  SyscallDesc("recvmmsg")},
++    {260,  SyscallDesc("wait4")},
++    {261,  SyscallDesc("prlimit64", prlimitFunc<RiscvLinux32>)},
++    {262,  SyscallDesc("fanotify_init")},
++    {263,  SyscallDesc("fanotify_mark")},
++    {264,  SyscallDesc("name_to_handle_at")},
++    {265,  SyscallDesc("open_by_handle_at")},
++    {266,  SyscallDesc("clock_adjtime")},
++    {267,  SyscallDesc("syncfs")},
++    {268,  SyscallDesc("setns")},
++    {269,  SyscallDesc("sendmmsg")},
++    {270,  SyscallDesc("process_vm_ready")},
++    {271,  SyscallDesc("process_vm_writev")},
++    {272,  SyscallDesc("kcmp")},
++    {273,  SyscallDesc("finit_module")},
++    {274,  SyscallDesc("sched_setattr")},
++    {275,  SyscallDesc("sched_getattr")},
++    {276,  SyscallDesc("renameat2")},
++    {277,  SyscallDesc("seccomp")},
++    {278,  SyscallDesc("getrandom")},
++    {279,  SyscallDesc("memfd_create")},
++    {280,  SyscallDesc("bpf")},
++    {281,  SyscallDesc("execveat")},
++    {282,  SyscallDesc("userfaultid")},
++    {283,  SyscallDesc("membarrier")},
++    {284,  SyscallDesc("mlock2")},
++    {285,  SyscallDesc("copy_file_range")},
++    {286,  SyscallDesc("preadv2")},
++    {287,  SyscallDesc("pwritev2")},
++    {1024, SyscallDesc("open", openFunc<RiscvLinux32>)},
++    {1025, SyscallDesc("link")},
++    {1026, SyscallDesc("unlink", unlinkFunc)},
++    {1027, SyscallDesc("mknod")},
++    {1028, SyscallDesc("chmod", chmodFunc<RiscvLinux32>)},
++    {1029, SyscallDesc("chown", chownFunc)},
++    {1030, SyscallDesc("mkdir", mkdirFunc)},
++    {1031, SyscallDesc("rmdir")},
++    {1032, SyscallDesc("lchown")},
++    {1033, SyscallDesc("access", accessFunc)},
++    {1034, SyscallDesc("rename", renameFunc)},
++    {1035, SyscallDesc("readlink", readlinkFunc)},
++    {1036, SyscallDesc("symlink")},
++    {1037, SyscallDesc("utimes", utimesFunc<RiscvLinux32>)},
++    {1038, SyscallDesc("stat", statFunc<RiscvLinux32>)},
++    {1039, SyscallDesc("lstat", lstatFunc<RiscvLinux32>)},
++    {1040, SyscallDesc("pipe", pipeFunc)},
++    {1041, SyscallDesc("dup2", dup2Func)},
++    {1042, SyscallDesc("epoll_create")},
++    {1043, SyscallDesc("inotifiy_init")},
++    {1044, SyscallDesc("eventfd")},
++    {1045, SyscallDesc("signalfd")},
++    {1046, SyscallDesc("sendfile")},
++    {1047, SyscallDesc("ftruncate", ftruncateFunc)},
++    {1048, SyscallDesc("truncate", truncateFunc)},
++    {1049, SyscallDesc("stat", statFunc<RiscvLinux32>)},
++    {1050, SyscallDesc("lstat", lstatFunc<RiscvLinux32>)},
++    {1051, SyscallDesc("fstat", fstatFunc<RiscvLinux32>)},
++    {1052, SyscallDesc("fcntl", fcntlFunc)},
++    {1053, SyscallDesc("fadvise64")},
++    {1054, SyscallDesc("newfstatat")},
++    {1055, SyscallDesc("fstatfs", fstatfsFunc<RiscvLinux32>)},
++    {1056, SyscallDesc("statfs", statfsFunc<RiscvLinux32>)},
+     {1057, SyscallDesc("lseek", lseekFunc)},
+-    {1058, SyscallDesc("mmap", mmapFunc<RiscvLinux>)},
++    {1058, SyscallDesc("mmap", mmapFunc<RiscvLinux32>)},
+     {1059, SyscallDesc("alarm")},
+     {1060, SyscallDesc("getpgrp")},
+     {1061, SyscallDesc("pause")},
+-    {1062, SyscallDesc("time", timeFunc<RiscvLinux>)},
++    {1062, SyscallDesc("time", timeFunc<RiscvLinux32>)},
+     {1063, SyscallDesc("utime")},
+     {1064, SyscallDesc("creat")},
+     {1065, SyscallDesc("getdents")},
+@@ -400,12 +749,23 @@ std::map<int, SyscallDesc> RiscvLinuxProcess::syscallDescs = {
+     {2011, SyscallDesc("getmainvars")}
+ };
+ 
+-RiscvLinuxProcess::RiscvLinuxProcess(ProcessParams * params,
+-    ObjectFile *objFile) : RiscvProcess(params, objFile)
++RiscvLinuxProcess64::RiscvLinuxProcess64(ProcessParams * params,
++    ObjectFile *objFile) : RiscvProcess64(params, objFile)
++{}
++
++SyscallDesc*
++RiscvLinuxProcess64::getDesc(int callnum)
++{
++    return syscallDescs.find(callnum) != syscallDescs.end() ?
++        &syscallDescs.at(callnum) : nullptr;
++}
++
++RiscvLinuxProcess32::RiscvLinuxProcess32(ProcessParams * params,
++    ObjectFile *objFile) : RiscvProcess32(params, objFile)
+ {}
+ 
+ SyscallDesc*
+-RiscvLinuxProcess::getDesc(int callnum)
++RiscvLinuxProcess32::getDesc(int callnum)
+ {
+     return syscallDescs.find(callnum) != syscallDescs.end() ?
+         &syscallDescs.at(callnum) : nullptr;
+diff --git a/src/arch/riscv/linux/process.hh b/src/arch/riscv/linux/process.hh
+index f83037fd4..1256ac667 100644
+--- a/src/arch/riscv/linux/process.hh
++++ b/src/arch/riscv/linux/process.hh
+@@ -41,11 +41,29 @@
+ #include "sim/eventq.hh"
+ 
+ /// A process with emulated Riscv/Linux syscalls.
+-class RiscvLinuxProcess : public RiscvProcess
++class RiscvLinuxProcess64 : public RiscvProcess64
+ {
+   public:
+     /// Constructor.
+-    RiscvLinuxProcess(ProcessParams * params, ObjectFile *objFile);
++    RiscvLinuxProcess64(ProcessParams * params, ObjectFile *objFile);
++
++    virtual SyscallDesc* getDesc(int callnum);
++
++    /// The target system's hostname.
++    static const char *hostname;
++
++    /// ID of the thread group leader for the process
++    uint64_t __tgid;
++
++    /// Array of syscall descriptors, indexed by call number.
++    static std::map<int, SyscallDesc> syscallDescs;
++};
++
++class RiscvLinuxProcess32 : public RiscvProcess32
++{
++  public:
++    /// Constructor.
++    RiscvLinuxProcess32(ProcessParams * params, ObjectFile *objFile);
+ 
+     virtual SyscallDesc* getDesc(int callnum);
+ 
+diff --git a/src/arch/riscv/process.cc b/src/arch/riscv/process.cc
+index 7548c65b2..ed6de1546 100644
+--- a/src/arch/riscv/process.cc
++++ b/src/arch/riscv/process.cc
+@@ -67,6 +67,11 @@ RiscvProcess::RiscvProcess(ProcessParams *params, ObjectFile *objFile) :
+                 objFile)
+ {
+     fatal_if(params->useArchPT, "Arch page tables not implemented.");
++}
++
++RiscvProcess64::RiscvProcess64(ProcessParams *params, ObjectFile *objFile) :
++        RiscvProcess(params, objFile)
++{
+     const Addr stack_base = 0x7FFFFFFFFFFFFFFFL;
+     const Addr max_stack_size = 8 * 1024 * 1024;
+     const Addr next_thread_stack_base = stack_base - max_stack_size;
+@@ -77,8 +82,21 @@ RiscvProcess::RiscvProcess(ProcessParams *params, ObjectFile *objFile) :
+             next_thread_stack_base, mmap_end);
+ }
+ 
++RiscvProcess32::RiscvProcess32(ProcessParams *params, ObjectFile *objFile) :
++        RiscvProcess(params, objFile)
++{
++    const Addr stack_base = 0x7FFFFFFF;
++    const Addr max_stack_size = 8 * 1024 * 1024;
++    const Addr next_thread_stack_base = stack_base - max_stack_size;
++    const Addr brk_point = roundUp(objFile->bssBase() + objFile->bssSize(),
++            PageBytes);
++    const Addr mmap_end = 0x40000000L;
++    memState = make_shared<MemState>(brk_point, stack_base, max_stack_size,
++                                     next_thread_stack_base, mmap_end);
++}
++
+ void
+-RiscvProcess::initState()
++RiscvProcess64::initState()
+ {
+     Process::initState();
+ 
+@@ -87,10 +105,25 @@ RiscvProcess::initState()
+         system->getThreadContext(ctx)->setMiscRegNoEffect(MISCREG_PRV, PRV_U);
+ }
+ 
++void
++RiscvProcess32::initState()
++{
++    Process::initState();
++
++    argsInit<uint32_t>(PageBytes);
++    for (ContextID ctx: contextIds) {
++        system->getThreadContext(ctx)->setMiscRegNoEffect(MISCREG_PRV, PRV_U);
++        PCState pc = system->getThreadContext(ctx)->pcState();
++        pc.rv32(true);
++        system->getThreadContext(ctx)->pcState(pc);
++    }
++}
++
+ template<class IntType> void
+ RiscvProcess::argsInit(int pageSize)
+ {
+     const int RandomBytes = 16;
++    const int addrSize = sizeof(IntType);
+ 
+     updateBias();
+     objFile->loadSections(initVirtMem);
+@@ -104,23 +137,24 @@ RiscvProcess::argsInit(int pageSize)
+         stack_top -= arg.size() + 1;
+     for (const string& env: envp)
+         stack_top -= env.size() + 1;
+-    stack_top &= -sizeof(Addr);
++    stack_top &= -addrSize;
+ 
+-    vector<AuxVector<IntType>> auxv;
++    typedef AuxVector<IntType> auxv_t;
++    vector<auxv_t> auxv;
+     if (elfObject != nullptr) {
+-        auxv.push_back({M5_AT_ENTRY, objFile->entryPoint()});
+-        auxv.push_back({M5_AT_PHNUM, elfObject->programHeaderCount()});
+-        auxv.push_back({M5_AT_PHENT, elfObject->programHeaderSize()});
+-        auxv.push_back({M5_AT_PHDR, elfObject->programHeaderTable()});
+-        auxv.push_back({M5_AT_PAGESZ, PageBytes});
+-        auxv.push_back({M5_AT_SECURE, 0});
+-        auxv.push_back({M5_AT_RANDOM, stack_top});
+-        auxv.push_back({M5_AT_NULL, 0});
++        auxv.push_back(auxv_t(M5_AT_ENTRY, objFile->entryPoint()));
++        auxv.push_back(auxv_t(M5_AT_PHNUM, elfObject->programHeaderCount()));
++        auxv.push_back(auxv_t(M5_AT_PHENT, elfObject->programHeaderSize()));
++        auxv.push_back(auxv_t(M5_AT_PHDR, elfObject->programHeaderTable()));
++        auxv.push_back(auxv_t(M5_AT_PAGESZ, PageBytes));
++        auxv.push_back(auxv_t(M5_AT_SECURE, 0));
++        auxv.push_back(auxv_t(M5_AT_RANDOM, stack_top));
++        auxv.push_back(auxv_t(M5_AT_NULL, 0));
+     }
+-    stack_top -= (1 + argv.size()) * sizeof(Addr) +
+-                   (1 + envp.size()) * sizeof(Addr) +
+-                   sizeof(Addr) + 2 * sizeof(IntType) * auxv.size();
+-    stack_top &= -2*sizeof(Addr);
++    stack_top -= (1 + argv.size()) * addrSize +
++                   (1 + envp.size()) * addrSize +
++                   addrSize + 2 * sizeof(IntType) * auxv.size();
++    stack_top &= -2*addrSize;
+     memState->setStackSize(memState->getStackBase() - stack_top);
+     allocateMem(roundDown(stack_top, pageSize),
+             roundUp(memState->getStackSize(), pageSize));
+@@ -159,14 +193,14 @@ RiscvProcess::argsInit(int pageSize)
+     envPointers.push_back(0);
+ 
+     // Align stack
+-    memState->setStackMin(memState->getStackMin() & -sizeof(Addr));
++    memState->setStackMin(memState->getStackMin() & -addrSize);
+ 
+     // Calculate bottom of stack
+     memState->setStackMin(memState->getStackMin() -
+-            ((1 + argv.size()) * sizeof(Addr) +
+-             (1 + envp.size()) * sizeof(Addr) +
+-             sizeof(Addr) + 2 * sizeof(IntType) * auxv.size()));
+-    memState->setStackMin(memState->getStackMin() & -2*sizeof(Addr));
++            ((1 + argv.size()) * addrSize +
++             (1 + envp.size()) * addrSize +
++             addrSize + 2 * sizeof(IntType) * auxv.size()));
++    memState->setStackMin(memState->getStackMin() & -2*addrSize);
+     Addr sp = memState->getStackMin();
+     const auto pushOntoStack =
+         [this, &sp](const uint8_t* data, const size_t size) {
+@@ -182,14 +216,14 @@ RiscvProcess::argsInit(int pageSize)
+     for (const Addr& argPointer: argPointers) {
+         DPRINTF(Stack, "Wrote argv pointer %p to address %p\n",
+                 (void*)argPointer, (void*)sp);
+-        pushOntoStack((uint8_t*)&argPointer, sizeof(Addr));
++        pushOntoStack((uint8_t*)&argPointer, addrSize);
+     }
+ 
+     // Push env pointers onto stack
+     for (const Addr& envPointer: envPointers) {
+         DPRINTF(Stack, "Wrote envp pointer %p to address %p\n",
+                 (void*)envPointer, (void*)sp);
+-        pushOntoStack((uint8_t*)&envPointer, sizeof(Addr));
++        pushOntoStack((uint8_t*)&envPointer, addrSize);
+     }
+ 
+     // Push aux vector onto stack
+diff --git a/src/arch/riscv/process.hh b/src/arch/riscv/process.hh
+index 8b934b1d9..63e379931 100644
+--- a/src/arch/riscv/process.hh
++++ b/src/arch/riscv/process.hh
+@@ -47,9 +47,6 @@ class RiscvProcess : public Process
+ {
+   protected:
+     RiscvProcess(ProcessParams * params, ObjectFile *objFile);
+-
+-    void initState() override;
+-
+     template<class IntType>
+     void argsInit(int pageSize);
+ 
+@@ -64,4 +61,18 @@ class RiscvProcess : public Process
+     virtual bool mmapGrowsDown() const override { return false; }
+ };
+ 
++class RiscvProcess64 : public RiscvProcess
++{
++  protected:
++    RiscvProcess64(ProcessParams * params, ObjectFile *objFile);
++    void initState() override;
++};
++
++class RiscvProcess32 : public RiscvProcess
++{
++  protected:
++    RiscvProcess32(ProcessParams * params, ObjectFile *objFile);
++    void initState() override;
++};
++
+ #endif // __RISCV_PROCESS_HH__
+diff --git a/src/arch/riscv/types.hh b/src/arch/riscv/types.hh
+index f17d0b235..635ae1429 100644
+--- a/src/arch/riscv/types.hh
++++ b/src/arch/riscv/types.hh
+@@ -58,14 +58,18 @@ class PCState : public GenericISA::UPCState<MachInst>
+ {
+   private:
+     bool _compressed;
++    bool _rv32;
+ 
+   public:
+-    PCState() : UPCState() { _compressed = false; }
+-    PCState(Addr val) : UPCState(val) { _compressed = false; }
++    PCState() : UPCState() { _compressed = false; _rv32 = false; }
++    PCState(Addr val) : UPCState(val) { _compressed = false; _rv32 = false; }
+ 
+     void compressed(bool c) { _compressed = c; }
+     bool compressed() { return _compressed; }
+ 
++    void rv32(bool val) { _rv32 = val; }
++    bool rv32() const { return _rv32; }
++
+     bool
+     branching() const
+     {
+diff --git a/src/base/loader/elf_object.cc b/src/base/loader/elf_object.cc
+index 60c79f803..761fd79f5 100644
+--- a/src/base/loader/elf_object.cc
++++ b/src/base/loader/elf_object.cc
+@@ -112,7 +112,7 @@ ElfObject::tryFile(const std::string &fname, size_t len, uint8_t *data,
+                ehdr.e_ident[EI_CLASS] == ELFCLASS64) {
+         arch = Arm64;
+     } else if (ehdr.e_machine == EM_RISCV) {
+-        arch = Riscv;
++        arch = (ehdr.e_ident[EI_CLASS] == ELFCLASS64) ? Riscv64 : Riscv32;
+     } else if (ehdr.e_machine == EM_PPC &&
+                ehdr.e_ident[EI_CLASS] == ELFCLASS32) {
+         arch = Power;
+diff --git a/src/base/loader/object_file.hh b/src/base/loader/object_file.hh
+index c2cdafe47..09c453b8d 100644
+--- a/src/base/loader/object_file.hh
++++ b/src/base/loader/object_file.hh
+@@ -57,7 +57,8 @@ class ObjectFile
+         Arm,
+         Thumb,
+         Power,
+-        Riscv
++        Riscv64,
++        Riscv32
+     };
+ 
+     enum OpSys {
+diff --git a/src/sim/process.cc b/src/sim/process.cc
+index 62959b4c5..c4dd64107 100644
+--- a/src/sim/process.cc
++++ b/src/sim/process.cc
+@@ -623,14 +623,19 @@ ProcessParams::create()
+         fatal("Unknown/unsupported operating system.");
+     }
+ #elif THE_ISA == RISCV_ISA
+-    if (obj_file->getArch() != ObjectFile::Riscv)
++    ObjectFile::Arch arch = obj_file->getArch();
++    if (arch != ObjectFile::Riscv64 && arch != ObjectFile::Riscv32)
+         fatal("Object file architecture does not match compiled ISA (RISCV).");
+     switch (obj_file->getOpSys()) {
+       case ObjectFile::UnknownOpSys:
+         warn("Unknown operating system; assuming Linux.");
+         // fall through
+       case ObjectFile::Linux:
+-        process = new RiscvLinuxProcess(this, obj_file);
++        if (arch == ObjectFile::Riscv64) {
++            process = new RiscvLinuxProcess64(this, obj_file);
++        } else {
++            process = new RiscvLinuxProcess32(this, obj_file);
++        }
+         break;
+       default:
+         fatal("Unknown/unsupported operating system.");
+-- 
+2.29.2
+

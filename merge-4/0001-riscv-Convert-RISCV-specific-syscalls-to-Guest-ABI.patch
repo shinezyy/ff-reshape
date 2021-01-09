@@ -1,0 +1,51 @@
+From 33593d77f93ea80a50e5230e075c9b8314561280 Mon Sep 17 00:00:00 2001
+From: Gabe Black <gabeblack@google.com>
+Date: Thu, 28 Nov 2019 00:04:54 -0800
+Subject: [PATCH] riscv: Convert RISCV specific syscalls to Guest ABI.
+
+Jira Issue: https://gem5.atlassian.net/browse/GEM5-187
+
+Change-Id: I1a7041ba890f5f69d5506583c658ae6a777b5daf
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/23202
+Reviewed-by: Bobby R. Bruce <bbruce@ucdavis.edu>
+Maintainer: Gabe Black <gabeblack@google.com>
+Tested-by: kokoro <noreply+kokoro@google.com>
+---
+ src/arch/riscv/linux/process.cc | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/src/arch/riscv/linux/process.cc b/src/arch/riscv/linux/process.cc
+index acf698912..d5be09848 100644
+--- a/src/arch/riscv/linux/process.cc
++++ b/src/arch/riscv/linux/process.cc
+@@ -84,11 +84,10 @@ RiscvLinuxObjectFileLoader loader;
+ 
+ /// Target uname() handler.
+ static SyscallReturn
+-unameFunc64(SyscallDesc *desc, int callnum, ThreadContext *tc)
++unameFunc64(SyscallDesc *desc, int callnum, ThreadContext *tc, Addr utsname)
+ {
+-    int index = 0;
+     auto process = tc->getProcessPtr();
+-    TypedBufferArg<Linux::utsname> name(process->getSyscallArg(tc, index));
++    TypedBufferArg<Linux::utsname> name(utsname);
+ 
+     strcpy(name->sysname, "Linux");
+     strcpy(name->nodename,"sim.gem5.org");
+@@ -102,11 +101,10 @@ unameFunc64(SyscallDesc *desc, int callnum, ThreadContext *tc)
+ 
+ /// Target uname() handler.
+ static SyscallReturn
+-unameFunc32(SyscallDesc *desc, int callnum, ThreadContext *tc)
++unameFunc32(SyscallDesc *desc, int callnum, ThreadContext *tc, Addr utsname)
+ {
+-    int index = 0;
+     auto process = tc->getProcessPtr();
+-    TypedBufferArg<Linux::utsname> name(process->getSyscallArg(tc, index));
++    TypedBufferArg<Linux::utsname> name(utsname);
+ 
+     strcpy(name->sysname, "Linux");
+     strcpy(name->nodename,"sim.gem5.org");
+-- 
+2.29.2
+

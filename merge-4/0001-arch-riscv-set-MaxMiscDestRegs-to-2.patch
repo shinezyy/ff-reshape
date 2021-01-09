@@ -1,0 +1,35 @@
+From 7c961a57f482e2b37eb38403f3374990dcf85032 Mon Sep 17 00:00:00 2001
+From: Alec Roelke <alec.roelke@gmail.com>
+Date: Fri, 29 Nov 2019 15:41:19 -0500
+Subject: [PATCH] arch-riscv: set MaxMiscDestRegs to 2
+
+In an earlier patch, the FCSR was split into its two components, FRM and
+FFLAGS, causing explicit writes to FCSR to incur two CSR writes. With
+the O3 CPU model, which defers them both to later, this creates a bug
+where an assertion that the number of CSR writes must be less than
+MaxMiscDestRegs fails because that constant is 1. This patch sets it to
+2 so the O3 CPU is compatible with this scheme.
+
+Change-Id: Ic3413738c4eebe9f127980d0d0af5033d18468e7
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/23220
+Reviewed-by: Alec Roelke <alec.roelke@gmail.com>
+Maintainer: Alec Roelke <alec.roelke@gmail.com>
+Tested-by: kokoro <noreply+kokoro@google.com>
+---
+ src/arch/riscv/registers.hh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/arch/riscv/registers.hh b/src/arch/riscv/registers.hh
+index 582a6c514..352c600af 100644
+--- a/src/arch/riscv/registers.hh
++++ b/src/arch/riscv/registers.hh
+@@ -67,5 +67,5 @@ namespace RiscvISA {
+ 
+ using RiscvISAInst::MaxInstSrcRegs;
+ using RiscvISAInst::MaxInstDestRegs;
+-const int MaxMiscDestRegs = 1;
++const int MaxMiscDestRegs = 2;
+ 
+-- 
+2.29.2
+

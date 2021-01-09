@@ -1,0 +1,107 @@
+From ca5e9c22708f6142c70d0c141a8d489bb345100a Mon Sep 17 00:00:00 2001
+From: Ian Jiang <ianjiang.ict@gmail.com>
+Date: Mon, 25 Nov 2019 11:30:41 +0800
+Subject: [PATCH] arch-riscv: Fix immediate decoding for integer shift
+ immediate instructions
+
+The "shamt" in integer shift immediate instructions is an unsigned
+immediate encoded in bits[25:20]. While the original Gem5 uses bits[31:20]
+as an int64_t. This patch fixes the problem by:
+- Adding a new parameter "imm_code" for format IOp and use the correct
+bitfields SHAMT5 or SHAMT6 to assign "imm_code" for each instruction.
+- Use uint64_t instead of default int64_t to assign parameter "imm_type"
+of format IOp.
+
+The instructions affected include:
+- Shift Left Logical Immediate, slli
+- Shift Right Logical Immediate, srli
+- Shift Right Arithmetic Immediate, srai
+- Shift Left Logical Word Immediate, slliw
+- Shift Right Logical Word Immediate, srliw
+- Shift Right Arithmetic Word Immediate, sraiw
+
+Change-Id: Iad34ccd036c11630409f84f6de2b939224e100e6
+Signed-off-by: Ian Jiang <ianjiang.ict@gmail.com>
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/22563
+Reviewed-by: Alec Roelke <alec.roelke@gmail.com>
+Maintainer: Alec Roelke <alec.roelke@gmail.com>
+Tested-by: kokoro <noreply+kokoro@google.com>
+---
+ src/arch/riscv/isa/decoder.isa          | 24 ++++++++++++------------
+ src/arch/riscv/isa/formats/standard.isa |  5 +++--
+ 2 files changed, 15 insertions(+), 14 deletions(-)
+
+diff --git a/src/arch/riscv/isa/decoder.isa b/src/arch/riscv/isa/decoder.isa
+index c53420347..daec4139b 100644
+--- a/src/arch/riscv/isa/decoder.isa
++++ b/src/arch/riscv/isa/decoder.isa
+@@ -414,8 +414,8 @@ decode QUADRANT default Unknown::unknown() {
+                     Rd_sd = Rs1_sd + imm;
+                 }});
+                 0x1: slli({{
+-                    Rd = Rs1 << SHAMT6;
+-                }});
++                    Rd = Rs1 << imm;
++                }}, imm_type = uint64_t, imm_code = {{ imm = SHAMT6; }});
+                 0x2: slti({{
+                     Rd = (Rs1_sd < imm) ? 1 : 0;
+                 }});
+@@ -427,11 +427,11 @@ decode QUADRANT default Unknown::unknown() {
+                 }}, uint64_t);
+                 0x5: decode SRTYPE {
+                     0x0: srli({{
+-                        Rd = Rs1 >> SHAMT6;
+-                    }});
++                        Rd = Rs1 >> imm;
++                    }}, imm_type = uint64_t, imm_code = {{ imm = SHAMT6; }});
+                     0x1: srai({{
+-                        Rd_sd = Rs1_sd >> SHAMT6;
+-                    }});
++                        Rd_sd = Rs1_sd >> imm;
++                    }}, imm_type = uint64_t, imm_code = {{ imm = SHAMT6; }});
+                 }
+                 0x6: ori({{
+                     Rd = Rs1 | imm;
+@@ -452,15 +452,15 @@ decode QUADRANT default Unknown::unknown() {
+                     Rd_sd = Rs1_sw + imm;
+                 }}, int32_t);
+                 0x1: slliw({{
+-                    Rd_sd = Rs1_sw << SHAMT5;
+-                }});
++                    Rd_sd = Rs1_sw << imm;
++                }}, imm_type = uint64_t, imm_code = {{ imm = SHAMT5; }});
+                 0x5: decode SRTYPE {
+                     0x0: srliw({{
+-                        Rd_sd = (int32_t)(Rs1_uw >> SHAMT5);
+-                    }});
++                        Rd_sd = (int32_t)(Rs1_uw >> imm);
++                    }}, imm_type = uint64_t, imm_code = {{ imm = SHAMT5; }});
+                     0x1: sraiw({{
+-                        Rd_sd = Rs1_sw >> SHAMT5;
+-                    }});
++                        Rd_sd = Rs1_sw >> imm;
++                    }}, imm_type = uint64_t, imm_code = {{ imm = SHAMT5; }});
+                 }
+             }
+         }
+diff --git a/src/arch/riscv/isa/formats/standard.isa b/src/arch/riscv/isa/formats/standard.isa
+index 78d8144f8..a689c5750 100644
+--- a/src/arch/riscv/isa/formats/standard.isa
++++ b/src/arch/riscv/isa/formats/standard.isa
+@@ -344,10 +344,11 @@ def format ROp(code, *opt_flags) {{
+     exec_output = BasicExecute.subst(iop)
+ }};
+ 
+-def format IOp(code, imm_type='int64_t', *opt_flags) {{
++def format IOp(code, imm_type='int64_t', imm_code='imm = sext<12>(IMM12);',
++              *opt_flags) {{
+     regs = ['_destRegIdx[0]','_srcRegIdx[0]']
+     iop = InstObjParams(name, Name, 'ImmOp<%s>' % imm_type,
+-        {'code': code, 'imm_code': 'imm = sext<12>(IMM12);',
++        {'imm_code': imm_code, 'code': code,
+          'regs': ','.join(regs)}, opt_flags)
+     header_output = ImmDeclare.subst(iop)
+     decoder_output = ImmConstructor.subst(iop)
+-- 
+2.29.2
+

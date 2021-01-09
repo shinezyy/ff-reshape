@@ -1,0 +1,31 @@
+From 8efcc0faac252d716704b5f8f9f3e1c165910ebe Mon Sep 17 00:00:00 2001
+From: Tuan Ta <qtt2@cornell.edu>
+Date: Tue, 5 Feb 2019 10:08:10 -0500
+Subject: [PATCH] arch-riscv: Initialize interrupt mask
+
+This patch initializes RISCV interrupt mask to 0.
+
+Change-Id: I56289d9f3f319e239e305befea006a0ad4d86b75
+Reviewed-on: https://gem5-review.googlesource.com/c/16162
+Reviewed-by: Jason Lowe-Power <jason@lowepower.com>
+Maintainer: Jason Lowe-Power <jason@lowepower.com>
+---
+ src/arch/riscv/interrupts.hh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/arch/riscv/interrupts.hh b/src/arch/riscv/interrupts.hh
+index 406fe4ffa..ed946879b 100644
+--- a/src/arch/riscv/interrupts.hh
++++ b/src/arch/riscv/interrupts.hh
+@@ -74,7 +74,7 @@ class Interrupts : public SimObject
+     std::bitset<NumInterruptTypes>
+     globalMask(ThreadContext *tc) const
+     {
+-        INTERRUPT mask;
++        INTERRUPT mask = 0;
+         STATUS status = tc->readMiscReg(MISCREG_STATUS);
+         if (status.mie)
+             mask.mei = mask.mti = mask.msi = 1;
+-- 
+2.29.2
+

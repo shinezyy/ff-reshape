@@ -1,0 +1,29 @@
+From e74921edd5c5c12f121175d59852cd1752c598aa Mon Sep 17 00:00:00 2001
+From: Tuan Ta <qtt2@cornell.edu>
+Date: Mon, 2 Apr 2018 16:21:46 -0400
+Subject: [PATCH] riscv: ignore nanosleep syscall
+
+Change-Id: I564a09564da668a5db3e75f15b33efaca363d71a
+Reviewed-on: https://gem5-review.googlesource.com/c/9624
+Reviewed-by: Jason Lowe-Power <jason@lowepower.com>
+Maintainer: Jason Lowe-Power <jason@lowepower.com>
+---
+ src/arch/riscv/linux/process.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/arch/riscv/linux/process.cc b/src/arch/riscv/linux/process.cc
+index 03104b232..72399201e 100644
+--- a/src/arch/riscv/linux/process.cc
++++ b/src/arch/riscv/linux/process.cc
+@@ -188,7 +188,7 @@ std::map<int, SyscallDesc> RiscvLinuxProcess64::syscallDescs = {
+     {98,   SyscallDesc("futex", futexFunc<RiscvLinux64>)},
+     {99,   SyscallDesc("set_robust_list", ignoreFunc, SyscallDesc::WarnOnce)},
+     {100,  SyscallDesc("get_robust_list", ignoreFunc, SyscallDesc::WarnOnce)},
+-    {101,  SyscallDesc("nanosleep")},
++    {101,  SyscallDesc("nanosleep", ignoreFunc, SyscallDesc::WarnOnce)},
+     {102,  SyscallDesc("getitimer")},
+     {103,  SyscallDesc("setitimer")},
+     {104,  SyscallDesc("kexec_load")},
+-- 
+2.29.2
+

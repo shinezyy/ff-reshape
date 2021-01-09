@@ -1,0 +1,32 @@
+From 2eb57c7c3bb762097aa7bdab40cd37ec73996dca Mon Sep 17 00:00:00 2001
+From: Tuan Ta <qtt2@cornell.edu>
+Date: Mon, 2 Apr 2018 16:22:30 -0400
+Subject: [PATCH] riscv: fixed syscall return value
+
+In case of failure, a syscall returns a negative value encoding the
+error code. This patch makes the risc-v implementation returns the
+encoded value instead of its absolute value upon a failure of a syscall.
+
+Change-Id: I6032b0337fe1cff5b326dbc6bb3b87a415f03300
+Reviewed-on: https://gem5-review.googlesource.com/c/9627
+Reviewed-by: Alec Roelke <ar4jc@virginia.edu>
+Maintainer: Alec Roelke <ar4jc@virginia.edu>
+---
+ src/arch/riscv/process.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/arch/riscv/process.cc b/src/arch/riscv/process.cc
+index ed6de1546..16d0dc7ff 100644
+--- a/src/arch/riscv/process.cc
++++ b/src/arch/riscv/process.cc
+@@ -279,6 +279,6 @@ RiscvProcess::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
+         tc->setIntReg(SyscallPseudoReturnReg, sysret.returnValue());
+     } else {
+         // got an error, return details
+-        tc->setIntReg(SyscallPseudoReturnReg, sysret.errnoValue());
++        tc->setIntReg(SyscallPseudoReturnReg, sysret.encodedValue());
+     }
+ }
+-- 
+2.29.2
+

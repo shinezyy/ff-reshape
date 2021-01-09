@@ -1,0 +1,1130 @@
+From 5d5f53378b1924b8d325808b84d67ec633e6c2d1 Mon Sep 17 00:00:00 2001
+From: Gabe Black <gabeblack@google.com>
+Date: Mon, 17 Feb 2020 00:14:19 -0800
+Subject: [PATCH] riscv: Delete authors lists from riscv files.
+
+Change-Id: I94135c8f0e1baee741d6470cb80b4da5e5f8e673
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/25451
+Reviewed-by: Daniel Carvalho <odanrc@yahoo.com.br>
+Maintainer: Gabe Black <gabeblack@google.com>
+Tested-by: kokoro <noreply+kokoro@google.com>
+---
+ src/arch/riscv/RiscvISA.py                | 4 ----
+ src/arch/riscv/RiscvInterrupts.py         | 4 ----
+ src/arch/riscv/RiscvSystem.py             | 3 ---
+ src/arch/riscv/RiscvTLB.py                | 3 ---
+ src/arch/riscv/SConscript                 | 4 ----
+ src/arch/riscv/SConsopts                  | 2 --
+ src/arch/riscv/bare_metal/system.cc       | 2 --
+ src/arch/riscv/bare_metal/system.hh       | 2 --
+ src/arch/riscv/decoder.cc                 | 3 ---
+ src/arch/riscv/decoder.hh                 | 3 ---
+ src/arch/riscv/faults.cc                  | 4 +---
+ src/arch/riscv/faults.hh                  | 3 ---
+ src/arch/riscv/idle_event.cc              | 4 ----
+ src/arch/riscv/idle_event.hh              | 4 ----
+ src/arch/riscv/insts/SConscript           | 4 +---
+ src/arch/riscv/insts/amo.cc               | 2 --
+ src/arch/riscv/insts/amo.hh               | 2 --
+ src/arch/riscv/insts/compressed.cc        | 4 +---
+ src/arch/riscv/insts/compressed.hh        | 4 +---
+ src/arch/riscv/insts/mem.cc               | 2 --
+ src/arch/riscv/insts/mem.hh               | 2 --
+ src/arch/riscv/insts/standard.cc          | 2 --
+ src/arch/riscv/insts/standard.hh          | 4 +---
+ src/arch/riscv/insts/static_inst.cc       | 5 +----
+ src/arch/riscv/insts/static_inst.hh       | 3 ---
+ src/arch/riscv/insts/unknown.hh           | 4 +---
+ src/arch/riscv/interrupts.cc              | 2 --
+ src/arch/riscv/interrupts.hh              | 2 --
+ src/arch/riscv/isa.cc                     | 3 +--
+ src/arch/riscv/isa.hh                     | 5 -----
+ src/arch/riscv/isa/bitfields.isa          | 3 ---
+ src/arch/riscv/isa/decoder.isa            | 2 --
+ src/arch/riscv/isa/formats/amo.isa        | 2 --
+ src/arch/riscv/isa/formats/basic.isa      | 3 ---
+ src/arch/riscv/isa/formats/compressed.isa | 3 +--
+ src/arch/riscv/isa/formats/formats.isa    | 3 ---
+ src/arch/riscv/isa/formats/fp.isa         | 2 --
+ src/arch/riscv/isa/formats/mem.isa        | 2 --
+ src/arch/riscv/isa/formats/standard.isa   | 2 --
+ src/arch/riscv/isa/formats/unknown.isa    | 3 ---
+ src/arch/riscv/isa/includes.isa           | 3 ---
+ src/arch/riscv/isa/main.isa               | 3 ---
+ src/arch/riscv/isa/operands.isa           | 3 ---
+ src/arch/riscv/isa_traits.hh              | 4 ----
+ src/arch/riscv/kernel_stats.hh            | 3 ---
+ src/arch/riscv/linux/linux.cc             | 2 --
+ src/arch/riscv/linux/linux.hh             | 2 --
+ src/arch/riscv/linux/process.cc           | 4 ----
+ src/arch/riscv/linux/process.hh           | 4 ----
+ src/arch/riscv/locked_mem.hh              | 4 +---
+ src/arch/riscv/microcode_rom.hh           | 2 --
+ src/arch/riscv/mmapped_ipr.hh             | 2 --
+ src/arch/riscv/pagetable.cc               | 4 ----
+ src/arch/riscv/pagetable.hh               | 4 ----
+ src/arch/riscv/pra_constants.hh           | 2 --
+ src/arch/riscv/process.cc                 | 6 +-----
+ src/arch/riscv/process.hh                 | 4 ----
+ src/arch/riscv/pseudo_inst.hh             | 2 --
+ src/arch/riscv/registers.hh               | 8 --------
+ src/arch/riscv/remote_gdb.cc              | 6 ------
+ src/arch/riscv/remote_gdb.hh              | 4 ----
+ src/arch/riscv/stacktrace.cc              | 3 +--
+ src/arch/riscv/stacktrace.hh              | 4 ----
+ src/arch/riscv/system.cc                  | 5 -----
+ src/arch/riscv/system.hh                  | 5 -----
+ src/arch/riscv/tlb.cc                     | 6 ------
+ src/arch/riscv/tlb.hh                     | 5 -----
+ src/arch/riscv/types.hh                   | 4 ----
+ src/arch/riscv/utility.hh                 | 5 -----
+ src/arch/riscv/vtophys.hh                 | 6 ------
+ 70 files changed, 12 insertions(+), 227 deletions(-)
+
+diff --git a/src/arch/riscv/RiscvISA.py b/src/arch/riscv/RiscvISA.py
+index dfb42c4dc..386917452 100644
+--- a/src/arch/riscv/RiscvISA.py
++++ b/src/arch/riscv/RiscvISA.py
+@@ -37,10 +37,6 @@
+ # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-#
+-# Authors: Andreas Sandberg
+-#          Sven Karlsson
+-#          Alec Roelke
+ 
+ from m5.objects.BaseISA import BaseISA
+ 
+diff --git a/src/arch/riscv/RiscvInterrupts.py b/src/arch/riscv/RiscvInterrupts.py
+index 7e63dedea..c3ad370b5 100644
+--- a/src/arch/riscv/RiscvInterrupts.py
++++ b/src/arch/riscv/RiscvInterrupts.py
+@@ -26,10 +26,6 @@
+ # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-#
+-# Authors: Gabe Black
+-#          Sven Karlsson
+-#          Alec Roelke
+ 
+ from m5.objects.BaseInterrupts import BaseInterrupts
+ 
+diff --git a/src/arch/riscv/RiscvSystem.py b/src/arch/riscv/RiscvSystem.py
+index ea1defd90..7be9ff9a3 100644
+--- a/src/arch/riscv/RiscvSystem.py
++++ b/src/arch/riscv/RiscvSystem.py
+@@ -26,9 +26,6 @@
+ # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-#
+-# Authors: Alec Roelke
+-#          Robert Scheffel
+ 
+ from m5.params import *
+ 
+diff --git a/src/arch/riscv/RiscvTLB.py b/src/arch/riscv/RiscvTLB.py
+index b24fffb43..4bcaf67b5 100644
+--- a/src/arch/riscv/RiscvTLB.py
++++ b/src/arch/riscv/RiscvTLB.py
+@@ -25,9 +25,6 @@
+ # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-#
+-# Authors: Jaidev Patwardhan
+-#          Korey Sewell
+ 
+ from m5.SimObject import SimObject
+ from m5.params import *
+diff --git a/src/arch/riscv/SConscript b/src/arch/riscv/SConscript
+index 25adb53a3..21c084b81 100644
+--- a/src/arch/riscv/SConscript
++++ b/src/arch/riscv/SConscript
+@@ -38,10 +38,6 @@
+ # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-#
+-# Authors: Andreas Hansson
+-#          Sven Karlsson
+-#          Alec Roelke
+ 
+ Import('*')
+ 
+diff --git a/src/arch/riscv/SConsopts b/src/arch/riscv/SConsopts
+index d4d280fb5..f5a8de56b 100644
+--- a/src/arch/riscv/SConsopts
++++ b/src/arch/riscv/SConsopts
+@@ -25,8 +25,6 @@
+ # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-#
+-# Authors: Nathan Binkert
+ 
+ Import('*')
+ 
+diff --git a/src/arch/riscv/bare_metal/system.cc b/src/arch/riscv/bare_metal/system.cc
+index 8d4ea414d..1ca8ed9b9 100644
+--- a/src/arch/riscv/bare_metal/system.cc
++++ b/src/arch/riscv/bare_metal/system.cc
+@@ -24,8 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Robert Scheffel
+  */
+ 
+ #include "arch/riscv/bare_metal/system.hh"
+diff --git a/src/arch/riscv/bare_metal/system.hh b/src/arch/riscv/bare_metal/system.hh
+index b9350bee4..1f665beb1 100644
+--- a/src/arch/riscv/bare_metal/system.hh
++++ b/src/arch/riscv/bare_metal/system.hh
+@@ -24,8 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Robert Scheffel
+  */
+ 
+ #ifndef __ARCH_RISCV_BARE_METAL_SYSTEM_HH__
+diff --git a/src/arch/riscv/decoder.cc b/src/arch/riscv/decoder.cc
+index 69c392194..a11799175 100644
+--- a/src/arch/riscv/decoder.cc
++++ b/src/arch/riscv/decoder.cc
+@@ -25,9 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Gabe Black
+- *          Alec Roelke
+  */
+ 
+ #include "arch/riscv/decoder.hh"
+diff --git a/src/arch/riscv/decoder.hh b/src/arch/riscv/decoder.hh
+index 750321167..25eae34bd 100644
+--- a/src/arch/riscv/decoder.hh
++++ b/src/arch/riscv/decoder.hh
+@@ -25,9 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Gabe Black
+- *          Alec Roelke
+  */
+ 
+ #ifndef __ARCH_RISCV_DECODER_HH__
+diff --git a/src/arch/riscv/faults.cc b/src/arch/riscv/faults.cc
+index 83adcba69..df8c0aed7 100644
+--- a/src/arch/riscv/faults.cc
++++ b/src/arch/riscv/faults.cc
+@@ -26,10 +26,8 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+- *          Robert Scheffel
+  */
++
+ #include "arch/riscv/faults.hh"
+ 
+ #include "arch/riscv/isa.hh"
+diff --git a/src/arch/riscv/faults.hh b/src/arch/riscv/faults.hh
+index 7bee6dd8e..5e24da2ed 100644
+--- a/src/arch/riscv/faults.hh
++++ b/src/arch/riscv/faults.hh
+@@ -26,9 +26,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+- *          Robert Scheffel
+  */
+ 
+ #ifndef __ARCH_RISCV_FAULTS_HH__
+diff --git a/src/arch/riscv/idle_event.cc b/src/arch/riscv/idle_event.cc
+index abf1b965b..5b56c272c 100644
+--- a/src/arch/riscv/idle_event.cc
++++ b/src/arch/riscv/idle_event.cc
+@@ -24,10 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Nathan Binkert
+- *          Lisa Hsu
+- *          Ali Saidi
+  */
+ 
+ #include "arch/riscv/idle_event.hh"
+diff --git a/src/arch/riscv/idle_event.hh b/src/arch/riscv/idle_event.hh
+index bcba05bf1..ba1e542c2 100644
+--- a/src/arch/riscv/idle_event.hh
++++ b/src/arch/riscv/idle_event.hh
+@@ -24,10 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Nathan Binkert
+- *          Lisa Hsu
+- *          Ali Saidi
+  */
+ 
+ #ifndef __KERN_RISCV_IDLE_EVENT_HH__
+diff --git a/src/arch/riscv/insts/SConscript b/src/arch/riscv/insts/SConscript
+index fcfb6273f..d9e47c3fa 100644
+--- a/src/arch/riscv/insts/SConscript
++++ b/src/arch/riscv/insts/SConscript
+@@ -24,8 +24,6 @@
+ # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-#
+-# Authors: Alec Roelke
+ 
+ Import('*')
+ 
+@@ -34,4 +32,4 @@ if env['TARGET_ISA'] == 'riscv':
+     Source('compressed.cc')
+     Source('mem.cc')
+     Source('standard.cc')
+-    Source('static_inst.cc')
+\ No newline at end of file
++    Source('static_inst.cc')
+diff --git a/src/arch/riscv/insts/amo.cc b/src/arch/riscv/insts/amo.cc
+index ce20e6064..2f2259ab7 100644
+--- a/src/arch/riscv/insts/amo.cc
++++ b/src/arch/riscv/insts/amo.cc
+@@ -25,8 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+  */
+ 
+ #include "arch/riscv/insts/amo.hh"
+diff --git a/src/arch/riscv/insts/amo.hh b/src/arch/riscv/insts/amo.hh
+index 748fe14a3..432ae077e 100644
+--- a/src/arch/riscv/insts/amo.hh
++++ b/src/arch/riscv/insts/amo.hh
+@@ -25,8 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+  */
+ 
+ #ifndef __ARCH_RISCV_INSTS_AMO_HH__
+diff --git a/src/arch/riscv/insts/compressed.cc b/src/arch/riscv/insts/compressed.cc
+index ff9eccc66..94b2574ba 100644
+--- a/src/arch/riscv/insts/compressed.cc
++++ b/src/arch/riscv/insts/compressed.cc
+@@ -25,8 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+  */
+ 
+ #include "arch/riscv/insts/compressed.hh"
+@@ -49,4 +47,4 @@ CompRegOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+     return ss.str();
+ }
+ 
+-}
+\ No newline at end of file
++}
+diff --git a/src/arch/riscv/insts/compressed.hh b/src/arch/riscv/insts/compressed.hh
+index 021a4b4b7..837a09a51 100644
+--- a/src/arch/riscv/insts/compressed.hh
++++ b/src/arch/riscv/insts/compressed.hh
+@@ -25,8 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+  */
+ 
+ #ifndef __ARCH_RISCV_INSTS_COMPRESSED_HH__
+@@ -54,4 +52,4 @@ class CompRegOp : public RiscvStaticInst
+ 
+ }
+ 
+-#endif // __ARCH_RISCV_INSTS_COMPRESSED_HH__
+\ No newline at end of file
++#endif // __ARCH_RISCV_INSTS_COMPRESSED_HH__
+diff --git a/src/arch/riscv/insts/mem.cc b/src/arch/riscv/insts/mem.cc
+index 862700b0c..c4747ee65 100644
+--- a/src/arch/riscv/insts/mem.cc
++++ b/src/arch/riscv/insts/mem.cc
+@@ -25,8 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+  */
+ 
+ #include "arch/riscv/insts/mem.hh"
+diff --git a/src/arch/riscv/insts/mem.hh b/src/arch/riscv/insts/mem.hh
+index 514d4d6e1..78eed19ad 100644
+--- a/src/arch/riscv/insts/mem.hh
++++ b/src/arch/riscv/insts/mem.hh
+@@ -25,8 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+  */
+ 
+ #ifndef __ARCH_RISCV_INST_MEM_HH__
+diff --git a/src/arch/riscv/insts/standard.cc b/src/arch/riscv/insts/standard.cc
+index 9354a542f..1e7d22e49 100644
+--- a/src/arch/riscv/insts/standard.cc
++++ b/src/arch/riscv/insts/standard.cc
+@@ -25,8 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+  */
+ 
+ #include "arch/riscv/insts/standard.hh"
+diff --git a/src/arch/riscv/insts/standard.hh b/src/arch/riscv/insts/standard.hh
+index 788bab240..a956d77e4 100644
+--- a/src/arch/riscv/insts/standard.hh
++++ b/src/arch/riscv/insts/standard.hh
+@@ -25,8 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+  */
+ 
+ #ifndef __ARCH_RISCV_STANDARD_INST_HH__
+@@ -104,4 +102,4 @@ class CSROp : public RiscvStaticInst
+ 
+ }
+ 
+-#endif // __ARCH_RISCV_STANDARD_INST_HH__
+\ No newline at end of file
++#endif // __ARCH_RISCV_STANDARD_INST_HH__
+diff --git a/src/arch/riscv/insts/static_inst.cc b/src/arch/riscv/insts/static_inst.cc
+index 665fab81a..b10fe7066 100644
+--- a/src/arch/riscv/insts/static_inst.cc
++++ b/src/arch/riscv/insts/static_inst.cc
+@@ -25,9 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Maxwell Walter
+- *          Alec Roelke
+  */
+ 
+ #include "arch/riscv/insts/static_inst.hh"
+@@ -48,4 +45,4 @@ RiscvMicroInst::advancePC(PCState &pcState) const
+     }
+ }
+ 
+-} // namespace RiscvISA
+\ No newline at end of file
++} // namespace RiscvISA
+diff --git a/src/arch/riscv/insts/static_inst.hh b/src/arch/riscv/insts/static_inst.hh
+index 8ceb98490..149e847a3 100644
+--- a/src/arch/riscv/insts/static_inst.hh
++++ b/src/arch/riscv/insts/static_inst.hh
+@@ -25,9 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Maxwell Walter
+- *          Alec Roelke
+  */
+ 
+ #ifndef __ARCH_RISCV_STATIC_INST_HH__
+diff --git a/src/arch/riscv/insts/unknown.hh b/src/arch/riscv/insts/unknown.hh
+index a96474aec..4b9f137ea 100644
+--- a/src/arch/riscv/insts/unknown.hh
++++ b/src/arch/riscv/insts/unknown.hh
+@@ -25,8 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+  */
+ 
+ #ifndef __ARCH_RISCV_UNKNOWN_INST_HH__
+@@ -71,4 +69,4 @@ class Unknown : public RiscvStaticInst
+ 
+ }
+ 
+-#endif // __ARCH_RISCV_UNKNOWN_INST_HH__
+\ No newline at end of file
++#endif // __ARCH_RISCV_UNKNOWN_INST_HH__
+diff --git a/src/arch/riscv/interrupts.cc b/src/arch/riscv/interrupts.cc
+index 96943e4bf..4ad5cea63 100644
+--- a/src/arch/riscv/interrupts.cc
++++ b/src/arch/riscv/interrupts.cc
+@@ -24,8 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Gabe Black
+  */
+ 
+ #include "arch/riscv/interrupts.hh"
+diff --git a/src/arch/riscv/interrupts.hh b/src/arch/riscv/interrupts.hh
+index 77079e11a..5fa6d782a 100644
+--- a/src/arch/riscv/interrupts.hh
++++ b/src/arch/riscv/interrupts.hh
+@@ -24,8 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Gabe Black
+  */
+ 
+ #ifndef __ARCH_RISCV_INTERRUPT_HH__
+diff --git a/src/arch/riscv/isa.cc b/src/arch/riscv/isa.cc
+index ba3aae00a..ca3358e6f 100644
+--- a/src/arch/riscv/isa.cc
++++ b/src/arch/riscv/isa.cc
+@@ -25,9 +25,8 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alec Roelke
+  */
++
+ #include "arch/riscv/isa.hh"
+ 
+ #include <ctime>
+diff --git a/src/arch/riscv/isa.hh b/src/arch/riscv/isa.hh
+index 1c08700e0..227b81233 100644
+--- a/src/arch/riscv/isa.hh
++++ b/src/arch/riscv/isa.hh
+@@ -28,11 +28,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Gabe Black
+- *          Timothy M. Jones
+- *          Sven Karlsson
+- *          Alec Roelke
+  */
+ 
+ #ifndef __ARCH_RISCV_ISA_HH__
+diff --git a/src/arch/riscv/isa/bitfields.isa b/src/arch/riscv/isa/bitfields.isa
+index fcda90cf7..dae7fe1a3 100644
+--- a/src/arch/riscv/isa/bitfields.isa
++++ b/src/arch/riscv/isa/bitfields.isa
+@@ -26,9 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Maxwell Walter
+-//          Alec Roelke
+ 
+ ////////////////////////////////////////////////////////////////////
+ //
+diff --git a/src/arch/riscv/isa/decoder.isa b/src/arch/riscv/isa/decoder.isa
+index 195fe4280..63cf1e45a 100644
+--- a/src/arch/riscv/isa/decoder.isa
++++ b/src/arch/riscv/isa/decoder.isa
+@@ -26,8 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Alec Roelke
+ 
+ ////////////////////////////////////////////////////////////////////
+ //
+diff --git a/src/arch/riscv/isa/formats/amo.isa b/src/arch/riscv/isa/formats/amo.isa
+index a115ccd93..8c7a6a510 100644
+--- a/src/arch/riscv/isa/formats/amo.isa
++++ b/src/arch/riscv/isa/formats/amo.isa
+@@ -26,8 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Alec Roelke
+ 
+ // Declaration templates
+ def template AtomicMemOpDeclare {{
+diff --git a/src/arch/riscv/isa/formats/basic.isa b/src/arch/riscv/isa/formats/basic.isa
+index dd25ba6f7..1c597e86b 100644
+--- a/src/arch/riscv/isa/formats/basic.isa
++++ b/src/arch/riscv/isa/formats/basic.isa
+@@ -26,9 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Maxwell Walter
+-//          Alec Roelke
+ 
+ // Basic instruction class declaration template.
+ def template BasicDeclare {{
+diff --git a/src/arch/riscv/isa/formats/compressed.isa b/src/arch/riscv/isa/formats/compressed.isa
+index 62d5b7567..91b954583 100644
+--- a/src/arch/riscv/isa/formats/compressed.isa
++++ b/src/arch/riscv/isa/formats/compressed.isa
+@@ -26,8 +26,7 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Alec Roelke
++
+ def format CROp(code, *opt_flags) {{
+     iop = InstObjParams(name, Name, 'CompRegOp', code, opt_flags)
+     header_output = BasicDeclare.subst(iop)
+diff --git a/src/arch/riscv/isa/formats/formats.isa b/src/arch/riscv/isa/formats/formats.isa
+index df2b3b84a..0f7dc4274 100644
+--- a/src/arch/riscv/isa/formats/formats.isa
++++ b/src/arch/riscv/isa/formats/formats.isa
+@@ -26,9 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Maxwell Walter
+-//          Alec Roelke
+ 
+ // Include the basic format
+ ##include "basic.isa"
+diff --git a/src/arch/riscv/isa/formats/fp.isa b/src/arch/riscv/isa/formats/fp.isa
+index 104728519..e383db844 100644
+--- a/src/arch/riscv/isa/formats/fp.isa
++++ b/src/arch/riscv/isa/formats/fp.isa
+@@ -26,8 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Alec Roelke
+ 
+ ////////////////////////////////////////////////////////////////////
+ //
+diff --git a/src/arch/riscv/isa/formats/mem.isa b/src/arch/riscv/isa/formats/mem.isa
+index 1e416d87e..175eff999 100644
+--- a/src/arch/riscv/isa/formats/mem.isa
++++ b/src/arch/riscv/isa/formats/mem.isa
+@@ -26,8 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Alec Roelke
+ 
+ ////////////////////////////////////////////////////////////////////
+ //
+diff --git a/src/arch/riscv/isa/formats/standard.isa b/src/arch/riscv/isa/formats/standard.isa
+index 2ffa2de88..a6c6e1c62 100644
+--- a/src/arch/riscv/isa/formats/standard.isa
++++ b/src/arch/riscv/isa/formats/standard.isa
+@@ -26,8 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Alec Roelke
+ 
+ ////////////////////////////////////////////////////////////////////
+ //
+diff --git a/src/arch/riscv/isa/formats/unknown.isa b/src/arch/riscv/isa/formats/unknown.isa
+index 7c2317f98..8ff959edb 100644
+--- a/src/arch/riscv/isa/formats/unknown.isa
++++ b/src/arch/riscv/isa/formats/unknown.isa
+@@ -26,9 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Maxwell Walter
+-//          Alec Roelke
+ 
+ ////////////////////////////////////////////////////////////////////
+ //
+diff --git a/src/arch/riscv/isa/includes.isa b/src/arch/riscv/isa/includes.isa
+index d992685e1..2d355bac0 100644
+--- a/src/arch/riscv/isa/includes.isa
++++ b/src/arch/riscv/isa/includes.isa
+@@ -26,9 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Maxwell Walter
+-//          Alec Roelke
+ 
+ ////////////////////////////////////////////////////////////////////
+ //
+diff --git a/src/arch/riscv/isa/main.isa b/src/arch/riscv/isa/main.isa
+index 3ffb3e6b4..24f366b00 100644
+--- a/src/arch/riscv/isa/main.isa
++++ b/src/arch/riscv/isa/main.isa
+@@ -26,9 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Maxwell Walter
+-//          Alec Roelke
+ 
+ ////////////////////////////////////////////////////////////////////
+ //
+diff --git a/src/arch/riscv/isa/operands.isa b/src/arch/riscv/isa/operands.isa
+index 8dc1a3b82..7c80b8acd 100644
+--- a/src/arch/riscv/isa/operands.isa
++++ b/src/arch/riscv/isa/operands.isa
+@@ -26,9 +26,6 @@
+ // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-//
+-// Authors: Maxwell Walter
+-//          Alec Roelke
+ 
+ def operand_types {{
+     'sb' : 'int8_t',
+diff --git a/src/arch/riscv/isa_traits.hh b/src/arch/riscv/isa_traits.hh
+index f69e71994..18cf48513 100644
+--- a/src/arch/riscv/isa_traits.hh
++++ b/src/arch/riscv/isa_traits.hh
+@@ -37,10 +37,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Andreas Hansson
+- *          Sven Karlsson
+- *          Alec Roelke
+  */
+ 
+ #ifndef __ARCH_RISCV_ISA_TRAITS_HH__
+diff --git a/src/arch/riscv/kernel_stats.hh b/src/arch/riscv/kernel_stats.hh
+index a796075f5..6435bcb20 100644
+--- a/src/arch/riscv/kernel_stats.hh
++++ b/src/arch/riscv/kernel_stats.hh
+@@ -24,9 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Lisa Hsu
+- *          Nathan Binkert
+  */
+ 
+ #ifndef __ARCH_RISCV_KERNEL_STATS_HH__
+diff --git a/src/arch/riscv/linux/linux.cc b/src/arch/riscv/linux/linux.cc
+index 65b430692..512e39260 100644
+--- a/src/arch/riscv/linux/linux.cc
++++ b/src/arch/riscv/linux/linux.cc
+@@ -24,8 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Korey Sewell
+  */
+ 
+ #include "arch/riscv/linux/linux.hh"
+diff --git a/src/arch/riscv/linux/linux.hh b/src/arch/riscv/linux/linux.hh
+index c3adaeeef..89c114db8 100644
+--- a/src/arch/riscv/linux/linux.hh
++++ b/src/arch/riscv/linux/linux.hh
+@@ -24,8 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Korey Sewell
+  */
+ 
+ #ifndef __ARCH_RISCV_LINUX_LINUX_HH__
+diff --git a/src/arch/riscv/linux/process.cc b/src/arch/riscv/linux/process.cc
+index 6f3f03741..3afbd131b 100644
+--- a/src/arch/riscv/linux/process.cc
++++ b/src/arch/riscv/linux/process.cc
+@@ -26,10 +26,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Gabe Black
+- *          Korey Sewell
+- *          Alec Roelke
+  */
+ 
+ #include "arch/riscv/linux/process.hh"
+diff --git a/src/arch/riscv/linux/process.hh b/src/arch/riscv/linux/process.hh
+index 224b2f049..521d645be 100644
+--- a/src/arch/riscv/linux/process.hh
++++ b/src/arch/riscv/linux/process.hh
+@@ -25,10 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Gabe Black
+- *          Korey Sewell
+- *          Alec Roelke
+  */
+ 
+ #ifndef __RISCV_LINUX_PROCESS_HH__
+diff --git a/src/arch/riscv/locked_mem.hh b/src/arch/riscv/locked_mem.hh
+index 08d27f15c..fd45b3f6c 100644
+--- a/src/arch/riscv/locked_mem.hh
++++ b/src/arch/riscv/locked_mem.hh
+@@ -41,10 +41,8 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Steve Reinhardt
+- *          Alec Roelke
+  */
++
+ #ifndef __ARCH_RISCV_LOCKED_MEM_HH__
+ #define __ARCH_RISCV_LOCKED_MEM_HH__
+ 
+diff --git a/src/arch/riscv/microcode_rom.hh b/src/arch/riscv/microcode_rom.hh
+index 6cfab71f1..781c31861 100644
+--- a/src/arch/riscv/microcode_rom.hh
++++ b/src/arch/riscv/microcode_rom.hh
+@@ -24,8 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Gabe Black
+  */
+ 
+ #ifndef __ARCH_RISCV_MICROCODE_ROM_HH__
+diff --git a/src/arch/riscv/mmapped_ipr.hh b/src/arch/riscv/mmapped_ipr.hh
+index 553d83e5b..bc995fcf2 100644
+--- a/src/arch/riscv/mmapped_ipr.hh
++++ b/src/arch/riscv/mmapped_ipr.hh
+@@ -24,8 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Ali Saidi
+  */
+ 
+ #ifndef __ARCH_RISCV_MMAPPED_IPR_HH__
+diff --git a/src/arch/riscv/pagetable.cc b/src/arch/riscv/pagetable.cc
+index 1bf430b29..3291d8a0d 100644
+--- a/src/arch/riscv/pagetable.cc
++++ b/src/arch/riscv/pagetable.cc
+@@ -25,10 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Nathan Binkert
+- *          Steve Reinhardt
+- *          Jaidev Patwardhan
+  */
+ 
+ #include "arch/riscv/pagetable.hh"
+diff --git a/src/arch/riscv/pagetable.hh b/src/arch/riscv/pagetable.hh
+index 249d03264..45d53f1fb 100644
+--- a/src/arch/riscv/pagetable.hh
++++ b/src/arch/riscv/pagetable.hh
+@@ -25,10 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Nathan Binkert
+- *          Steve Reinhardt
+- *          Jaidev Patwardhan
+  */
+ 
+ #ifndef __ARCH_RISCV_PAGETABLE_H__
+diff --git a/src/arch/riscv/pra_constants.hh b/src/arch/riscv/pra_constants.hh
+index f5d6ef56c..ab61498c2 100644
+--- a/src/arch/riscv/pra_constants.hh
++++ b/src/arch/riscv/pra_constants.hh
+@@ -24,8 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Jaidev Patwardhan
+  */
+ 
+ #ifndef __ARCH_RISCV_PRA_CONSTANTS_HH__
+diff --git a/src/arch/riscv/process.cc b/src/arch/riscv/process.cc
+index ce4983609..a80f88cdc 100644
+--- a/src/arch/riscv/process.cc
++++ b/src/arch/riscv/process.cc
+@@ -25,12 +25,8 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Gabe Black
+- *          Ali Saidi
+- *          Korey Sewell
+- *          Alec Roelke
+  */
++
+ #include "arch/riscv/process.hh"
+ 
+ #include <algorithm>
+diff --git a/src/arch/riscv/process.hh b/src/arch/riscv/process.hh
+index 71a0c7b60..933d6d19f 100644
+--- a/src/arch/riscv/process.hh
++++ b/src/arch/riscv/process.hh
+@@ -25,10 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Gabe Black
+- *          Ali Saidi
+- *          Alec Roelke
+  */
+ 
+ #ifndef __RISCV_PROCESS_HH__
+diff --git a/src/arch/riscv/pseudo_inst.hh b/src/arch/riscv/pseudo_inst.hh
+index 642ffd610..85fd6c011 100644
+--- a/src/arch/riscv/pseudo_inst.hh
++++ b/src/arch/riscv/pseudo_inst.hh
+@@ -24,8 +24,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Alexandru Dutu
+  */
+ 
+ #ifndef __ARCH_RISCV_PSEUDO_INST_HH__
+diff --git a/src/arch/riscv/registers.hh b/src/arch/riscv/registers.hh
+index 352c600af..d5c05a2e4 100644
+--- a/src/arch/riscv/registers.hh
++++ b/src/arch/riscv/registers.hh
+@@ -39,14 +39,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Andreas Hansson
+- *          Sven Karlsson
+- *          Alec Roelke
+- *          Yifei Liu
+- *          Lin Cheng
+- *          Xihao Chen
+- *          Cheng Tan
+  */
+ 
+ #ifndef __ARCH_RISCV_REGISTERS_HH__
+diff --git a/src/arch/riscv/remote_gdb.cc b/src/arch/riscv/remote_gdb.cc
+index 15d47e265..16b458511 100644
+--- a/src/arch/riscv/remote_gdb.cc
++++ b/src/arch/riscv/remote_gdb.cc
+@@ -39,12 +39,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Nathan Binkert
+- *          William Wang
+- *          Deyuan Guo
+- *          Boris Shingarov
+- *          Alec Roelke
+  */
+ 
+ /*
+diff --git a/src/arch/riscv/remote_gdb.hh b/src/arch/riscv/remote_gdb.hh
+index 79a6f126b..a9d3b0c5c 100644
+--- a/src/arch/riscv/remote_gdb.hh
++++ b/src/arch/riscv/remote_gdb.hh
+@@ -27,10 +27,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Nathan Binkert
+- *          Boris Shingarov
+- *          Alec Roelke
+  */
+ 
+ #ifndef __ARCH_RISCV_REMOTE_GDB_HH__
+diff --git a/src/arch/riscv/stacktrace.cc b/src/arch/riscv/stacktrace.cc
+index 72c4a022a..69159b95f 100644
+--- a/src/arch/riscv/stacktrace.cc
++++ b/src/arch/riscv/stacktrace.cc
+@@ -24,9 +24,8 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Nathan Binkert
+  */
++
+ #include "arch/riscv/stacktrace.hh"
+ 
+ #include <string>
+diff --git a/src/arch/riscv/stacktrace.hh b/src/arch/riscv/stacktrace.hh
+index 62f9a471d..b88db6926 100644
+--- a/src/arch/riscv/stacktrace.hh
++++ b/src/arch/riscv/stacktrace.hh
+@@ -26,10 +26,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Ali Saidi
+- *          Stephen Hines
+- *          Timothy M. Jones
+  */
+ 
+ #ifndef __ARCH_RISCV_STACKTRACE_HH__
+diff --git a/src/arch/riscv/system.cc b/src/arch/riscv/system.cc
+index 2017eed98..01ecbdc6d 100644
+--- a/src/arch/riscv/system.cc
++++ b/src/arch/riscv/system.cc
+@@ -25,11 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Ali Saidi
+- *          Nathan Binkert
+- *          Jaidev Patwardhan
+- *          Robert Scheffel
+  */
+ 
+ #include "arch/riscv/system.hh"
+diff --git a/src/arch/riscv/system.hh b/src/arch/riscv/system.hh
+index 78638d0ad..62999cf57 100644
+--- a/src/arch/riscv/system.hh
++++ b/src/arch/riscv/system.hh
+@@ -25,11 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Ali Saidi
+- *          Nathan Binkert
+- *          Jaidev Patwardhan
+- *          Robert Scheffel
+  */
+ 
+ #ifndef __ARCH_RISCV_SYSTEM_HH__
+diff --git a/src/arch/riscv/tlb.cc b/src/arch/riscv/tlb.cc
+index 494ec4c67..014e3698c 100644
+--- a/src/arch/riscv/tlb.cc
++++ b/src/arch/riscv/tlb.cc
+@@ -25,12 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Nathan Binkert
+- *          Steve Reinhardt
+- *          Jaidev Patwardhan
+- *          Zhengxing Li
+- *          Deyuan Guo
+  */
+ 
+ #include "arch/riscv/tlb.hh"
+diff --git a/src/arch/riscv/tlb.hh b/src/arch/riscv/tlb.hh
+index 5d6c9dfc0..bdd318192 100644
+--- a/src/arch/riscv/tlb.hh
++++ b/src/arch/riscv/tlb.hh
+@@ -25,11 +25,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Nathan Binkert
+- *          Steve Reinhardt
+- *          Jaidev Patwardhan
+- *          Korey Sewell
+  */
+ 
+ #ifndef __ARCH_RISCV_TLB_HH__
+diff --git a/src/arch/riscv/types.hh b/src/arch/riscv/types.hh
+index 635ae1429..38923b8f2 100644
+--- a/src/arch/riscv/types.hh
++++ b/src/arch/riscv/types.hh
+@@ -37,10 +37,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Andreas Hansson
+- *          Sven Karlsson
+- *          Alec Roelke
+  */
+ 
+ #ifndef __ARCH_RISCV_TYPES_HH__
+diff --git a/src/arch/riscv/utility.hh b/src/arch/riscv/utility.hh
+index 1b8e2d93b..deec64ec3 100644
+--- a/src/arch/riscv/utility.hh
++++ b/src/arch/riscv/utility.hh
+@@ -38,11 +38,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Andreas Hansson
+- *          Sven Karlsson
+- *          Alec Roelke
+- *          Robert Scheffel
+  */
+ 
+ #ifndef __ARCH_RISCV_UTILITY_HH__
+diff --git a/src/arch/riscv/vtophys.hh b/src/arch/riscv/vtophys.hh
+index d26f01726..29d9f4fd9 100644
+--- a/src/arch/riscv/vtophys.hh
++++ b/src/arch/riscv/vtophys.hh
+@@ -27,12 +27,6 @@
+  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- *
+- * Authors: Ali Saidi
+- *          Nathan Binkert
+- *          Stephen Hines
+- *          Timothy M. Jones
+- *          Sven Karlsson
+  */
+ 
+ #ifndef __ARCH_RISCV_VTOPHYS_HH__
+-- 
+2.29.2
+

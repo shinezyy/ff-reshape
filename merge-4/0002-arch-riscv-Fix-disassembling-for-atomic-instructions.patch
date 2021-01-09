@@ -1,0 +1,114 @@
+From cd096a6e17cbfe46ff637d34d1caa01b83e4864a Mon Sep 17 00:00:00 2001
+From: Ian Jiang <ianjiang.ict@gmail.com>
+Date: Sun, 3 Nov 2019 16:25:06 +0800
+Subject: [PATCH 2/2] arch-riscv: Fix disassembling for atomic instructions
+
+The original Gem5 does not give correct disassembly for atomic
+instructions, which are implemented with one or two micro instructions.
+The correct register indices are not decoded until subsequent micro
+instruction is processed. This patch fixes the problem by getting the
+register indices and other properties (aq and rl) from certain bitfields
+of the machine code in the disassembling function.
+
+Change-Id: I2cdaf0b3c48ff266f19ca707a5de48c9050b3897
+Signed-off-by: Ian Jiang <ianjiang.ict@gmail.com>
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/22568
+Tested-by: kokoro <noreply+kokoro@google.com>
+Reviewed-by: Jason Lowe-Power <jason@lowepower.com>
+Reviewed-by: Alec Roelke <alec.roelke@gmail.com>
+Maintainer: Jason Lowe-Power <jason@lowepower.com>
+---
+ src/arch/riscv/insts/amo.cc       | 38 ++++++++++++++++++++++++-------
+ src/arch/riscv/insts/bitfields.hh |  8 ++++++-
+ 2 files changed, 37 insertions(+), 9 deletions(-)
+
+diff --git a/src/arch/riscv/insts/amo.cc b/src/arch/riscv/insts/amo.cc
+index d12064720..ce20e6064 100644
+--- a/src/arch/riscv/insts/amo.cc
++++ b/src/arch/riscv/insts/amo.cc
+@@ -34,6 +34,7 @@
+ #include <sstream>
+ #include <string>
+ 
++#include "arch/riscv/insts/bitfields.hh"
+ #include "arch/riscv/utility.hh"
+ #include "cpu/exec_context.hh"
+ #include "cpu/static_inst.hh"
+@@ -63,8 +64,15 @@ string LoadReserved::generateDisassembly(Addr pc,
+     const SymbolTable *symtab) const
+ {
+     stringstream ss;
+-    ss << mnemonic << ' ' << registerName(_destRegIdx[0]) << ", ("
+-            << registerName(_srcRegIdx[0]) << ')';
++    ss << mnemonic;
++    if (AQ || RL)
++        ss << '_';
++    if (AQ)
++        ss << "aq";
++    if (RL)
++        ss << "rl";
++    ss << ' ' << registerName(RegId(IntRegClass, RD)) << ", ("
++            << registerName(RegId(IntRegClass, RS1)) << ')';
+     return ss.str();
+ }
+ 
+@@ -82,9 +90,16 @@ string StoreCond::generateDisassembly(Addr pc,
+     const SymbolTable *symtab) const
+ {
+     stringstream ss;
+-    ss << mnemonic << ' ' << registerName(_destRegIdx[0]) << ", "
+-            << registerName(_srcRegIdx[1]) << ", ("
+-            << registerName(_srcRegIdx[0]) << ')';
++    ss << mnemonic;
++    if (AQ || RL)
++        ss << '_';
++    if (AQ)
++        ss << "aq";
++    if (RL)
++        ss << "rl";
++    ss << ' ' << registerName(RegId(IntRegClass, RD)) << ", "
++            << registerName(RegId(IntRegClass, RS2)) << ", ("
++            << registerName(RegId(IntRegClass, RS1)) << ')';
+     return ss.str();
+ }
+ 
+@@ -103,9 +118,16 @@ string AtomicMemOp::generateDisassembly(Addr pc,
+     const SymbolTable *symtab) const
+ {
+     stringstream ss;
+-    ss << mnemonic << ' ' << registerName(_destRegIdx[0]) << ", "
+-            << registerName(_srcRegIdx[1]) << ", ("
+-            << registerName(_srcRegIdx[0]) << ')';
++    ss << mnemonic;
++    if (AQ || RL)
++        ss << '_';
++    if (AQ)
++        ss << "aq";
++    if (RL)
++        ss << "rl";
++    ss << ' ' << registerName(RegId(IntRegClass, RD)) << ", "
++            << registerName(RegId(IntRegClass, RS2)) << ", ("
++            << registerName(RegId(IntRegClass, RS1)) << ')';
+     return ss.str();
+ }
+ 
+diff --git a/src/arch/riscv/insts/bitfields.hh b/src/arch/riscv/insts/bitfields.hh
+index eac070e7f..7b985dc8e 100644
+--- a/src/arch/riscv/insts/bitfields.hh
++++ b/src/arch/riscv/insts/bitfields.hh
+@@ -10,4 +10,10 @@
+ #define IMMSIGN bits(machInst, 31)
+ #define OPCODE  bits(machInst, 6, 0)
+ 
+-#endif // __ARCH_RISCV_BITFIELDS_HH__
+\ No newline at end of file
++#define AQ      bits(machInst, 26)
++#define RD      bits(machInst, 11, 7)
++#define RL      bits(machInst, 25)
++#define RS1     bits(machInst, 19, 15)
++#define RS2     bits(machInst, 24, 20)
++
++#endif // __ARCH_RISCV_BITFIELDS_HH__
+-- 
+2.29.2
+

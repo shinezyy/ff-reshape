@@ -1,0 +1,43 @@
+From f0e2caf84fbbf225e46cbda61e45fc5727d4d885 Mon Sep 17 00:00:00 2001
+From: Austin Harris <austinharris@utexas.edu>
+Date: Mon, 4 Feb 2019 17:48:52 -0600
+Subject: [PATCH] riscv: Get rid of ISA specific register types in Interrupts.
+
+Change-Id: I5542649c6af27a286f276a289b86c40dd7e32abc
+Signed-off-by: Austin Harris <austinharris@utexas.edu>
+Reviewed-on: https://gem5-review.googlesource.com/c/16122
+Reviewed-by: Gabe Black <gabeblack@google.com>
+Maintainer: Gabe Black <gabeblack@google.com>
+---
+ src/arch/riscv/interrupts.hh | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/arch/riscv/interrupts.hh b/src/arch/riscv/interrupts.hh
+index 729af6fb9..912bf45ca 100644
+--- a/src/arch/riscv/interrupts.hh
++++ b/src/arch/riscv/interrupts.hh
+@@ -125,10 +125,10 @@ class Interrupts : public SimObject
+         ip = 0;
+     }
+ 
+-    MiscReg readIP() const { return (MiscReg)ip.to_ulong(); }
+-    MiscReg readIE() const { return (MiscReg)ie.to_ulong(); }
+-    void setIP(const MiscReg& val) { ip = val; }
+-    void setIE(const MiscReg& val) { ie = val; }
++    uint64_t readIP() const { return (uint64_t)ip.to_ulong(); }
++    uint64_t readIE() const { return (uint64_t)ie.to_ulong(); }
++    void setIP(const uint64_t& val) { ip = val; }
++    void setIE(const uint64_t& val) { ie = val; }
+ 
+     void
+     serialize(CheckpointOut &cp)
+@@ -150,4 +150,4 @@ class Interrupts : public SimObject
+ 
+ } // namespace RiscvISA
+ 
+-#endif // __ARCH_RISCV_INTERRUPT_HH__
+\ No newline at end of file
++#endif // __ARCH_RISCV_INTERRUPT_HH__
+-- 
+2.29.2
+

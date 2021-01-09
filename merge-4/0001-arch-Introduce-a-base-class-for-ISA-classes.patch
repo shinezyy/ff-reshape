@@ -1,0 +1,591 @@
+From c8079dd745d0b1632e8d7b9befa4f293e6fbe3f5 Mon Sep 17 00:00:00 2001
+From: Gabe Black <gabeblack@google.com>
+Date: Mon, 3 Feb 2020 16:06:38 -0800
+Subject: [PATCH] arch: Introduce a base class for ISA classes.
+
+These don't have anything in them at the moment since making some ISA
+methods virtual and not inlined will likely add overhead, specifically
+the ones for flattening registers. Some code may need to be rearranged
+to minimize that overhead before the ISA objects can be truly put
+behind a generic interface.
+
+Change-Id: Ie36a771e977535a7996fdff701ce202bb95c8c58
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/25007
+Tested-by: kokoro <noreply+kokoro@google.com>
+Maintainer: Gabe Black <gabeblack@google.com>
+Reviewed-by: Giacomo Travaglini <giacomo.travaglini@arm.com>
+---
+ src/arch/alpha/AlphaISA.py  |  4 ++--
+ src/arch/alpha/isa.cc       |  3 +--
+ src/arch/alpha/isa.hh       |  5 +++--
+ src/arch/arm/ArmISA.py      |  4 ++--
+ src/arch/arm/isa.cc         | 13 ++++--------
+ src/arch/arm/isa.hh         |  5 +++--
+ src/arch/generic/BaseISA.py | 34 ++++++++++++++++++++++++++++++
+ src/arch/generic/SConscript |  1 +
+ src/arch/generic/isa.hh     | 41 +++++++++++++++++++++++++++++++++++++
+ src/arch/mips/MipsISA.py    |  5 +++--
+ src/arch/mips/isa.cc        |  4 ++--
+ src/arch/mips/isa.hh        |  5 +++--
+ src/arch/power/PowerISA.py  |  4 ++--
+ src/arch/power/isa.cc       |  3 +--
+ src/arch/power/isa.hh       |  5 +++--
+ src/arch/riscv/RiscvISA.py  |  4 ++--
+ src/arch/riscv/isa.cc       |  2 +-
+ src/arch/riscv/isa.hh       |  5 +++--
+ src/arch/sparc/SparcISA.py  |  4 ++--
+ src/arch/sparc/isa.cc       |  3 +--
+ src/arch/sparc/isa.hh       |  5 +++--
+ src/arch/x86/X86ISA.py      |  4 ++--
+ src/arch/x86/isa.cc         |  3 +--
+ src/arch/x86/isa.hh         |  7 ++++---
+ 24 files changed, 124 insertions(+), 49 deletions(-)
+ create mode 100644 src/arch/generic/BaseISA.py
+ create mode 100644 src/arch/generic/isa.hh
+
+diff --git a/src/arch/alpha/AlphaISA.py b/src/arch/alpha/AlphaISA.py
+index d85354704..7f6da8f34 100644
+--- a/src/arch/alpha/AlphaISA.py
++++ b/src/arch/alpha/AlphaISA.py
+@@ -37,9 +37,9 @@
+ 
+ from m5.params import *
+ from m5.proxy import *
+-from m5.SimObject import SimObject
++from m5.objects.BaseISA import BaseISA
+ 
+-class AlphaISA(SimObject):
++class AlphaISA(BaseISA):
+     type = 'AlphaISA'
+     cxx_class = 'AlphaISA::ISA'
+     cxx_header = "arch/alpha/isa.hh"
+diff --git a/src/arch/alpha/isa.cc b/src/arch/alpha/isa.cc
+index 71cf2980a..b12358b6f 100644
+--- a/src/arch/alpha/isa.cc
++++ b/src/arch/alpha/isa.cc
+@@ -40,8 +40,7 @@
+ namespace AlphaISA
+ {
+ 
+-ISA::ISA(Params *p)
+-    : SimObject(p), system(p->system)
++ISA::ISA(Params *p) : BaseISA(p), system(p->system)
+ {
+     clear();
+     initializeIprTable();
+diff --git a/src/arch/alpha/isa.hh b/src/arch/alpha/isa.hh
+index f26031d8a..e58175eff 100644
+--- a/src/arch/alpha/isa.hh
++++ b/src/arch/alpha/isa.hh
+@@ -37,6 +37,7 @@
+ 
+ #include "arch/alpha/registers.hh"
+ #include "arch/alpha/types.hh"
++#include "arch/generic/isa.hh"
+ #include "base/types.hh"
+ #include "cpu/reg_class.hh"
+ #include "sim/sim_object.hh"
+@@ -50,7 +51,7 @@ class ThreadContext;
+ 
+ namespace AlphaISA
+ {
+-    class ISA : public SimObject
++    class ISA : public BaseISA
+     {
+       public:
+         typedef uint64_t InternalProcReg;
+@@ -147,7 +148,7 @@ namespace AlphaISA
+         void startup(ThreadContext *tc) {}
+ 
+         /// Explicitly import the otherwise hidden startup
+-        using SimObject::startup;
++        using BaseISA::startup;
+     };
+ }
+ 
+diff --git a/src/arch/arm/ArmISA.py b/src/arch/arm/ArmISA.py
+index 7b7189565..9fb7fdfbf 100644
+--- a/src/arch/arm/ArmISA.py
++++ b/src/arch/arm/ArmISA.py
+@@ -38,16 +38,16 @@
+ 
+ from m5.params import *
+ from m5.proxy import *
+-from m5.SimObject import SimObject
+ 
+ from m5.objects.ArmPMU import ArmPMU
+ from m5.objects.ArmSystem import SveVectorLength
++from m5.objects.BaseISA import BaseISA
+ from m5.objects.ISACommon import VecRegRenameMode
+ 
+ # Enum for DecoderFlavour
+ class DecoderFlavour(Enum): vals = ['Generic']
+ 
+-class ArmISA(SimObject):
++class ArmISA(BaseISA):
+     type = 'ArmISA'
+     cxx_class = 'ArmISA::ISA'
+     cxx_header = "arch/arm/isa.hh"
+diff --git a/src/arch/arm/isa.cc b/src/arch/arm/isa.cc
+index 101ca5420..472f5aeac 100644
+--- a/src/arch/arm/isa.cc
++++ b/src/arch/arm/isa.cc
+@@ -61,15 +61,10 @@
+ namespace ArmISA
+ {
+ 
+-ISA::ISA(Params *p)
+-    : SimObject(p),
+-      system(NULL),
+-      _decoderFlavour(p->decoderFlavour),
+-      _vecRegRenameMode(Enums::Full),
+-      pmu(p->pmu),
+-      haveGICv3CPUInterface(false),
+-      impdefAsNop(p->impdef_nop),
+-      afterStartup(false)
++ISA::ISA(Params *p) : BaseISA(p), system(NULL),
++    _decoderFlavour(p->decoderFlavour), _vecRegRenameMode(Enums::Full),
++    pmu(p->pmu), haveGICv3CPUInterface(false), impdefAsNop(p->impdef_nop),
++    afterStartup(false)
+ {
+     miscRegs[MISCREG_SCTLR_RST] = 0;
+ 
+diff --git a/src/arch/arm/isa.hh b/src/arch/arm/isa.hh
+index 23f05ccaf..bc784e93e 100644
+--- a/src/arch/arm/isa.hh
++++ b/src/arch/arm/isa.hh
+@@ -49,6 +49,7 @@
+ #include "arch/arm/system.hh"
+ #include "arch/arm/tlb.hh"
+ #include "arch/arm/types.hh"
++#include "arch/generic/isa.hh"
+ #include "arch/generic/traits.hh"
+ #include "debug/Checkpoint.hh"
+ #include "enums/VecRegRenameMode.hh"
+@@ -63,7 +64,7 @@ class EventManager;
+ 
+ namespace ArmISA
+ {
+-    class ISA : public SimObject
++    class ISA : public BaseISA
+     {
+       protected:
+         // Parent system
+@@ -763,7 +764,7 @@ namespace ArmISA
+         }
+ 
+         /// Explicitly import the otherwise hidden startup
+-        using SimObject::startup;
++        using BaseISA::startup;
+ 
+         typedef ArmISAParams Params;
+ 
+diff --git a/src/arch/generic/BaseISA.py b/src/arch/generic/BaseISA.py
+new file mode 100644
+index 000000000..f50819b5f
+--- /dev/null
++++ b/src/arch/generic/BaseISA.py
+@@ -0,0 +1,34 @@
++# Copyright 2020 Google, Inc.
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions are
++# met: redistributions of source code must retain the above copyright
++# notice, this list of conditions and the following disclaimer;
++# redistributions in binary form must reproduce the above copyright
++# notice, this list of conditions and the following disclaimer in the
++# documentation and/or other materials provided with the distribution;
++# neither the name of the copyright holders nor the names of its
++# contributors may be used to endorse or promote products derived from
++# this software without specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++#
++# Authors: Gabe Black
++
++from m5.params import *
++from m5.SimObject import SimObject
++
++class BaseISA(SimObject):
++    type = 'BaseISA'
++    abstract = True
++    cxx_header = "arch/generic/isa.hh"
+diff --git a/src/arch/generic/SConscript b/src/arch/generic/SConscript
+index 61034bfe9..64be7ce9b 100644
+--- a/src/arch/generic/SConscript
++++ b/src/arch/generic/SConscript
+@@ -47,6 +47,7 @@ Source('decode_cache.cc')
+ Source('mmapped_ipr.cc')
+ 
+ SimObject('BaseInterrupts.py')
++SimObject('BaseISA.py')
+ SimObject('BaseTLB.py')
+ SimObject('ISACommon.py')
+ 
+diff --git a/src/arch/generic/isa.hh b/src/arch/generic/isa.hh
+new file mode 100644
+index 000000000..83fbd867e
+--- /dev/null
++++ b/src/arch/generic/isa.hh
+@@ -0,0 +1,41 @@
++/*
++ * Copyright 2020 Google Inc.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions are
++ * met: redistributions of source code must retain the above copyright
++ * notice, this list of conditions and the following disclaimer;
++ * redistributions in binary form must reproduce the above copyright
++ * notice, this list of conditions and the following disclaimer in the
++ * documentation and/or other materials provided with the distribution;
++ * neither the name of the copyright holders nor the names of its
++ * contributors may be used to endorse or promote products derived from
++ * this software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ *
++ * Authors: Gabe Black
++ */
++
++#ifndef __ARCH_GENERIC_ISA_HH__
++#define __ARCH_GENERIC_ISA_HH__
++
++#include "sim/sim_object.hh"
++
++class BaseISA : public SimObject
++{
++  protected:
++    using SimObject::SimObject;
++};
++
++#endif // __ARCH_GENERIC_ISA_HH__
+diff --git a/src/arch/mips/MipsISA.py b/src/arch/mips/MipsISA.py
+index 22602ff0c..180d9e6f3 100644
+--- a/src/arch/mips/MipsISA.py
++++ b/src/arch/mips/MipsISA.py
+@@ -35,11 +35,12 @@
+ #
+ # Authors: Andreas Sandberg
+ 
+-from m5.SimObject import SimObject
+ from m5.params import *
+ from m5.proxy import *
+ 
+-class MipsISA(SimObject):
++from m5.objects.BaseISA import BaseISA
++
++class MipsISA(BaseISA):
+     type = 'MipsISA'
+     cxx_class = 'MipsISA::ISA'
+     cxx_header = "arch/mips/isa.hh"
+diff --git a/src/arch/mips/isa.cc b/src/arch/mips/isa.cc
+index eaee294c8..559424d73 100644
+--- a/src/arch/mips/isa.cc
++++ b/src/arch/mips/isa.cc
+@@ -89,8 +89,8 @@ ISA::miscRegNames[NumMiscRegs] =
+     "LLFlag"
+ };
+ 
+-ISA::ISA(Params *p)
+-    : SimObject(p), numThreads(p->num_threads), numVpes(p->num_vpes)
++ISA::ISA(Params *p) : BaseISA(p), numThreads(p->num_threads),
++    numVpes(p->num_vpes)
+ {
+     miscRegFile.resize(NumMiscRegs);
+     bankType.resize(NumMiscRegs);
+diff --git a/src/arch/mips/isa.hh b/src/arch/mips/isa.hh
+index 2055fb059..df0936ddc 100644
+--- a/src/arch/mips/isa.hh
++++ b/src/arch/mips/isa.hh
+@@ -35,6 +35,7 @@
+ #include <string>
+ #include <vector>
+ 
++#include "arch/generic/isa.hh"
+ #include "arch/mips/registers.hh"
+ #include "arch/mips/types.hh"
+ #include "cpu/reg_class.hh"
+@@ -49,7 +50,7 @@ class ThreadContext;
+ 
+ namespace MipsISA
+ {
+-    class ISA : public SimObject
++    class ISA : public BaseISA
+     {
+       public:
+         // The MIPS name for this file is CP0 or Coprocessor 0
+@@ -132,7 +133,7 @@ namespace MipsISA
+         void startup(ThreadContext *tc) {}
+ 
+         /// Explicitly import the otherwise hidden startup
+-        using SimObject::startup;
++        using BaseISA::startup;
+ 
+         const Params *params() const;
+ 
+diff --git a/src/arch/power/PowerISA.py b/src/arch/power/PowerISA.py
+index df35ab359..82efb9a39 100644
+--- a/src/arch/power/PowerISA.py
++++ b/src/arch/power/PowerISA.py
+@@ -35,9 +35,9 @@
+ #
+ # Authors: Andreas Sandberg
+ 
+-from m5.SimObject import SimObject
++from m5.objects.BaseISA import BaseISA
+ 
+-class PowerISA(SimObject):
++class PowerISA(BaseISA):
+     type = 'PowerISA'
+     cxx_class = 'PowerISA::ISA'
+     cxx_header = "arch/power/isa.hh"
+diff --git a/src/arch/power/isa.cc b/src/arch/power/isa.cc
+index faf6dfb91..9bbd745ff 100644
+--- a/src/arch/power/isa.cc
++++ b/src/arch/power/isa.cc
+@@ -44,8 +44,7 @@
+ namespace PowerISA
+ {
+ 
+-ISA::ISA(Params *p)
+-    : SimObject(p)
++ISA::ISA(Params *p) : BaseISA(p)
+ {
+     clear();
+ }
+diff --git a/src/arch/power/isa.hh b/src/arch/power/isa.hh
+index 16850d147..d5706b55b 100644
+--- a/src/arch/power/isa.hh
++++ b/src/arch/power/isa.hh
+@@ -33,6 +33,7 @@
+ #ifndef __ARCH_POWER_ISA_HH__
+ #define __ARCH_POWER_ISA_HH__
+ 
++#include "arch/generic/isa.hh"
+ #include "arch/power/registers.hh"
+ #include "arch/power/types.hh"
+ #include "base/logging.hh"
+@@ -47,7 +48,7 @@ class EventManager;
+ namespace PowerISA
+ {
+ 
+-class ISA : public SimObject
++class ISA : public BaseISA
+ {
+   protected:
+     RegVal dummy;
+@@ -135,7 +136,7 @@ class ISA : public SimObject
+     void startup(ThreadContext *tc) {}
+ 
+     /// Explicitly import the otherwise hidden startup
+-    using SimObject::startup;
++    using BaseISA::startup;
+ 
+     const Params *params() const;
+ 
+diff --git a/src/arch/riscv/RiscvISA.py b/src/arch/riscv/RiscvISA.py
+index 7e6344bab..dfb42c4dc 100644
+--- a/src/arch/riscv/RiscvISA.py
++++ b/src/arch/riscv/RiscvISA.py
+@@ -42,9 +42,9 @@
+ #          Sven Karlsson
+ #          Alec Roelke
+ 
+-from m5.SimObject import SimObject
++from m5.objects.BaseISA import BaseISA
+ 
+-class RiscvISA(SimObject):
++class RiscvISA(BaseISA):
+     type = 'RiscvISA'
+     cxx_class = 'RiscvISA::ISA'
+     cxx_header = "arch/riscv/isa.hh"
+diff --git a/src/arch/riscv/isa.cc b/src/arch/riscv/isa.cc
+index 0fa730533..ba3aae00a 100644
+--- a/src/arch/riscv/isa.cc
++++ b/src/arch/riscv/isa.cc
+@@ -46,7 +46,7 @@
+ namespace RiscvISA
+ {
+ 
+-ISA::ISA(Params *p) : SimObject(p)
++ISA::ISA(Params *p) : BaseISA(p)
+ {
+     miscRegFile.resize(NumMiscRegs);
+     clear();
+diff --git a/src/arch/riscv/isa.hh b/src/arch/riscv/isa.hh
+index 31f82e135..1c08700e0 100644
+--- a/src/arch/riscv/isa.hh
++++ b/src/arch/riscv/isa.hh
+@@ -41,6 +41,7 @@
+ #include <map>
+ #include <string>
+ 
++#include "arch/generic/isa.hh"
+ #include "arch/riscv/registers.hh"
+ #include "arch/riscv/types.hh"
+ #include "base/bitfield.hh"
+@@ -62,7 +63,7 @@ enum PrivilegeMode {
+     PRV_M = 3
+ };
+ 
+-class ISA : public SimObject
++class ISA : public BaseISA
+ {
+   protected:
+     std::vector<RegVal> miscRegFile;
+@@ -91,7 +92,7 @@ class ISA : public SimObject
+     void startup(ThreadContext *tc) {}
+ 
+     /// Explicitly import the otherwise hidden startup
+-    using SimObject::startup;
++    using BaseISA::startup;
+ 
+     const Params *params() const;
+ 
+diff --git a/src/arch/sparc/SparcISA.py b/src/arch/sparc/SparcISA.py
+index 23776f673..5f8f3ce23 100644
+--- a/src/arch/sparc/SparcISA.py
++++ b/src/arch/sparc/SparcISA.py
+@@ -35,9 +35,9 @@
+ #
+ # Authors: Andreas Sandberg
+ 
+-from m5.SimObject import SimObject
++from m5.objects.BaseISA import BaseISA
+ 
+-class SparcISA(SimObject):
++class SparcISA(BaseISA):
+     type = 'SparcISA'
+     cxx_class = 'SparcISA::ISA'
+     cxx_header = "arch/sparc/isa.hh"
+diff --git a/src/arch/sparc/isa.cc b/src/arch/sparc/isa.cc
+index b89f46550..f1b62eeda 100644
+--- a/src/arch/sparc/isa.cc
++++ b/src/arch/sparc/isa.cc
+@@ -61,8 +61,7 @@ buildPstateMask()
+ 
+ static const PSTATE PstateMask = buildPstateMask();
+ 
+-ISA::ISA(Params *p)
+-    : SimObject(p)
++ISA::ISA(Params *p) : BaseISA(p)
+ {
+     tickCompare = NULL;
+     sTickCompare = NULL;
+diff --git a/src/arch/sparc/isa.hh b/src/arch/sparc/isa.hh
+index 6cda32038..ba3f514e9 100644
+--- a/src/arch/sparc/isa.hh
++++ b/src/arch/sparc/isa.hh
+@@ -34,6 +34,7 @@
+ #include <ostream>
+ #include <string>
+ 
++#include "arch/generic/isa.hh"
+ #include "arch/sparc/registers.hh"
+ #include "arch/sparc/types.hh"
+ #include "cpu/cpuevent.hh"
+@@ -47,7 +48,7 @@ class ThreadContext;
+ 
+ namespace SparcISA
+ {
+-class ISA : public SimObject
++class ISA : public BaseISA
+ {
+   private:
+ 
+@@ -174,7 +175,7 @@ class ISA : public SimObject
+     void startup(ThreadContext *tc) {}
+ 
+     /// Explicitly import the otherwise hidden startup
+-    using SimObject::startup;
++    using BaseISA::startup;
+ 
+   protected:
+     bool isHyperPriv() { return hpstate.hpriv; }
+diff --git a/src/arch/x86/X86ISA.py b/src/arch/x86/X86ISA.py
+index 75d8e85c9..9ff29f27e 100644
+--- a/src/arch/x86/X86ISA.py
++++ b/src/arch/x86/X86ISA.py
+@@ -35,9 +35,9 @@
+ #
+ # Authors: Andreas Sandberg
+ 
+-from m5.SimObject import SimObject
++from m5.objects.BaseISA import BaseISA
+ 
+-class X86ISA(SimObject):
++class X86ISA(BaseISA):
+     type = 'X86ISA'
+     cxx_class = 'X86ISA::ISA'
+     cxx_header = "arch/x86/isa.hh"
+diff --git a/src/arch/x86/isa.cc b/src/arch/x86/isa.cc
+index 657724047..7b75dfda9 100644
+--- a/src/arch/x86/isa.cc
++++ b/src/arch/x86/isa.cc
+@@ -133,8 +133,7 @@ ISA::clear()
+     regVal[MISCREG_APIC_BASE] = lApicBase;
+ }
+ 
+-ISA::ISA(Params *p)
+-    : SimObject(p)
++ISA::ISA(Params *p) : BaseISA(p)
+ {
+     clear();
+ }
+diff --git a/src/arch/x86/isa.hh b/src/arch/x86/isa.hh
+index a835a794a..b404077b6 100644
+--- a/src/arch/x86/isa.hh
++++ b/src/arch/x86/isa.hh
+@@ -34,9 +34,10 @@
+ #include <iostream>
+ #include <string>
+ 
++#include "arch/generic/isa.hh"
++#include "arch/x86/registers.hh"
+ #include "arch/x86/regs/float.hh"
+ #include "arch/x86/regs/misc.hh"
+-#include "arch/x86/registers.hh"
+ #include "base/types.hh"
+ #include "cpu/reg_class.hh"
+ #include "sim/sim_object.hh"
+@@ -48,7 +49,7 @@ struct X86ISAParams;
+ 
+ namespace X86ISA
+ {
+-    class ISA : public SimObject
++    class ISA : public BaseISA
+     {
+       protected:
+         RegVal regVal[NUM_MISCREGS];
+@@ -140,7 +141,7 @@ namespace X86ISA
+         void startup(ThreadContext *tc);
+ 
+         /// Explicitly import the otherwise hidden startup
+-        using SimObject::startup;
++        using BaseISA::startup;
+ 
+     };
+ }
+-- 
+2.29.2
+

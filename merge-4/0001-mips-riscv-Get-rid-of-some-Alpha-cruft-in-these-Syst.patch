@@ -1,0 +1,78 @@
+From e1a101fc1b5f231b38b251a0da6088dfd947904a Mon Sep 17 00:00:00 2001
+From: Gabe Black <gabeblack@google.com>
+Date: Wed, 9 Oct 2019 17:10:08 -0700
+Subject: [PATCH] mips,riscv: Get rid of some Alpha cruft in these System
+ classes.
+
+The consolePanicEvent pointer and addConsoleFuncEvent template were
+inherited from Alpha and were not used (and probably make no sense) for
+MIPS or RISCV which (to my knowledge) don't have the idea of a
+"console" binary.
+
+Change-Id: I109b866a65f69c7334062f7304c7b18acc51d99d
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/21782
+Tested-by: kokoro <noreply+kokoro@google.com>
+Reviewed-by: Jason Lowe-Power <jason@lowepower.com>
+Maintainer: Jason Lowe-Power <jason@lowepower.com>
+---
+ src/arch/mips/system.hh  | 13 -------------
+ src/arch/riscv/system.hh | 13 -------------
+ 2 files changed, 26 deletions(-)
+
+diff --git a/src/arch/mips/system.hh b/src/arch/mips/system.hh
+index eb28b3b2f..c48faa1ba 100644
+--- a/src/arch/mips/system.hh
++++ b/src/arch/mips/system.hh
+@@ -66,22 +66,9 @@ class MipsSystem : public System
+     /** Object pointer for the console code */
+     ObjectFile *console;
+ 
+-#ifndef NDEBUG
+-  /** Event to halt the simulator if the console calls panic() */
+-    BreakPCEvent *consolePanicEvent;
+-#endif
+-
+   protected:
+     const Params *params() const { return (const Params *)_params; }
+ 
+-    /** Add a function-based event to the console code. */
+-    template <class T>
+-    T *
+-    addConsoleFuncEvent(const char *lbl)
+-    {
+-        return addFuncEvent<T>(consoleSymtab, lbl);
+-    }
+-
+     virtual Addr fixFuncEventAddr(Addr addr);
+ 
+ };
+diff --git a/src/arch/riscv/system.hh b/src/arch/riscv/system.hh
+index 7bff5cd45..78638d0ad 100644
+--- a/src/arch/riscv/system.hh
++++ b/src/arch/riscv/system.hh
+@@ -79,22 +79,9 @@ class RiscvSystem : public System
+     /** Object pointer for the console code */
+     ObjectFile *console;
+ 
+-#ifndef NDEBUG
+-  /** Event to halt the simulator if the console calls panic() */
+-    BreakPCEvent *consolePanicEvent;
+-#endif
+-
+   protected:
+     const Params *params() const { return (const Params *)_params; }
+ 
+-    /** Add a function-based event to the console code. */
+-    template <class T>
+-    T *
+-    addConsoleFuncEvent(const char *lbl)
+-    {
+-        return addFuncEvent<T>(consoleSymtab, lbl);
+-    }
+-
+     virtual Addr fixFuncEventAddr(Addr addr);
+ 
+ };
+-- 
+2.29.2
+

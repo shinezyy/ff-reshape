@@ -1,0 +1,120 @@
+error: patch failed: configs/common/FSConfig.py:123
+error: configs/common/FSConfig.py: patch does not apply
+error: patch failed: configs/common/FSConfig.py:123
+error: configs/common/FSConfig.py: patch does not apply
+error: patch failed: configs/example/arm/fs_bigLITTLE.py:118
+error: configs/example/arm/fs_bigLITTLE.py: patch does not apply
+error: patch failed: configs/example/arm/fs_bigLITTLE.py:118
+error: configs/example/arm/fs_bigLITTLE.py: patch does not apply
+error: patch failed: configs/example/arm/starter_fs.py:99
+error: configs/example/arm/starter_fs.py: patch does not apply
+error: patch failed: configs/example/arm/starter_fs.py:99
+error: configs/example/arm/starter_fs.py: patch does not apply
+error: patch failed: configs/example/fs.py:269
+error: configs/example/fs.py: patch does not apply
+error: patch failed: configs/example/fs.py:269
+error: configs/example/fs.py: patch does not apply
+error: patch failed: configs/example/se.py:171
+error: configs/example/se.py: patch does not apply
+error: patch failed: configs/example/se.py:171
+error: configs/example/se.py: patch does not apply
+error: patch failed: src/arch/arm/ArmSystem.py:41
+error: src/arch/arm/ArmSystem.py: patch does not apply
+error: patch failed: src/arch/arm/ArmSystem.py:41
+error: src/arch/arm/ArmSystem.py: patch does not apply
+error: patch failed: src/arch/arm/SConscript:67
+error: src/arch/arm/SConscript: patch does not apply
+error: patch failed: src/arch/arm/SConscript:67
+error: src/arch/arm/SConscript: patch does not apply
+error: patch failed: src/arch/arm/freebsd/system.cc:112
+error: src/arch/arm/freebsd/system.cc: patch does not apply
+error: patch failed: src/arch/arm/freebsd/system.cc:112
+error: src/arch/arm/freebsd/system.cc: patch does not apply
+error: patch failed: src/arch/arm/freebsd/system.hh:69
+error: src/arch/arm/freebsd/system.hh: patch does not apply
+error: patch failed: src/arch/arm/freebsd/system.hh:69
+error: src/arch/arm/freebsd/system.hh: patch does not apply
+error: patch failed: src/arch/arm/linux/system.cc:38
+error: src/arch/arm/linux/system.cc: patch does not apply
+error: patch failed: src/arch/arm/linux/system.cc:38
+error: src/arch/arm/linux/system.cc: patch does not apply
+error: patch failed: src/arch/arm/linux/system.hh:38
+error: src/arch/arm/linux/system.hh: patch does not apply
+error: patch failed: src/arch/arm/linux/system.hh:38
+error: src/arch/arm/linux/system.hh: patch does not apply
+error: patch failed: src/arch/arm/stacktrace.cc:46
+error: src/arch/arm/stacktrace.cc: patch does not apply
+error: patch failed: src/arch/arm/stacktrace.cc:46
+error: src/arch/arm/stacktrace.cc: patch does not apply
+error: patch failed: src/arch/arm/system.cc:42
+error: src/arch/arm/system.cc: patch does not apply
+error: patch failed: src/arch/arm/system.cc:42
+error: src/arch/arm/system.cc: patch does not apply
+error: patch failed: src/arch/arm/system.hh:47
+error: src/arch/arm/system.hh: patch does not apply
+error: patch failed: src/arch/arm/system.hh:47
+error: src/arch/arm/system.hh: patch does not apply
+error: patch failed: src/arch/riscv/faults.cc:30
+error: src/arch/riscv/faults.cc: patch does not apply
+error: patch failed: src/arch/riscv/faults.cc:30
+error: src/arch/riscv/faults.cc: patch does not apply
+error: patch failed: src/arch/riscv/system.cc:29
+error: src/arch/riscv/system.cc: patch does not apply
+error: patch failed: src/arch/riscv/system.cc:29
+error: src/arch/riscv/system.cc: patch does not apply
+error: patch failed: src/arch/sparc/SparcSystem.py:26
+error: src/arch/sparc/SparcSystem.py: patch does not apply
+error: patch failed: src/arch/sparc/SparcSystem.py:26
+error: src/arch/sparc/SparcSystem.py: patch does not apply
+error: patch failed: src/arch/sparc/system.cc:28
+error: src/arch/sparc/system.cc: patch does not apply
+error: patch failed: src/arch/sparc/system.cc:28
+error: src/arch/sparc/system.cc: patch does not apply
+error: patch failed: src/arch/x86/X86System.py:33
+error: src/arch/x86/X86System.py: patch does not apply
+error: patch failed: src/arch/x86/X86System.py:33
+error: src/arch/x86/X86System.py: patch does not apply
+error: patch failed: src/arch/x86/linux/system.cc:35
+error: src/arch/x86/linux/system.cc: patch does not apply
+error: patch failed: src/arch/x86/linux/system.cc:35
+error: src/arch/x86/linux/system.cc: patch does not apply
+error: patch failed: src/arch/x86/linux/system.hh:35
+error: src/arch/x86/linux/system.hh: patch does not apply
+error: patch failed: src/arch/x86/linux/system.hh:35
+error: src/arch/x86/linux/system.hh: patch does not apply
+error: patch failed: src/arch/x86/stacktrace.cc:46
+error: src/arch/x86/stacktrace.cc: patch does not apply
+error: patch failed: src/arch/x86/stacktrace.cc:46
+error: src/arch/x86/stacktrace.cc: patch does not apply
+error: patch failed: src/arch/x86/system.cc:38
+error: src/arch/x86/system.cc: patch does not apply
+error: patch failed: src/arch/x86/system.cc:38
+error: src/arch/x86/system.cc: patch does not apply
+error: patch failed: src/dev/arm/RealView.py:619
+error: src/dev/arm/RealView.py: patch does not apply
+error: patch failed: src/dev/arm/RealView.py:619
+error: src/dev/arm/RealView.py: patch does not apply
+error: patch failed: src/kern/linux/helpers.cc:93
+error: src/kern/linux/helpers.cc: patch does not apply
+error: patch failed: src/kern/linux/helpers.cc:93
+error: src/kern/linux/helpers.cc: patch does not apply
+error: patch failed: src/sim/SConscript:53
+error: patch failed: src/sim/SConscript:53
+error: src/sim/SConscript: patch does not apply
+error: src/sim/SConscript: patch does not apply
+error: patch failed: src/sim/System.py:99
+error: patch failed: src/sim/System.py:99
+error: src/sim/System.py: patch does not apply
+error: src/sim/System.py: patch does not apply
+error: patch failed: src/sim/system.cc:111
+error: patch failed: src/sim/system.cc:111
+error: src/sim/system.cc: patch does not apply
+error: src/sim/system.cc: patch does not apply
+error: patch failed: src/sim/system.hh:60
+error: patch failed: src/sim/system.hh:60
+error: src/sim/system.hh: patch does not apply
+error: src/sim/system.hh: patch does not apply
+error: patch failed: tests/configs/arm_generic.py:104
+error: patch failed: tests/configs/arm_generic.py:104
+error: tests/configs/arm_generic.py: patch does not apply
+error: tests/configs/arm_generic.py: patch does not apply

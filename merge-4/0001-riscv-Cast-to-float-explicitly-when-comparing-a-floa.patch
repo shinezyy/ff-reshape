@@ -1,0 +1,128 @@
+From b82860cc988898a40a0e72b09b5d97701ae23b21 Mon Sep 17 00:00:00 2001
+From: Gabe Black <gabeblack@google.com>
+Date: Sun, 9 Feb 2020 19:28:21 -0800
+Subject: [PATCH] riscv: Cast to float explicitly when comparing a float to an
+ int.
+
+clang 11 complains that the int value is not represented exactly
+otherwise which breaks the build. With this case the comparison is
+still the same, but since it's explicit the compiler doesn't warn about
+it.
+
+Change-Id: I1d9ffc77e778517d9c6a985ae7aa6c4f1d5b57a2
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/25225
+Reviewed-by: Jason Lowe-Power <jason@lowepower.com>
+Reviewed-by: Alec Roelke <alec.roelke@gmail.com>
+Maintainer: Alec Roelke <alec.roelke@gmail.com>
+Tested-by: kokoro <noreply+kokoro@google.com>
+---
+ src/arch/riscv/isa/decoder.isa | 36 ++++++++++++++++++++++------------
+ 1 file changed, 24 insertions(+), 12 deletions(-)
+
+diff --git a/src/arch/riscv/isa/decoder.isa b/src/arch/riscv/isa/decoder.isa
+index daec4139b..195fe4280 100644
+--- a/src/arch/riscv/isa/decoder.isa
++++ b/src/arch/riscv/isa/decoder.isa
+@@ -1426,10 +1426,12 @@ decode QUADRANT default Unknown::unknown() {
+                         if (std::isnan(fs1)) {
+                             Rd_sd = numeric_limits<int32_t>::max();
+                             FFLAGS |= FloatInvalid;
+-                        } else if (fs1 >= numeric_limits<int32_t>::max()) {
++                        } else if (fs1 >=
++                                float(numeric_limits<int32_t>::max())) {
+                             Rd_sd = numeric_limits<int32_t>::max();
+                             FFLAGS |= FloatInvalid;
+-                        } else if (fs1 <= numeric_limits<int32_t>::min()) {
++                        } else if (fs1 <=
++                                float(numeric_limits<int32_t>::min())) {
+                             Rd_sd = numeric_limits<int32_t>::min();
+                             FFLAGS |= FloatInvalid;
+                         } else {
+@@ -1446,7 +1448,8 @@ decode QUADRANT default Unknown::unknown() {
+                         } else if (fs1 < 0.0) {
+                             Rd = 0;
+                             FFLAGS |= FloatInvalid;
+-                        } else if (fs1 > numeric_limits<uint32_t>::max()) {
++                        } else if (fs1 >
++                                float(numeric_limits<uint32_t>::max())) {
+                             Rd = numeric_limits<uint64_t>::max();
+                             FFLAGS |= FloatInvalid;
+                         } else {
+@@ -1460,10 +1463,12 @@ decode QUADRANT default Unknown::unknown() {
+                         if (std::isnan(fs1)) {
+                             Rd_sd = numeric_limits<int64_t>::max();
+                             FFLAGS |= FloatInvalid;
+-                        } else if (fs1 > numeric_limits<int64_t>::max()) {
++                        } else if (fs1 >
++                                float(numeric_limits<int64_t>::max())) {
+                             Rd_sd = numeric_limits<int64_t>::max();
+                             FFLAGS |= FloatInvalid;
+-                        } else if (fs1 < numeric_limits<int64_t>::min()) {
++                        } else if (fs1 <
++                                float(numeric_limits<int64_t>::min())) {
+                             Rd_sd = numeric_limits<int64_t>::min();
+                             FFLAGS |= FloatInvalid;
+                         } else {
+@@ -1480,7 +1485,8 @@ decode QUADRANT default Unknown::unknown() {
+                         } else if (fs1 < 0.0) {
+                             Rd = 0;
+                             FFLAGS |= FloatInvalid;
+-                        } else if (fs1 > numeric_limits<uint64_t>::max()) {
++                        } else if (fs1 >
++                                float(numeric_limits<uint64_t>::max())) {
+                             Rd = numeric_limits<uint64_t>::max();
+                             FFLAGS |= FloatInvalid;
+                         } else {
+@@ -1493,10 +1499,12 @@ decode QUADRANT default Unknown::unknown() {
+                         if (std::isnan(Fs1)) {
+                             Rd_sd = numeric_limits<int32_t>::max();
+                             FFLAGS |= FloatInvalid;
+-                        } else if (Fs1 > numeric_limits<int32_t>::max()) {
++                        } else if (Fs1 >
++                                float(numeric_limits<int32_t>::max())) {
+                             Rd_sd = numeric_limits<int32_t>::max();
+                             FFLAGS |= FloatInvalid;
+-                        } else if (Fs1 < numeric_limits<int32_t>::min()) {
++                        } else if (Fs1 <
++                                float(numeric_limits<int32_t>::min())) {
+                             Rd_sd = numeric_limits<int32_t>::min();
+                             FFLAGS |= FloatInvalid;
+                         } else {
+@@ -1510,7 +1518,8 @@ decode QUADRANT default Unknown::unknown() {
+                         } else if (Fs1 < 0) {
+                             Rd = 0;
+                             FFLAGS |= FloatInvalid;
+-                        } else if (Fs1 > numeric_limits<uint32_t>::max()) {
++                        } else if (Fs1 >
++                                float(numeric_limits<uint32_t>::max())) {
+                             Rd = numeric_limits<uint64_t>::max();
+                             FFLAGS |= FloatInvalid;
+                         } else {
+@@ -1521,10 +1530,12 @@ decode QUADRANT default Unknown::unknown() {
+                         if (std::isnan(Fs1)) {
+                             Rd_sd = numeric_limits<int64_t>::max();
+                             FFLAGS |= FloatInvalid;
+-                        } else if (Fs1 > numeric_limits<int64_t>::max()) {
++                        } else if (Fs1 >
++                                float(numeric_limits<int64_t>::max())) {
+                             Rd_sd = numeric_limits<int64_t>::max();
+                             FFLAGS |= FloatInvalid;
+-                        } else if (Fs1 < numeric_limits<int64_t>::min()) {
++                        } else if (Fs1 <
++                                float(numeric_limits<int64_t>::min())) {
+                             Rd_sd = numeric_limits<int64_t>::min();
+                             FFLAGS |= FloatInvalid;
+                         } else {
+@@ -1538,7 +1549,8 @@ decode QUADRANT default Unknown::unknown() {
+                         } else if (Fs1 < 0) {
+                             Rd = 0;
+                             FFLAGS |= FloatInvalid;
+-                        } else if (Fs1 > numeric_limits<uint64_t>::max()) {
++                        } else if (Fs1 >
++                                float(numeric_limits<uint64_t>::max())) {
+                             Rd = numeric_limits<uint64_t>::max();
+                             FFLAGS |= FloatInvalid;
+                         } else {
+-- 
+2.29.2
+

@@ -1,0 +1,42 @@
+From d3aba22c52cdc3304cb8ca19d122cafb94b23f1c Mon Sep 17 00:00:00 2001
+From: Xin Ouyang <xin.ouyang@streamcomputing.com>
+Date: Sun, 17 Nov 2019 09:58:19 +0800
+Subject: [PATCH] arch-riscv: fix asmtest concurrent issues.
+
+riscv asmtest uses multiprocessing.Pool to run multiple gem5
+processes concurrently.
+
+By using gem5 default options, processes will fail because:
+ - accessing to the same m5out directory
+ - listening too many remote gdb ports at the same time
+
+This will set independent m5out directories and disable remote gdb
+ports for asmtest gem5 processes.
+
+Change-Id: Ie4c81232210568cd1945adc2b99eebc019d705b6
+Signed-off-by: Xin Ouyang <xin.ouyang@streamcomputing.com>
+Reviewed-on: https://gem5-review.googlesource.com/c/public/gem5/+/22863
+Reviewed-by: Jason Lowe-Power <jason@lowepower.com>
+Reviewed-by: Alec Roelke <alec.roelke@gmail.com>
+Maintainer: Jason Lowe-Power <jason@lowepower.com>
+Tested-by: kokoro <noreply+kokoro@google.com>
+---
+ tests/test-progs/asmtest/src/riscv/run-tests.py | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/tests/test-progs/asmtest/src/riscv/run-tests.py b/tests/test-progs/asmtest/src/riscv/run-tests.py
+index 53a8476c0..f5b847ff7 100755
+--- a/tests/test-progs/asmtest/src/riscv/run-tests.py
++++ b/tests/test-progs/asmtest/src/riscv/run-tests.py
+@@ -109,6 +109,8 @@ for test in tests:
+     test_name = test + '-' + model
+     job_names.append(test_name)
+     job_cmds.append([gem5_bin,
++                     '-d', 'm5out/' + test_name,
++                     '--listener-mode', 'off',
+                      config,
+                      '-m', str(args.max_tick),
+                      '--cpu-type', model,
+-- 
+2.29.2
+
