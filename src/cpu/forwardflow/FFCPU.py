@@ -1,4 +1,4 @@
-# Copyright (c) 2016 ARM Limited
+# Copyright (c) 2016, 2019 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -43,12 +43,12 @@ from __future__ import print_function
 from m5.defines import buildEnv
 from m5.params import *
 from m5.proxy import *
-from BaseCPU import BaseCPU
-from FFFUPool import *
-from FFChecker import FFChecker
-from BranchPredictor import *
-from MemDepPredictor import *
-from LoopBuffer import *
+from m5.objects.BaseCPU import BaseCPU
+from m5.objects.FFFUPool import *
+from m5.objects.FFChecker import FFChecker
+from m5.objects.BranchPredictor import *
+from m5.objects.MemDepPredictor import *
+from m5.objects.LoopBuffer import *
 
 coreWidth = 4
 
@@ -71,7 +71,9 @@ class DerivFFCPU(BaseCPU):
     activity = Param.Unsigned(0, "Initial count")
 
     cacheStorePorts = Param.Unsigned(200, "Cache Ports. "
-          "Constrains stores only. Loads are constrained by load FUs.")
+          "Constrains stores only.")
+    cacheLoadPorts = Param.Unsigned(200, "Cache Ports. "
+          "Constrains loads only.")
 
     decodeToFetchDelay = Param.Cycles(1, "Decode to fetch delay")
     renameToFetchDelay = Param.Cycles(1 ,"Rename to fetch delay")
@@ -171,18 +173,8 @@ class DerivFFCPU(BaseCPU):
 
     #branchPred = Param.BranchPredictor(TournamentBP(numThreads =
     #                                                   Parent.numThreads),
-    #branchPred = Param.BranchPredictor(LTAGE(numThreads =
-    #                                                   Parent.numThreads),
-    #branchPred = Param.BranchPredictor(PerceptronLocalBP(numThreads =
-    #                                                  Parent.numThreads),
-    branchPred = Param.BranchPredictor(MyPerceptron(numThreads =
+    branchPred = Param.BranchPredictor(LTAGE(numThreads =
                                                        Parent.numThreads),
-    #branchPred = Param.BranchPredictor(PathPerceptron(numThreads =
-    #                                                    Parent.numThreads),
-    #branchPred = Param.BranchPredictor(Perceptron(numThreads =
-    #                                                    Parent.numThreads),
-    #branchPred = Param.BranchPredictor(LocalBP(numThreads =
-    #                                                   Parent.numThreads),
                                        "Branch Predictor")
 
     mDepPred = Param.MemDepPredictor(MemDepPredictor(), "memory dep predictor")
@@ -192,21 +184,8 @@ class DerivFFCPU(BaseCPU):
                           "Enable TSO Memory model")
 
     def addCheckerCpu(self):
-        if buildEnv['TARGET_ISA'] in ['arm']:
-            from ArmTLB import ArmTLB
-
-            self.checker = FFChecker(workload=self.workload,
-                                     exitOnError=False,
-                                     updateOnError=True,
-                                     warnOnlyOnLoadError=True)
-            self.checker.itb = ArmTLB(size = self.itb.size)
-            self.checker.dtb = ArmTLB(size = self.dtb.size)
-            self.checker.cpu_id = self.cpu_id
-
-        else:
-            print("ERROR: Checker only supported under ARM ISA!")
-
-            exit(1)
+        print("ERROR: Checker not supported for Omegaflow")
+        exit(1)
 
     DQDepth = Param.Unsigned(48, "depth of each dataflow queue bank")
     numOperands = Param.Unsigned(4,
