@@ -1812,6 +1812,27 @@ void DefaultFetch<Impl>::predictFanout(const DynInstPtr &inst)
     }
 }
 
+template<class Impl>
+bool
+DefaultFetch<Impl>::IcachePort::recvTimingResp(PacketPtr pkt)
+{
+    DPRINTF(Fetch, "Fetch unit received timing\n");
+    // We shouldn't ever get a cacheable block in Modified state
+    assert(pkt->req->isUncacheable() ||
+           !(pkt->cacheResponding() && !pkt->hasSharers()));
+    fetch->processCacheCompletion(pkt);
+
+    return true;
+}
+
+template<class Impl>
+void
+DefaultFetch<Impl>::IcachePort::recvReqRetry()
+{
+    fetch->recvReqRetry();
+}
+
+
 }
 
 #endif//__CPU_FF_FETCH_IMPL_HH__

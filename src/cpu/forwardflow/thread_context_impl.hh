@@ -178,14 +178,14 @@ template <class Impl>
 const TheISA::VecRegContainer&
 O3ThreadContext<Impl>::readVecRegFlat(RegIndex reg_id) const
 {
-    return cpu->readArchVecReg(reg_id, thread->threadId());
+    panic("No Vector support in RV-ForwardFlow");
 }
 
 template <class Impl>
 TheISA::VecRegContainer&
 O3ThreadContext<Impl>::getWritableVecRegFlat(RegIndex reg_id)
 {
-    return cpu->getWritableArchVecReg(reg_id, thread->threadId());
+    panic("No Vector support in RV-ForwardFlow");
 }
 
 template <class Impl>
@@ -193,7 +193,23 @@ const TheISA::VecElem&
 O3ThreadContext<Impl>::readVecElemFlat(RegIndex idx,
                                            const ElemIndex& elemIndex) const
 {
-    return cpu->readArchVecElem(idx, elemIndex, thread->threadId());
+    panic("No Vector support in RV-ForwardFlow");
+}
+
+
+template <class Impl>
+const TheISA::VecPredRegContainer&
+O3ThreadContext<Impl>::readVecPredRegFlat(RegIndex reg_id) const
+{
+    panic("No Vec support in RV-ForwardFlow");
+}
+
+
+template <class Impl>
+TheISA::VecPredRegContainer&
+O3ThreadContext<Impl>::getWritableVecPredRegFlat(RegIndex reg_id)
+{
+    panic("No Vec support in RV-ForwardFlow");
 }
 
 template <class Impl>
@@ -226,9 +242,7 @@ template <class Impl>
 void
 O3ThreadContext<Impl>::setVecRegFlat(RegIndex reg_idx, const VecRegContainer& val)
 {
-    cpu->setArchVecReg(reg_idx, val, thread->threadId());
-
-    conditionalSquash();
+    panic("No Vector support in RV-ForwardFlow");
 }
 
 template <class Impl>
@@ -236,8 +250,15 @@ void
 O3ThreadContext<Impl>::setVecElemFlat(RegIndex idx,
         const ElemIndex& elemIndex, const VecElem& val)
 {
-    cpu->setArchVecElem(idx, elemIndex, val, thread->threadId());
-    conditionalSquash();
+    panic("No Vector support in RV-ForwardFlow");
+}
+
+template <class Impl>
+void
+O3ThreadContext<Impl>::setVecPredRegFlat(RegIndex reg_idx,
+        const VecPredRegContainer& val)
+{
+    panic("No Vector support in RV-ForwardFlow");
 }
 
 template <class Impl>
@@ -291,6 +312,31 @@ O3ThreadContext<Impl>::setMiscReg(RegIndex misc_reg, RegVal val)
 
     conditionalSquash();
 }
+
+
+// hardware transactional memory
+template <class Impl>
+void
+O3ThreadContext<Impl>::htmAbortTransaction(uint64_t htmUid,
+                                           HtmFailureFaultCause cause)
+{
+    panic("No htm support in RV-ForwardFlow");
+}
+
+template <class Impl>
+BaseHTMCheckpointPtr&
+O3ThreadContext<Impl>::getHtmCheckpointPtr()
+{
+    panic("No htm support in RV-ForwardFlow");
+}
+
+template <class Impl>
+void
+O3ThreadContext<Impl>::setHtmCheckpointPtr(BaseHTMCheckpointPtr new_cpt)
+{
+    panic("No htm support in RV-ForwardFlow");
+}
+
 
 }
 
