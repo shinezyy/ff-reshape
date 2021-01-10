@@ -99,7 +99,7 @@ private:
 
     DQTop *dq;
 
-    bool commitInstInSB(DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest);
+    bool commitInstInSB(const DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest);
 
 
     std::unordered_map<int, FFRegValue> hintIntRF;
@@ -110,12 +110,12 @@ private:
     Scoreboard hintSB;
 
 public:
-    std::pair<bool, FFRegValue> commitInst(DynInstPtr &inst);
+    std::pair<bool, FFRegValue> commitInst(const DynInstPtr &inst);
 
-    void postExecInst(DynInstPtr &inst);
+    void postExecInst(const DynInstPtr &inst);
 
     // todo: update map to tell its parent or sibling where to forward
-    std::pair<bool, std::list<PointerPair>> recordAndUpdateMap(DynInstPtr &inst);
+    std::pair<bool, std::list<PointerPair>> recordAndUpdateMap(const DynInstPtr &inst);
 
 //    void clearCounters();
 //
@@ -123,9 +123,9 @@ public:
 
     bool checkpointsFull();
 
-    bool takeCheckpoint(DynInstPtr &inst);
+    bool takeCheckpoint(const DynInstPtr &inst);
 
-    void recoverCPT(DynInstPtr &inst);
+    void recoverCPT(const DynInstPtr &inst);
 
     void recoverCPT(InstSeqNum &num);
 
@@ -153,7 +153,7 @@ public:
     void dumpMaps();
 
     // is LF source, is LF drain
-    std::pair<bool, bool> forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forward);
+    std::pair<bool, bool> forwardAfter(const DynInstPtr &inst, std::list<DynInstPtr> &need_forward);
 
     void regStats();
 
@@ -189,13 +189,13 @@ public:
 private:
     std::mt19937 gen;
 
-    void randomizeOp(DynInstPtr& inst);
+    void randomizeOp(const DynInstPtr& inst);
 
     const bool decoupleOpPosition;
 
     const bool readyHint;
 
-    void countChild(DQPointer parent_ptr, DynInstPtr &inst);
+    void countChild(DQPointer parent_ptr, const DynInstPtr &inst);
 
     MemDepPredictor *mDepPred;
 };

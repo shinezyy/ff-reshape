@@ -135,7 +135,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
         DPRINTF(Branch, "[tid:%i] [sn:%llu] "
             "Unconditional control\n",
             tid,seqNum);
-        DPRINTF(Debug::OracleBP, "[tid:%i]: Unconditional control.\n", tid);
+        DPRINTF(OracleBP, "[tid:%i]: Unconditional control.\n", tid);
         pred_taken = true;
         // Tell the BP there was an unconditional branch.
         uncondBranch(tid, pc.instAddr(), bp_history);
@@ -146,7 +146,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
         DPRINTF(Branch, "[tid:%i] [sn:%llu] "
                 "Branch predictor predicted %i for PC %s\n",
                 tid, seqNum,  pred_taken, pc);
-        DPRINTF(Debug::OracleBP, "[tid:%i]: [sn:%i] Branch predictor"
+        DPRINTF(OracleBP, "[tid:%i]: [sn:%i] Branch predictor"
                 " predicted %i for PC %s\n", tid, seqNum,  pred_taken, pc);
     }
 

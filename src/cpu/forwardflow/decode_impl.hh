@@ -292,7 +292,7 @@ DefaultDecode<Impl>::unblock(ThreadID tid)
 
 template<class Impl>
 void
-DefaultDecode<Impl>::squash(DynInstPtr &inst, ThreadID tid)
+DefaultDecode<Impl>::squash(const DynInstPtr &inst, ThreadID tid)
 {
     DPRINTF(Decode, "[tid:%i]: [sn:%i] Squashing due to incorrect branch "
             "prediction detected at decode.\n", tid, inst->seqNum);

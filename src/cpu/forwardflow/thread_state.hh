@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 ARM Limited
+ * Copyright (c) 2012, 2019 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -53,9 +53,7 @@
 class EndQuiesceEvent;
 class Event;
 class FunctionalMemory;
-class FunctionProfile;
 class Process;
-class ProfileNode;
 
 namespace FF{
 /**
@@ -73,7 +71,15 @@ struct O3ThreadState : public ThreadState {
   private:
     /** Pointer to the CPU. */
     O3CPU *cpu;
+
   public:
+    PCEventQueue pcEventQueue;
+    /**
+     * An instruction-based event queue. Used for scheduling events based on
+     * number of instructions committed.
+     */
+    EventQueue comInstEventQueue;
+
     /* This variable controls if writes to a thread context should cause a all
      * dynamic/speculative state to be thrown away. Nominally this is the
      * desired behavior because the external thread context write has updated
@@ -90,27 +96,10 @@ struct O3ThreadState : public ThreadState {
     bool trapPending;
 
     O3ThreadState(O3CPU *_cpu, int _thread_num, Process *_process)
-        : ThreadState(_cpu, _thread_num, _process),
-          cpu(_cpu), noSquashFromTC(false), trapPending(false),
-          tc(nullptr)
+        : ThreadState(_cpu, _thread_num, _process), cpu(_cpu),
+          comInstEventQueue("instruction-based event queue"),
+          noSquashFromTC(false), trapPending(false), tc(nullptr)
     {
-        if (!FullSystem)
-            return;
-
-        if (cpu->params()->profile) {
-            profile = new FunctionProfile(
-                    cpu->params()->system->kernelSymtab);
-            Callback *cb =
-                new MakeCallback<O3ThreadState,
-                &O3ThreadState::dumpFuncProfile>(this);
-            registerExitCallback(cb);
-        }
-
-        // let's fill with a dummy node for now so we don't get a segfault
-        // on the first cycle when there's no node available.
-        static ProfileNode dummyNode;
-        profileNode = &dummyNode;
-        profilePC = 3;
     }
 
     void serialize(CheckpointOut &cp) const override
@@ -141,18 +130,8 @@ struct O3ThreadState : public ThreadState {
     ThreadContext *getTC() { return tc; }
 
     /** Handles the syscall. */
-    void syscall(int64_t callnum, Fault *fault)
-    {
-        process->syscall(callnum, tc, fault);
-    }
+    void syscall() { process->syscall(tc); }
 
-    void dumpFuncProfile()
-    {
-        OutputStream *os(
-            simout.create(csprintf("profile.%s.dat", cpu->name())));
-        profile->dump(tc, *os->stream());
-        simout.close(os);
-    }
 };
 
 }

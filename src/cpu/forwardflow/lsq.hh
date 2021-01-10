@@ -47,16 +47,17 @@
 
 #include "arch/generic/tlb.hh"
 #include "cpu/inst_seq.hh"
-#include "cpu/o3/lsq_unit.hh"
+#include "cpu/forwardflow/lsq_unit.hh"
 #include "cpu/utils.hh"
 #include "enums/SMTQueuePolicy.hh"
 #include "mem/port.hh"
 #include "sim/sim_object.hh"
 
-struct DerivO3CPUParams;
+struct DerivFFCPUParams;
 
+namespace FF{
 template <class Impl>
-class FullO3CPU;
+class FFCPU;
 
 template <class Impl>
 class LSQ
@@ -125,11 +126,11 @@ class LSQ
 
         /** Pointer to LSQ. */
         LSQ<Impl> *lsq;
-        FullO3CPU<Impl> *cpu;
+        FFCPU<Impl> *cpu;
 
       public:
         /** Default constructor. */
-        DcachePort(LSQ<Impl> *_lsq, FullO3CPU<Impl>* _cpu)
+        DcachePort(LSQ<Impl> *_lsq, FFCPU<Impl>* _cpu)
             : RequestPort(_cpu->name() + ".dcache_port", _cpu), lsq(_lsq),
               cpu(_cpu)
         { }
@@ -850,7 +851,7 @@ class LSQ
     };
 
     /** Constructs an LSQ with the given parameters. */
-    LSQ(O3CPU *cpu_ptr, IEW *iew_ptr, DerivO3CPUParams *params);
+    LSQ(O3CPU *cpu_ptr, IEW *iew_ptr, DerivFFCPUParams *params);
     ~LSQ() { }
 
     /** Returns the name of the LSQ. */
@@ -1214,6 +1215,8 @@ LSQ<Impl>::write(LSQRequest* req, uint8_t *data, int store_idx)
     ThreadID tid = cpu->contextToThread(req->request()->contextId());
 
     return thread.at(tid).write(req, data, store_idx);
+}
+
 }
 
 #endif // __CPU_O3_LSQ_HH__

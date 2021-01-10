@@ -423,7 +423,7 @@ class O3ThreadContext : public ThreadContext
     void
     syscall() override
     {
-        return cpu->syscall(thread->threadId());
+        cpu->syscall(thread->threadId());
     }
 
     /** Reads the funcExeInst counter. */

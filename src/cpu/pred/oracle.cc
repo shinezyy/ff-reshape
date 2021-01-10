@@ -89,7 +89,7 @@ OracleBP::lookup(ThreadID tid, Addr branch_addr, void * &bp_history)
 
 void
 OracleBP::update(ThreadID tid, Addr branch_addr, bool taken, void *bp_history,
-                bool squashed)
+                bool squashed, const StaticInstPtr &inst, Addr corrTarget)
 {
     auto history_state = static_cast<BPState *>(bp_history);
 

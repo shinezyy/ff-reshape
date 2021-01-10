@@ -112,9 +112,9 @@ public:
 
     void setExec(Exec *_exec);
 
-    bool canServe(DynInstPtr &inst, InstSeqNum &waitee);
+    bool canServe(const DynInstPtr &inst, InstSeqNum &waitee);
 
-    bool consume(DynInstPtr &inst);
+    bool consume(const DynInstPtr &inst);
 
 //    bool transferPointer();
 //    bool transferValue();

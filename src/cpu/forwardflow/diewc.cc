@@ -152,7 +152,7 @@ template<class Impl>
 void FFDIEWC<Impl>::tryVerifyTailLoads()
 {
     unsigned count = 0;
-    for (DynInstPtr &inst: instsToCommit) {
+    for (const DynInstPtr &inst: instsToCommit) {
         DPRINTF(NoSQSMB, "Verifying\n");
         if (inst->isStore() || inst->isMemBarrier() || inst->isWriteBarrier()) {
             DPRINTF(NoSQSMB || Debug::FFCommit, "Break verifying because encountered store\n");
@@ -170,7 +170,7 @@ void FFDIEWC<Impl>::tryVerifyTailLoads()
 
 
 template<class Impl>
-bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
+bool FFDIEWC<Impl>::tryVerifyTailLoad(const DynInstPtr &tail, bool is_tail) {
     bool break_verif = false;
     if (!tail->loadVerified && !tail->sentReExec && (tail->isNormalBypass() || tail->effAddrValid())) {
         DPRINTF(NoSQSMB, "Trying to verifiy inst[%lu], last verified load is %lu\n",
@@ -190,7 +190,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
             if (!tail->memPredHistory->updated) {
                 skip_verify = mDepPred->checkAddr(tail->seqNum,
                         tail->memPredHistory->bypass,
-                        tail->physEffAddrLow, tail->physEffAddrHigh,
+                        tail->physEffAddr, 0,
                         tail->effSize, tail->seqNVul);
             } else {
                 DPRINTF(NoSQSMB, "memPredHistory is record! maybe violation detected, break\n");
@@ -204,7 +204,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
         if (skip_verify) {
             DPRINTF(NoSQSMB || Debug::NoSQPred, "Skip verifying load [%lu]\n", tail->seqNum);
             DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass with distance %i\n",
-                    tail->seqNum, tail->instAddr(), tail->physEffAddrLow,
+                    tail->seqNum, tail->instAddr(), tail->physEffAddr,
                     tail->memPredHistory->bypass ? "" : " not", tail->memPredHistory->distPair.ssnDistance);
             if (Debug::NoSQPred) {
                 std::cout << " with history: "
@@ -232,7 +232,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
 
         } else if (!ldstQueue.numStoresToWB(DummyTid)){
             DPRINTF(NoSQSMB, "Did not skip verifying load [%lu] @ 0x%lx size: %u\n",
-                    tail->seqNum, tail->physEffAddrLow, tail->effSize);
+                    tail->seqNum, tail->physEffAddr, tail->effSize);
             auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(tail, is_tail);
             if (sent_reexec) {
                 verifiedTailLoad = tail->seqNum;
@@ -253,7 +253,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
                 FPCanceledBypass++;
 
                 DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should not bypass\n",
-                        tail->seqNum, tail->instAddr(), tail->physEffAddrLow);
+                        tail->seqNum, tail->instAddr(), tail->physEffAddr);
                 if (Debug::NoSQPred) {
                     std::cout << " with history: "
                               << tail->memPredHistory->patternInfo.localHistory << "\n";
@@ -276,7 +276,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(DynInstPtr &tail, bool is_tail) {
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::squash(DynInstPtr &inst) {
+void FFDIEWC<Impl>::squash(const DynInstPtr &inst) {
     // todo calculate invalidation mask, write to DQ valid bits
 
     // todo find corresponding checkpoint of the consumer table, reverse to it
@@ -573,7 +573,7 @@ void FFDIEWC<Impl>::dispatch() {
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::setupPointerLink(FFDIEWC::DynInstPtr &inst, bool jumped, const PointerPair &pair)
+void FFDIEWC<Impl>::setupPointerLink(const FFDIEWC::DynInstPtr &inst, bool jumped, const PointerPair &pair)
 {
     auto [bypass_canceled, pairs] = archState.recordAndUpdateMap(inst);
 
@@ -754,7 +754,7 @@ void FFDIEWC<Impl>::execute() {
 template <class Impl>
 bool
 FFDIEWC<Impl>::
-        commitHead(DynInstPtr &head_inst, unsigned inst_num)
+        commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 {
     assert(head_inst);
 
@@ -877,13 +877,9 @@ FFDIEWC<Impl>::
     if (head_inst->isStore() && inst_fault == NoFault) {
         head_inst->setCompleted();
 
-        mDepPred->commitStore(head_inst->physEffAddrLow, head_inst->effSize,
+        mDepPred->commitStore(head_inst->physEffAddr, head_inst->effSize,
                               head_inst->storeSeq, head_inst->dqPosition);
 
-        if (head_inst->physEffAddrHigh) {
-            mDepPred->commitStore(head_inst->physEffAddrHigh, head_inst->effSize,
-                                  head_inst->storeSeq, head_inst->dqPosition);
-        }
         mDepPred->removeStore(head_inst->seqNum);
     }
 
@@ -948,12 +944,9 @@ FFDIEWC<Impl>::
     updateComInstStats(head_inst);
 
     if (head_inst->isLoad()) {
-        mDepPred->commitLoad(head_inst->physEffAddrLow,
+        mDepPred->commitLoad(head_inst->physEffAddr,
                              head_inst->seqNum, head_inst->dqPosition);
 
-        if (head_inst->physEffAddrHigh) {
-            // pass yet
-        }
     }
 
     if (FullSystem) {
@@ -969,10 +962,10 @@ FFDIEWC<Impl>::
 
         if (head_inst->isNormalStore()) {
             DPRINTF(ASMCommit, "Inst[%lu][%lu] @pc:0x%lx store to 0x%lx\n",
-                    head_inst->seqNum, commitAll, head_inst->instAddr(), head_inst->physEffAddrLow);
+                    head_inst->seqNum, commitAll, head_inst->instAddr(), head_inst->physEffAddr);
         } else if (head_inst->isLoad()) {
             DPRINTF(ASMCommit, "Inst[%lu][%lu] @pc:0x%lx load from 0x%lx have path: 0x%lx\n",
-                    head_inst->seqNum, commitAll, head_inst->instAddr(), head_inst->physEffAddrLow,
+                    head_inst->seqNum, commitAll, head_inst->instAddr(), head_inst->physEffAddr,
                     head_inst->memPredHistory->pathInfo.path);
         }
 
@@ -1177,7 +1170,7 @@ FFDIEWC<Impl>::commitInsts()
                 // toNextCycle->diewc2diewc.donePointer = head_inst->dqPosition;
 
                 canHandleInterrupts =  (!head_inst->isDelayedCommit()) &&
-                                       ((THE_ISA != ALPHA_ISA) ||
+                                       (true ||
                                          (!(pc.instAddr() & 0x3)));
 
                 // at this point store conditionals should either have
@@ -1235,7 +1228,7 @@ FFDIEWC<Impl>::commitInsts()
                            !thread->trapPending);
                     do {
                         oldpc = pc.instAddr();
-                        cpu->system->pcEventQueue.service(thread->getTC());
+                        thread->pcEventQueue.service(oldpc, thread->getTC());
                         count++;
                     } while (oldpc != pc.instAddr());
                     if (count > 1) {
@@ -1254,7 +1247,7 @@ FFDIEWC<Impl>::commitInsts()
                 //
                 // If we don't do this, we might end up in a live lock situation
                 if (!interrupt && avoidQuiesceLiveLock &&
-                    onInstBoundary && cpu->checkInterrupts(cpu->tcBase(0)))
+                    onInstBoundary && cpu->checkInterrupts(0))
                     squashAfter(head_inst);
 
                 instsToCommit.pop_front();
@@ -1290,7 +1283,7 @@ typename FFDIEWC<Impl>::DynInstPtr FFDIEWC<Impl>::getTailInst() {
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::squashAfter(typename FFDIEWC<Impl>::DynInstPtr &head_inst) {
+void FFDIEWC<Impl>::squashAfter(const typename FFDIEWC<Impl>::DynInstPtr &head_inst) {
     DPRINTF(Commit, "Executing squash after for inst [sn:%lli]\n",
             head_inst->seqNum);
 
@@ -1573,7 +1566,7 @@ void FFDIEWC<Impl>::clearAllocatedInsts() {
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::updateComInstStats(DynInstPtr &inst) {
+void FFDIEWC<Impl>::updateComInstStats(const DynInstPtr &inst) {
 
     if (!inst->isMicroop() || inst->isLastMicroop()) {
         if (!inst->isForwarder()) {
@@ -1667,14 +1660,14 @@ void FFDIEWC<Impl>::insertPointerPair(const PointerPair& pair) {
 
 
 template<class Impl>
-void FFDIEWC<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered,
+void FFDIEWC<Impl>::rescheduleMemInst(const DynInstPtr &inst, bool isStrictOrdered,
         bool isFalsePositive)
 {
     dq.rescheduleMemInst(inst, isStrictOrdered, isFalsePositive);
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::replayMemInst(DynInstPtr &inst)
+void FFDIEWC<Impl>::replayMemInst(const DynInstPtr &inst)
 {
     dq.replayMemInst(inst);
 }
@@ -1686,7 +1679,7 @@ void FFDIEWC<Impl>::cacheUnblocked()
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::blockMemInst(DynInstPtr &inst)
+void FFDIEWC<Impl>::blockMemInst(const DynInstPtr &inst)
 {
     dq.blockMemInst(inst);
 }
@@ -1698,7 +1691,7 @@ void FFDIEWC<Impl>::wakeCPU()
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
+void FFDIEWC<Impl>::instToWriteback(const DynInstPtr &inst)
 {
     assert(inst->isLoad() || inst->isStoreConditional());
     inst->setCanCommit();
@@ -1728,13 +1721,13 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
         dq.writebackLoad(inst);
     }
 
-    SSBFCell *cell = mDepPred->tssbf.find(inst->physEffAddrLow);
+    SSBFCell *cell = mDepPred->tssbf.find(inst->physEffAddr);
 
     if (violation && inst->isNormalBypass() && !inst->memPredHistory->updated) {
         // false positive
         DPRINTF(NoSQPred, "Count down bypassing confidence for inst[%lu]\n", inst->seqNum);
         DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should not bypass\n",
-                inst->seqNum, inst->instAddr(), inst->physEffAddrLow);
+                inst->seqNum, inst->instAddr(), inst->physEffAddr);
         if (Debug::NoSQPred) {
             std::cout << " with history: "
                       << inst->memPredHistory->patternInfo.localHistory << "\n";
@@ -1759,7 +1752,7 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
             if (!violation) {
                 if (!inst->memPredHistory->updated) {
                     DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should%s bypass with distance %i\n",
-                            inst->seqNum, inst->instAddr(), inst->physEffAddrLow,
+                            inst->seqNum, inst->instAddr(), inst->physEffAddr,
                             inst->memPredHistory->bypass ? "" : " not", ssn_dist);
                     if (Debug::NoSQPred) {
                         std::cout << " with history: "
@@ -1768,13 +1761,13 @@ void FFDIEWC<Impl>::instToWriteback(DynInstPtr &inst)
                 }
                 mDepPred->checkSilentViolation(
                         inst->seqNum,
-                        inst->instAddr(), inst->physEffAddrLow, inst->effSize,
+                        inst->instAddr(), inst->physEffAddr, inst->effSize,
                         cell,
                         ssn_dist, dq_dist,
                         *(inst->memPredHistory));
             } else {
                 DPRINTF(NoSQPred, "Load[%lu] with pc:0x%lx, addr 0x%lx should bypass with distance %i\n",
-                        inst->seqNum, inst->instAddr(), inst->physEffAddrLow, ssn_dist);
+                        inst->seqNum, inst->instAddr(), inst->physEffAddr, ssn_dist);
                 if (Debug::NoSQPred) {
                     std::cout << " with history: "
                               << inst->memPredHistory->patternInfo.localHistory << "\n";
@@ -1901,7 +1894,6 @@ template<class Impl>
 void FFDIEWC<Impl>::resetEntries()
 {
     dq.resetEntries();
-    ldstQueue.resetEntries();
 }
 
 template<class Impl>
@@ -1940,7 +1932,7 @@ typename Impl::DynInstPtr FFDIEWC<Impl>::readTailInst(ThreadID tid)
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::checkMisprediction(DynInstPtr &inst)
+void FFDIEWC<Impl>::checkMisprediction(const DynInstPtr &inst)
 {
     if (!fetchRedirect ||
         !toNextCycle->diewc2diewc.squash ||
@@ -1969,7 +1961,7 @@ void FFDIEWC<Impl>::checkMisprediction(DynInstPtr &inst)
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::squashDueToBranch(DynInstPtr &inst)
+void FFDIEWC<Impl>::squashDueToBranch(const DynInstPtr &inst)
 {
     if (!toNextCycle->diewc2diewc.squash ||
             inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum) {
@@ -2155,7 +2147,6 @@ void FFDIEWC<Impl>::regStats()
         ;
 
     dq.regStats();
-    ldstQueue.regStats();
     archState.regStats();
 
     iewExecutedInsts
@@ -2334,7 +2325,7 @@ void FFDIEWC<Impl>::setAllocQueue(TimeBuffer<AllocationStruct> *aq_ptr)
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
+void FFDIEWC<Impl>::executeInst(const DynInstPtr &inst)
 {
     assert(inst);
     DPRINTF(DIEWC||Debug::RSProbe1 || Debug::FFExec || Debug::ObExec,
@@ -2507,7 +2498,7 @@ void FFDIEWC<Impl>::executeInst(DynInstPtr &inst)
 
 template<class Impl>
 void
-FFDIEWC<Impl>::squashDueToMemMissPred(DynInstPtr &violator)
+FFDIEWC<Impl>::squashDueToMemMissPred(const DynInstPtr &violator)
 {
     DPRINTF(DIEWC, "Memory violation, squashing violator and younger "
                  "insts, PC: %s [sn:%i].\n", violator->pcState(), violator->seqNum);
@@ -2692,7 +2683,7 @@ void FFDIEWC<Impl>::checkDQHalfSquash()
 }
 
 template<class Impl>
-void FFDIEWC<Impl>:: updateExeInstStats(DynInstPtr &inst)
+void FFDIEWC<Impl>:: updateExeInstStats(const DynInstPtr &inst)
 {
     iewExecutedInsts++;
 
@@ -2718,7 +2709,7 @@ void FFDIEWC<Impl>::setFanoutPred(FanoutPred *fanoutPred1)
 template<class Impl>
 typename Impl::DynInstPtr
 FFDIEWC<Impl>::insertForwarder(
-        DynInstPtr &parent_inst, DynInstPtr &anchor)
+        const DynInstPtr &parent_inst, const DynInstPtr &anchor)
 {
     const RegId &lf_reg = parent_inst->staticInst->destRegIdx(0);
 
@@ -2732,7 +2723,6 @@ FFDIEWC<Impl>::insertForwarder(
             anchor->seqNum + (++anchor->numFollowingFw), cpu);
 
     forwarder->setTid(DummyTid);
-    forwarder->setASID(DummyTid);
     forwarder->setThreadState(cpu->thread[DummyTid]);
 
     forwarder->setInstListIt(cpu->addInstAfter(forwarder,
@@ -2773,7 +2763,7 @@ FFDIEWC<Impl>::tryResetRef()
 
 template<class Impl>
 void
-FFDIEWC<Impl>::setUpLoad(DynInstPtr &inst)
+FFDIEWC<Impl>::setUpLoad(const DynInstPtr &inst)
 {
     const MemPredHistory &hist = *(inst->memPredHistory);
     if (hist.bypass) {
@@ -2796,7 +2786,7 @@ FFDIEWC<Impl>::setStoreCompleted(InstSeqNum sn, Addr eff_addr, InstSeqNum ssn)
 }
 
 template<class Impl>
-bool FFDIEWC<Impl>::checkViolation(FFDIEWC::DynInstPtr &inst)
+bool FFDIEWC<Impl>::checkViolation(const FFDIEWC::DynInstPtr &inst)
 {
     assert(inst->isLoad());
     if (inst->isNormalBypass()) {
@@ -2839,7 +2829,7 @@ void FFDIEWC<Impl>::readInstsToCommit()
 }
 
 template<class Impl>
-void FFDIEWC<Impl>::squashLoad(FFDIEWC::DynInstPtr &inst)
+void FFDIEWC<Impl>::squashLoad(const FFDIEWC::DynInstPtr &inst)
 {
     DPRINTF(NoSQPred, "Squashing load: %lu\n", inst->seqNum);
     mDepPred->squashLoad(inst->instAddr(), *(inst->memPredHistory));

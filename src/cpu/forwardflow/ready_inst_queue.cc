@@ -68,14 +68,14 @@ ReadyInstsQueue<Impl>::insert(std::list<DynInstPtr> &q, DynInstPtr inst)
 
 template<class Impl>
 void
-ReadyInstsQueue<Impl>::insertInst(OpGroups group, DynInstPtr &inst)
+ReadyInstsQueue<Impl>::insertInst(OpGroups group, const DynInstPtr &inst)
 {
     insert(preScheduledQueues[group], inst);
 }
 
 template<class Impl>
 void
-ReadyInstsQueue<Impl>::insertEmpirically(DynInstPtr &inst)
+ReadyInstsQueue<Impl>::insertEmpirically(const DynInstPtr &inst)
 {
     size_t md_size = preScheduledQueues[OpGroups::MultDiv].size(),
            fa_size = preScheduledQueues[OpGroups::FPAdd].size();

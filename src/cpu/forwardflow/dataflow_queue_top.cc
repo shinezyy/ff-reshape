@@ -109,7 +109,7 @@ void DQTop<Impl>::tick()
 }
 
 template<class Impl>
-void DQTop<Impl>::replayMemInst(DynInstPtr &inst)
+void DQTop<Impl>::replayMemInst(const DynInstPtr &inst)
 {
     memDepUnit.replay();
 }
@@ -131,7 +131,7 @@ void DQTop<Impl>::scheduleNonSpec()
 
 template<class Impl>
 std::pair<bool, bool>
-DQTop<Impl>::reExecTailLoad(DynInstPtr &inst, bool is_tail)
+DQTop<Impl>::reExecTailLoad(const DynInstPtr &inst, bool is_tail)
 {
     bool re_executed = false, bypass_canceled = false;
     assert(inst);
@@ -337,7 +337,7 @@ bool DQTop<Impl>::validPosition(unsigned u) const
 
 template<class Impl>
 std::pair<bool, PointerPair>
-DQTop<Impl>::insertBarrier(DynInstPtr &inst)
+DQTop<Impl>::insertBarrier(const DynInstPtr &inst)
 {
     memDepUnit.insertBarrier(inst);
     return insertNonSpec(inst);
@@ -345,7 +345,7 @@ DQTop<Impl>::insertBarrier(DynInstPtr &inst)
 
 template<class Impl>
 std::pair<bool, PointerPair>
-DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
+DQTop<Impl>::insertNonSpec(const DynInstPtr &inst)
 {
     bool non_spec = false;
     if (inst->isStoreConditional() || inst->isLoadReserved()) {
@@ -360,7 +360,7 @@ DQTop<Impl>::insertNonSpec(DynInstPtr &inst)
 
 template<class Impl>
 std::pair<bool, PointerPair>
-DQTop<Impl>::insert(DynInstPtr &inst, bool non_spec)
+DQTop<Impl>::insert(const DynInstPtr &inst, bool non_spec)
 {
     // TODO: this is centralized now; Decentralize it with buffers
     // todo: send to allocated DQ position
@@ -646,7 +646,7 @@ void DQTop<Impl>::setDIEWC(DIEWC *_diewc)
 }
 
 template<class Impl>
-void DQTop<Impl>::deferMemInst(DynInstPtr &inst)
+void DQTop<Impl>::deferMemInst(const DynInstPtr &inst)
 {
     deferredMemInsts.push_back(inst);
 }
@@ -682,7 +682,7 @@ typename Impl::DynInstPtr DQTop<Impl>::getBlockedMemInst()
 
 
 template<class Impl>
-void DQTop<Impl>::rescheduleMemInst(DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive)
+void DQTop<Impl>::rescheduleMemInst(const DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive)
 {
     DPRINTF(DQ, "Marking inst[%llu] as need rescheduling\n", inst->seqNum);
     inst->translationStarted(false);
@@ -717,7 +717,7 @@ void DQTop<Impl>::replayMemInsts()
 }
 
 template<class Impl>
-void DQTop<Impl>::blockMemInst(DynInstPtr &inst)
+void DQTop<Impl>::blockMemInst(const DynInstPtr &inst)
 {
     inst->translationStarted(false);
     inst->translationCompleted(false);
@@ -747,7 +747,7 @@ void DQTop<Impl>::cacheUnblocked()
 }
 
 template<class Impl>
-bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
+bool DQTop<Impl>::writebackLoad(const DynInstPtr &inst)
 {
     DPRINTF(DQWake, "Writeback Load[%lu]\n", inst->seqNum);
     bool not_verifying = !inst->isNormalBypass() && // if bypassOp writebackLoad must be verifying
@@ -777,7 +777,7 @@ bool DQTop<Impl>::writebackLoad(DynInstPtr &inst)
 }
 
 template<class Impl>
-void DQTop<Impl>::completeMemInst(DynInstPtr &inst)
+void DQTop<Impl>::completeMemInst(const DynInstPtr &inst)
 {
     inst->receivedDest = true;
     if (inst->isMemRef()) {
@@ -1117,7 +1117,7 @@ void DQTop<Impl>::clearPairBuffer()
 }
 
 template<class Impl>
-void DQTop<Impl>::schedSwitchDispatchingGroup(DynInstPtr &inst)
+void DQTop<Impl>::schedSwitchDispatchingGroup(const DynInstPtr &inst)
 {
     switchOn = inst;
     switchDispGroup = true;
@@ -1181,7 +1181,7 @@ void DQTop<Impl>::checkSanity() const
 }
 
 template<class Impl>
-void DQTop<Impl>::squashLoad(DQTop::DynInstPtr &inst)
+void DQTop<Impl>::squashLoad(const DQTop::DynInstPtr &inst)
 {
     diewc->squashLoad(inst);
 }

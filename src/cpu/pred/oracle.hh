@@ -96,8 +96,9 @@ class OracleBP : public BPredUnit
      * @param branch_addr The address of the branch to update.
      * @param taken Whether or not the branch was taken.
      */
-    void update(ThreadID tid, Addr branch_addr, bool taken, void *bp_history,
-                bool squashed) override;
+    void update(ThreadID tid, Addr branch_addr, bool taken,
+            void *bp_history, bool squashed,
+            const StaticInstPtr &inst, Addr corrTarget) override;
 
     void squash(ThreadID tid, void *bp_history) override;
 

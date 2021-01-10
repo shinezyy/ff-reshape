@@ -99,7 +99,7 @@ bool ZPerceptron::lookup(ThreadID tid, Addr branch_addr, void *&bp_bistory) {
 
 
 void ZPerceptron::update(ThreadID tid, Addr branch_addr, bool taken,
-        void *bp_history, bool squashed) {
+        void *bp_history, bool squashed, const StaticInstPtr &inst, Addr corrTarget) {
     auto history = static_cast<BPHistory *>(bp_history);
 
     auto index = computeIndex(branch_addr);

@@ -107,7 +107,7 @@ public:
 
     DynInstPtr readInstsFromBank(const BasePointer &pointer) const;
 
-    void writeInstsToBank(const BasePointer &pointer, DynInstPtr &inst);
+    void writeInstsToBank(const BasePointer &pointer, const DynInstPtr &inst);
 
     void checkReadiness(BasePointer pointer);
 
@@ -135,7 +135,7 @@ public:
 
     void cycleStart();
 
-    void clearPending(DynInstPtr &inst);
+    void clearPending(const DynInstPtr &inst);
 
     DQPointer extraWakeupPointer;
 

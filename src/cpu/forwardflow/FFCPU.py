@@ -49,6 +49,7 @@ from m5.objects.FFChecker import FFChecker
 from m5.objects.BranchPredictor import *
 from m5.objects.MemDepPredictor import *
 from m5.objects.LoopBuffer import *
+from m5.objects.O3CPU import FetchPolicy, SMTQueuePolicy, CommitPolicy
 
 coreWidth = 4
 
@@ -162,8 +163,9 @@ class DerivFFCPU(BaseCPU):
     numROBEntries = Param.Unsigned(224, "Number of reorder buffer entries")
 
     smtNumFetchingThreads = Param.Unsigned(1, "SMT Number of Fetching Threads")
-    smtFetchPolicy = Param.String('SingleThread', "SMT Fetch policy")
-    smtLSQPolicy    = Param.String('Partitioned', "SMT LSQ Sharing Policy")
+    smtFetchPolicy = Param.FetchPolicy('SingleThread', "SMT Fetch policy")
+    smtLSQPolicy    = Param.SMTQueuePolicy('Partitioned',
+            "SMT LSQ Sharing Policy")
     smtLSQThreshold = Param.Int(100, "SMT LSQ Threshold Sharing Parameter")
     smtIQPolicy    = Param.String('Partitioned', "SMT IQ Sharing Policy")
     smtIQThreshold = Param.Int(100, "SMT IQ Threshold Sharing Parameter")

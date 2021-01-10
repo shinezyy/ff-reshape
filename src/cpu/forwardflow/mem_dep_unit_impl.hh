@@ -124,7 +124,7 @@ MemDepUnit<MemDepPred, Impl>::setIQ(InstructionQueue *iq_ptr)
 
 template <class MemDepPred, class Impl>
 PointerPair
-MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
+MemDepUnit<MemDepPred, Impl>::insert(const DynInstPtr &inst)
 {
     // Check any barriers and the dependence predictor for any
     // producing memrefs/stores.
@@ -214,14 +214,14 @@ MemDepUnit<MemDepPred, Impl>::insert(DynInstPtr &inst)
 
 template <class MemDepPred, class Impl>
 void
-MemDepUnit<MemDepPred, Impl>::insertNonSpec(DynInstPtr &inst)
+MemDepUnit<MemDepPred, Impl>::insertNonSpec(const DynInstPtr &inst)
 {
 
 }
 
 template <class MemDepPred, class Impl>
 void
-MemDepUnit<MemDepPred, Impl>::insertBarrier(DynInstPtr &barr_inst)
+MemDepUnit<MemDepPred, Impl>::insertBarrier(const DynInstPtr &barr_inst)
 {
     InstSeqNum barr_sn = barr_inst->seqNum;
     // Memory barriers block loads and stores, write barriers only stores.
@@ -243,7 +243,7 @@ MemDepUnit<MemDepPred, Impl>::insertBarrier(DynInstPtr &barr_inst)
 
 template <class MemDepPred, class Impl>
 void
-MemDepUnit<MemDepPred, Impl>::reschedule(DynInstPtr &inst)
+MemDepUnit<MemDepPred, Impl>::reschedule(const DynInstPtr &inst)
 {
     instsToReplay.push_back(inst);
 }
@@ -268,7 +268,7 @@ MemDepUnit<MemDepPred, Impl>::replay()
 
 template <class MemDepPred, class Impl>
 void
-MemDepUnit<MemDepPred, Impl>::completeBarrier(DynInstPtr &inst)
+MemDepUnit<MemDepPred, Impl>::completeBarrier(const DynInstPtr &inst)
 {
     InstSeqNum barr_sn = inst->seqNum;
     DPRINTF(MemDepUnit, "barrier completed: %s SN:%lli\n", inst->pcState(),
@@ -320,7 +320,7 @@ MemDepUnit<MemDepPred, Impl>::squash(const InstSeqNum &squashed_num,
 
 template <class MemDepPred, class Impl>
 inline void
-MemDepUnit<MemDepPred, Impl>::moveToReady(DynInstPtr &woken_inst)
+MemDepUnit<MemDepPred, Impl>::moveToReady(const DynInstPtr &woken_inst)
 {
     DPRINTF(MemDepUnit, "Notify DQ to wakeup [sn:%lli].\n",
             woken_inst->seqNum);

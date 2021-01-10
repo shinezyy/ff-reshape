@@ -48,8 +48,6 @@ from m5.objects.O3Checker import O3Checker
 from m5.objects.BranchPredictor import *
 from m5.objects.BaseCPU import BaseCPU
 from m5.objects.FUPool import *
-from m5.objects.O3Checker import O3Checker
-from m5.objects.BranchPredictor import *
 from m5.objects.BranchTrace import *
 from m5.objects.LoopBuffer import *
 

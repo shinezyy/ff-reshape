@@ -48,8 +48,8 @@
 #include "base/str.hh"
 #include "config/the_isa.hh"
 #include "cpu/checker/cpu.hh"
-#include "cpu/o3/lsq.hh"
-#include "cpu/o3/lsq_unit.hh"
+#include "cpu/forwardflow/lsq.hh"
+#include "cpu/forwardflow/lsq_unit.hh"
 #include "debug/Activity.hh"
 #include "debug/DIEWC.hh"
 #include "debug/FFSquash.hh"
@@ -60,6 +60,8 @@
 #include "debug/O3PipeView.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
+
+namespace FF{
 
 template<class Impl>
 LSQUnit<Impl>::WritebackEvent::WritebackEvent(const DynInstPtr &_inst,
@@ -221,7 +223,7 @@ LSQUnit<Impl>::LSQUnit(uint32_t lqEntries, uint32_t sqEntries)
 
 template<class Impl>
 void
-LSQUnit<Impl>::init(O3CPU *cpu_ptr, IEW *iew_ptr, DerivO3CPUParams *params,
+LSQUnit<Impl>::init(O3CPU *cpu_ptr, IEW *iew_ptr, DerivFFCPUParams *params,
         LSQ *lsq_ptr, unsigned id)
 {
     lsqID = id;
@@ -640,7 +642,6 @@ LSQUnit<Impl>::executeLoad(const DynInstPtr &inst)
         assert(inst->readPredicate());
         inst->setExecuted();
         inst->completeAcc(nullptr);
-        iewStage->instToCommit(inst);
         iewStage->instToWriteback(inst);
         iewStage->activityThisCycle();
         return NoFault;
@@ -676,7 +677,7 @@ LSQUnit<Impl>::executeLoad(const DynInstPtr &inst)
             inst->isAtCommit()) {
             inst->setExecuted();
         }
-        iewStage->instToCommit(inst);
+        iewStage->instToWriteback(inst);
         iewStage->activityThisCycle();
     } else {
         if (inst->effAddrValid()) {
@@ -1042,7 +1043,6 @@ LSQUnit<Impl>::squash(const InstSeqNum &squashed_num)
         memDepViolator = NULL;
     }
 
-    unsigned squashed_store = 0;
     while (stores != 0 &&
            storeQueue.back().instruction()->seqNum > squashed_num) {
         // Instructions marked as can WB are already committed.
@@ -1204,8 +1204,7 @@ LSQUnit<Impl>::completeStore(typename StoreQueue::iterator store_idx)
         iewStage->updateLSQNextCycle = true;
     }
 
-    iewStage->setStoreCompleted(storeQueue[store_idx].inst->seqNum);
-
+    iewStage->setStoreCompleted(store_inst->seqNum, store_inst->physEffAddr, store_inst->storeSeq);
 
     DPRINTF(LSQUnit, "Completing store [sn:%lli], idx:%i, store head "
             "idx:%i\n",
@@ -1325,6 +1324,8 @@ unsigned int
 LSQUnit<Impl>::cacheLineSize()
 {
     return cpu->cacheLineSize();
+}
+
 }
 
 #endif//__CPU_O3_LSQ_UNIT_IMPL_HH__

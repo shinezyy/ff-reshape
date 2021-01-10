@@ -22,7 +22,7 @@ namespace FF
 using namespace std;
 
 template<class Impl>
-std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(DynInstPtr &inst)
+std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(const DynInstPtr &inst)
 {
     unsigned num_src_regs = inst->numSrcRegs();
 
@@ -383,7 +383,7 @@ uint64_t ArchState<Impl>::readFloatRegBits(int reg_idx)
 }
 
 template<class Impl>
-bool ArchState<Impl>::takeCheckpoint(DynInstPtr &inst)
+bool ArchState<Impl>::takeCheckpoint(const DynInstPtr &inst)
 {
     DPRINTF(FFSquash, "Take checkpoint on inst[%llu] %s pc:%s\n",
             inst->seqNum, inst->staticInst->disassemble(inst->instAddr()),
@@ -404,7 +404,7 @@ bool ArchState<Impl>::takeCheckpoint(DynInstPtr &inst)
 }
 
 template<class Impl>
-void ArchState<Impl>::recoverCPT(DynInstPtr &inst)
+void ArchState<Impl>::recoverCPT(const DynInstPtr &inst)
 {
     recoverCPT(inst->seqNum);
 }
@@ -469,7 +469,7 @@ bool ArchState<Impl>::checkpointsFull()
 }
 
 template<class Impl>
-pair<bool, FFRegValue> ArchState<Impl>::commitInst(DynInstPtr &inst)
+pair<bool, FFRegValue> ArchState<Impl>::commitInst(const DynInstPtr &inst)
 {
     InstSeqNum num = inst->seqNum;
 
@@ -543,7 +543,7 @@ void ArchState<Impl>::setDQ(DQTop *_dq)
 template<class Impl>
 bool
 ArchState<Impl>::commitInstInSB(
-        DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest)
+        const DynInstPtr &inst, Scoreboard &sb, ReverseTable &rt, const RegId &dest)
 {
     bool ret = false;
     SBIndex idx = make_pair(dest.classValue(), dest.index());
@@ -628,7 +628,7 @@ void ArchState<Impl>::dumpMaps()
 
 template<class Impl>
 std::pair<bool, bool>
-ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forward)
+ArchState<Impl>::forwardAfter(const DynInstPtr &inst, std::list<DynInstPtr> &need_forward)
 {
     bool is_lf_source = false;
     bool is_lf_drain = false;
@@ -689,7 +689,7 @@ ArchState<Impl>::forwardAfter(DynInstPtr &inst, std::list<DynInstPtr> &need_forw
 
 template<class Impl>
 void
-ArchState<Impl>::randomizeOp(DynInstPtr &inst)
+ArchState<Impl>::randomizeOp(const DynInstPtr &inst)
 {
     if (inst->isNormalStore() ||
         inst->isRVAmoLoadHalf() || inst->isRVAmoStoreHalf() ||
@@ -707,7 +707,7 @@ ArchState<Impl>::randomizeOp(DynInstPtr &inst)
 
 template<class Impl>
 void
-ArchState<Impl>::postExecInst(DynInstPtr &inst) {
+ArchState<Impl>::postExecInst(const DynInstPtr &inst) {
     FFRegValue val = FFRegValue();
     if (inst->numDestRegs() > 0) {
         // in RV it must be 1
@@ -744,7 +744,7 @@ ArchState<Impl>::postExecInst(DynInstPtr &inst) {
 
 template<class Impl>
 void
-ArchState<Impl>::countChild(DQPointer parent_ptr, DynInstPtr &inst)
+ArchState<Impl>::countChild(DQPointer parent_ptr, const DynInstPtr &inst)
 {
     DynInstPtr parent = dq->readInst(parent_ptr);
     if (!parent) {

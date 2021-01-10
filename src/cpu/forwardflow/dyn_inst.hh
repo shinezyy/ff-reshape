@@ -218,7 +218,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     bool simPalCheck(int palFunc);
 
     /** Emulates a syscall. */
-    void syscall(int64_t callnum, Fault *fault);
+    void syscall();
 
   public:
 

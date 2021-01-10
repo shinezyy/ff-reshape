@@ -45,14 +45,12 @@
  */
 #include "cpu/forwardflow/cpu.hh"
 #include "arch/generic/traits.hh"
-#include "arch/kernel_stats.hh"
 #include "config/the_isa.hh"
 #include "cpu/activity.hh"
 #include "cpu/checker/cpu.hh"
 #include "cpu/checker/thread_context.hh"
 #include "cpu/forwardflow/isa_specific.hh"
 #include "cpu/forwardflow/thread_context.hh"
-#include "cpu/quiesce_event.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Activity.hh"
@@ -70,11 +68,6 @@
 #include "sim/stat_control.hh"
 #include "sim/system.hh"
 
-#if THE_ISA == ALPHA_ISA
-#include "arch/alpha/osfpal.hh"
-#include "debug/Activity.hh"
-
-#endif
 
 struct BaseCPUParams;
 
@@ -155,10 +148,6 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
       decode(this, params),
       allocation(this, params),
       diewc(this, params),
-
-      /* It is mandatory that all SMT threads use the same renaming mode as
-       * they are sharing registers and rename */
-      vecMode(initRenameMode<TheISA::ISA>::mode(params->isa[0])),
 
       isa(numThreads, NULL),
 
@@ -305,9 +294,6 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
         assert(o3_tc->cpu);
         o3_tc->thread = this->thread[tid];
 
-        // Setup quiesce event.
-        this->thread[tid]->quiesceEvent = new ::EndQuiesceEvent(tc);
-
         // Give the thread the TC.
         this->thread[tid]->tc = tc;
 
@@ -322,7 +308,7 @@ FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
     }
 
     for (ThreadID tid = 0; tid < this->numThreads; tid++) {
-        isa[tid] = params->isa[tid];
+        isa[tid] = dynamic_cast<TheISA::ISA *>(params->isa[tid]);
         this->thread[tid]->setFuncExeInst(0);
     }
 }
@@ -411,7 +397,6 @@ FFCPU<Impl>::regStats()
         .precision(6);
     totalIpc =  sum(committedInsts) / numCycles;
 
-    this->fetch.regStats();
     this->decode.regStats();
     this->allocation.regStats();
     this->diewc.regStats();
@@ -544,13 +529,6 @@ FFCPU<Impl>::init()
         thread[tid]->initMemProxies(thread[tid]->getTC());
     }
 
-    if (FullSystem && !params()->switched_out) {
-        for (ThreadID tid = 0; tid < numThreads; tid++) {
-            ThreadContext *src_tc = threadContexts[tid];
-            TheISA::initCPU(src_tc, src_tc->contextId());
-        }
-    }
-
     // Clear noSquashFromTC.
     for (int tid = 0; tid < numThreads; ++tid)
         thread[tid]->noSquashFromTC = false;
@@ -563,8 +541,6 @@ void
 FFCPU<Impl>::startup()
 {
     BaseCPU::startup();
-    for (int tid = 0; tid < numThreads; ++tid)
-        isa[tid]->startup(threadContexts[tid]);
 
     fetch.startupStage();
     decode.startupStage();
@@ -720,7 +696,7 @@ FFCPU<Impl>::insertThread(ThreadID tid)
     // and not in the ThreadContext.
     ThreadContext *src_tc;
     if (FullSystem)
-        src_tc = system->threadContexts[tid];
+        src_tc = system->threads[tid];
     else
         src_tc = tcBase(tid);
 
@@ -783,14 +759,6 @@ template <class Impl>
 Fault
 FFCPU<Impl>::hwrei(ThreadID tid)
 {
-#if THE_ISA == ALPHA_ISA
-    // Need to clear the lock flag upon returning from an interrupt.
-    this->setMiscRegNoEffect(AlphaISA::MISCREG_LOCKFLAG, false, tid);
-
-    this->thread[tid]->kernelStats->hwrei();
-
-    // FIXME: XXX check for interrupts? XXX
-#endif
     return NoFault;
 }
 
@@ -798,25 +766,6 @@ template <class Impl>
 bool
 FFCPU<Impl>::simPalCheck(int palFunc, ThreadID tid)
 {
-#if THE_ISA == ALPHA_ISA
-    if (this->thread[tid]->kernelStats)
-        this->thread[tid]->kernelStats->callpal(palFunc,
-                                                this->threadContexts[tid]);
-
-    switch (palFunc) {
-      case PAL::halt:
-        halt();
-        if (--System::numSystemsRunning == 0)
-            exitSimLoop("all cpus halted");
-        break;
-
-      case PAL::bpt:
-      case PAL::bugchk:
-        if (this->system->breakpoint())
-            return false;
-        break;
-    }
-#endif
     return true;
 }
 
@@ -825,7 +774,7 @@ Fault
 FFCPU<Impl>::getInterrupts()
 {
     // Check if there are any outstanding interrupts
-    return this->interrupts[0]->getInterrupt(this->threadContexts[0]);
+    return this->interrupts[0]->getInterrupt();
 }
 
 template <class Impl>
@@ -839,7 +788,7 @@ FFCPU<Impl>::processInterrupts(const Fault &interrupt)
     // @todo: Allow other threads to handle interrupts.
 
     assert(interrupt != NoFault);
-    this->interrupts[0]->updateIntrInfo(this->threadContexts[0]);
+    this->interrupts[0]->updateIntrInfo();
 
     DPRINTF(FFCPU, "Interrupt %s being handled\n", interrupt->name());
     this->trap(interrupt, 0, nullptr);
@@ -856,7 +805,7 @@ FFCPU<Impl>::trap(const Fault &fault, ThreadID tid,
 
 template <class Impl>
 void
-FFCPU<Impl>::syscall(int64_t callnum, ThreadID tid, Fault *fault)
+FFCPU<Impl>::syscall(ThreadID tid)
 {
     DPRINTF(FFCPU, "[tid:%i] Executing syscall().\n\n", tid);
 
@@ -867,7 +816,7 @@ FFCPU<Impl>::syscall(int64_t callnum, ThreadID tid, Fault *fault)
     ++(this->thread[tid]->funcExeInst);
 
     // Execute the actual syscall.
-    this->thread[tid]->syscall(callnum, fault);
+    this->thread[tid]->syscall();
 
     // Decrease funcExeInst by one as the normal commit will handle
     // incrementing it.
@@ -1089,7 +1038,7 @@ FFCPU<Impl>::verifyMemoryMode() const
 }
 
 template <class Impl>
-TheISA::MiscReg
+RegVal
 FFCPU<Impl>::readMiscRegNoEffect(int misc_reg, ThreadID tid) const
 {
     DPRINTF(FFExec, "reading misc reg with no effect\n");
@@ -1097,19 +1046,19 @@ FFCPU<Impl>::readMiscRegNoEffect(int misc_reg, ThreadID tid) const
 }
 
 template <class Impl>
-TheISA::MiscReg
+RegVal
 FFCPU<Impl>::readMiscReg(int misc_reg, ThreadID tid)
 {
     DPRINTF(FFExec, "reading misc reg for tid %i\n", tid);
     assert(this->isa[tid]);
     miscRegfileReads++;
-    return this->isa[tid]->readMiscReg(misc_reg, tcBase(tid));
+    return this->isa[tid]->readMiscReg(misc_reg);
 }
 
 template <class Impl>
 void
 FFCPU<Impl>::setMiscRegNoEffect(int misc_reg,
-        const TheISA::MiscReg &val, ThreadID tid)
+        const RegVal &val, ThreadID tid)
 {
     this->isa[tid]->setMiscRegNoEffect(misc_reg, val);
 }
@@ -1117,10 +1066,10 @@ FFCPU<Impl>::setMiscRegNoEffect(int misc_reg,
 template <class Impl>
 void
 FFCPU<Impl>::setMiscReg(int misc_reg,
-        const TheISA::MiscReg &val, ThreadID tid)
+        const RegVal &val, ThreadID tid)
 {
     miscRegfileWrites++;
-    this->isa[tid]->setMiscReg(misc_reg, val, tcBase(tid));
+    this->isa[tid]->setMiscReg(misc_reg, val);
 }
 
 
@@ -1176,7 +1125,7 @@ FFCPU<Impl>::readArchVecElem(const RegIndex& reg_idx, const ElemIndex& ldx,
 }
 
 template <class Impl>
-CCReg
+RegVal
 FFCPU<Impl>::readArchCCReg(int reg_idx, ThreadID tid)
 {
     panic("No CC support in RV-ForwardFlow");
@@ -1231,7 +1180,7 @@ FFCPU<Impl>::setArchVecElem(const RegIndex& reg_idx, const ElemIndex& ldx,
 
 template <class Impl>
 void
-FFCPU<Impl>::setArchCCReg(int reg_idx, CCReg val, ThreadID tid)
+FFCPU<Impl>::setArchCCReg(int reg_idx, RegVal val, ThreadID tid)
 {
     panic("No CC support in RV-ForwardFlow");
 }
@@ -1281,7 +1230,7 @@ FFCPU<Impl>::squashFromTC(ThreadID tid)
 
 template <class Impl>
 typename FFCPU<Impl>::ListIt
-FFCPU<Impl>::addInst(DynInstPtr &inst)
+FFCPU<Impl>::addInst(const DynInstPtr &inst)
 {
     instList.push_back(inst);
 
@@ -1290,7 +1239,7 @@ FFCPU<Impl>::addInst(DynInstPtr &inst)
 
 template <class Impl>
 typename FFCPU<Impl>::ListIt
-FFCPU<Impl>::addInstAfter(DynInstPtr &inst, ListIt anchor)
+FFCPU<Impl>::addInstAfter(const DynInstPtr &inst, ListIt anchor)
 {
     auto younger = std::next(anchor);
 
@@ -1306,32 +1255,31 @@ FFCPU<Impl>::addInstAfter(DynInstPtr &inst, ListIt anchor)
 
 template <class Impl>
 void
-FFCPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
+FFCPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
 {
     // Keep an instruction count.
     if ((!inst->isMicroop() || inst->isLastMicroop()) &&
             !inst->isForwarder()) {
         thread[tid]->numInst++;
-        thread[tid]->numInsts++;
+        thread[tid]->threadStats.numInsts++;
         committedInsts[tid]++;
         system->totalNumInsts++;
 
         // Check for instruction-count-based events.
-        comInstEventQueue[tid]->serviceEvents(thread[tid]->numInst);
-        system->instEventQueue.serviceEvents(system->totalNumInsts);
+        thread[tid]->comInstEventQueue.serviceEvents(thread[tid]->numInst);
     }
     if (!inst->isForwarder()) {
         thread[tid]->numOp++;
-        thread[tid]->numOps++;
+        thread[tid]->threadStats.numOps++;
         committedOps[tid]++;
     }
 
-    probeInstCommit(inst->staticInst);
+    probeInstCommit(inst->staticInst, inst->instAddr());
 }
 
 template <class Impl>
 void
-FFCPU<Impl>::removeFrontInst(DynInstPtr &inst)
+FFCPU<Impl>::removeFrontInst(const DynInstPtr &inst)
 {
     DPRINTF(FFCommit, "Adding committed instruction PC %s "
             "[sn:%lli] to remove list @addr: %p\n",

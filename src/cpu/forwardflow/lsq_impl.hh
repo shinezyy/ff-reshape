@@ -47,19 +47,21 @@
 #include <string>
 
 #include "base/logging.hh"
-#include "cpu/o3/cpu.hh"
-#include "cpu/o3/lsq.hh"
+#include "cpu/forwardflow/cpu.hh"
+#include "cpu/forwardflow/lsq.hh"
 #include "debug/Drain.hh"
 #include "debug/Fetch.hh"
 #include "debug/HtmCpu.hh"
 #include "debug/LSQ.hh"
 #include "debug/Writeback.hh"
-#include "params/DerivO3CPU.hh"
+#include "params/DerivFFCPU.hh"
+
+namespace FF{
 
 using namespace std;
 
 template <class Impl>
-LSQ<Impl>::LSQ(O3CPU *cpu_ptr, IEW *iew_ptr, DerivO3CPUParams *params)
+LSQ<Impl>::LSQ(O3CPU *cpu_ptr, IEW *iew_ptr, DerivFFCPUParams *params)
     : cpu(cpu_ptr), iewStage(iew_ptr),
       _cacheBlocked(false),
       cacheStorePorts(params->cacheStorePorts), usedStorePorts(0),
@@ -1292,6 +1294,8 @@ LSQ<Impl>::HtmCmdRequest::finish(const Fault &fault, const RequestPtr &req,
         ThreadContext* tc, BaseTLB::Mode mode)
 {
     panic("unexpected behaviour");
+}
+
 }
 
 #endif//__CPU_O3_LSQ_IMPL_HH__

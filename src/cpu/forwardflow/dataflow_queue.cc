@@ -273,7 +273,7 @@ void DataflowQueues<Impl>::cycleStart()
 template<class Impl>
 std::pair<unsigned, boost::dynamic_bitset<> >
 DataflowQueues<Impl>::coordinateFU(
-        DataflowQueues::DynInstPtr &inst, unsigned from)
+        const DataflowQueues::DynInstPtr &inst, unsigned from)
 {
     // find another FU group with desired capability.
     DPRINTF(FUW, "Coordinating req %u.%u  with llb:%i\n", from/2, from%2, llBlocked);
@@ -475,7 +475,7 @@ void DataflowQueues<Impl>::squashReady(InstSeqNum seq)
 template<class Impl>
 void
 DataflowQueues<Impl>::markFwPointers(
-        std::array<DQPointer, 4> &pointers, PointerPair &pair, DynInstPtr &inst)
+        std::array<DQPointer, 4> &pointers, PointerPair &pair, const DynInstPtr &inst)
 {
     unsigned op = pair.dest.op;
 
@@ -1315,7 +1315,7 @@ DataflowQueues<Impl>::genFUValidMask()
 
 template<class Impl>
 void
-DataflowQueues<Impl>::countCycles(typename Impl::DynInstPtr &inst, WKPointer *wk)
+DataflowQueues<Impl>::countCycles(const typename Impl::DynInstPtr &inst, WKPointer *wk)
 {
     inst->ssrDelay = wk->ssrDelay;
     inst->queueingDelay = wk->queueTime;
@@ -1931,7 +1931,7 @@ void DataflowQueues<Impl>::checkSanity() const
 template<class Impl>
 void DataflowQueues<Impl>::pointerMeetsInst(
         TermedPointer &pointer, PointerPair &pair,
-        DataflowQueues::DynInstPtr &inst, unsigned op, bool adapting_premature)
+        const DataflowQueues::DynInstPtr &inst, unsigned op, bool adapting_premature)
 {
     bool value_available = false;
 

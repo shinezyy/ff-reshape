@@ -130,6 +130,7 @@ class FFCPU : public BaseO3CPU
 
     BaseTLB *itb;
     BaseTLB *dtb;
+    using LSQRequest = typename LSQ<Impl>::LSQRequest;
 
     /** Overall CPU status. */
     Status _status;
@@ -139,7 +140,7 @@ class FFCPU : public BaseO3CPU
     /**
      * IcachePort class for instruction fetch.
      */
-    class IcachePort : public MasterPort
+    class IcachePort : public RequestPort
     {
       protected:
         /** Pointer to fetch. */
@@ -148,7 +149,7 @@ class FFCPU : public BaseO3CPU
       public:
         /** Default constructor. */
         IcachePort(DefaultFetch<Impl> *_fetch, FFCPU<Impl>* _cpu)
-            : MasterPort(_cpu->name() + ".icache_port", _cpu), fetch(_fetch)
+            : RequestPort(_cpu->name() + ".icache_port", _cpu), fetch(_fetch)
         { }
 
       protected:
@@ -164,7 +165,7 @@ class FFCPU : public BaseO3CPU
     /**
      * DcachePort class for the load/store queue.
      */
-    class DcachePort : public MasterPort
+    class DcachePort : public RequestPort
     {
       protected:
 
@@ -175,7 +176,7 @@ class FFCPU : public BaseO3CPU
       public:
         /** Default constructor. */
         DcachePort(LSQ<Impl> *_lsq, FFCPU<Impl>* _cpu)
-            : MasterPort(_cpu->name() + ".dcache_port", _cpu), lsq(_lsq),
+            : RequestPort(_cpu->name() + ".dcache_port", _cpu), lsq(_lsq),
               cpu(_cpu)
         { }
 
@@ -337,7 +338,7 @@ class FFCPU : public BaseO3CPU
     /** Executes a syscall.
      * @todo: Determine if this needs to be virtual.
      */
-    void syscall(int64_t callnum, ThreadID tid, Fault *fault);
+    void syscall(ThreadID tid);
 
     /** Starts draining the CPU's pipeline of all instructions in
      * order to stop all memory accesses. */
@@ -391,21 +392,21 @@ class FFCPU : public BaseO3CPU
     /** Register accessors.  Index refers to the physical register index. */
 
     /** Reads a miscellaneous register. */
-    TheISA::MiscReg readMiscRegNoEffect(int misc_reg, ThreadID tid) const;
+    RegVal readMiscRegNoEffect(int misc_reg, ThreadID tid) const;
 
     /** Reads a misc. register, including any side effects the read
      * might have as defined by the architecture.
      */
-    TheISA::MiscReg readMiscReg(int misc_reg, ThreadID tid);
+    RegVal readMiscReg(int misc_reg, ThreadID tid);
 
     /** Sets a miscellaneous register. */
-    void setMiscRegNoEffect(int misc_reg, const TheISA::MiscReg &val,
+    void setMiscRegNoEffect(int misc_reg, const RegVal &val,
             ThreadID tid);
 
     /** Sets a misc. register, including any side effects the write
      * might have as defined by the architecture.
      */
-    void setMiscReg(int misc_reg, const TheISA::MiscReg &val,
+    void setMiscReg(int misc_reg, const RegVal &val,
             ThreadID tid);
 
     uint64_t readArchIntReg(int reg_idx, ThreadID tid);
@@ -450,7 +451,7 @@ class FFCPU : public BaseO3CPU
     const VecElem& readArchVecElem(const RegIndex& reg_idx,
                                    const ElemIndex& ldx, ThreadID tid) const;
 
-    TheISA::CCReg readArchCCReg(int reg_idx, ThreadID tid);
+    RegVal readArchCCReg(int reg_idx, ThreadID tid);
 
     /** Architectural register accessors.  Looks up in the commit
      * rename table to obtain the true physical index of the
@@ -468,7 +469,7 @@ class FFCPU : public BaseO3CPU
     void setArchVecElem(const RegIndex& reg_idx, const ElemIndex& ldx,
                         const VecElem& val, ThreadID tid);
 
-    void setArchCCReg(int reg_idx, TheISA::CCReg val, ThreadID tid);
+    void setArchCCReg(int reg_idx, RegVal val, ThreadID tid);
 
     /** Sets the commit PC state of a specific thread. */
     void pcState(const TheISA::PCState &newPCState, ThreadID tid);
@@ -494,17 +495,17 @@ class FFCPU : public BaseO3CPU
     /** Function to add instruction onto the head of the list of the
      *  instructions.  Used when new instructions are fetched.
      */
-    ListIt addInst(DynInstPtr &inst);
+    ListIt addInst(const DynInstPtr &inst);
 
-    ListIt addInstAfter(DynInstPtr &inst, ListIt anchor);
+    ListIt addInstAfter(const DynInstPtr &inst, ListIt anchor);
 
     /** Function to tell the CPU that an instruction has completed. */
-    void instDone(ThreadID tid, DynInstPtr &inst);
+    void instDone(ThreadID tid, const DynInstPtr &inst);
 
     /** Remove an instruction from the front end of the list.  There's
      *  no restriction on location of the instruction.
      */
-    void removeFrontInst(DynInstPtr &inst);
+    void removeFrontInst(const DynInstPtr &inst);
 
     /** Remove all instructions that are not currently in the ROB.
      *  There's also an option to not squash delay slot instructions.*/
@@ -562,9 +563,6 @@ class FFCPU : public BaseO3CPU
     typename CPUPolicy::ArchState *archState;
 
     typename CPUPolicy::DQTop *dq;
-
-    /** The rename mode of the vector registers */
-    Enums::VecRegRenameMode vecMode;
 
     /** Active Threads List */
     std::list<ThreadID> activeThreads;
@@ -691,28 +689,36 @@ class FFCPU : public BaseO3CPU
     /** Available thread ids in the cpu*/
     std::vector<ThreadID> tids;
 
-    /** CPU read function, forwards read to LSQ. */
-    Fault read(const RequestPtr &req,
-               RequestPtr &sreqLow, RequestPtr &sreqHigh,
-               int load_idx)
+    /** CPU pushRequest function, forwards request to LSQ. */
+    Fault pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
+                      unsigned int size, Addr addr, Request::Flags flags,
+                      uint64_t *res, AtomicOpFunctorPtr amo_op = nullptr,
+                      const std::vector<bool>& byte_enable =
+                      std::vector<bool>())
+
     {
-        return this->diewc.ldstQueue.read(req, sreqLow, sreqHigh, load_idx);
+        return diewc.ldstQueue.pushRequest(inst, isLoad, data, size, addr,
+                flags, res, std::move(amo_op), byte_enable);
+    }
+
+
+    /** CPU read function, forwards read to LSQ. */
+    Fault read(LSQRequest* req, int load_idx)
+    {
+        return this->diewc.ldstQueue.read(req, load_idx);
     }
 
     /** CPU write function, forwards write to LSQ. */
-    Fault write(const RequestPtr &req,
-                const RequestPtr &sreqLow, const RequestPtr &sreqHigh,
-                uint8_t *data, int store_idx)
+    Fault write(LSQRequest* req, uint8_t *data, int store_idx)
     {
-        return this->diewc.ldstQueue.write(req, sreqLow, sreqHigh,
-                                         data, store_idx);
+        return this->diewc.ldstQueue.write(req, data, store_idx);
     }
 
     /** Used by the fetch unit to get a hold of the instruction port. */
-    MasterPort &getInstPort() override { return icachePort; }
+    RequestPort &getInstPort() override { return icachePort; }
 
     /** Get the dcache port (used to find block size for translations). */
-    MasterPort &getDataPort() override { return dcachePort; }
+    RequestPort &getDataPort() override { return dcachePort; }
 
     /** Stat for total number of times the CPU is descheduled. */
     Stats::Scalar timesIdled;

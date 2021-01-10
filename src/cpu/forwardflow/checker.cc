@@ -63,8 +63,6 @@ FFCheckerParams::create()
     params->numThreads = numThreads;
     params->max_insts_any_thread = 0;
     params->max_insts_all_threads = 0;
-    params->max_loads_any_thread = 0;
-    params->max_loads_all_threads = 0;
     params->exitOnError = exitOnError;
     params->updateOnError = updateOnError;
     params->warnOnlyOnLoadError = warnOnlyOnLoadError;
@@ -75,8 +73,6 @@ FFCheckerParams::create()
     Counter temp;
     temp = max_insts_any_thread;
     temp = max_insts_all_threads;
-    temp = max_loads_any_thread;
-    temp = max_loads_all_threads;
     temp++;
     Tick temp2 = progress_interval;
     params->progress_interval = 0;
@@ -87,7 +83,6 @@ FFCheckerParams::create()
     params->isa = isa;
     params->system = system;
     params->cpu_id = cpu_id;
-    params->profile = profile;
     params->workload = workload;
 
     FFChecker *cpu = new FFChecker(params);
