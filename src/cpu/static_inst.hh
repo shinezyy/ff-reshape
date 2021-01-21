@@ -359,9 +359,12 @@ class StaticInst : public RefCounted, public StaticInstFlags
     simpleAsBytes(void *buf, size_t max_size, const T &t)
     {
         size_t size = sizeof(T);
-        if (size <= max_size)
+        if (size <= max_size) {
             *reinterpret_cast<T *>(buf) = htole<T>(t);
-        return size;
+            return size;
+        } else {
+            return 0;
+        }
     }
 
   public:

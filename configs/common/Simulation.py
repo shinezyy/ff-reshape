@@ -45,7 +45,7 @@ import sys
 from os import getcwd
 from os.path import join as joinpath
 
-from common import CpuConfig
+from common import CpuConfig, SSConfig
 from common import ObjectList
 
 import m5
@@ -473,6 +473,12 @@ def run(options, root, testsys, cpu_class):
     if options.maxinsts:
         for i in range(np):
             testsys.cpu[i].max_insts_any_thread = options.maxinsts
+
+    for cpu in testsys.cpu:
+        if options.branch_trace_en:
+            CpuConfig.config_branch_trace(cpu_class, cpu, options)
+        # O3 Config
+        SSConfig.modifyO3CPUConfig(options, cpu)
 
     if cpu_class:
         switch_cpus = [cpu_class(switched_out=True, cpu_id=(i))

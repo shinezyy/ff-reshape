@@ -69,6 +69,9 @@
 
 using namespace std;
 
+uint8_t *pmemStart;
+uint64_t pmemSize;
+
 PhysicalMemory::PhysicalMemory(const string& _name,
                                const vector<AbstractMemory*>& _memories,
                                bool mmap_using_noreserve,
@@ -451,6 +454,9 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
     // we've already got the actual backing store mapped
     uint8_t* pmem = backingStore[store_id].pmem;
     AddrRange range = backingStore[store_id].range;
+
+    pmemStart = pmem;
+    pmemSize = range.size();
 
     if (range_size != 0) {
         DPRINTF(Checkpoint, "Unserializing physical memory %s with size %d\n",

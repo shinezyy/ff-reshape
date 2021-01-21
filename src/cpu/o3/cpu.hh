@@ -53,6 +53,7 @@
 #include "arch/types.hh"
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
+#include "cpu/difftest.hh"
 #include "cpu/o3/comm.hh"
 #include "cpu/o3/cpu_policy.hh"
 #include "cpu/o3/scoreboard.hh"
@@ -792,6 +793,26 @@ class FullO3CPU : public BaseO3CPU
     // hardware transactional memory
     void htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
                             HtmFailureFaultCause cause);
+
+  private:
+    uint32_t diff_wdst[DIFFTEST_WIDTH];
+    uint64_t diff_wdata[DIFFTEST_WIDTH];
+    uint64_t diff_wpc[DIFFTEST_WIDTH];
+    uint64_t gem5_reg[DIFFTEST_NR_REG];
+    uint64_t nemu_reg[DIFFTEST_NR_REG];
+    DiffState diff;
+    bool hasCommit{};
+
+    void readGem5Regs();
+
+    enum DiffAt {
+        NoneDiff = 0,
+        PCDiff,
+        NPCDiff,
+        InstDiff,
+        ValueDiff,
+    };
+    std::pair<int, bool> diffWithNEMU(const DynInstPtr &inst);
 };
 
 #endif // __CPU_O3_CPU_HH__

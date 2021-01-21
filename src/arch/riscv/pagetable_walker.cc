@@ -293,14 +293,16 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
     bool doTLBInsert = false;
     bool doEndWalk = false;
 
-    DPRINTF(PageTableWalker, "Got level%d PTE: %#x\n", level, pte);
+    DPRINTF(PageTableWalker, "For req to %#lx, Got level%d PTE: %#x\n",
+            req->getVaddr(), level, pte);
 
     // step 2: TODO check PMA and PMP
 
     // step 3:
     if (!pte.v || (!pte.r && pte.w)) {
         doEndWalk = true;
-        DPRINTF(PageTableWalker, "PTE invalid, raising PF\n");
+        DPRINTF(PageTableWalker, "PTE invalid, raising PF. v: %i, r: %i, w: %i\n",
+                pte.v, pte.r, pte.w);
         fault = pageFault(pte.v);
     }
     else {

@@ -62,6 +62,7 @@
 #include "cpu/static_inst.hh"
 #include "cpu/translation.hh"
 #include "debug/HtmCpu.hh"
+#include "debug/LSQUnit.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
 #include "sim/byteswap.hh"
@@ -1104,6 +1105,7 @@ BaseDynInst<Impl>::writeMem(uint8_t *data, unsigned size, Addr addr,
                             const std::vector<bool> &byte_enable)
 {
     assert(byte_enable.empty() || byte_enable.size() == size);
+    DPRINTF(LSQUnit, "Push write req to addr %#lx\n", addr);
     return cpu->pushRequest(
             dynamic_cast<typename DynInstPtr::PtrType>(this),
             /* st */ false, data, size, addr, flags, res, nullptr,

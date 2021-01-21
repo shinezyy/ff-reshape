@@ -30,6 +30,7 @@
 #include "arch/riscv/decoder.hh"
 #include "arch/riscv/types.hh"
 #include "debug/Decode.hh"
+#include "debug/LoopBuffer.hh"
 
 namespace RiscvISA
 {
@@ -50,7 +51,8 @@ void
 Decoder::moreBytes(const PCState &pc, Addr fetchPC, MachInst inst)
 {
     inst = letoh(inst);
-    DPRINTF(Decode, "Requesting bytes 0x%08x from address %#x\n", inst,
+    DPRINTF(Decode || Debug::LoopBuffer,
+            "Requesting bytes 0x%08x from address %#x\n", inst,
             fetchPC);
 
     bool aligned = pc.pc() % sizeof(MachInst) == 0;

@@ -104,6 +104,7 @@ struct InstSupplyState {
     Addr end; // branch
     unsigned offset;
     uint8_t *buf;
+    uint8_t tempBuf[4];
     Addr lastPC;
     Addr expectedPC;
     ExpectedForwardBranch expectedForwardBranch;
@@ -198,11 +199,15 @@ class LoopBuffer : public SimObject
 
     bool canProvide(Addr pc);
 
-    bool canContinueOnPC(Addr pc);
+    bool canContinueOnPC(Addr fetch_addr, Addr inst_pc);
 
     bool canContinueOnNPC(Addr cpc, Addr npc, bool is_taken);
 
-    uint8_t* getInst(Addr pc, unsigned inst_size);
+    uint8_t* getInst(Addr fetch_addr, Addr inst_pc);
+
+    void notifyLastInstSize(Addr fetch_addr, Addr inst_pc, unsigned inst_size);
+
+    void padding_2();
 };
 
 #endif //__CPU_O3_LOOPBUFFER_HH__

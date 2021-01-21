@@ -42,6 +42,9 @@
 
 #include "cpu/o3/cpu.hh"
 
+#include <cstdlib>
+#include <cstring>
+
 #include "arch/generic/traits.hh"
 #include "config/the_isa.hh"
 #include "cpu/activity.hh"
@@ -56,6 +59,7 @@
 #include "debug/FFInit.hh"
 #include "debug/O3CPU.hh"
 #include "debug/Quiesce.hh"
+#include "debug/ValueCommit.hh"
 #include "enums/MemoryMode.hh"
 #include "sim/async.hh"
 #include "sim/core.hh"
@@ -356,6 +360,13 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
 
     for (ThreadID tid = 0; tid < this->numThreads; tid++)
         this->thread[tid]->setFuncExeInst(0);
+
+    init_difftest();
+
+    diff.nemu_reg = nemu_reg;
+    diff.wpc = diff_wpc;
+    diff.wdata = diff_wdata;
+    diff.wdst = diff_wdst;
 }
 
 template <class Impl>
@@ -1532,6 +1543,33 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
                 this->nextDumpInstCount += this->repeatDumpInstCount;
             };
         }
+
+        if (!hasCommit && inst->instAddr() == 0x80000000u) {
+            hasCommit = true;
+            readGem5Regs();
+            gem5_reg[DIFFTEST_THIS_PC] = inst->instAddr();
+            extern uint8_t *pmemStart;
+            extern uint64_t pmemSize;
+            ref_difftest_memcpy_from_dut(0x80000000, pmemStart, pmemSize);
+            ref_difftest_setregs(gem5_reg);
+        }
+
+        if (hasCommit) {
+            auto [diff_at, has_mem_xpt] = diffWithNEMU(inst);
+            if (diff_at != NoneDiff) {
+                if (has_mem_xpt && diff_at == PCDiff) {
+                    warn("Found mem exception, Let NEMU run one more instruction\n");
+                    std::tie(diff_at, has_mem_xpt) = diffWithNEMU(inst);
+                    if (diff_at != NoneDiff) {
+                        panic("Difftest failed again!\n");
+                    } else {
+                        warn("Difftest matched again, NEMU seems to commit the failed mem instruction\n");
+                    }
+                } else {
+                    panic("Difftest failed!\n");
+                }
+            }
+        }
     }
     thread[tid]->numOp++;
     thread[tid]->threadStats.numOps++;
@@ -1875,6 +1913,115 @@ FullO3CPU<Impl>::htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
     if (!this->iew.ldstQueue.getDataPort().sendTimingReq(abort_pkt)) {
         panic("HTM abort signal was not sent to the memory subsystem.");
     }
+}
+
+template <class Impl>
+void
+FullO3CPU<Impl>::readGem5Regs()
+{
+    for (int i = 0; i < 32; i++) {
+        gem5_reg[i] = readArchIntReg(i, 0);
+        gem5_reg[i + 32] = readArchFloatReg(i, 0);
+    }
+}
+
+template <class Impl>
+std::pair<int, bool>
+FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
+{
+    int diff_at = DiffAt::NoneDiff;
+
+    difftest_step(&diff);
+    extern const char *reg_name[];
+
+    auto gem5_pc = inst->instAddr();
+    auto nemu_pc = nemu_reg[DIFFTEST_THIS_PC];
+    DPRINTF(ValueCommit, "NEMU PC: %#x, GEM5 PC: %#x\n", nemu_pc, gem5_pc);
+
+    auto nemu_store_addr = nemu_reg[DIFFTEST_STORE_ADDR];
+    if (nemu_store_addr) {
+        DPRINTF(ValueCommit, "NEMU store addr: %#lx\n", nemu_store_addr);
+    }
+
+    uint8_t gem5_inst[5];
+    uint8_t nemu_inst[9];
+
+    int nemu_inst_len = nemu_reg[DIFFTEST_RVC] ? 2 : 4;
+    int gem5_inst_len = inst->pcState().compressed() ? 2 : 4;
+
+    assert(inst->staticInst->asBytes(gem5_inst, 8));
+    *reinterpret_cast<uint32_t *>(nemu_inst) =
+        htole<uint32_t>(nemu_reg[DIFFTEST_INST_PAYLOAD]);
+
+    if (nemu_pc != gem5_pc) {
+        warn("NEMU store addr: %#lx\n", nemu_store_addr);
+        warn("Inst [sn:%lli]\n", inst->seqNum);
+        warn("Diff at %s, NEMU: %#lx, GEM5: %#lx\n",
+                "PC", nemu_pc, gem5_pc
+            );
+        if (!diff_at)
+            diff_at = PCDiff;
+    }
+
+    if (diff.npc != inst->nextInstAddr()) {
+        warn("Inst [sn:%lli]\n", inst->seqNum);
+        warn("Diff at %s, NEMU: %#lx, GEM5: %#lx\n",
+                "NPC", diff.npc, inst->nextInstAddr()
+            );
+        if (!diff_at)
+            diff_at = NPCDiff;
+    } else {
+        DPRINTF(ValueCommit, "Inst [sn:%lli] %s, NEMU: %#lx, GEM5: %#lx\n",
+                inst->seqNum, "NPC", diff.npc, inst->nextInstAddr()
+               );
+    }
+
+    if (nemu_inst_len != gem5_inst_len ||
+            memcmp(gem5_inst, nemu_inst, nemu_inst_len) != 0) {
+        warn("Inst [sn:%lli]\n", inst->seqNum);
+        warn("Diff at %s, NEMU: %02x %02x %02x %02x (%i),"
+                "GEM5: %02x %02x %02x %02x (%i)\n",
+                "inst payload",
+                nemu_inst[0], nemu_inst[1], nemu_inst[2], nemu_inst[3], nemu_inst_len,
+                gem5_inst[0], gem5_inst[1], gem5_inst[2], gem5_inst[3], gem5_inst_len
+            );
+        if (!diff_at)
+            diff_at = InstDiff;
+    }
+
+    DPRINTF(ValueCommit, "Inst [sn:%llu] @ %#lx is %s\n",
+            inst->seqNum, inst->instAddr(),
+            inst->staticInst->disassemble(inst->instAddr()));
+
+    // auto gem5_mstatus = readMiscRegNoEffect(MISCREG_STATUS, 0);
+    // auto nemu_mstatus = nemu_reg[DIFFTEST_MSTATUS];
+    // DPRINTF(ValueCommit, "%s: NEMU = %#lx, GEM5 = %#lx\n",
+    //         "mstatus", nemu_mstatus, gem5_mstatus);
+
+    if (inst->numDestRegs() > 0) {
+        const auto &dest = inst->staticInst->destRegIdx(0);
+        auto dest_tag = dest.index() + dest.isFloatReg() * 32;
+
+        if ((dest.isFloatReg() || dest.isIntReg()) && !dest.isZeroReg()) {
+
+            auto gem5_val = inst->getResult().asIntegerNoAssert();
+            auto nemu_val = nemu_reg[dest_tag];
+
+            if (gem5_val != nemu_val) {
+                if (dest.isFloatReg() && (gem5_val^nemu_val) == ((0xffffffffULL) << 32)) {
+                    DPRINTF(ValueCommit, "Difference might be caused by box, ignore it\n");
+                } else {
+                    warn("Inst [sn:%lli]\n", inst->seqNum);
+                    warn("Diff at %s Ref value: %#lx, GEM5 value: %#lx\n",
+                            reg_name[dest_tag], nemu_val, gem5_val
+                        );
+                    if (!diff_at)
+                        diff_at = ValueDiff;
+                }
+            }
+        }
+    }
+    return std::make_pair(diff_at, nemu_reg[DIFFTEST_HAS_MEM_XPT] != 0);
 }
 
 // Forward declaration of FullO3CPU.

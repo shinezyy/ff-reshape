@@ -35,6 +35,8 @@ def modifyO3CPUConfig(options, cpu):
         assert options.outcome_path is not None
         cpu.branchPred.outcomePath = options.outcome_path
         cpu.branchPred.checkAddr = options.check_outcome_addr is not None
+    elif options.use_bp is None:
+        print('Keep default BP without modification')
     else:
         print('Unknow BP:', options.use_bp)
         assert False

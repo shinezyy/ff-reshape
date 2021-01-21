@@ -64,7 +64,7 @@ from common import CpuConfig
 from common import MemConfig
 from common import ObjectList
 from common.Caches import *
-from common import Options
+from common import Options, SSOptions
 
 def cmd_line_template():
     if options.command_line and options.command_line_file:
@@ -153,6 +153,8 @@ def build_test_system(np):
     if ObjectList.is_kvm_cpu(TestCPUClass) or \
         ObjectList.is_kvm_cpu(FutureClass):
         test_sys.kvm_vm = KvmVM()
+
+    CpuConfig.config_branch_trace(TestCPUClass, test_sys.cpu, options)
 
     if options.ruby:
         bootmem = getattr(test_sys, '_bootmem', None)
@@ -303,6 +305,7 @@ def build_drive_system(np):
 parser = optparse.OptionParser()
 Options.addCommonOptions(parser)
 Options.addFSOptions(parser)
+SSOptions.addO3Options(parser)
 
 # Add the ruby specific and protocol specific options
 if '--ruby' in sys.argv:

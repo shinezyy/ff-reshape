@@ -1196,7 +1196,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
     bool inRom = isRomMicroPC(thisPC.microPC());
 
     if (lbuf->enable && fetchSource == LoopBuf &&
-            lbuf->canContinueOnPC(fetchAddr)) {
+            lbuf->canContinueOnPC(fetchAddr, thisPC.instAddr())) {
         // pass
     } else if (lbuf->enable && lbuf->canProvide(fetchAddr)) {
         fetchSource = LoopBuf;
@@ -1300,12 +1300,12 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             // to the next cache block then start fetch from icache.
 
             if (lbuf->enable && fetchSource == LoopBuf) {
-                if (!lbuf->canContinueOnPC(fetchAddr)) {
+                if (!lbuf->canContinueOnPC(fetchAddr, thisPC.instAddr())) {
                     fetchSource = CacheLine;
                     break;
                 }
 
-                uint8_t *found_line = lbuf->getInst(fetchAddr, instSize);
+                uint8_t *found_line = lbuf->getInst(0, 0);
                 assert(found_line);
                 cacheInsts = reinterpret_cast<TheISA::MachInst *>(found_line);
 

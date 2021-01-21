@@ -230,6 +230,16 @@ DefaultCommit<Impl>::CommitStats::CommitStats(O3CPU *cpu,
     integer
         .init(cpu->numThreads)
         .flags(total);
+
+    functionCalls
+          .init(commit->numThreads)
+          .flags(total);
+
+    committedInstType
+        .init(commit->numThreads,Enums::Num_OpClass)
+        .flags(total | pdf | dist);
+
+    committedInstType.ysubnames(Enums::OpClassStrings);
 }
 
 template <class Impl>
