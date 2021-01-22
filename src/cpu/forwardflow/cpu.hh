@@ -90,7 +90,7 @@ class BaseO3CPU : public BaseCPU
 {
     //Stuff that's pretty ISA independent will go here.
   public:
-    BaseO3CPU(BaseCPUParams *params);
+    BaseO3CPU(const BaseCPUParams *params);
 
     void regStats();
 };
@@ -128,8 +128,7 @@ class FFCPU : public BaseO3CPU
         SwitchedOut
     };
 
-    BaseTLB *itb;
-    BaseTLB *dtb;
+    BaseMMU *mmu;
     using LSQRequest = typename LSQ<Impl>::LSQRequest;
 
     /** Overall CPU status. */
@@ -253,7 +252,7 @@ class FFCPU : public BaseO3CPU
 
   public:
     /** Constructs a CPU with the given parameters. */
-    FFCPU(DerivFFCPUParams *params);
+    FFCPU(const DerivFFCPUParams *params);
     /** Destructor. */
     ~FFCPU();
 
@@ -268,18 +267,12 @@ class FFCPU : public BaseO3CPU
 
     void demapPage(Addr vaddr, uint64_t asn)
     {
-        this->itb->demapPage(vaddr, asn);
-        this->dtb->demapPage(vaddr, asn);
-    }
-
-    void demapInstPage(Addr vaddr, uint64_t asn)
-    {
-        this->itb->demapPage(vaddr, asn);
+        mmu->demapPage(vaddr, asn);
     }
 
     void demapDataPage(Addr vaddr, uint64_t asn)
     {
-        this->dtb->demapPage(vaddr, asn);
+        mmu->demapPage(vaddr, asn);
     }
 
     /** Ticks CPU, calling tick() on each stage, and checking the overall
@@ -335,11 +328,6 @@ class FFCPU : public BaseO3CPU
     void unserializeThread(CheckpointIn &cp, ThreadID tid) override;
 
   public:
-    /** Executes a syscall.
-     * @todo: Determine if this needs to be virtual.
-     */
-    void syscall(ThreadID tid);
-
     /** Starts draining the CPU's pipeline of all instructions in
      * order to stop all memory accesses. */
     DrainState drain() override;

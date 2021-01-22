@@ -113,7 +113,7 @@ class MemDepUnit
     MemDepUnit();
 
     /** Constructs a MemDepUnit with given parameters. */
-    MemDepUnit(DerivFFCPUParams *params);
+    MemDepUnit(const DerivFFCPUParams *params);
 
     /** Frees up any memory allocated. */
     ~MemDepUnit();
@@ -122,7 +122,7 @@ class MemDepUnit
     std::string name() const { return _name; }
 
     /** Initializes the unit with parameters and a thread id. */
-    void init(DerivFFCPUParams *params, ThreadID tid);
+    void init(const DerivFFCPUParams *params, ThreadID tid);
 
     /** Registers statistics. */
     void regStats();
@@ -183,7 +183,7 @@ class MemDepUnit
             : inst(new_inst), regsReady(false), memDepReady(false),
               completed(false), squashed(false)
         {
-            if (inst->isStore() || inst->isMemBarrier() || inst->isWriteBarrier()) {
+            if (inst->isStore() || inst->isReadBarrier() || inst->isWriteBarrier()) {
                 latestPosition = new_inst->dqPosition;
             } else {
                 latestPosition.valid = false;

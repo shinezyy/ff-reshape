@@ -40,6 +40,7 @@
 
 #include "base/trace.hh"
 #include "debug/CacheComp.hh"
+#include "mem/cache/base.hh"
 #include "mem/cache/tags/super_blk.hh"
 #include "params/BaseCacheCompressor.hh"
 
@@ -75,15 +76,33 @@ Base::CompressionData::getSize() const
     return std::ceil(_size/8);
 }
 
-Base::Base(const Params *p)
-  : SimObject(p), blkSize(p->block_size), chunkSizeBits(p->chunk_size_bits),
-    sizeThreshold((blkSize * p->size_threshold_percentage) / 100),
-    stats(*this)
+Base::Base(const Params &p)
+  : SimObject(p), blkSize(p.block_size), chunkSizeBits(p.chunk_size_bits),
+    sizeThreshold((blkSize * p.size_threshold_percentage) / 100),
+    compChunksPerCycle(p.comp_chunks_per_cycle),
+    compExtraLatency(p.comp_extra_latency),
+    decompChunksPerCycle(p.decomp_chunks_per_cycle),
+    decompExtraLatency(p.decomp_extra_latency),
+    cache(nullptr), stats(*this)
 {
     fatal_if(64 % chunkSizeBits,
         "64 must be a multiple of the chunk granularity.");
 
+    fatal_if(((CHAR_BIT * blkSize) / chunkSizeBits) < compChunksPerCycle,
+        "Compressor processes more chunks per cycle than the number of "
+        "chunks in the input");
+    fatal_if(((CHAR_BIT * blkSize) / chunkSizeBits) < decompChunksPerCycle,
+        "Decompressor processes more chunks per cycle than the number of "
+        "chunks in the input");
+
     fatal_if(blkSize < sizeThreshold, "Compressed data must fit in a block");
+}
+
+void
+Base::setCache(BaseCache *_cache)
+{
+    assert(!cache);
+    cache = _cache;
 }
 
 std::vector<Base::Chunk>

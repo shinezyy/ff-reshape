@@ -335,7 +335,7 @@ class MetaPredictor: public SimObject
     typedef MemDepPredictorParams Params;
 
     explicit MetaPredictor (const Params *p)
-            : SimObject(p),
+            : SimObject(*p),
               table(size),
               squashFactor(p->SquashFactor),
               _name("MetaPredictor")

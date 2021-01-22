@@ -238,7 +238,7 @@ class BaseTrafficGen : public ClockedObject
     } stats;
 
   public:
-    BaseTrafficGen(const BaseTrafficGenParams* p);
+    BaseTrafficGen(const BaseTrafficGenParams &p);
 
     ~BaseTrafficGen();
 
@@ -331,7 +331,7 @@ class BaseTrafficGen : public ClockedObject
     /** Currently active generator */
     std::shared_ptr<BaseGen> activeGenerator;
 
-    /** Stream/SubStreamID Generator */
+    /** Stream/SubstreamID Generator */
     std::unique_ptr<StreamGen> streamGenerator;
 };
 

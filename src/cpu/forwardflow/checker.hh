@@ -54,7 +54,7 @@ class FFChecker : public Checker<FFCPUImpl>
 {
   public:
     FFChecker(Params *p)
-          : Checker<FFCPUImpl>(p)
+          : Checker<FFCPUImpl>(*p)
     { }
 };
 

@@ -76,8 +76,8 @@ namespace FF{
 using namespace TheISA;
 using namespace std;
 
-BaseO3CPU::BaseO3CPU(BaseCPUParams *params)
-    : BaseCPU(params)
+BaseO3CPU::BaseO3CPU(const BaseCPUParams *params)
+    : BaseCPU(*params)
 {
 }
 
@@ -134,10 +134,9 @@ FFCPU<Impl>::DcachePort::recvReqRetry()
 }
 
 template <class Impl>
-FFCPU<Impl>::FFCPU(DerivFFCPUParams *params)
+FFCPU<Impl>::FFCPU(const DerivFFCPUParams *params)
     : BaseO3CPU(params),
-      itb(params->itb),
-      dtb(params->dtb),
+      mmu(params->mmu),
       tickEvent([this]{ tick(); }, "FFCPU tick",
                 false, Event::CPU_Tick_Pri),
 #ifndef NDEBUG
@@ -377,25 +376,25 @@ FFCPU<Impl>::regStats()
         .name(name() + ".cpi")
         .desc("CPI: Cycles Per Instruction")
         .precision(6);
-    cpi = numCycles / committedInsts;
+    cpi = baseStats.numCycles / committedInsts;
 
     totalCpi
         .name(name() + ".cpi_total")
         .desc("CPI: Total CPI of All Threads")
         .precision(6);
-    totalCpi = numCycles / sum(committedInsts);
+    totalCpi = baseStats.numCycles / sum(committedInsts);
 
     ipc
         .name(name() + ".ipc")
         .desc("IPC: Instructions Per Cycle")
         .precision(6);
-    ipc =  committedInsts / numCycles;
+    ipc =  committedInsts / baseStats.numCycles;
 
     totalIpc
         .name(name() + ".ipc_total")
         .desc("IPC: Total IPC of All Threads")
         .precision(6);
-    totalIpc =  sum(committedInsts) / numCycles;
+    totalIpc =  sum(committedInsts) / baseStats.numCycles;
 
     this->decode.regStats();
     this->allocation.regStats();
@@ -464,7 +463,7 @@ FFCPU<Impl>::tick()
     assert(!switchedOut());
     assert(drainState() != DrainState::Drained);
 
-    ++numCycles;
+    ++baseStats.numCycles;
     updateCycleCounters(BaseCPU::CPU_STATE_ON);
 
 //    activity = false;
@@ -684,6 +683,15 @@ FFCPU<Impl>::haltContext(ThreadID tid)
     deactivateThread(tid);
     removeThread(tid);
 
+    // If this was the last thread then unschedule the tick event.
+    if (activeThreads.size() == 0) {
+        if (tickEvent.scheduled())
+        {
+            unscheduleTickEvent();
+        }
+        lastRunningCycle = curCycle();
+        _status = Idle;
+    }
     updateCycleCounters(BaseCPU::CPU_STATE_SLEEP);
 }
 
@@ -801,26 +809,6 @@ FFCPU<Impl>::trap(const Fault &fault, ThreadID tid,
 {
     // Pass the thread's TC into the invoke method.
     fault->invoke(this->threadContexts[tid], inst);
-}
-
-template <class Impl>
-void
-FFCPU<Impl>::syscall(ThreadID tid)
-{
-    DPRINTF(FFCPU, "[tid:%i] Executing syscall().\n\n", tid);
-
-    DPRINTF(Activity,"Activity: syscall() called.\n");
-
-    // Temporarily increase this by one to account for the syscall
-    // instruction.
-    ++(this->thread[tid]->funcExeInst);
-
-    // Execute the actual syscall.
-    this->thread[tid]->syscall();
-
-    // Decrease funcExeInst by one as the normal commit will handle
-    // incrementing it.
-    --(this->thread[tid]->funcExeInst);
 }
 
 template <class Impl>
@@ -1263,7 +1251,6 @@ FFCPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
         thread[tid]->numInst++;
         thread[tid]->threadStats.numInsts++;
         committedInsts[tid]++;
-        system->totalNumInsts++;
 
         // Check for instruction-count-based events.
         thread[tid]->comInstEventQueue.serviceEvents(thread[tid]->numInst);
@@ -1470,7 +1457,7 @@ FFCPU<Impl>::wakeCPU()
     if (cycles > 1) {
         --cycles;
         idleCycles += cycles;
-        numCycles += cycles;
+        baseStats.numCycles += cycles;
     }
 
     schedule(tickEvent, clockEdge());
@@ -1569,3 +1556,12 @@ ThreadID DummyTid = 0;
 // Forward declaration of FFCPU.
 template class FF::FFCPU<FFCPUImpl>;
 
+#include "cpu/forwardflow/deriv.hh"
+
+#include "params/DerivFFCPU.hh"
+
+DerivFFCPU *
+DerivFFCPUParams::create() const
+{
+    return new DerivFFCPU(this);
+}

@@ -20,7 +20,7 @@ class UartLite: public BasicPioDevice
     Tick read(PacketPtr pkt) override;
     Tick write(PacketPtr pkt) override;
 
-    explicit UartLite(UartLiteParams *params);
+    explicit UartLite(const UartLiteParams *params);
 };
 
 

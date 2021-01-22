@@ -3,9 +3,9 @@
 #include "debug/LoopBuffer.hh"
 #include "debug/LoopBufferStack.hh"
 
-LoopBuffer::LoopBuffer(LoopBufferParams *params)
+LoopBuffer::LoopBuffer(const LoopBufferParams *params)
     :
-        SimObject(params),
+        SimObject(*params),
         numEntries(params->numEntries),
         _name("LoopBuffer"),
         entrySize(params->entrySize),
@@ -581,7 +581,8 @@ InstSupplyState::invalidate()
 }
 
 LoopBuffer *
-LoopBufferParams::create()
+LoopBufferParams::create() const
 {
     return new LoopBuffer(this);
 }
+

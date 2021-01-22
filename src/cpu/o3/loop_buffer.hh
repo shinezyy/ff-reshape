@@ -139,7 +139,7 @@ class LoopBuffer : public SimObject
 
   public:
 
-    LoopBuffer(LoopBufferParams *params);
+    LoopBuffer(const LoopBufferParams *params);
 
     ~LoopBuffer();
 

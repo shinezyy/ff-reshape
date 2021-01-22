@@ -280,7 +280,7 @@ void Allocation<Impl>::allocateInsts() {
             break;
         }
 
-        if ((inst->isIprAccess() || inst->isSerializeBefore()) &&
+        if ((inst->isSerializeBefore()) &&
                 !inst->isSerializeHandled()) {
             DPRINTF(DAllocation, "Serialize before instruction encountered.\n");
             if (!inst->isTempSerializeBefore()) {
@@ -557,7 +557,7 @@ int Allocation<Impl>::calcFreeSQEntries() {
 }
 
 template<class Impl>
-Allocation<Impl>::Allocation(O3CPU* cpu, DerivFFCPUParams *params)
+Allocation<Impl>::Allocation(O3CPU* cpu, const DerivFFCPUParams *params)
         : cpu(cpu),
           allocationWidth(params->numDQBanks),
           instsInProgress(0),

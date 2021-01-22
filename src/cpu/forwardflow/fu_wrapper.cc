@@ -92,7 +92,7 @@ bool FUWrapper<Impl>::consume(const FUWrapper::DynInstPtr &inst)
             DPRINTFR(FUW, "to wake up " ptrfmt "\n", extptr(dest));
             to_wake[DestPtr] = dest;
 
-            if (inst->isMemBarrier() || inst->isWriteBarrier()) {
+            if (inst->isReadBarrier() || inst->isWriteBarrier()) {
                 DPRINTFR(FUW, "without value because of it's barrier\n");
                 to_wake[DestPtr].wkType = WKPointer::WKType::WKOrder;
                 to_wake[DestPtr].hasVal = false;

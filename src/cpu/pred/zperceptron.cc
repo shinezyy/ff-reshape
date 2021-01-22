@@ -11,7 +11,7 @@
 
 using namespace boost;
 
-ZPerceptron *ZPerceptronParams::create()
+ZPerceptron *ZPerceptronParams::create() const
 {
     return new ZPerceptron(this);
 }
@@ -56,7 +56,7 @@ void ZPerceptron::updateGHR(ThreadID tid, bool taken) {
 }
 
 ZPerceptron::ZPerceptron(const ZPerceptronParams *params)
-        : BPredUnit(params),
+        : BPredUnit(*params),
           globalHistoryLen(params->globalHistoryLen),
           tableSize(params->tableSize),
           emptyLocalHistory(1),

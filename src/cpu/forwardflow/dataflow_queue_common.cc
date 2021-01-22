@@ -35,7 +35,7 @@ unsigned DQCommon::pointer2uint(const BasePointer &ptr) const
 }
 
 
-DQCommon::DQCommon(DerivFFCPUParams *params)
+DQCommon::DQCommon(const DerivFFCPUParams *params)
         :
         nullDQPointer{false, 0, 0, 0, 0},
         nullWKPointer(WKPointer()),

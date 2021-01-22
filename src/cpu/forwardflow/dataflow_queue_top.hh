@@ -80,7 +80,7 @@ public:
 
     std::unordered_map<BasePointer, FFRegValue> committedValues;
 
-    explicit DQTop(DerivFFCPUParams *params);
+    explicit DQTop(const DerivFFCPUParams *params);
 
     void cycleStart();
 

@@ -66,15 +66,15 @@
 
 using namespace std;
 
-BaseTrafficGen::BaseTrafficGen(const BaseTrafficGenParams* p)
+BaseTrafficGen::BaseTrafficGen(const BaseTrafficGenParams &p)
     : ClockedObject(p),
-      system(p->system),
-      elasticReq(p->elastic_req),
-      progressCheck(p->progress_check),
+      system(p.system),
+      elasticReq(p.elastic_req),
+      progressCheck(p.progress_check),
       noProgressEvent([this]{ noProgress(); }, name()),
       nextTransitionTick(0),
       nextPacketTick(0),
-      maxOutstandingReqs(p->max_outstanding_reqs),
+      maxOutstandingReqs(p.max_outstanding_reqs),
       port(name() + ".port", *this),
       retryPkt(NULL),
       retryPktTick(0), blockedWaitingResp(false),
@@ -183,12 +183,12 @@ BaseTrafficGen::update()
         // try to pick and assign them to the new packet
         if (streamGenerator) {
             auto sid = streamGenerator->pickStreamID();
-            auto ssid = streamGenerator->pickSubStreamID();
+            auto ssid = streamGenerator->pickSubstreamID();
 
             pkt->req->setStreamId(sid);
 
             if (streamGenerator->ssidValid()) {
-                pkt->req->setSubStreamId(ssid);
+                pkt->req->setSubstreamId(ssid);
             }
         }
 

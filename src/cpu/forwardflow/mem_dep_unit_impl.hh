@@ -61,7 +61,7 @@ MemDepUnit<MemDepPred, Impl>::MemDepUnit()
 }
 
 template <class MemDepPred, class Impl>
-MemDepUnit<MemDepPred, Impl>::MemDepUnit(DerivFFCPUParams *params)
+MemDepUnit<MemDepPred, Impl>::MemDepUnit(const DerivFFCPUParams *params)
     : _name(params->name + ".memdepunit"),
       iqPtr(NULL)
 {
@@ -76,7 +76,7 @@ MemDepUnit<MemDepPred, Impl>::~MemDepUnit()
 
 template <class MemDepPred, class Impl>
 void
-MemDepUnit<MemDepPred, Impl>::init(DerivFFCPUParams *params, ThreadID tid)
+MemDepUnit<MemDepPred, Impl>::init(const DerivFFCPUParams *params, ThreadID tid)
 {
     DPRINTF(MemDepUnit, "Creating MemDepUnit %i object.\n",tid);
 
@@ -225,7 +225,7 @@ MemDepUnit<MemDepPred, Impl>::insertBarrier(const DynInstPtr &barr_inst)
 {
     InstSeqNum barr_sn = barr_inst->seqNum;
     // Memory barriers block loads and stores, write barriers only stores.
-    if (barr_inst->isMemBarrier()) {
+    if (barr_inst->isReadBarrier()) {
         loadBarrier.valid = true;
         loadBarrier.SN = barr_sn;
         storeBarrier.valid = true;
@@ -273,7 +273,7 @@ MemDepUnit<MemDepPred, Impl>::completeBarrier(const DynInstPtr &inst)
     InstSeqNum barr_sn = inst->seqNum;
     DPRINTF(MemDepUnit, "barrier completed: %s SN:%lli\n", inst->pcState(),
             inst->seqNum);
-    if (inst->isMemBarrier()) {
+    if (inst->isReadBarrier()) {
         if (loadBarrier.SN == barr_sn)
             loadBarrier.valid = false;
         if (storeBarrier.SN == barr_sn)

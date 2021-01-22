@@ -453,7 +453,7 @@ void ArchState<Impl>::recoverCPT(InstSeqNum &num)
 }
 
 template<class Impl>
-ArchState<Impl>::ArchState(DerivFFCPUParams *params)
+ArchState<Impl>::ArchState(const DerivFFCPUParams *params)
     : MaxCheckpoints(params->MaxCheckpoints),
     gen(0xa2c57a7e),
     decoupleOpPosition(params->DecoupleOpPosition),

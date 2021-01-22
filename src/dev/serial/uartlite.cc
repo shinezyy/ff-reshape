@@ -39,14 +39,15 @@ Tick UartLite::write(PacketPtr pkt) {
   return pioDelay;
 }
 
-UartLite::UartLite(UartLiteParams *params) :
-    BasicPioDevice(params, params->pio_size)
+UartLite::UartLite(const UartLiteParams *params) :
+    BasicPioDevice(*params, params->pio_size)
 {
 
 }
 
 UartLite *
-UartLiteParams::create()
+UartLiteParams::create() const
 {
-  return new UartLite(this);
+    return new UartLite(this);
 }
+

@@ -24,7 +24,7 @@ using boost::dynamic_bitset;
 
 template<class Impl>
 DataflowQueueBank<Impl>::DataflowQueueBank(
-        DerivFFCPUParams *params, unsigned bank_id,
+        const DerivFFCPUParams *params, unsigned bank_id,
         DQ *dq, DQTop *_top)
         : dq(dq),
           nOps(params->numOperands),

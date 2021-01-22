@@ -40,7 +40,7 @@ using namespace FF;
 class DerivFFCPU : public FFCPU<FFCPUImpl>
 {
   public:
-    DerivFFCPU(DerivFFCPUParams *p)
+    DerivFFCPU(const DerivFFCPUParams *p)
         : FFCPU<FFCPUImpl>(p)
     { }
 };

@@ -260,24 +260,6 @@ BaseO3DynInst<Impl>::simPalCheck(int palFunc)
     panic("simPalCheck called, but PAL only exists in Alpha!\n");
 }
 
-template <class Impl>
-void
-BaseO3DynInst<Impl>::syscall()
-{
-    if (FullSystem)
-        panic("Syscall emulation isn't available in FS mode.\n");
-
-    // HACK: check CPU's nextPC before and after syscall. If it
-    // changes, update this instruction's nextPC because the syscall
-    // must have changed the nextPC.
-    TheISA::PCState curPC = this->cpu->pcState(this->threadNumber);
-    this->cpu->syscall(this->threadNumber);
-    TheISA::PCState newPC = this->cpu->pcState(this->threadNumber);
-    if (!(curPC == newPC)) {
-        this->pcState(newPC);
-    }
-}
-
 template<class Impl>
 bool BaseO3DynInst<Impl>::opFulfilled(unsigned i)
 {

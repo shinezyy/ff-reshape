@@ -129,7 +129,7 @@ public:
 
     void recoverCPT(InstSeqNum &num);
 
-    explicit ArchState(DerivFFCPUParams *);
+    explicit ArchState(const DerivFFCPUParams *);
 
     uint64_t readIntReg(int reg_idx);
     void setIntReg(int reg_idx, uint64_t);

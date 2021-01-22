@@ -51,21 +51,21 @@
 #include "debug/Branch.hh"
 #include "debug/OracleBP.hh"
 
-BPredUnit::BPredUnit(const Params *params)
+BPredUnit::BPredUnit(const Params &params)
     : SimObject(params),
-      numThreads(params->numThreads),
+      numThreads(params.numThreads),
       predHist(numThreads),
-      BTB(params->BTBEntries,
-          params->BTBTagSize,
-          params->instShiftAmt,
-          params->numThreads),
+      BTB(params.BTBEntries,
+          params.BTBTagSize,
+          params.instShiftAmt,
+          params.numThreads),
       RAS(numThreads),
-      iPred(params->indirectBranchPred),
+      iPred(params.indirectBranchPred),
       stats(this),
-      instShiftAmt(params->instShiftAmt)
+      instShiftAmt(params.instShiftAmt)
 {
     for (auto& r : RAS)
-        r.init(params->RASSize);
+        r.init(params.RASSize);
 }
 
 BPredUnit::BPredUnitStats::BPredUnitStats(Stats::Group *parent)
@@ -109,7 +109,7 @@ BPredUnit::drainSanityCheck() const
 {
     // We shouldn't have any outstanding requests when we resume from
     // a drained system.
-    for (const auto& ph M5_VAR_USED : predHist)
+    for (M5_VAR_USED const auto& ph : predHist)
         assert(ph.empty());
 }
 

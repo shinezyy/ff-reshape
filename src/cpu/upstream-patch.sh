@@ -1,6 +1,6 @@
 f="$(basename -- $1)"
 cd o3
-git diff 338a173e..c1b1e7dc53 $f > $f.patch
+git diff 53d955cdd $f > $f.patch
 cd ..
 cd forwardflow
 if [ $# -eq 1 ]

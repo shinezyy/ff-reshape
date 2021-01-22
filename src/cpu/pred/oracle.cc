@@ -39,7 +39,7 @@
 #include "debug/OracleBP.hh"
 
 OracleBP::OracleBP(const OracleBPParams *params)
-    : BPredUnit(params),
+    : BPredUnit(*params),
     branchTraceFile(params->outcomePath),
     trace(branchTraceFile)
 {
@@ -271,9 +271,8 @@ void OracleBP::dumpState() {
     }
 }
 
-
 OracleBP*
-OracleBPParams::create()
+OracleBPParams::create() const
 {
     return new OracleBP(this);
 }

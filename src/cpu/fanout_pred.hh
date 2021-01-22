@@ -110,7 +110,7 @@ private:
     float profitDiscount;
 
 public:
-    explicit FanoutPred(BaseCPUParams *params);
+    explicit FanoutPred(const BaseCPUParams *params);
 
     void update(uint64_t pc, unsigned reg_idx, unsigned fanout,
             bool verbose, FPFeatures *fp_feat, int contrib);

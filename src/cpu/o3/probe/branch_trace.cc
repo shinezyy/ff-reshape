@@ -47,7 +47,7 @@
 #include "mem/packet.hh"
 
 BranchTrace::BranchTrace(const BranchTraceParams *params)
-: SimObject(params),
+: SimObject(*params),
 _name("BranchTrace")
 {
 
@@ -82,7 +82,7 @@ void BranchTrace::writeRecord(uint32_t branch_count, bool taken, Addr branch, Ad
 }
 
 BranchTrace*
-BranchTraceParams::create()
+BranchTraceParams::create() const
 {
     return new BranchTrace(this);
 }

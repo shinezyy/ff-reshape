@@ -27,13 +27,14 @@ Tick Lint::write(PacketPtr pkt) {
 }
 
 Lint::Lint(const LintParams *p) :
-    BasicPioDevice(p, p->pio_size)
+    BasicPioDevice(*p, p->pio_size)
 {
 
 }
 
 Lint *
-LintParams::create()
+LintParams::create() const
 {
   return new Lint(this);
 }
+

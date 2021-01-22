@@ -82,7 +82,7 @@ FFFUPool::~FFFUPool()
 
 // Constructor
 FFFUPool::FFFUPool(const Params *p)
-    : SimObject(p), fw(p)
+    : SimObject(*p), fw(p)
 {
     numFU = 0;
 
@@ -248,23 +248,8 @@ FFFUPool::isDrained() const
     return is_drained;
 }
 
-//
-
-////////////////////////////////////////////////////////////////////////////
-//
-//  The SimObjects we use to get the FU information into the simulator
-//
-////////////////////////////////////////////////////////////////////////////
-
-//
-//    FFFUPool - Contails a list of FUDesc objects to make available
-//
-
-//
-//  The FuPool object
-//
 FFFUPool *
-FFFUPoolParams::create()
+FFFUPoolParams::create() const
 {
     return new FFFUPool(this);
 }

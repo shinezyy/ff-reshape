@@ -324,7 +324,7 @@ private:
 
     void clearAllocatedInsts();
 public:
-    FFDIEWC(XFFCPU*, DerivFFCPUParams *);
+    FFDIEWC(XFFCPU*, const DerivFFCPUParams *);
 
     void cacheUnblocked();
 

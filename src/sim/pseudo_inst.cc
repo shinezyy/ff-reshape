@@ -61,7 +61,6 @@
 #include "debug/WorkItems.hh"
 #include "dev/net/dist_iface.hh"
 #include "params/BaseCPU.hh"
-#include "sim/full_system.hh"
 #include "sim/process.hh"
 #include "sim/serialize.hh"
 #include "sim/sim_events.hh"
@@ -100,18 +99,10 @@ const std::string DIST_SIZE = "dist-size";
 
 } // namespace InitParamKey
 
-static inline void
-panicFsOnlyPseudoInst(const char *name)
-{
-    panic("Pseudo inst \"%s\" is only available in Full System mode.", name);
-}
-
 void
 arm(ThreadContext *tc)
 {
     DPRINTF(PseudoInst, "PseudoInst::arm()\n");
-    if (!FullSystem)
-        panicFsOnlyPseudoInst("arm");
 
     auto *workload = tc->getSystemPtr()->workload;
     if (workload)
@@ -211,10 +202,8 @@ void
 loadsymbol(ThreadContext *tc)
 {
     DPRINTF(PseudoInst, "PseudoInst::loadsymbol()\n");
-    if (!FullSystem)
-        panicFsOnlyPseudoInst("loadsymbol");
 
-    const string &filename = tc->getCpuPtr()->system->params()->symbolfile;
+    const string &filename = tc->getCpuPtr()->system->params().symbolfile;
     if (filename.empty()) {
         return;
     }
@@ -266,8 +255,6 @@ addsymbol(ThreadContext *tc, Addr addr, Addr symbolAddr)
 {
     DPRINTF(PseudoInst, "PseudoInst::addsymbol(0x%x, 0x%x)\n",
             addr, symbolAddr);
-    if (!FullSystem)
-        panicFsOnlyPseudoInst("addSymbol");
 
     std::string symbol;
     tc->getVirtProxy().readString(symbol, symbolAddr);
@@ -285,10 +272,6 @@ initParam(ThreadContext *tc, uint64_t key_str1, uint64_t key_str2)
 {
     DPRINTF(PseudoInst, "PseudoInst::initParam() key:%s%s\n", (char *)&key_str1,
             (char *)&key_str2);
-    if (!FullSystem) {
-        panicFsOnlyPseudoInst("initParam");
-        return 0;
-    }
 
     // The key parameter string is passed in via two 64-bit registers. We copy
     // out the characters from the 64-bit integer variables here, and
@@ -318,7 +301,7 @@ void
 resetstats(ThreadContext *tc, Tick delay, Tick period)
 {
     DPRINTF(PseudoInst, "PseudoInst::resetstats(%i, %i)\n", delay, period);
-    if (!tc->getCpuPtr()->params()->do_statistics_insts)
+    if (!tc->getCpuPtr()->params().do_statistics_insts)
         return;
 
 
@@ -332,7 +315,7 @@ void
 dumpstats(ThreadContext *tc, Tick delay, Tick period)
 {
     DPRINTF(PseudoInst, "PseudoInst::dumpstats(%i, %i)\n", delay, period);
-    if (!tc->getCpuPtr()->params()->do_statistics_insts)
+    if (!tc->getCpuPtr()->params().do_statistics_insts)
         return;
 
 
@@ -346,7 +329,7 @@ void
 dumpresetstats(ThreadContext *tc, Tick delay, Tick period)
 {
     DPRINTF(PseudoInst, "PseudoInst::dumpresetstats(%i, %i)\n", delay, period);
-    if (!tc->getCpuPtr()->params()->do_statistics_insts)
+    if (!tc->getCpuPtr()->params().do_statistics_insts)
         return;
 
 
@@ -360,7 +343,7 @@ void
 m5checkpoint(ThreadContext *tc, Tick delay, Tick period)
 {
     DPRINTF(PseudoInst, "PseudoInst::m5checkpoint(%i, %i)\n", delay, period);
-    if (!tc->getCpuPtr()->params()->do_checkpoint_insts)
+    if (!tc->getCpuPtr()->params().do_checkpoint_insts)
         return;
 
     if (DistIface::readyToCkpt(delay, period)) {
@@ -375,12 +358,8 @@ readfile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset)
 {
     DPRINTF(PseudoInst, "PseudoInst::readfile(0x%x, 0x%x, 0x%x)\n",
             vaddr, len, offset);
-    if (!FullSystem) {
-        panicFsOnlyPseudoInst("readfile");
-        return 0;
-    }
 
-    const string &file = tc->getSystemPtr()->params()->readfile;
+    const string &file = tc->getSystemPtr()->params().readfile;
     if (file.empty()) {
         return ULL(0);
     }
@@ -471,22 +450,18 @@ switchcpu(ThreadContext *tc)
     exitSimLoop("switchcpu");
 }
 
-/*
- * This function is executed when the simulation is executing the syscall
- * handler in System Emulation mode.
- */
-void
-m5Syscall(ThreadContext *tc)
-{
-    DPRINTF(PseudoInst, "PseudoInst::m5Syscall()\n");
-    tc->syscall();
-}
-
 void
 togglesync(ThreadContext *tc)
 {
     DPRINTF(PseudoInst, "PseudoInst::togglesync()\n");
     DistIface::toggleSync(tc);
+}
+
+void
+triggerWorkloadEvent(ThreadContext *tc)
+{
+    DPRINTF(PseudoInst, "PseudoInst::triggerWorkloadEvent()\n");
+    tc->getSystemPtr()->workload->event(tc);
 }
 
 //
@@ -499,9 +474,9 @@ workbegin(ThreadContext *tc, uint64_t workid, uint64_t threadid)
 {
     DPRINTF(PseudoInst, "PseudoInst::workbegin(%i, %i)\n", workid, threadid);
     System *sys = tc->getSystemPtr();
-    const System::Params *params = sys->params();
+    const System::Params &params = sys->params();
 
-    if (params->exit_on_work_items) {
+    if (params.exit_on_work_items) {
         exitSimLoop("workbegin", static_cast<int>(workid));
         return;
     }
@@ -515,20 +490,20 @@ workbegin(ThreadContext *tc, uint64_t workid, uint64_t threadid)
     // If specified, determine if this is the specific work item the user
     // identified
     //
-    if (params->work_item_id == -1 || params->work_item_id == workid) {
+    if (params.work_item_id == -1 || params.work_item_id == workid) {
 
         uint64_t systemWorkBeginCount = sys->incWorkItemsBegin();
         int cpuId = tc->getCpuPtr()->cpuId();
 
-        if (params->work_cpus_ckpt_count != 0 &&
-            sys->markWorkItem(cpuId) >= params->work_cpus_ckpt_count) {
+        if (params.work_cpus_ckpt_count != 0 &&
+            sys->markWorkItem(cpuId) >= params.work_cpus_ckpt_count) {
             //
             // If active cpus equals checkpoint count, create checkpoint
             //
             exitSimLoop("checkpoint");
         }
 
-        if (systemWorkBeginCount == params->work_begin_ckpt_count) {
+        if (systemWorkBeginCount == params.work_begin_ckpt_count) {
             //
             // Note: the string specified as the cause of the exit event must
             // exactly equal "checkpoint" inorder to create a checkpoint
@@ -536,14 +511,14 @@ workbegin(ThreadContext *tc, uint64_t workid, uint64_t threadid)
             exitSimLoop("checkpoint");
         }
 
-        if (systemWorkBeginCount == params->work_begin_exit_count) {
+        if (systemWorkBeginCount == params.work_begin_exit_count) {
             //
             // If a certain number of work items started, exit simulation
             //
             exitSimLoop("work started count reach");
         }
 
-        if (cpuId == params->work_begin_cpu_id_exit) {
+        if (cpuId == params.work_begin_cpu_id_exit) {
             //
             // If work started on the cpu id specified, exit simulation
             //
@@ -562,9 +537,9 @@ workend(ThreadContext *tc, uint64_t workid, uint64_t threadid)
 {
     DPRINTF(PseudoInst, "PseudoInst::workend(%i, %i)\n", workid, threadid);
     System *sys = tc->getSystemPtr();
-    const System::Params *params = sys->params();
+    const System::Params &params = sys->params();
 
-    if (params->exit_on_work_items) {
+    if (params.exit_on_work_items) {
         exitSimLoop("workend", static_cast<int>(workid));
         return;
     }
@@ -577,21 +552,21 @@ workend(ThreadContext *tc, uint64_t workid, uint64_t threadid)
     // If specified, determine if this is the specific work item the user
     // identified
     //
-    if (params->work_item_id == -1 || params->work_item_id == workid) {
+    if (params.work_item_id == -1 || params.work_item_id == workid) {
 
         uint64_t systemWorkEndCount = sys->incWorkItemsEnd();
         int cpuId = tc->getCpuPtr()->cpuId();
 
-        if (params->work_cpus_ckpt_count != 0 &&
-            sys->markWorkItem(cpuId) >= params->work_cpus_ckpt_count) {
+        if (params.work_cpus_ckpt_count != 0 &&
+            sys->markWorkItem(cpuId) >= params.work_cpus_ckpt_count) {
             //
             // If active cpus equals checkpoint count, create checkpoint
             //
             exitSimLoop("checkpoint");
         }
 
-        if (params->work_end_ckpt_count != 0 &&
-            systemWorkEndCount == params->work_end_ckpt_count) {
+        if (params.work_end_ckpt_count != 0 &&
+            systemWorkEndCount == params.work_end_ckpt_count) {
             //
             // If total work items completed equals checkpoint count, create
             // checkpoint
@@ -599,8 +574,8 @@ workend(ThreadContext *tc, uint64_t workid, uint64_t threadid)
             exitSimLoop("checkpoint");
         }
 
-        if (params->work_end_exit_count != 0 &&
-            systemWorkEndCount == params->work_end_exit_count) {
+        if (params.work_end_exit_count != 0 &&
+            systemWorkEndCount == params.work_end_exit_count) {
             //
             // If total work items completed equals exit count, exit simulation
             //

@@ -223,7 +223,7 @@ LSQUnit<Impl>::LSQUnit(uint32_t lqEntries, uint32_t sqEntries)
 
 template<class Impl>
 void
-LSQUnit<Impl>::init(O3CPU *cpu_ptr, IEW *iew_ptr, DerivFFCPUParams *params,
+LSQUnit<Impl>::init(O3CPU *cpu_ptr, IEW *iew_ptr, const DerivFFCPUParams *params,
         LSQ *lsq_ptr, unsigned id)
 {
     lsqID = id;
@@ -352,6 +352,7 @@ LSQUnit<Impl>::insertLoad(const DynInstPtr &load_inst)
     assert(!loadQueue.back().valid());
     loadQueue.back().set(load_inst);
     load_inst->lqIdx = loadQueue.tail();
+    assert(load_inst->lqIdx > 0);
     load_inst->lqIt = loadQueue.getIterator(load_inst->lqIdx);
 
     ++loads;
@@ -409,7 +410,8 @@ LSQUnit<Impl>::insertStore(const DynInstPtr& store_inst)
     storeQueue.advance_tail();
 
     store_inst->sqIdx = storeQueue.tail();
-    store_inst->lqIdx = loadQueue.moduloAdd(loadQueue.tail(), 1);
+    store_inst->lqIdx = loadQueue.tail() + 1;
+    assert(store_inst->lqIdx > 0);
     store_inst->lqIt = loadQueue.end();
 
     storeQueue.back().set(store_inst);

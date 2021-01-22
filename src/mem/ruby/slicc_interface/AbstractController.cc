@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017,2019 ARM Limited
+ * Copyright (c) 2017,2019,2020 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -47,16 +47,17 @@
 #include "mem/ruby/system/Sequencer.hh"
 #include "sim/system.hh"
 
-AbstractController::AbstractController(const Params *p)
-    : ClockedObject(p), Consumer(this), m_version(p->version),
-      m_clusterID(p->cluster_id),
-      m_id(p->system->getRequestorId(this)), m_is_blocking(false),
-      m_number_of_TBEs(p->number_of_TBEs),
-      m_transitions_per_cycle(p->transitions_per_cycle),
-      m_buffer_size(p->buffer_size), m_recycle_latency(p->recycle_latency),
-      m_mandatory_queue_latency(p->mandatory_queue_latency),
+AbstractController::AbstractController(const Params &p)
+    : ClockedObject(p), Consumer(this), m_version(p.version),
+      m_clusterID(p.cluster_id),
+      m_id(p.system->getRequestorId(this)), m_is_blocking(false),
+      m_number_of_TBEs(p.number_of_TBEs),
+      m_transitions_per_cycle(p.transitions_per_cycle),
+      m_buffer_size(p.buffer_size), m_recycle_latency(p.recycle_latency),
+      m_mandatory_queue_latency(p.mandatory_queue_latency),
       memoryPort(csprintf("%s.memory", name()), this),
-      addrRanges(p->addr_ranges.begin(), p->addr_ranges.end())
+      addrRanges(p.addr_ranges.begin(), p.addr_ranges.end()),
+      stats(this)
 {
     if (m_version == 0) {
         // Combine the statistics from all controllers
@@ -68,25 +69,48 @@ AbstractController::AbstractController(const Params *p)
 void
 AbstractController::init()
 {
-    m_delayHistogram.init(10);
+    stats.m_delayHistogram.init(10);
     uint32_t size = Network::getNumberOfVirtualNetworks();
     for (uint32_t i = 0; i < size; i++) {
-        m_delayVCHistogram.push_back(new Stats::Histogram());
-        m_delayVCHistogram[i]->init(10);
+        stats.m_delayVCHistogram.push_back(new Stats::Histogram(this));
+        stats.m_delayVCHistogram[i]->init(10);
     }
 
     if (getMemReqQueue()) {
         getMemReqQueue()->setConsumer(this);
     }
+
+    // Initialize the addr->downstream machine mappings. Multiple machines
+    // in downstream_destinations can have the same address range if they have
+    // different types. If this is the case, mapAddressToDownstreamMachine
+    // needs to specify the machine type
+    downstreamDestinations.resize();
+    for (auto abs_cntrl : params().downstream_destinations) {
+        MachineID mid = abs_cntrl->getMachineID();
+        const AddrRangeList &ranges = abs_cntrl->getAddrRanges();
+        for (const auto &addr_range : ranges) {
+            auto i = downstreamAddrMap.intersects(addr_range);
+            if (i == downstreamAddrMap.end()) {
+                i = downstreamAddrMap.insert(addr_range, AddrMapEntry());
+            }
+            AddrMapEntry &entry = i->second;
+            fatal_if(entry.count(mid.getType()) > 0,
+                     "%s: %s mapped to multiple machines of the same type\n",
+                     name(), addr_range.to_string());
+            entry[mid.getType()] = mid;
+        }
+        downstreamDestinations.add(mid);
+    }
+
 }
 
 void
 AbstractController::resetStats()
 {
-    m_delayHistogram.reset();
+    stats.m_delayHistogram.reset();
     uint32_t size = Network::getNumberOfVirtualNetworks();
     for (uint32_t i = 0; i < size; i++) {
-        m_delayVCHistogram[i]->reset();
+        stats.m_delayVCHistogram[i]->reset();
     }
 }
 
@@ -94,19 +118,14 @@ void
 AbstractController::regStats()
 {
     ClockedObject::regStats();
-
-    m_fully_busy_cycles
-        .name(name() + ".fully_busy_cycles")
-        .desc("cycles for which number of transistions == max transitions")
-        .flags(Stats::nozero);
 }
 
 void
 AbstractController::profileMsgDelay(uint32_t virtualNetwork, Cycles delay)
 {
-    assert(virtualNetwork < m_delayVCHistogram.size());
-    m_delayHistogram.sample(delay);
-    m_delayVCHistogram[virtualNetwork]->sample(delay);
+    assert(virtualNetwork < stats.m_delayVCHistogram.size());
+    stats.m_delayHistogram.sample(delay);
+    stats.m_delayVCHistogram[virtualNetwork]->sample(delay);
 }
 
 void
@@ -357,6 +376,30 @@ AbstractController::mapAddressToMachine(Addr addr, MachineType mtype) const
     return mach;
 }
 
+MachineID
+AbstractController::mapAddressToDownstreamMachine(Addr addr, MachineType mtype)
+const
+{
+    const auto i = downstreamAddrMap.contains(addr);
+    fatal_if(i == downstreamAddrMap.end(),
+      "%s: couldn't find mapping for address %x\n", name(), addr);
+
+    const AddrMapEntry &entry = i->second;
+    assert(!entry.empty());
+
+    if (mtype == MachineType_NUM) {
+        fatal_if(entry.size() > 1,
+          "%s: address %x mapped to multiple machine types.\n", name(), addr);
+        return entry.begin()->second;
+    } else {
+        auto j = entry.find(mtype);
+        fatal_if(j == entry.end(),
+          "%s: couldn't find mapping for address %x\n", name(), addr);
+        return j->second;
+    }
+}
+
+
 bool
 AbstractController::MemoryPort::recvTimingResp(PacketPtr pkt)
 {
@@ -375,4 +418,18 @@ AbstractController::MemoryPort::MemoryPort(const std::string &_name,
                                            PortID id)
     : RequestPort(_name, _controller, id), controller(_controller)
 {
+}
+
+AbstractController::
+ControllerStats::ControllerStats(Stats::Group *parent)
+    : Stats::Group(parent),
+      m_fully_busy_cycles(this, "fully_busy_cycles",
+                          "cycles for which number of transistions == max "
+                          "transitions"),
+      m_delayHistogram(this, "delay_histogram")
+{
+    m_fully_busy_cycles
+        .flags(Stats::nozero);
+    m_delayHistogram
+        .flags(Stats::nozero);
 }

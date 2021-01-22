@@ -16,7 +16,7 @@
 using namespace boost;
 
 
-FanoutPred::FanoutPred(BaseCPUParams *params)
+FanoutPred::FanoutPred(const BaseCPUParams *params)
         : lambda(params->FanoutPredLambda),
           depth(params->FanoutPredTableSize),
           mask(static_cast<unsigned>((1 << ceilLog2(depth)) - 1)),

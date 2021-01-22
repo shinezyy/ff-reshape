@@ -9,7 +9,7 @@
 #include "debug/NoSQSMB.hh"
 
 MemDepPredictor::MemDepPredictor(const Params *params)
-    : SimObject(params),
+    : SimObject(*params),
 
     _name("NoSQPredictor"),
 
@@ -688,13 +688,13 @@ unsigned MemDepPredictor::getNumStores() const {
     return recentStoreTable.size();
 }
 
-MemDepPredictor *MemDepPredictorParams::create()
+MemDepPredictor *MemDepPredictorParams::create() const
 {
     return new MemDepPredictor(this);
 }
 
 TSSBF::TSSBF(const Params *p)
-        : SimObject(p),
+        : SimObject(*p),
           TagBits(p->TSSBFTagBits),
           TagMask((((uint64_t)1) << TagBits) - 1),
           Size(p->TSSBFSize),
@@ -802,7 +802,7 @@ void TSSBF::dump()
 
 
 SimpleSSBF::SimpleSSBF(const Params *p)
-        : SimObject(p),
+        : SimObject(*p),
           Size(p->TSSBFSize),
           IndexBits(ceilLog2(p->TSSBFSize)),
           IndexMask((((uint64_t)1) << IndexBits) - 1),
@@ -1136,7 +1136,7 @@ void LocalPredictor::clearTouchBit()
 }
 
 LocalPredictor::LocalPredictor(const LocalPredictor::Params *p)
-: SimObject(p),
+: SimObject(*p),
     predTable(predTableSize, SignedSatCounter(2, 0)),
     _name("MemPatternPredictor")
 {

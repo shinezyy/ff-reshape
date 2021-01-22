@@ -23,7 +23,7 @@ namespace FF
 using namespace std;
 
 template<class Impl>
-DQTop<Impl>::DQTop(DerivFFCPUParams *params)
+DQTop<Impl>::DQTop(const DerivFFCPUParams *params)
         :
         c(params),
         head(0),
@@ -784,7 +784,7 @@ void DQTop<Impl>::completeMemInst(const DynInstPtr &inst)
         // complateMemInst
         inst->memOpDone(true);
 
-    } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
+    } else if (inst->isReadBarrier() || inst->isWriteBarrier()) {
         memDepUnit.completeBarrier(inst);
     }
 }

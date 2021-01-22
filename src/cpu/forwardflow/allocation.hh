@@ -191,7 +191,7 @@ public:
 public:
     void regStats();
 
-    explicit Allocation(O3CPU*, DerivFFCPUParams*);
+    explicit Allocation(O3CPU*, const DerivFFCPUParams*);
 
     std::string name() const;
 

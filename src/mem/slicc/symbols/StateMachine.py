@@ -307,7 +307,7 @@ class $c_ident : public AbstractController
 {
   public:
     typedef ${c_ident}Params Params;
-    $c_ident(const Params *p);
+    $c_ident(const Params &p);
     static int getNumControllers();
     void init();
 
@@ -379,6 +379,12 @@ TransitionResult doTransitionWorker(${ident}_Event event,
 
         code('''
                                     Addr addr);
+
+${ident}_Event m_curTransitionEvent;
+${ident}_State m_curTransitionNextState;
+
+${ident}_Event curTransitionEvent() { return m_curTransitionEvent; }
+${ident}_State curTransitionNextState() { return m_curTransitionNextState; }
 
 int m_counters[${ident}_State_NUM][${ident}_Event_NUM];
 int m_event_counters[${ident}_Event_NUM];
@@ -533,12 +539,6 @@ using namespace std;
         num_in_ports = len(self.in_ports)
 
         code('''
-$c_ident *
-${c_ident}Params::create()
-{
-    return new $c_ident(this);
-}
-
 int $c_ident::m_num_controllers = 0;
 std::vector<Stats::Vector *>  $c_ident::eventVec;
 std::vector<std::vector<Stats::Vector *> >  $c_ident::transVec;
@@ -553,13 +553,13 @@ stringstream ${ident}_transitionComment;
 #endif
 
 /** \\brief constructor */
-$c_ident::$c_ident(const Params *p)
+$c_ident::$c_ident(const Params &p)
     : AbstractController(p)
 {
     m_machineID.type = MachineType_${ident};
     m_machineID.num = m_version;
     m_num_controllers++;
-    p->ruby_system->registerAbstractController(this);
+    p.ruby_system->registerAbstractController(this);
 
     m_in_ports = $num_in_ports;
 ''')
@@ -572,9 +572,9 @@ $c_ident::$c_ident(const Params *p)
         #
         for param in self.config_parameters:
             if param.pointer:
-                code('m_${{param.ident}}_ptr = p->${{param.ident}};')
+                code('m_${{param.ident}}_ptr = p.${{param.ident}};')
             else:
-                code('m_${{param.ident}} = p->${{param.ident}};')
+                code('m_${{param.ident}} = p.${{param.ident}};')
 
             if re.compile("sequencer").search(param.ident) or \
                    param.type_ast.type.c_ident == "GPUCoalescer" or \
@@ -605,7 +605,7 @@ void
 $c_ident::initNetQueues()
 {
     MachineType machine_type = string_to_MachineType("${{self.ident}}");
-    int base M5_VAR_USED = MachineType_base_number(machine_type);
+    M5_VAR_USED int base = MachineType_base_number(machine_type);
 
 ''')
         code.indent()
@@ -815,13 +815,20 @@ $c_ident::regStats()
 {
     AbstractController::regStats();
 
+    // For each type of controllers, one controller of that type is picked
+    // to aggregate stats of all controllers of that type. 
     if (m_version == 0) {
+
+        Profiler *profiler = params().ruby_system->getProfiler();
+        Stats::Group *profilerStatsPtr = &profiler->rubyProfilerStats;
+
         for (${ident}_Event event = ${ident}_Event_FIRST;
              event < ${ident}_Event_NUM; ++event) {
-            Stats::Vector *t = new Stats::Vector();
+            std::string stat_name =
+                "${c_ident}." + ${ident}_Event_to_string(event);
+            Stats::Vector *t =
+                new Stats::Vector(profilerStatsPtr, stat_name.c_str());
             t->init(m_num_controllers);
-            t->name(params()->ruby_system->name() + ".${c_ident}." +
-                ${ident}_Event_to_string(event));
             t->flags(Stats::pdf | Stats::total | Stats::oneline |
                      Stats::nozero);
 
@@ -835,16 +842,46 @@ $c_ident::regStats()
 
             for (${ident}_Event event = ${ident}_Event_FIRST;
                  event < ${ident}_Event_NUM; ++event) {
-
-                Stats::Vector *t = new Stats::Vector();
+                std::string stat_name = "${c_ident}." +
+                    ${ident}_State_to_string(state) +
+                    "." + ${ident}_Event_to_string(event);
+                Stats::Vector *t =
+                    new Stats::Vector(profilerStatsPtr, stat_name.c_str());
                 t->init(m_num_controllers);
-                t->name(params()->ruby_system->name() + ".${c_ident}." +
-                        ${ident}_State_to_string(state) +
-                        "." + ${ident}_Event_to_string(event));
-
                 t->flags(Stats::pdf | Stats::total | Stats::oneline |
                          Stats::nozero);
                 transVec[state].push_back(t);
+            }
+        }
+    }
+    for (${ident}_Event event = ${ident}_Event_FIRST;
+                 event < ${ident}_Event_NUM; ++event) {
+        std::string stat_name =
+            "outTransLatHist." + ${ident}_Event_to_string(event);
+        Stats::Histogram* t = new Stats::Histogram(&stats, stat_name.c_str());
+        stats.m_outTransLatHist.push_back(t);
+        t->init(5);
+        t->flags(Stats::pdf | Stats::total |
+                 Stats::oneline | Stats::nozero);
+    }
+    for (${ident}_Event event = ${ident}_Event_FIRST;
+                 event < ${ident}_Event_NUM; ++event) {
+        stats.m_inTransLatHist.emplace_back();
+        for (${ident}_State initial_state = ${ident}_State_FIRST;
+             initial_state < ${ident}_State_NUM; ++initial_state) {
+            stats.m_inTransLatHist.back().emplace_back();
+            for (${ident}_State final_state = ${ident}_State_FIRST;
+                 final_state < ${ident}_State_NUM; ++final_state) {
+                std::string stat_name = "inTransLatHist." +
+                    ${ident}_Event_to_string(event) + "." +
+                    ${ident}_State_to_string(initial_state) + "." +
+                    ${ident}_State_to_string(final_state);
+                Stats::Histogram* t =
+                    new Stats::Histogram(&stats, stat_name.c_str());
+                stats.m_inTransLatHist.back().back().push_back(t);
+                t->init(5);
+                t->flags(Stats::pdf | Stats::total |
+                         Stats::oneline | Stats::nozero);
             }
         }
     }
@@ -856,7 +893,7 @@ $c_ident::collateStats()
     for (${ident}_Event event = ${ident}_Event_FIRST;
          event < ${ident}_Event_NUM; ++event) {
         for (unsigned int i = 0; i < m_num_controllers; ++i) {
-            RubySystem *rs = params()->ruby_system;
+            RubySystem *rs = params().ruby_system;
             std::map<uint32_t, AbstractController *>::iterator it =
                      rs->m_abstract_controls[MachineType_${ident}].find(i);
             assert(it != rs->m_abstract_controls[MachineType_${ident}].end());
@@ -872,7 +909,7 @@ $c_ident::collateStats()
              event < ${ident}_Event_NUM; ++event) {
 
             for (unsigned int i = 0; i < m_num_controllers; ++i) {
-                RubySystem *rs = params()->ruby_system;
+                RubySystem *rs = params().ruby_system;
                 std::map<uint32_t, AbstractController *>::iterator it =
                          rs->m_abstract_controls[MachineType_${ident}].find(i);
                 assert(it != rs->m_abstract_controls[MachineType_${ident}].end());
@@ -1201,7 +1238,7 @@ ${ident}_Controller::wakeup()
         assert(counter <= m_transitions_per_cycle);
         if (counter == m_transitions_per_cycle) {
             // Count how often we are fully utilized
-            m_fully_busy_cycles++;
+            stats.m_fully_busy_cycles++;
 
             // Wakeup in another cycle and try again
             scheduleEvent(Cycles(1));
@@ -1407,6 +1444,8 @@ ${ident}_Controller::doTransitionWorker(${ident}_Event event,
         code('''
                                         Addr addr)
 {
+    m_curTransitionEvent = event;
+    m_curTransitionNextState = next_state;
     switch(HASH_FUN(state, event)) {
 ''')
 
@@ -1427,10 +1466,12 @@ ${ident}_Controller::doTransitionWorker(${ident}_Event event,
                     # is determined before any actions of the transition
                     # execute, and therefore the next state calculation cannot
                     # depend on any of the transitionactions.
-                    case('next_state = getNextState(addr);')
+                    case('next_state = getNextState(addr); '
+                         'm_curTransitionNextState = next_state;')
                 else:
                     ns_ident = trans.nextState.ident
-                    case('next_state = ${ident}_State_${ns_ident};')
+                    case('next_state = ${ident}_State_${ns_ident}; '
+                         'm_curTransitionNextState = next_state;')
 
             actions = trans.actions
             request_types = trans.request_types

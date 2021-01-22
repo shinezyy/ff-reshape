@@ -220,7 +220,7 @@ class RefCountingPtr
     T *get() const { return data; }
 
     template <bool B = TisConst>
-    operator RefCountingPtr<typename std::enable_if<!B, ConstT>::type>()
+    operator RefCountingPtr<typename std::enable_if_t<!B, ConstT>>()
     {
         return RefCountingPtr<const T>(*this);
     }

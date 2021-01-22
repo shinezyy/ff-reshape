@@ -11,7 +11,7 @@ namespace FF
 
 template<class Impl>
 ReadyInstsQueue<Impl>::ReadyInstsQueue(
-        DerivFFCPUParams *params, const std::string& parent_name, bool prefer_md)
+        const DerivFFCPUParams *params, const std::string& parent_name, bool prefer_md)
         :   maxReadyQueueSize(params->MaxReadyQueueSize),
             preScheduledQueues(nOpGroups),
             _name(parent_name + ".ReadyInstQueue"),

@@ -61,30 +61,75 @@
 
 using namespace std;
 
-Sequencer *
-RubySequencerParams::create()
-{
-    return new Sequencer(this);
-}
-
-Sequencer::Sequencer(const Params *p)
+Sequencer::Sequencer(const Params &p)
     : RubyPort(p), m_IncompleteTimes(MachineType_NUM),
       deadlockCheckEvent([this]{ wakeup(); }, "Sequencer deadlock check")
 {
     m_outstanding_count = 0;
 
-    m_instCache_ptr = p->icache;
-    m_dataCache_ptr = p->dcache;
-    m_max_outstanding_requests = p->max_outstanding_requests;
-    m_deadlock_threshold = p->deadlock_threshold;
+    m_dataCache_ptr = p.dcache;
+    m_max_outstanding_requests = p.max_outstanding_requests;
+    m_deadlock_threshold = p.deadlock_threshold;
 
-    m_coreId = p->coreid; // for tracking the two CorePair sequencers
+    m_coreId = p.coreid; // for tracking the two CorePair sequencers
     assert(m_max_outstanding_requests > 0);
     assert(m_deadlock_threshold > 0);
-    assert(m_instCache_ptr != NULL);
-    assert(m_dataCache_ptr != NULL);
 
-    m_runningGarnetStandalone = p->garnet_standalone;
+    m_runningGarnetStandalone = p.garnet_standalone;
+
+
+    // These statistical variables are not for display.
+    // The profiler will collate these across different
+    // sequencers and display those collated statistics.
+    m_outstandReqHist.init(10);
+    m_latencyHist.init(10);
+    m_hitLatencyHist.init(10);
+    m_missLatencyHist.init(10);
+
+    for (int i = 0; i < RubyRequestType_NUM; i++) {
+        m_typeLatencyHist.push_back(new Stats::Histogram());
+        m_typeLatencyHist[i]->init(10);
+
+        m_hitTypeLatencyHist.push_back(new Stats::Histogram());
+        m_hitTypeLatencyHist[i]->init(10);
+
+        m_missTypeLatencyHist.push_back(new Stats::Histogram());
+        m_missTypeLatencyHist[i]->init(10);
+    }
+
+    for (int i = 0; i < MachineType_NUM; i++) {
+        m_hitMachLatencyHist.push_back(new Stats::Histogram());
+        m_hitMachLatencyHist[i]->init(10);
+
+        m_missMachLatencyHist.push_back(new Stats::Histogram());
+        m_missMachLatencyHist[i]->init(10);
+
+        m_IssueToInitialDelayHist.push_back(new Stats::Histogram());
+        m_IssueToInitialDelayHist[i]->init(10);
+
+        m_InitialToForwardDelayHist.push_back(new Stats::Histogram());
+        m_InitialToForwardDelayHist[i]->init(10);
+
+        m_ForwardToFirstResponseDelayHist.push_back(new Stats::Histogram());
+        m_ForwardToFirstResponseDelayHist[i]->init(10);
+
+        m_FirstResponseToCompletionDelayHist.push_back(new Stats::Histogram());
+        m_FirstResponseToCompletionDelayHist[i]->init(10);
+    }
+
+    for (int i = 0; i < RubyRequestType_NUM; i++) {
+        m_hitTypeMachLatencyHist.push_back(std::vector<Stats::Histogram *>());
+        m_missTypeMachLatencyHist.push_back(std::vector<Stats::Histogram *>());
+
+        for (int j = 0; j < MachineType_NUM; j++) {
+            m_hitTypeMachLatencyHist[i].push_back(new Stats::Histogram());
+            m_hitTypeMachLatencyHist[i][j]->init(10);
+
+            m_missTypeMachLatencyHist[i].push_back(new Stats::Histogram());
+            m_missTypeMachLatencyHist[i][j]->init(10);
+        }
+    }
+
 }
 
 Sequencer::~Sequencer()
@@ -94,6 +139,8 @@ Sequencer::~Sequencer()
 void
 Sequencer::llscLoadLinked(const Addr claddr)
 {
+    fatal_if(m_dataCache_ptr == NULL,
+        "%s must have a dcache object to support LLSC requests.", name());
     AbstractCacheEntry *line = m_dataCache_ptr->lookup(claddr);
     if (line) {
         line->setLocked(m_version);
@@ -105,6 +152,9 @@ Sequencer::llscLoadLinked(const Addr claddr)
 void
 Sequencer::llscClearMonitor(const Addr claddr)
 {
+    // clear monitor is called for all stores and evictions
+    if (m_dataCache_ptr == NULL)
+        return;
     AbstractCacheEntry *line = m_dataCache_ptr->lookup(claddr);
     if (line && line->isLocked(m_version)) {
         line->clearLocked();
@@ -116,6 +166,8 @@ Sequencer::llscClearMonitor(const Addr claddr)
 bool
 Sequencer::llscStoreConditional(const Addr claddr)
 {
+    fatal_if(m_dataCache_ptr == NULL,
+        "%s must have a dcache object to support LLSC requests.", name());
     AbstractCacheEntry *line = m_dataCache_ptr->lookup(claddr);
     if (!line)
         return false;
@@ -137,6 +189,7 @@ Sequencer::llscStoreConditional(const Addr claddr)
 bool
 Sequencer::llscCheckMonitor(const Addr address)
 {
+    assert(m_dataCache_ptr != NULL);
     const Addr claddr = makeLineAddress(address);
     AbstractCacheEntry *line = m_dataCache_ptr->lookup(claddr);
     if (!line)
@@ -347,7 +400,8 @@ Sequencer::writeCallback(Addr address, DataBlock& data,
                          const bool externalHit, const MachineType mach,
                          const Cycles initialRequestTime,
                          const Cycles forwardRequestTime,
-                         const Cycles firstResponseTime)
+                         const Cycles firstResponseTime,
+                         const bool noCoales)
 {
     //
     // Free the whole list as we assume we have had the exclusive access
@@ -365,6 +419,15 @@ Sequencer::writeCallback(Addr address, DataBlock& data,
     int aliased_loads = 0;
     while (!seq_req_list.empty()) {
         SequencerRequest &seq_req = seq_req_list.front();
+
+        if (noCoales && !ruby_request) {
+            // Do not process follow-up requests
+            // (e.g. if full line no present)
+            // Reissue to the cache hierarchy
+            issueRequest(seq_req.pkt, seq_req.m_second_type);
+            break;
+        }
+
         if (ruby_request) {
             assert(seq_req.m_type != RubyRequestType_LD);
             assert(seq_req.m_type != RubyRequestType_Load_Linked);
@@ -771,62 +834,4 @@ Sequencer::evictionCallback(Addr address)
 {
     llscClearMonitor(address);
     ruby_eviction_callback(address);
-}
-
-void
-Sequencer::regStats()
-{
-    RubyPort::regStats();
-
-    // These statistical variables are not for display.
-    // The profiler will collate these across different
-    // sequencers and display those collated statistics.
-    m_outstandReqHist.init(10);
-    m_latencyHist.init(10);
-    m_hitLatencyHist.init(10);
-    m_missLatencyHist.init(10);
-
-    for (int i = 0; i < RubyRequestType_NUM; i++) {
-        m_typeLatencyHist.push_back(new Stats::Histogram());
-        m_typeLatencyHist[i]->init(10);
-
-        m_hitTypeLatencyHist.push_back(new Stats::Histogram());
-        m_hitTypeLatencyHist[i]->init(10);
-
-        m_missTypeLatencyHist.push_back(new Stats::Histogram());
-        m_missTypeLatencyHist[i]->init(10);
-    }
-
-    for (int i = 0; i < MachineType_NUM; i++) {
-        m_hitMachLatencyHist.push_back(new Stats::Histogram());
-        m_hitMachLatencyHist[i]->init(10);
-
-        m_missMachLatencyHist.push_back(new Stats::Histogram());
-        m_missMachLatencyHist[i]->init(10);
-
-        m_IssueToInitialDelayHist.push_back(new Stats::Histogram());
-        m_IssueToInitialDelayHist[i]->init(10);
-
-        m_InitialToForwardDelayHist.push_back(new Stats::Histogram());
-        m_InitialToForwardDelayHist[i]->init(10);
-
-        m_ForwardToFirstResponseDelayHist.push_back(new Stats::Histogram());
-        m_ForwardToFirstResponseDelayHist[i]->init(10);
-
-        m_FirstResponseToCompletionDelayHist.push_back(new Stats::Histogram());
-        m_FirstResponseToCompletionDelayHist[i]->init(10);
-    }
-
-    for (int i = 0; i < RubyRequestType_NUM; i++) {
-        m_hitTypeMachLatencyHist.push_back(std::vector<Stats::Histogram *>());
-        m_missTypeMachLatencyHist.push_back(std::vector<Stats::Histogram *>());
-
-        for (int j = 0; j < MachineType_NUM; j++) {
-            m_hitTypeMachLatencyHist[i].push_back(new Stats::Histogram());
-            m_hitTypeMachLatencyHist[i][j]->init(10);
-
-            m_missTypeMachLatencyHist[i].push_back(new Stats::Histogram());
-            m_missTypeMachLatencyHist[i][j]->init(10);
-        }
-    }
 }

@@ -102,7 +102,7 @@ class DefaultDecode
 
   public:
     /** DefaultDecode constructor. */
-    DefaultDecode(O3CPU *_cpu, DerivFFCPUParams *params);
+    DefaultDecode(O3CPU *_cpu, const DerivFFCPUParams *params);
 
     void startupStage();
     void resetStage();

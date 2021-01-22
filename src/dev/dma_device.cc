@@ -45,7 +45,6 @@
 #include "base/chunk_generator.hh"
 #include "debug/DMA.hh"
 #include "debug/Drain.hh"
-#include "mem/port_proxy.hh"
 #include "sim/clocked_object.hh"
 #include "sim/system.hh"
 
@@ -54,9 +53,7 @@ DmaPort::DmaPort(ClockedObject *dev, System *s,
     : RequestPort(dev->name() + ".dma", dev),
       device(dev), sys(s), requestorId(s->getRequestorId(dev)),
       sendEvent([this]{ sendDma(); }, dev->name()),
-      pendingCount(0), inRetry(false),
-      defaultSid(sid),
-      defaultSSid(ssid)
+      defaultSid(sid), defaultSSid(ssid), cacheLineSize(s->cacheLineSize())
 { }
 
 void
@@ -66,7 +63,7 @@ DmaPort::handleResp(PacketPtr pkt, Tick delay)
     assert(pkt->isResponse());
 
     // get the DMA sender state
-    DmaReqState *state = dynamic_cast<DmaReqState*>(pkt->senderState);
+    auto *state = dynamic_cast<DmaReqState*>(pkt->senderState);
     assert(state);
 
     DPRINTF(DMA, "Received response %s for addr: %#x size: %d nb: %d,"  \
@@ -114,15 +111,15 @@ DmaPort::recvTimingResp(PacketPtr pkt)
     return true;
 }
 
-DmaDevice::DmaDevice(const Params *p)
-    : PioDevice(p), dmaPort(this, sys, p->sid, p->ssid)
+DmaDevice::DmaDevice(const Params &p)
+    : PioDevice(p), dmaPort(this, sys, p.sid, p.ssid)
 { }
 
 void
 DmaDevice::init()
 {
-    if (!dmaPort.isConnected())
-        panic("DMA port of %s not connected to anything!", name());
+    panic_if(!dmaPort.isConnected(),
+             "DMA port of %s not connected to anything!", name());
     PioDevice::init();
 }
 
@@ -144,7 +141,7 @@ DmaPort::recvReqRetry()
     trySendTimingReq();
 }
 
-RequestPtr
+void
 DmaPort::dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
                    uint8_t *data, uint32_t sid, uint32_t ssid, Tick delay,
                    Request::Flags flag)
@@ -154,22 +151,18 @@ DmaPort::dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
     // i.e. cache line size
     DmaReqState *reqState = new DmaReqState(event, size, delay);
 
-    // (functionality added for Table Walker statistics)
-    // We're only interested in this when there will only be one request.
-    // For simplicity, we return the last request, which would also be
-    // the only request in that case.
-    RequestPtr req = NULL;
+    RequestPtr req = nullptr;
 
     DPRINTF(DMA, "Starting DMA for addr: %#x size: %d sched: %d\n", addr, size,
             event ? event->scheduled() : -1);
-    for (ChunkGenerator gen(addr, size, sys->cacheLineSize());
+    for (ChunkGenerator gen(addr, size, cacheLineSize);
          !gen.done(); gen.next()) {
 
         req = std::make_shared<Request>(
             gen.addr(), gen.size(), flag, requestorId);
 
         req->setStreamId(sid);
-        req->setSubStreamId(ssid);
+        req->setSubstreamId(ssid);
 
         req->taskId(ContextSwitchTaskId::DMA);
         PacketPtr pkt = new Packet(req, cmd);
@@ -189,16 +182,14 @@ DmaPort::dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
     // just created, for atomic this involves actually completing all
     // the requests
     sendDma();
-
-    return req;
 }
 
-RequestPtr
+void
 DmaPort::dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
                    uint8_t *data, Tick delay, Request::Flags flag)
 {
-    return dmaAction(cmd, addr, size, event, data,
-                     defaultSid, defaultSSid, delay, flag);
+    dmaAction(cmd, addr, size, event, data,
+              defaultSid, defaultSSid, delay, flag);
 }
 
 void
@@ -269,8 +260,9 @@ DmaPort::sendDma()
 
             handleResp(pkt, lat);
         }
-    } else
+    } else {
         panic("Unknown memory mode.");
+    }
 }
 
 Port &
@@ -287,9 +279,8 @@ DmaReadFifo::DmaReadFifo(DmaPort &_port, size_t size,
                          unsigned max_pending,
                          Request::Flags flags)
     : maxReqSize(max_req_size), fifoSize(size),
-      reqFlags(flags), port(_port),
-      buffer(size),
-      nextAddr(0), endAddr(0)
+      reqFlags(flags), port(_port), proxy(port, port.sys->cacheLineSize()),
+      cacheLineSize(port.sys->cacheLineSize()), buffer(size)
 {
     freeRequests.resize(max_pending);
     for (auto &e : freeRequests)
@@ -346,8 +337,7 @@ DmaReadFifo::tryGet(uint8_t *dst, size_t len)
 void
 DmaReadFifo::get(uint8_t *dst, size_t len)
 {
-    const bool success(tryGet(dst, len));
-    panic_if(!success, "Buffer underrun in DmaReadFifo::get()\n");
+    panic_if(!tryGet(dst, len), "Buffer underrun in DmaReadFifo::get()");
 }
 
 void
@@ -396,8 +386,7 @@ void
 DmaReadFifo::resumeFillFunctional()
 {
     const size_t fifo_space = buffer.capacity() - buffer.size();
-    const size_t kvm_watermark = port.sys->cacheLineSize();
-    if (fifo_space >= kvm_watermark || buffer.capacity() < kvm_watermark) {
+    if (fifo_space >= cacheLineSize || buffer.capacity() < cacheLineSize) {
         const size_t block_remaining = endAddr - nextAddr;
         const size_t xfer_size = std::min(fifo_space, block_remaining);
         std::vector<uint8_t> tmp_buffer(xfer_size);
@@ -407,7 +396,7 @@ DmaReadFifo::resumeFillFunctional()
                 "fifo_space=%#x block_remaining=%#x\n",
                 nextAddr, xfer_size, fifo_space, block_remaining);
 
-        port.sys->physProxy.readBlob(nextAddr, tmp_buffer.data(), xfer_size);
+        proxy.readBlob(nextAddr, tmp_buffer.data(), xfer_size);
         buffer.write(tmp_buffer.begin(), xfer_size);
         nextAddr += xfer_size;
     }
@@ -473,13 +462,13 @@ DmaReadFifo::handlePending()
 DrainState
 DmaReadFifo::drain()
 {
-    return pendingRequests.empty() ? DrainState::Drained : DrainState::Draining;
+    return pendingRequests.empty() ?
+        DrainState::Drained : DrainState::Draining;
 }
 
 
-DmaReadFifo::DmaDoneEvent::DmaDoneEvent(DmaReadFifo *_parent,
-                                        size_t max_size)
-    : parent(_parent), _done(false), _canceled(false), _data(max_size, 0)
+DmaReadFifo::DmaDoneEvent::DmaDoneEvent(DmaReadFifo *_parent, size_t max_size)
+    : parent(_parent), _data(max_size, 0)
 {
 }
 

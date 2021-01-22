@@ -154,7 +154,7 @@ void FFDIEWC<Impl>::tryVerifyTailLoads()
     unsigned count = 0;
     for (const DynInstPtr &inst: instsToCommit) {
         DPRINTF(NoSQSMB, "Verifying\n");
-        if (inst->isStore() || inst->isMemBarrier() || inst->isWriteBarrier()) {
+        if (inst->isStore() || inst->isReadBarrier() || inst->isWriteBarrier()) {
             DPRINTF(NoSQSMB || Debug::FFCommit, "Break verifying because encountered store\n");
             break;
         }
@@ -460,7 +460,7 @@ void FFDIEWC<Impl>::dispatch() {
             }
             toAllocation->diewcInfo.dispatchedToSQ++;
 
-        } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
+        } else if (inst->isReadBarrier() || inst->isWriteBarrier()) {
             DPRINTF(DIEWC, "Mem barrier: %s\n",
                     inst->staticInst->disassemble(inst->instAddr()));
             inst->setCanCommit();
@@ -771,7 +771,7 @@ FFDIEWC<Impl>::
         // can also reach here before executed
         if (head_inst->isNonSpeculative() || head_inst->isLoadReserved() ||
             head_inst->isStoreConditional() ||
-            head_inst->isMemBarrier() || head_inst->isWriteBarrier() ||
+            head_inst->isReadBarrier() || head_inst->isWriteBarrier() ||
             (head_inst->isLoad() && head_inst->strictlyOrdered())) {
 
             DPRINTF(Commit || Debug::FFCommit, "Encountered a barrier or non-speculative "
@@ -863,11 +863,6 @@ FFDIEWC<Impl>::
                 head_inst->seqNum,
                 toNextCycle->diewc2diewc.squashedSeqNum);
         return false;
-    }
-
-    if (head_inst->isThreadSync()) {
-        // Not handled for now.
-        panic("Thread sync instructions are not handled yet.\n");
     }
 
     // Check if the instruction caused a fault.  If so, trap.
@@ -1457,7 +1452,7 @@ void FFDIEWC<Impl>::squashAll() {
 }
 
 template<class Impl>
-FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, DerivFFCPUParams *params)
+FFDIEWC<Impl>::FFDIEWC(XFFCPU *cpu, const DerivFFCPUParams *params)
         :
         cpu(cpu),
         freeEntries{params->numDQBanks * params->DQDepth * params->numDQGroups,
@@ -1607,7 +1602,7 @@ void FFDIEWC<Impl>::updateComInstStats(const DynInstPtr &inst) {
         }
     }
 
-    if (inst->isMemBarrier()) {
+    if (inst->isReadBarrier()) {
         statComMembars++;
     }
 
@@ -2430,7 +2425,7 @@ void FFDIEWC<Impl>::executeInst(const DynInstPtr &inst)
         archState.postExecInst(inst);
     }
 
-    if (inst->isMemBarrier() || inst->isWriteBarrier()) {
+    if (inst->isReadBarrier() || inst->isWriteBarrier()) {
         dq.completeMemInst(inst);
     }
 

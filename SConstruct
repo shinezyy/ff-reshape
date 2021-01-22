@@ -139,7 +139,7 @@ if GetOption('no_lto') and GetOption('force_lto'):
 #
 ########################################################################
 
-main = Environment()
+main = Environment(tools=['default', 'git'])
 
 from gem5_scons.util import get_termcap
 termcap = get_termcap()
@@ -238,7 +238,7 @@ global_vars.AddVariables(
     ('MARSHAL_CCFLAGS_EXTRA', 'Extra C and C++ marshal compiler flags', ''),
     ('MARSHAL_LDFLAGS_EXTRA', 'Extra marshal linker flags', ''),
     ('PYTHON_CONFIG', 'Python config binary to use',
-     [ 'python3-config', 'python-config', 'python2.7-config', 'python2-config']
+     [ 'python3-config', 'python-config']
     ),
     ('PROTOC', 'protoc tool', environ.get('PROTOC', 'protoc')),
     ('BATCH', 'Use batch pool for build and tests', False),
@@ -259,7 +259,7 @@ global_vars.Save(global_vars_file, main)
 
 # Parse EXTRAS variable to build list of all directories where we're
 # look for sources etc.  This list is exported as extras_dir_list.
-base_dir = main.srcdir.abspath
+base_dir = Dir('#src').abspath
 if main['EXTRAS']:
     extras_dir_list = makePathListAbsolute(main['EXTRAS'].split(':'))
 else:
@@ -342,6 +342,12 @@ if main['GCC'] or main['CLANG']:
     main.Append(PSHLINKFLAGS=shared_partial_flags)
     main.Append(PLINKFLAGS=shared_partial_flags)
 
+    # Treat warnings as errors but white list some warnings that we
+    # want to allow (e.g., deprecation warnings).
+    main.Append(CCFLAGS=['-Werror',
+                         '-Wno-error=deprecated-declarations',
+                         '-Wno-error=deprecated',
+                        ])
 else:
     error('\n'.join((
           "Don't know what compiler options to use for your compiler.",
@@ -417,8 +423,8 @@ elif main['CLANG']:
     clang_version_match = clang_version_re.search(CXX_version)
     if (clang_version_match):
         clang_version = clang_version_match.groups()[0]
-        if compareVersions(clang_version, "3.1") < 0:
-            error('clang version 3.1 or newer required.\n'
+        if compareVersions(clang_version, "3.9") < 0:
+            error('clang version 3.9 or newer required.\n'
                   'Installed version:', clang_version)
     else:
         error('Unable to determine clang version.')
@@ -574,6 +580,27 @@ int main(){
     context.Result(ret)
     return ret
 
+def CheckPythonLib(context):
+    context.Message('Checking Python version... ')
+    ret = context.TryRun(r"""
+#include <pybind11/embed.h>
+
+int
+main(int argc, char **argv) {
+    pybind11::scoped_interpreter guard{};
+    pybind11::exec(
+        "import sys\n"
+        "vi = sys.version_info\n"
+        "sys.stdout.write('%i.%i.%i' % (vi.major, vi.minor, vi.micro));\n");
+    return 0;
+}
+    """, extension=".cc")
+    context.Result(ret[1] if ret[0] == 1 else 0)
+    if ret[0] == 0:
+        return None
+    else:
+        return tuple(map(int, ret[1].split(".")))
+
 # Platform-specific configuration.  Note again that we assume that all
 # builds under a given build root run on the same host platform.
 conf = Configure(main,
@@ -581,6 +608,7 @@ conf = Configure(main,
                  log_file = joinpath(build_root, 'scons_config.log'),
                  custom_tests = {
         'CheckMember' : CheckMember,
+        'CheckPythonLib' : CheckPythonLib,
         })
 
 # Check if we should compile a 64 bit binary on Mac OS X/Darwin
@@ -636,9 +664,6 @@ if main['USE_PYTHON']:
               main['PYTHON_CONFIG'])
 
     print("Info: Using Python config: %s" % (python_config, ))
-    if python_config != 'python3-config':
-        warning('python3-config could not be found.\n'
-                'Future releases of gem5 will drop support for python2.')
 
     py_includes = readCommand([python_config, '--includes'],
                               exception='').split()
@@ -696,6 +721,17 @@ main.Prepend(CPPPATH=Dir('ext/pybind11/include/'))
 marshal_env = main.Clone()
 marshal_env.Append(CCFLAGS='$MARSHAL_CCFLAGS_EXTRA')
 marshal_env.Append(LINKFLAGS='$MARSHAL_LDFLAGS_EXTRA')
+py_version = conf.CheckPythonLib()
+if not py_version:
+    error("Can't find a working Python installation")
+
+# Found a working Python installation. Check if it meets minimum
+# requirements.
+if py_version[0] < 3 or \
+   (py_version[0] == 3 and py_version[1] < 6):
+    error('Python version too old. Version 3.6 or newer is required.')
+elif py_version[0] > 3:
+    warning('Python version too new. Python 3 expected.')
 
 # On Solaris you need to use libsocket for socket ops
 if not conf.CheckLibWithHeader(None, 'sys/socket.h', 'C++', 'accept(0,0,0);'):
@@ -996,7 +1032,7 @@ export_vars += ['USE_FENV', 'TARGET_ISA', 'TARGET_GPU_ISA',
 # value of the variable.
 def build_config_file(target, source, env):
     (variable, value) = [s.get_contents().decode('utf-8') for s in source]
-    with open(str(target[0]), 'w') as f:
+    with open(str(target[0].abspath), 'w') as f:
         print('#define', variable, value, file=f)
     return None
 
@@ -1009,7 +1045,7 @@ def config_emitter(target, source, env):
     # extract variable name from Builder arg
     variable = str(target[0])
     # True target is config header file
-    target = joinpath('config', variable.lower() + '.hh')
+    target = Dir('config').File(variable.lower() + '.hh')
     val = env[variable]
     if isinstance(val, bool):
         # Force value to 0/1
@@ -1018,9 +1054,9 @@ def config_emitter(target, source, env):
         val = '"' + val + '"'
 
     # Sources are variable name & value (packaged in SCons Value nodes)
-    return ([target], [Value(variable), Value(val)])
+    return [target], [Value(variable), Value(val)]
 
-config_builder = Builder(emitter = config_emitter, action = config_action)
+config_builder = Builder(emitter=config_emitter, action=config_action)
 
 main.Append(BUILDERS = { 'ConfigFile' : config_builder })
 
@@ -1074,7 +1110,7 @@ if sys.platform != "darwin":
 main.AddMethod(add_local_rpath, 'AddLocalRPATH')
 
 # builds in ext are shared across all configs in the build root.
-ext_dir = abspath(joinpath(str(main.root), 'ext'))
+ext_dir = Dir('#ext').abspath
 ext_build_dirs = []
 for root, dirs, files in os.walk(ext_dir):
     if 'SConscript' in files:
@@ -1162,7 +1198,7 @@ for variant_path in variant_paths:
         # normally determined by name of $VARIANT_DIR, but can be
         # overridden by '--default=' arg on command line.
         default = GetOption('default')
-        opts_dir = joinpath(main.root.abspath, 'build_opts')
+        opts_dir = Dir('#build_opts').abspath
         if default:
             default_vars_files = [joinpath(build_root, 'variables', default),
                                   joinpath(opts_dir, default)]

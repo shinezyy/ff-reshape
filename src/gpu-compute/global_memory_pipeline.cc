@@ -43,11 +43,11 @@
 #include "gpu-compute/vector_register_file.hh"
 #include "gpu-compute/wavefront.hh"
 
-GlobalMemPipeline::GlobalMemPipeline(const ComputeUnitParams* p,
+GlobalMemPipeline::GlobalMemPipeline(const ComputeUnitParams &p,
                                      ComputeUnit &cu)
     : computeUnit(cu), _name(cu.name() + ".GlobalMemPipeline"),
-      gmQueueSize(p->global_mem_queue_size),
-      maxWaveRequests(p->max_wave_requests), inflightStores(0),
+      gmQueueSize(p.global_mem_queue_size),
+      maxWaveRequests(p.max_wave_requests), inflightStores(0),
       inflightLoads(0)
 {
 }
@@ -130,6 +130,9 @@ GlobalMemPipeline::exec()
         DPRINTF(GPUMem, "CU%d: WF[%d][%d]: Completing global mem instr %s\n",
                 m->cu_id, m->simdId, m->wfSlotId, m->disassemble());
         m->completeAcc(m);
+        if (m->isFlat() && m->isLoad()) {
+            w->decLGKMInstsIssued();
+        }
         w->decVMemInstsIssued();
 
         if (m->isLoad() || m->isAtomicRet()) {
@@ -192,6 +195,14 @@ GlobalMemPipeline::exec()
         DPRINTF(GPUCoalescer, "initiateAcc for %s seqNum %d\n",
                 mp->disassemble(), mp->seqNum());
         mp->initiateAcc(mp);
+
+        if (mp->isFlat() && mp->isStore()) {
+            mp->wavefront()->decLGKMInstsIssued();
+        }
+
+        if (mp->isStore() && mp->isGlobalSeg()) {
+            mp->wavefront()->decExpInstsIssued();
+        }
 
         if (((mp->isMemSync() && !mp->isEndOfKernel()) || !mp->isMemSync())) {
             /**

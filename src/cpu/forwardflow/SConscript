@@ -38,7 +38,6 @@ if 'FFCPU' in env['CPU_MODELS']:
 
     Source('base_dyn_inst.cc')
     Source('cpu.cc')
-    Source('deriv.cc')
     Source('decode.cc')
     Source('dyn_inst.cc')
     Source('fetch.cc')

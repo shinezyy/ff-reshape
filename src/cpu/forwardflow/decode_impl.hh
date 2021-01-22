@@ -62,7 +62,7 @@ namespace FF {
 using std::list;
 
 template<class Impl>
-DefaultDecode<Impl>::DefaultDecode(O3CPU *_cpu, DerivFFCPUParams *params)
+DefaultDecode<Impl>::DefaultDecode(O3CPU *_cpu, const DerivFFCPUParams *params)
     : cpu(_cpu),
       renameToDecodeDelay(params->renameToDecodeDelay),
       iewToDecodeDelay(params->iewToDecodeDelay),

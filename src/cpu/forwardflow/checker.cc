@@ -50,41 +50,10 @@ class MemObject;
 template
 class Checker<FFCPUImpl>;
 
-
-////////////////////////////////////////////////////////////////////////
-//
-//  CheckerCPU Simulation Object
-//
 FFChecker *
-FFCheckerParams::create()
+FFCheckerParams::create() const
 {
     FFChecker::Params *params = new FFChecker::Params();
-    params->name = name;
-    params->numThreads = numThreads;
-    params->max_insts_any_thread = 0;
-    params->max_insts_all_threads = 0;
-    params->exitOnError = exitOnError;
-    params->updateOnError = updateOnError;
-    params->warnOnlyOnLoadError = warnOnlyOnLoadError;
-    params->clk_domain = clk_domain;
-    params->tracer = tracer;
-    // Hack to touch all parameters.  Consider not deriving Checker
-    // from BaseCPU..it's not really a CPU in the end.
-    Counter temp;
-    temp = max_insts_any_thread;
-    temp = max_insts_all_threads;
-    temp++;
-    Tick temp2 = progress_interval;
-    params->progress_interval = 0;
-    temp2++;
-
-    params->itb = itb;
-    params->dtb = dtb;
-    params->isa = isa;
-    params->system = system;
-    params->cpu_id = cpu_id;
-    params->workload = workload;
-
     FFChecker *cpu = new FFChecker(params);
     return cpu;
 }

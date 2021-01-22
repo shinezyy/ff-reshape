@@ -22,7 +22,7 @@ namespace FF {
 // common
 struct DQCommon {
 public:
-    explicit DQCommon(DerivFFCPUParams *params);
+    explicit DQCommon(const DerivFFCPUParams *params);
 
     boost::dynamic_bitset<> uint2Bits(unsigned from);
 

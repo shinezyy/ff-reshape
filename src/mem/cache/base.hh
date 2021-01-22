@@ -108,6 +108,28 @@ class BaseCache : public ClockedObject
         NUM_BLOCKED_CAUSES
     };
 
+    /**
+     * A data contents update is composed of the updated block's address,
+     * the old contents, and the new contents.
+     * @sa ppDataUpdate
+     */
+    struct DataUpdate
+    {
+        /** The updated block's address. */
+        Addr addr;
+        /** Whether the block belongs to the secure address space. */
+        bool isSecure;
+        /** The stale data contents. If zero-sized this update is a fill. */
+        std::vector<uint64_t> oldData;
+        /** The new data contents. If zero-sized this is an invalidation. */
+        std::vector<uint64_t> newData;
+
+        DataUpdate(Addr _addr, bool is_secure)
+          : addr(_addr), isSecure(is_secure), oldData(), newData()
+        {
+        }
+    };
+
   protected:
 
     /**
@@ -333,6 +355,13 @@ class BaseCache : public ClockedObject
 
     /** To probe when a cache fill occurs */
     ProbePointArg<PacketPtr> *ppFill;
+
+    /**
+     * To probe when the contents of a block are updated. Content updates
+     * include data fills, overwrites, and invalidations, which means that
+     * this probe partially overlaps with other probes.
+     */
+    ProbePointArg<DataUpdate> *ppDataUpdate;
 
     /**
      * The writeAllocator drive optimizations for streaming writes.
@@ -575,6 +604,18 @@ class BaseCache : public ClockedObject
     virtual void functionalAccess(PacketPtr pkt, bool from_cpu_side);
 
     /**
+     * Update the data contents of a block. When no packet is provided no
+     * data will be written to the block, which means that this was likely
+     * triggered by an invalidation.
+     *
+     * @param blk The block being updated.
+     * @param cpkt The packet containing the new data.
+     * @param has_old_data Whether this block had data previously.
+     */
+    void updateBlockData(CacheBlk *blk, const PacketPtr cpkt,
+        bool has_old_data);
+
+    /**
      * Handle doing the Compare and Swap function for SPARC.
      */
     void cmpAndSwap(CacheBlk *blk, PacketPtr pkt);
@@ -677,7 +718,7 @@ class BaseCache : public ClockedObject
      * @param writebacks List for any writebacks that need to be performed.
      * @return Whether operation is successful or not.
      */
-    bool updateCompressionData(CacheBlk *blk, const uint64_t* data,
+    bool updateCompressionData(CacheBlk *&blk, const uint64_t* data,
                                PacketList &writebacks);
 
     /**
@@ -894,6 +935,22 @@ class BaseCache : public ClockedObject
     const bool isReadOnly;
 
     /**
+     * when a data expansion of a compressed block happens it will not be
+     * able to co-allocate where it is at anymore. If true, the replacement
+     * policy is called to chose a new location for the block. Otherwise,
+     * all co-allocated blocks are evicted.
+     */
+    const bool replaceExpansions;
+
+    /**
+     * Similar to data expansions, after a block improves its compression,
+     * it may need to be moved elsewhere compatible with the new compression
+     * factor, or, if not required by the compaction method, it may be moved
+     * to co-allocate with an existing block and thus free an entry.
+     */
+    const bool moveContractions;
+
+    /**
      * Bit vector of the blocking reasons for the access path.
      * @sa #BlockedCause
      */
@@ -1066,6 +1123,12 @@ class BaseCache : public ClockedObject
         /** Number of data expansions. */
         Stats::Scalar dataExpansions;
 
+        /**
+         * Number of data contractions (blocks that had their compression
+         * factor improved).
+         */
+        Stats::Scalar dataContractions;
+
         /** Per-command statistics */
         std::vector<std::unique_ptr<CacheCmdStats>> cmd;
     } stats;
@@ -1074,7 +1137,7 @@ class BaseCache : public ClockedObject
     void regProbePoints() override;
 
   public:
-    BaseCache(const BaseCacheParams *p, unsigned blk_size);
+    BaseCache(const BaseCacheParams &p, unsigned blk_size);
     ~BaseCache();
 
     void init() override;
@@ -1301,11 +1364,11 @@ class BaseCache : public ClockedObject
  */
 class WriteAllocator : public SimObject {
   public:
-    WriteAllocator(const WriteAllocatorParams *p) :
+    WriteAllocator(const WriteAllocatorParams &p) :
         SimObject(p),
-        coalesceLimit(p->coalesce_limit * p->block_size),
-        noAllocateLimit(p->no_allocate_limit * p->block_size),
-        delayThreshold(p->delay_threshold)
+        coalesceLimit(p.coalesce_limit * p.block_size),
+        noAllocateLimit(p.no_allocate_limit * p.block_size),
+        delayThreshold(p.delay_threshold)
     {
         reset();
     }

@@ -61,7 +61,7 @@ namespace FF{
 using namespace std;
 
 template <class Impl>
-LSQ<Impl>::LSQ(O3CPU *cpu_ptr, IEW *iew_ptr, DerivFFCPUParams *params)
+LSQ<Impl>::LSQ(O3CPU *cpu_ptr, IEW *iew_ptr, const DerivFFCPUParams *params)
     : cpu(cpu_ptr), iewStage(iew_ptr),
       _cacheBlocked(false),
       cacheStorePorts(params->cacheStorePorts), usedStorePorts(0),
@@ -973,7 +973,7 @@ void
 LSQ<Impl>::LSQRequest::sendFragmentToTranslation(int i)
 {
     numInTranslationFragments++;
-    _port.dTLB()->translateTiming(
+    _port.getMMUPtr()->translateTiming(
             this->request(i),
             this->_inst->thread->getTC(), this,
             this->isLoad() ? BaseTLB::Read : BaseTLB::Write);

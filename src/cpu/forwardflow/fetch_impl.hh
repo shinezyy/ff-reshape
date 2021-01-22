@@ -79,7 +79,7 @@ namespace FF{
 using namespace std;
 
 template<class Impl>
-DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivFFCPUParams *params)
+DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, const DerivFFCPUParams *params)
     : fetchPolicy(params->smtFetchPolicy),
       cpu(_cpu),
       decodeToFetchDelay(params->decodeToFetchDelay),
@@ -273,19 +273,19 @@ DefaultFetch<Impl>::regStats()
         .name(name() + ".idleRate")
         .desc("Percent of cycles fetch was idle")
         .prereq(idleRate);
-    idleRate = fetchIdleCycles * 100 / cpu->numCycles;
+    idleRate = fetchIdleCycles * 100 / cpu->baseStats.numCycles;
 
     branchRate
         .name(name() + ".branchRate")
         .desc("Number of branch fetches per cycle")
         .flags(Stats::total);
-    branchRate = fetchedBranches / cpu->numCycles;
+    branchRate = fetchedBranches / cpu->baseStats.numCycles;
 
     fetchRate
         .name(name() + ".rate")
         .desc("Number of inst fetches per cycle")
         .flags(Stats::total);
-    fetchRate = fetchedInsts / cpu->numCycles;
+    fetchRate = fetchedInsts / cpu->baseStats.numCycles;
 
     fetchFromLoopBuffer
         .name(name() + ".fetchFromLoopBuffer")
@@ -652,7 +652,7 @@ DefaultFetch<Impl>::fetchCacheLine(Addr vaddr, ThreadID tid, Addr pc)
     // Initiate translation of the icache block
     fetchStatus[tid] = ItlbWait;
     FetchTranslation *trans = new FetchTranslation(this);
-    cpu->itb->translateTiming(mem_req, cpu->thread[tid]->getTC(),
+    cpu->mmu->translateTiming(mem_req, cpu->thread[tid]->getTC(),
                               trans, BaseTLB::Execute);
     return true;
 }
@@ -1542,13 +1542,13 @@ DefaultFetch<Impl>::getFetchingThread()
 {
     if (numThreads > 1) {
         switch (fetchPolicy) {
-          case FetchPolicy::RoundRobin:
+          case SMTFetchPolicy::RoundRobin:
             return roundRobin();
-          case FetchPolicy::IQCount:
+          case SMTFetchPolicy::IQCount:
             return iqCount();
-          case FetchPolicy::LSQCount:
+          case SMTFetchPolicy::LSQCount:
             return lsqCount();
-          case FetchPolicy::Branch:
+          case SMTFetchPolicy::Branch:
             return branchCount();
           default:
             return InvalidThreadID;

@@ -27,7 +27,7 @@ class ReadyInstsQueue{
 public:
     typedef typename Impl::DynInstPtr DynInstPtr;
 
-    explicit ReadyInstsQueue(DerivFFCPUParams *params,
+    explicit ReadyInstsQueue(const DerivFFCPUParams *params,
             const std::string& parent_name, bool prefer_md);
 
     void squash(InstSeqNum inst_seq);

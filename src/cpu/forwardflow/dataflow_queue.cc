@@ -39,7 +39,7 @@ using namespace std;
 using boost::dynamic_bitset;
 
 template<class Impl>
-DataflowQueues<Impl>::DataflowQueues(DerivFFCPUParams *params,
+DataflowQueues<Impl>::DataflowQueues(const DerivFFCPUParams *params,
         unsigned gid, DQCommon *_c, DQTop *_top)
         :
         writes(0),

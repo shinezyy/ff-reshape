@@ -94,7 +94,7 @@ public:
 
     void setTail(unsigned t);
 
-    explicit DataflowQueueBank(DerivFFCPUParams *params,
+    explicit DataflowQueueBank(const DerivFFCPUParams *params,
             unsigned bank_id, DQ *dq, DQTop *_top);
 
     bool canServeNew();
