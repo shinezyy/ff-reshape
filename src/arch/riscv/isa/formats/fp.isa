@@ -97,22 +97,9 @@ def template FloatExecute {{
                 RegVal FFLAGS = xc->readMiscReg(MISCREG_FFLAGS);
                 std::feclearexcept(FE_ALL_EXCEPT);
                 %(code)s;
-                if (std::fetestexcept(FE_INEXACT)) {
-                    DPRINTF(RiscvMisc, "RV F/D: setting FE_INEXACT\n");
-                    FFLAGS |= FloatInexact;
-                }
-                if (std::fetestexcept(FE_UNDERFLOW)) {
-                    FFLAGS |= FloatUnderflow;
-                }
-                if (std::fetestexcept(FE_OVERFLOW)) {
-                    FFLAGS |= FloatOverflow;
-                }
-                if (std::fetestexcept(FE_DIVBYZERO)) {
-                    FFLAGS |= FloatDivZero;
-                }
-                if (std::fetestexcept(FE_INVALID)) {
-                    FFLAGS |= FloatInvalid;
-                }
+
+                FFLAGS |= softfloat_exceptionFlags;
+                softfloat_exceptionFlags = 0;
                 xc->setMiscReg(MISCREG_FFLAGS, FFLAGS);
             }
 

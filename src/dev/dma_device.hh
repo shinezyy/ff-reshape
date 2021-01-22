@@ -44,9 +44,11 @@
 #include <deque>
 #include <memory>
 
+#include "base/addr_range_map.hh"
+#include "base/chunk_generator.hh"
 #include "base/circlebuf.hh"
 #include "dev/io_device.hh"
-#include "mem/port_proxy.hh"
+#include "mem/backdoor.hh"
 #include "params/DmaDevice.hh"
 #include "sim/drain.hh"
 #include "sim/system.hh"
@@ -56,12 +58,12 @@ class ClockedObject;
 class DmaPort : public RequestPort, public Drainable
 {
   private:
+    AddrRangeMap<MemBackdoorPtr, 1> memBackdoors;
 
     /**
-     * Take the first packet of the transmit list and attempt to send
-     * it as a timing request. If it is successful, schedule the
-     * sending of the next packet, otherwise remember that we are
-     * waiting for a retry.
+     * Take the first request on the transmit list and attempt to send a timing
+     * packet from it. If it is successful, schedule the sending of the next
+     * packet. Otherwise remember that we are waiting for a retry.
      */
     void trySendTimingReq();
 
@@ -73,18 +75,6 @@ class DmaPort : public RequestPort, public Drainable
      * list.
      */
     void sendDma();
-
-    /**
-     * Handle a response packet by updating the corresponding DMA
-     * request state to reflect the bytes received, and also update
-     * the pending request counter. If the DMA request that this
-     * packet is part of is complete, then signal the completion event
-     * if present, potentially with a delay added to it.
-     *
-     * @param pkt Response packet to handler
-     * @param delay Additional delay for scheduling the completion event
-     */
-    void handleResp(PacketPtr pkt, Tick delay=0);
 
     struct DmaReqState : public Packet::SenderState
     {
@@ -101,10 +91,56 @@ class DmaPort : public RequestPort, public Drainable
         /** Amount to delay completion of dma by */
         const Tick delay;
 
-        DmaReqState(Event *ce, Addr tb, Tick _delay)
-            : completionEvent(ce), totBytes(tb), delay(_delay)
+        /** Object to track what chunks of bytes to send at a time. */
+        ChunkGenerator gen;
+
+        /** Pointer to a buffer for the data. */
+        uint8_t *const data = nullptr;
+
+        /** The flags to use for requests. */
+        const Request::Flags flags;
+
+        /** The requestor ID to use for requests. */
+        const RequestorID id;
+
+        /** Stream IDs. */
+        const uint32_t sid;
+        const uint32_t ssid;
+
+        /** Command for the request. */
+        const Packet::Command cmd;
+
+        DmaReqState(Packet::Command _cmd, Addr addr, Addr chunk_sz, Addr tb,
+                    uint8_t *_data, Request::Flags _flags, RequestorID _id,
+                    uint32_t _sid, uint32_t _ssid, Event *ce, Tick _delay)
+            : completionEvent(ce), totBytes(tb), delay(_delay),
+              gen(addr, tb, chunk_sz), data(_data), flags(_flags), id(_id),
+              sid(_sid), ssid(_ssid), cmd(_cmd)
         {}
+
+        PacketPtr createPacket();
     };
+
+    /** Send the next packet from a DMA request in atomic mode. */
+    bool sendAtomicReq(DmaReqState *state);
+    /**
+     * Send the next packet from a DMA request in atomic mode, and request
+     * and/or use memory backdoors if possible.
+     */
+    bool sendAtomicBdReq(DmaReqState *state);
+
+    /**
+     * Handle a response packet by updating the corresponding DMA
+     * request state to reflect the bytes received, and also update
+     * the pending request counter. If the DMA request that this
+     * packet is part of is complete, then signal the completion event
+     * if present, potentially with a delay added to it.
+     *
+     * @param pkt Response packet to handler
+     * @param delay Additional delay for scheduling the completion event
+     */
+    void handleRespPacket(PacketPtr pkt, Tick delay=0);
+    void handleResp(DmaReqState *state, Addr addr, Addr size, Tick delay=0);
 
   public:
     /** The device that owns this port. */
@@ -119,7 +155,7 @@ class DmaPort : public RequestPort, public Drainable
 
   protected:
     /** Use a deque as we never do any insertion or removal in the middle */
-    std::deque<PacketPtr> transmitList;
+    std::deque<DmaReqState *> transmitList;
 
     /** Event used to schedule a future sending from the transmit list. */
     EventFunctionWrapper sendEvent;
@@ -127,9 +163,8 @@ class DmaPort : public RequestPort, public Drainable
     /** Number of outstanding packets the dma port has. */
     uint32_t pendingCount = 0;
 
-    /** If the port is currently waiting for a retry before it can
-     * send whatever it is that it's sending. */
-    bool inRetry = false;
+    /** The packet (if any) waiting for a retry to send. */
+    PacketPtr inRetry = nullptr;
 
     /** Default streamId */
     const uint32_t defaultSid;
@@ -143,8 +178,6 @@ class DmaPort : public RequestPort, public Drainable
 
     bool recvTimingResp(PacketPtr pkt) override;
     void recvReqRetry() override;
-
-    void queueDma(PacketPtr pkt);
 
   public:
 
@@ -474,7 +507,6 @@ class DmaReadFifo : public Drainable, public Serializable
     const Request::Flags reqFlags;
 
     DmaPort &port;
-    PortProxy proxy;
 
     const int cacheLineSize;
 
@@ -520,8 +552,8 @@ class DmaReadFifo : public Drainable, public Serializable
     /** Try to issue new DMA requests during normal execution*/
     void resumeFillTiming();
 
-    /** Try to bypass DMA requests in KVM execution mode */
-    void resumeFillFunctional();
+    /** Try to bypass DMA requests in non-caching mode */
+    void resumeFillBypass();
 
   private: // Internal state
     Fifo<uint8_t> buffer;

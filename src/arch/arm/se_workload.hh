@@ -28,10 +28,9 @@
 #ifndef __ARCH_ARM_SE_WORKLOAD_HH__
 #define __ARCH_ARM_SE_WORKLOAD_HH__
 
+#include "arch/arm/reg_abi.hh"
 #include "params/ArmSEWorkload.hh"
 #include "sim/se_workload.hh"
-#include "sim/syscall_abi.hh"
-#include "sim/syscall_desc.hh"
 
 namespace ArmISA
 {
@@ -51,42 +50,10 @@ class SEWorkload : public ::SEWorkload
 
     ::Loader::Arch getArch() const override { return ::Loader::Arm64; }
 
-    struct SyscallABI32 : public GenericSyscallABI32
-    {
-        static const std::vector<int> ArgumentRegs;
-    };
-
-    struct SyscallABI64 : public GenericSyscallABI64
-    {
-        static const std::vector<int> ArgumentRegs;
-    };
+    using SyscallABI32 = RegABI32;
+    using SyscallABI64 = RegABI64;
 };
 
 } // namespace ArmISA
-
-namespace GuestABI
-{
-
-template <typename ABI, typename Arg>
-struct Argument<ABI, Arg,
-    typename std::enable_if_t<
-        std::is_base_of<ArmISA::SEWorkload::SyscallABI32, ABI>::value &&
-        ABI::template IsWide<Arg>::value>>
-{
-    static Arg
-    get(ThreadContext *tc, typename ABI::State &state)
-    {
-        // 64 bit arguments are passed starting in an even register.
-        if (state % 2)
-            state++;
-        panic_if(state + 1 >= ABI::ArgumentRegs.size(),
-                "Ran out of syscall argument registers.");
-        auto low = ABI::ArgumentRegs[state++];
-        auto high = ABI::ArgumentRegs[state++];
-        return (Arg)ABI::mergeRegs(tc, low, high);
-    }
-};
-
-} // namespace GuestABI
 
 #endif // __ARCH_ARM_SE_WORKLOAD_HH__

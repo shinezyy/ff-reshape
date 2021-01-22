@@ -53,6 +53,7 @@
 
 #include "base/statistics.hh"
 #include "base/time.hh"
+#include "base/types.hh"
 #include "params/Root.hh"
 #include "sim/eventq.hh"
 #include "sim/sim_object.hh"
@@ -90,26 +91,26 @@ class Root : public SimObject
     }
 
   public: // Global statistics
-    struct Stats : public ::Stats::Group
+    struct RootStats : public Stats::Group
     {
         void resetStats() override;
 
-        ::Stats::Formula simSeconds;
-        ::Stats::Value simTicks;
-        ::Stats::Value finalTick;
-        ::Stats::Value simFreq;
-        ::Stats::Value hostSeconds;
+        Stats::Formula simSeconds;
+        Stats::Value simTicks;
+        Stats::Value finalTick;
+        Stats::Value simFreq;
+        Stats::Value hostSeconds;
 
-        ::Stats::Formula hostTickRate;
-        ::Stats::Value hostMemory;
+        Stats::Formula hostTickRate;
+        Stats::Value hostMemory;
 
-        static Stats instance;
+        static RootStats instance;
 
       private:
-        Stats();
+        RootStats();
 
-        Stats(const Stats &) = delete;
-        Stats &operator=(const Stats &) = delete;
+        RootStats(const RootStats &) = delete;
+        RootStats &operator=(const RootStats &) = delete;
 
         Time statTime;
         Tick startTick;
@@ -151,6 +152,6 @@ class Root : public SimObject
  * Global simulator statistics that are not associated with a
  * specific SimObject.
  */
-extern Root::Stats &rootStats;
+extern Root::RootStats &rootStats;
 
 #endif // __SIM_ROOT_HH__

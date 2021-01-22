@@ -40,6 +40,7 @@
 #include <climits>
 #include <functional>
 #include <iosfwd>
+#include <list>
 #include <memory>
 #include <string>
 
@@ -48,6 +49,7 @@
 #include "base/types.hh"
 #include "base/uncontended_mutex.hh"
 #include "debug/Event.hh"
+#include "sim/core.hh"
 #include "sim/serialize.hh"
 
 class EventQueue;       // forward declaration
@@ -81,7 +83,7 @@ extern bool inParallelMode;
 EventQueue *getEventQueue(uint32_t index);
 
 inline EventQueue *curEventQueue() { return _curEventQueue; }
-inline void curEventQueue(EventQueue *q) { _curEventQueue = q; }
+inline void curEventQueue(EventQueue *q);
 
 /**
  * Common base class for Event and GlobalEvent, so they can share flag
@@ -617,6 +619,8 @@ operator!=(const Event &l, const Event &r)
 class EventQueue
 {
   private:
+    friend void curEventQueue(EventQueue *);
+
     std::string objName;
     Event *head;
     Tick _curTick;
@@ -967,6 +971,13 @@ class EventQueue
             deschedule(getHead());
     }
 };
+
+inline void
+curEventQueue(EventQueue *q)
+{
+    _curEventQueue = q;
+    Gem5Internal::_curTickPtr = (q == nullptr) ? nullptr : &q->_curTick;
+}
 
 void dumpMainQueue();
 

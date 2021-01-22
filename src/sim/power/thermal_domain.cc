@@ -79,18 +79,6 @@ ThermalDomain::emitUpdate()
     ppThermalUpdate->notify(node->temp);
 }
 
-void
-ThermalDomain::serialize(CheckpointOut &cp) const
-{
-    SERIALIZE_SCALAR(_initTemperature);
-}
-
-void
-ThermalDomain::unserialize(CheckpointIn &cp)
-{
-    UNSERIALIZE_SCALAR(_initTemperature);
-}
-
 
 LinearEquation
 ThermalDomain::getEquation(ThermalNode * tn, unsigned n, double step) const

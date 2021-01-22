@@ -39,6 +39,7 @@
 
 #include "base/statistics.hh"
 #include "params/ThermalCapacitor.hh"
+#include "params/ThermalModel.hh"
 #include "params/ThermalReference.hh"
 #include "params/ThermalResistor.hh"
 #include "sim/clocked_object.hh"
@@ -54,18 +55,6 @@ ThermalReference::ThermalReference(const Params &p)
 {
 }
 
-void
-ThermalReference::serialize(CheckpointOut &cp) const
-{
-    SERIALIZE_SCALAR(_temperature);
-}
-
-void
-ThermalReference::unserialize(CheckpointIn &cp)
-{
-    UNSERIALIZE_SCALAR(_temperature);
-}
-
 LinearEquation
 ThermalReference::getEquation(ThermalNode * n, unsigned nnodes,
                               double step) const {
@@ -79,18 +68,6 @@ ThermalReference::getEquation(ThermalNode * n, unsigned nnodes,
 ThermalResistor::ThermalResistor(const Params &p)
     : SimObject(p), _resistance(p.resistance), node1(NULL), node2(NULL)
 {
-}
-
-void
-ThermalResistor::serialize(CheckpointOut &cp) const
-{
-    SERIALIZE_SCALAR(_resistance);
-}
-
-void
-ThermalResistor::unserialize(CheckpointIn &cp)
-{
-    UNSERIALIZE_SCALAR(_resistance);
 }
 
 LinearEquation
@@ -126,18 +103,6 @@ ThermalResistor::getEquation(ThermalNode * n, unsigned nnodes,
 ThermalCapacitor::ThermalCapacitor(const Params &p)
     : SimObject(p), _capacitance(p.capacitance), node1(NULL), node2(NULL)
 {
-}
-
-void
-ThermalCapacitor::serialize(CheckpointOut &cp) const
-{
-    SERIALIZE_SCALAR(_capacitance);
-}
-
-void
-ThermalCapacitor::unserialize(CheckpointIn &cp)
-{
-    UNSERIALIZE_SCALAR(_capacitance);
 }
 
 LinearEquation
@@ -176,18 +141,6 @@ ThermalCapacitor::getEquation(ThermalNode * n, unsigned nnodes,
 ThermalModel::ThermalModel(const Params &p)
     : ClockedObject(p), stepEvent([this]{ doStep(); }, name()), _step(p.step)
 {
-}
-
-void
-ThermalModel::serialize(CheckpointOut &cp) const
-{
-    SERIALIZE_SCALAR(_step);
-}
-
-void
-ThermalModel::unserialize(CheckpointIn &cp)
-{
-    UNSERIALIZE_SCALAR(_step);
 }
 
 void
@@ -252,24 +205,37 @@ ThermalModel::startup()
     schedule(stepEvent, curTick() + SimClock::Int::s * _step);
 }
 
-void ThermalModel::addDomain(ThermalDomain * d) {
+void
+ThermalModel::addDomain(ThermalDomain * d)
+{
     domains.push_back(d);
     entities.push_back(d);
 }
-void ThermalModel::addReference(ThermalReference * r) {
+
+void
+ThermalModel::addReference(ThermalReference * r)
+{
     references.push_back(r);
     entities.push_back(r);
 }
-void ThermalModel::addCapacitor(ThermalCapacitor * c) {
+
+void
+ThermalModel::addCapacitor(ThermalCapacitor * c)
+{
     capacitors.push_back(c);
     entities.push_back(c);
 }
-void ThermalModel::addResistor(ThermalResistor * r) {
+
+void
+ThermalModel::addResistor(ThermalResistor * r)
+{
     resistors.push_back(r);
     entities.push_back(r);
 }
 
-double ThermalModel::getTemp() const {
+double
+ThermalModel::getTemp() const
+{
     // Just pick the highest temperature
     double temp = 0;
     for (auto & n : eq_nodes)
