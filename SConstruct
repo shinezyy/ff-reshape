@@ -608,7 +608,7 @@ conf = Configure(main,
                  log_file = joinpath(build_root, 'scons_config.log'),
                  custom_tests = {
         'CheckMember' : CheckMember,
-        'CheckPythonLib' : CheckPythonLib,
+        # 'CheckPythonLib' : CheckPythonLib,
         })
 
 # Check if we should compile a 64 bit binary on Mac OS X/Darwin
@@ -721,17 +721,17 @@ main.Prepend(CPPPATH=Dir('ext/pybind11/include/'))
 marshal_env = main.Clone()
 marshal_env.Append(CCFLAGS='$MARSHAL_CCFLAGS_EXTRA')
 marshal_env.Append(LINKFLAGS='$MARSHAL_LDFLAGS_EXTRA')
-py_version = conf.CheckPythonLib()
-if not py_version:
-    error("Can't find a working Python installation")
-
-# Found a working Python installation. Check if it meets minimum
-# requirements.
-if py_version[0] < 3 or \
-   (py_version[0] == 3 and py_version[1] < 6):
-    error('Python version too old. Version 3.6 or newer is required.')
-elif py_version[0] > 3:
-    warning('Python version too new. Python 3 expected.')
+# py_version = conf.CheckPythonLib()
+# if not py_version:
+#     error("Can't find a working Python installation")
+# 
+# # Found a working Python installation. Check if it meets minimum
+# # requirements.
+# if py_version[0] < 3 or \
+#    (py_version[0] == 3 and py_version[1] < 6):
+#     error('Python version too old. Version 3.6 or newer is required.')
+# elif py_version[0] > 3:
+#     warning('Python version too new. Python 3 expected.')
 
 # On Solaris you need to use libsocket for socket ops
 if not conf.CheckLibWithHeader(None, 'sys/socket.h', 'C++', 'accept(0,0,0);'):
