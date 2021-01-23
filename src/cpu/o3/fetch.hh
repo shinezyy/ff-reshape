@@ -621,6 +621,8 @@ class DefaultFetch
     };
 
     FetchSource fetchSource;
+
+    bool isFirstUop{true};
 };
 
 #endif //__CPU_O3_FETCH_HH__

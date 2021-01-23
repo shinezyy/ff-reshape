@@ -785,6 +785,8 @@ DefaultFetch<Impl>::doSquash(const TheISA::PCState &newPC,
     ++fetchStats.squashCycles;
 
     fetchSource = CacheLine;
+
+    isFirstUop = true;
 }
 
 template<class Impl>
@@ -1167,17 +1169,19 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
     bool inRom = isRomMicroPC(thisPC.microPC());
 
-    if (lbuf->enable && fetchSource == LoopBuf &&
-            lbuf->canContinueOnPC(fetchAddr, thisPC.instAddr())) {
-        // pass
+    if (isFirstUop) {
+        if (lbuf->enable && fetchSource == LoopBuf &&
+                lbuf->canContinueOnPC(fetchAddr, thisPC.instAddr())) {
+            // pass
 
-    } else if (lbuf->enable && lbuf->canProvide(thisPC.instAddr())) {
-        DPRINTF(LoopBuffer, "Will provide inst from loop buffer for PC %#lx c.PC %#lx\n",
-                fetchAddr, fetchAddr);
-        fetchSource = LoopBuf;
+        } else if (lbuf->enable && lbuf->canProvide(thisPC.instAddr())) {
+            DPRINTF(LoopBuffer, "Will provide inst from loop buffer for PC %#lx c.PC %#lx\n",
+                    fetchAddr, fetchAddr);
+            fetchSource = LoopBuf;
 
-    } else {
-        fetchSource = CacheLine;
+        } else {
+            fetchSource = CacheLine;
+        }
     }
 
     // If returning from the delay of a cache miss, then update the status
@@ -1323,12 +1327,13 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         // the memory we've processed so far.
 
         unsigned decoding_inst_size = 4;
+        isFirstUop = true;
         do {
             if (!(curMacroop || inRom)) {
                 if (decoder[tid]->instReady()) {
                     staticInst = decoder[tid]->decode(thisPC);
                     // here compressed is computed
-                    DPRINTF(LoopBuffer, "%s is created\n",
+                    DPRINTF(LoopBuffer, "New macro %s is created\n",
                             staticInst->disassemble(thisPC.instAddr()));
 
                     // Increment stat of fetched instructions.
@@ -1343,6 +1348,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                     // We need more bytes for this instruction so blkOffset and
                     // pcOffset will be updated
                     if (fetchSource == LoopBuf) {
+                        // Bytes eaten are not enough to build a new inst
                         lbuf->notifyLastInstSize(fetchAddr, thisPC.instAddr(), 0);
                     }
                     break;
@@ -1351,7 +1357,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             if (thisPC.compressed()) {
                 decoding_inst_size = 2;
             }
-            if (staticInst) {
+            if (isFirstUop && staticInst) {
                 uint8_t payload[9];
                 staticInst->asBytes(payload, 8);
                 lbuf->recordInst(payload, thisPC.instAddr(), decoding_inst_size);
@@ -1365,6 +1371,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                     DPRINTFR(LoopBuffer, "%02x ", payload[i]);
                 }
                 DPRINTFR(LoopBuffer, "\n");
+                isFirstUop = false;
             } else {
                 DPRINTF(LoopBuffer, "Do not send to lbuf because it is not the first Uop in this inst\n");
             }

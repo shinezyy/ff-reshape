@@ -1533,11 +1533,11 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
         }
 
         if (hasCommit) {
-            auto [diff_at, has_mem_xpt] = diffWithNEMU(inst);
+            auto [diff_at, npc_match] = diffWithNEMU(inst);
             if (diff_at != NoneDiff) {
-                if (has_mem_xpt && diff_at == PCDiff) {
-                    warn("Found mem exception, Let NEMU run one more instruction\n");
-                    std::tie(diff_at, has_mem_xpt) = diffWithNEMU(inst);
+                if (npc_match && diff_at == PCDiff) {
+                    warn("Found PC mismatch, Let NEMU run one more instruction\n");
+                    std::tie(diff_at, npc_match) = diffWithNEMU(inst);
                     if (diff_at != NoneDiff) {
                         panic("Difftest failed again!\n");
                     } else {
@@ -1908,6 +1908,7 @@ std::pair<int, bool>
 FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
 {
     int diff_at = DiffAt::NoneDiff;
+    bool npc_match = false;
 
     difftest_step(&diff);
     extern const char *reg_name[];
@@ -1937,8 +1938,12 @@ FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
         warn("Diff at %s, NEMU: %#lx, GEM5: %#lx\n",
                 "PC", nemu_pc, gem5_pc
             );
-        if (!diff_at)
+        if (!diff_at) {
             diff_at = PCDiff;
+            if (diff.npc == gem5_pc) {
+                npc_match = true;
+            }
+        }
     }
 
     if (diff.npc != inst->nextInstAddr()) {
@@ -1999,7 +2004,7 @@ FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
             }
         }
     }
-    return std::make_pair(diff_at, nemu_reg[DIFFTEST_HAS_MEM_XPT] != 0);
+    return std::make_pair(diff_at, npc_match);
 }
 
 // Forward declaration of FullO3CPU.
