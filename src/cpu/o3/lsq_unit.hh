@@ -930,6 +930,10 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
         load_inst->memData = new uint8_t[req->mainRequest()->getSize()];
     }
 
+    if (req->request()->getPaddr() < 0x80000000UL) {
+        req->request()->setFlags(Request::UNCACHEABLE);
+    }
+
 
     // hardware transactional memory
     if (req->mainRequest()->isHTMCmd()) {

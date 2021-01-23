@@ -880,7 +880,7 @@ LSQUnit<Impl>::writebackStores()
                 req->request()->getPaddr(), (int)*(inst->memData),
                 inst->seqNum);
 
-        if (req->request()->getPaddr() < 0x80000000) {
+        if (req->request()->getPaddr() < 0x80000000UL) {
             req->request()->setFlags(Request::UNCACHEABLE);
         }
 
