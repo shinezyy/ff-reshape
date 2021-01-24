@@ -577,7 +577,11 @@ Fault
 Walker::WalkerState::pageFault(bool present)
 {
     DPRINTF(PageTableWalker, "Raising page fault.\n");
-    return walker->tlb->createPagefault(entry.vaddr, mode);
+    if (req->isInstFetch()) {
+        return walker->tlb->createPagefault(req->getPC(), mode);
+    } else {
+        return walker->tlb->createPagefault(entry.vaddr, mode);
+    }
 }
 
 } /* end namespace RiscvISA */
