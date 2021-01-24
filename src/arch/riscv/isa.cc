@@ -388,6 +388,10 @@ ISA::setMiscReg(int misc_reg, RegVal val)
                 val &= ~(STATUS_SXL_MASK | STATUS_UXL_MASK);
                 val |= cur & (STATUS_SXL_MASK | STATUS_UXL_MASK);
                 setMiscRegNoEffect(misc_reg, val);
+
+                STATUS mstatus = readMiscRegNoEffect(misc_reg);
+                mstatus.sd = mstatus.xs == 3 || mstatus.fs == 3;
+                setMiscRegNoEffect(misc_reg, mstatus);
             }
             break;
           default:
