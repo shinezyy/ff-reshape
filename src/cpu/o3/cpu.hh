@@ -798,6 +798,10 @@ class FullO3CPU : public BaseO3CPU
         ValueDiff,
     };
     std::pair<int, bool> diffWithNEMU(const DynInstPtr &inst);
+
+    bool scFenceInFlight{false};
+    unsigned scFailed{0};
+    unsigned totalSCFailures{0};
 };
 
 #endif // __CPU_O3_CPU_HH__

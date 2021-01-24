@@ -1503,8 +1503,10 @@ template <class Impl>
 void
 FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
 {
+    bool should_diff = false;
     // Keep an instruction count.
     if (!inst->isMicroop() || inst->isLastMicroop()) {
+        should_diff = true;
         thread[tid]->numInst++;
         thread[tid]->threadStats.numInsts++;
         cpuStats.committedInsts[tid]++;
@@ -1532,23 +1534,63 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
             ref_difftest_setregs(gem5_reg);
         }
 
-        if (hasCommit) {
-            auto [diff_at, npc_match] = diffWithNEMU(inst);
-            if (diff_at != NoneDiff) {
-                if (npc_match && diff_at == PCDiff) {
-                    warn("Found PC mismatch, Let NEMU run one more instruction\n");
-                    std::tie(diff_at, npc_match) = diffWithNEMU(inst);
-                    if (diff_at != NoneDiff) {
-                        panic("Difftest failed again!\n");
-                    } else {
-                        warn("Difftest matched again, NEMU seems to commit the failed mem instruction\n");
-                    }
+        if (scFailed) {
+            DPRINTF(ValueCommit,
+                    "Skip inst after scFailed. Insts since this failure: %u, total failure count = %u\n",
+                    scFailed, totalSCFailures);
+            should_diff = false;
+            scFailed++;
+
+        } else if (scFenceInFlight) {
+            assert(inst->isWriteBarrier() && inst->isReadBarrier());
+            DPRINTF(ValueCommit, "Skip diff fence generated from LR/SC\n");
+            should_diff = false;
+
+        } else {
+            should_diff = true;
+        }
+    }
+    scFenceInFlight = false;
+
+    auto old_sc_failed = false;
+    if (!inst->isLastMicroop() &&
+            inst->isStoreConditional() && !inst->isLastMicroop() && inst->isDelayedCommit()) {
+        if (scFailed) {
+            old_sc_failed = true;
+            scFailed = 0;
+        }
+        scFenceInFlight = true;
+        DPRINTF(ValueCommit, "Diff SC even if it is not the last Microop\n");
+        should_diff = true;
+    }
+    if (should_diff) {
+        auto [diff_at, npc_match] = diffWithNEMU(inst);
+        if (diff_at != NoneDiff) {
+            if (npc_match && diff_at == PCDiff) {
+                warn("Found PC mismatch, Let NEMU run one more instruction\n");
+                std::tie(diff_at, npc_match) = diffWithNEMU(inst);
+                if (diff_at != NoneDiff) {
+                    panic("Difftest failed again!\n");
                 } else {
-                    panic("Difftest failed!\n");
+                    warn("Difftest matched again, NEMU seems to commit the failed mem instruction\n");
                 }
+
+            } else if (scFenceInFlight) {
+                scFailed = 1;
+                totalSCFailures++;
+                warn("SC failed, Let GEM5 run alone until next SC, SC failure #%u\n",
+                        totalSCFailures);
+
+            } else {
+                panic("Difftest failed!\n");
+            }
+        } else { // no diff
+            if (old_sc_failed) {
+                warn("SC failure #%u resolved\n", totalSCFailures);
             }
         }
     }
+
     thread[tid]->numOp++;
     thread[tid]->threadStats.numOps++;
     cpuStats.committedOps[tid]++;
