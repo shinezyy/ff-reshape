@@ -93,6 +93,8 @@ def _validateTags(commit_header):
     valid_tags.remove('pmc')
     valid_tags.extend(['RFC', 'WIP'
         "cpu-omegaflow", "cpu-nosq", "rv-gcpt",
+        "cpu-loopbuf",
+        "difftest",
         ])
 
     tags = ''.join(commit_header.split(':')[0].split()).split(',')

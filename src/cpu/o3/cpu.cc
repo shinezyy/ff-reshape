@@ -2035,6 +2035,11 @@ FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
             if (gem5_val != nemu_val) {
                 if (dest.isFloatReg() && (gem5_val^nemu_val) == ((0xffffffffULL) << 32)) {
                     DPRINTF(ValueCommit, "Difference might be caused by box, ignore it\n");
+
+                // } else if (0x40600000 <= inst->physEffAddr && inst->physEffAddr <= 0x4060000c) {
+                //     DPRINTF(ValueCommit, "Difference might be caused by read %s at %#lx, ignore it\n",
+                //             "serial", inst->physEffAddr);
+
                 } else {
                     warn("Inst [sn:%lli]\n", inst->seqNum);
                     warn("Diff at %s Ref value: %#lx, GEM5 value: %#lx\n",
