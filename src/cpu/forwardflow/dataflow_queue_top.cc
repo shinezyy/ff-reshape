@@ -648,6 +648,17 @@ void DQTop<Impl>::setDIEWC(DIEWC *_diewc)
 template<class Impl>
 void DQTop<Impl>::deferMemInst(const DynInstPtr &inst)
 {
+    inst->translationStarted(false);
+    inst->translationCompleted(false);
+    inst->clearCanIssue();
+    inst->clearIssued();
+
+    // Omegaflow specific:
+    inst->fuGranted = false;
+    inst->inReadyQueue = false;
+    inst->hasMemDep = true;
+    inst->memDepReady = false;
+
     deferredMemInsts.push_back(inst);
 }
 
@@ -655,12 +666,15 @@ template<class Impl>
 typename Impl::DynInstPtr
 DQTop<Impl>::getDeferredMemInstToExecute()
 {
+    DPRINTF(DQ, "Deferred size: %lu\n", deferredMemInsts.size());
     auto it = deferredMemInsts.begin();
     while (it != deferredMemInsts.end()) {
         if ((*it)->translationCompleted() || (*it)->isSquashed()) {
             DynInstPtr inst = *it;
             deferredMemInsts.erase(it);
             return inst;
+        } else {
+            it++;
         }
     }
     return nullptr;
@@ -670,6 +684,7 @@ template<class Impl>
 typename Impl::DynInstPtr DQTop<Impl>::getBlockedMemInst()
 {
     if (retryMemInsts.empty()) {
+        DPRINTF(DQ, "retry mem insts size: %llu\n", retryMemInsts.size());
         return nullptr;
     } else {
         auto inst = retryMemInsts.front();

@@ -172,8 +172,13 @@ void
 LSQ<Impl>::tick()
 {
     // Re-issue loads which got blocked on the per-cycle load ports limit.
-    if (usedLoadPorts == cacheLoadPorts && !_cacheBlocked)
+    if (usedLoadPorts == cacheLoadPorts && !_cacheBlocked) {
         iewStage->cacheUnblocked();
+    } else {
+        DPRINTF(LSQ, "Cannot unblock cache, usedLoadPorts=%i,"
+                " cacheLoadPorts=%i, _cacheBlocked=%i\n",
+                usedLoadPorts, cacheLoadPorts, _cacheBlocked);
+    }
 
     usedLoadPorts = 0;
     usedStorePorts = 0;
@@ -702,7 +707,7 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
 
     const bool htm_cmd = isLoad && (flags & Request::HTM_CMD);
 
-    if (inst->translationStarted()) {
+    if (inst->translationStarted() && !inst->loadVerifying) {
         req = inst->savedReq;
         assert(req);
     } else {
@@ -717,6 +722,7 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
             req = new SingleDataRequest(&thread[tid], inst, isLoad, addr,
                     size, flags, data, res, std::move(amo_op));
         }
+        DPRINTF(LSQ, "Creating new req for inst[sn:%llu] -> %#lx\n", inst->seqNum, req);
         assert(req);
         if (!byte_enable.empty()) {
             req->_byteEnable = byte_enable;
@@ -1026,6 +1032,9 @@ LSQ<Impl>::SingleDataRequest::buildPackets()
 {
     assert(_senderState);
     /* Retries do not create new packets. */
+    if (this->smbVerifying) {
+        _packets.clear();
+    }
     if (_packets.size() == 0) {
         _packets.push_back(
                 isLoad()
@@ -1060,6 +1069,10 @@ LSQ<Impl>::SplitDataRequest::buildPackets()
 {
     /* Extra data?? */
     Addr base_address = _addr;
+
+    if (this->smbVerifying) {
+        _packets.clear();
+    }
 
     if (_packets.size() == 0) {
         /* New stuff */

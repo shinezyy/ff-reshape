@@ -359,7 +359,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     setFloatRegOperandBits(const StaticInst *si, int idx, RegVal val) override
     {
         // this->cpu->setFloatReg(this->_destRegIdx[idx], val);
-        DPRINTF(FFExec, "Inst [%llu] %s setting dest float reg(%i) to %f\n",
+        DPRINTF(FFExec, "Inst [%llu] %s setting dest float reg(%i) to %llu\n",
                 this->seqNum, si->disassemble(this->instAddr()), idx, val);
         destValue.i = val;
         BaseDynInst<Impl>::setFloatRegOperandBits(si, idx, val);

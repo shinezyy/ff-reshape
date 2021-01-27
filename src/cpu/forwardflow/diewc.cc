@@ -44,6 +44,8 @@ void FFDIEWC<Impl>::tick() {
 
     clearAtStart();
 
+    ldstQueue.tick();
+
     // todo: Execute ready insts
     // execute();
 
@@ -414,7 +416,26 @@ void FFDIEWC<Impl>::dispatch() {
         DPRINTF(DIEWC||Debug::RSProbe1, "Dispatching inst[%llu] %s PC: %s\n",
                 inst->seqNum, inst->staticInst->disassemble(inst->instAddr()),
                 inst->pcState());
-        if (inst->isLoad()) {
+        if (inst->isAtomic()) {
+            DPRINTF(IEW, "Dispatch: Atomic instruction "
+                    "encountered, adding to LSQ.\n");
+
+            ldstQueue.insertStore(inst);
+            ++dispStores;
+
+            // AMOs need to be set as "canCommit()"
+            // so that commit can process them when they reach the
+            // head of commit.
+            inst->setCanCommit();
+            std::tie(jumped, pair) = dq.insertNonSpec(inst);
+            setupPointerLink(inst, jumped, pair);
+            normally_add_to_dq = false;
+
+            ++dispNonSpecInsts;
+
+            toAllocation->diewcInfo.dispatchedToSQ++;
+
+        } else if (inst->isLoad()) {
             ldstQueue.insertLoad(inst);
             ++dispaLoads;
 
@@ -936,8 +957,6 @@ FFDIEWC<Impl>::
         return false;
     }
 
-    updateComInstStats(head_inst);
-
     if (head_inst->isLoad()) {
         mDepPred->commitLoad(head_inst->physEffAddr,
                              head_inst->seqNum, head_inst->dqPosition);
@@ -945,8 +964,8 @@ FFDIEWC<Impl>::
     }
 
     if (FullSystem) {
-        panic("FF does not consider FullSystem yet\n");
     }
+
     DPRINTF(Commit || Debug::FFCommit, "Committing instruction with [sn:%lli] PC %s @DQ(%d %d)\n",
             head_inst->seqNum, head_inst->pcState(),
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
@@ -1018,6 +1037,8 @@ FFDIEWC<Impl>::
         head_inst->commitTick = curTick() - head_inst->fetchTick;
     }
 #endif
+
+    updateComInstStats(head_inst);
 
     // If this was a store, record it for this cycle.
     if (head_inst->isStore())
@@ -2347,7 +2368,18 @@ void FFDIEWC<Impl>::executeInst(const DynInstPtr &inst)
     Fault fault = NoFault;
 
     if (inst->isMemRef()) {
-        if (inst->isLoad()) {
+        DPRINTF(DIEWC || Debug::FFExec, "Execute: Calculating address for memory "
+                "reference.\n");
+
+        if (inst->isAtomic()) {
+            fault = ldstQueue.executeStore(inst);
+            if (inst->isTranslationDelayed() && fault == NoFault) {
+                DPRINTF(IEW || Debug::FFExec, "Execute: Delayed translation, deferring atomic "
+                        "store.\n");
+                dq.deferMemInst(inst);
+                return;
+            }
+        } else if (inst->isLoad()) {
             fault = ldstQueue.executeLoad(inst);
 
             if (inst->isTranslationDelayed() &&
@@ -2510,11 +2542,11 @@ FFDIEWC<Impl>::squashDueToMemMissPred(const DynInstPtr &violator)
 
         if (!youngest_cpted_inst_seq) {
             squashAll();
-             // Where to find a cpt hint?
-             cptHint = true;
-             toCheckpoint = violator->instAddr() - 4;
-             DPRINTF(FFSquash, "Hint to checkpoint on pc: 0x%llx next time"
-                     " in case mem violation\n", toCheckpoint);
+            // Where to find a cpt hint?
+            cptHint = true;
+            toCheckpoint = violator->instAddr() - 4;
+            DPRINTF(FFSquash, "Hint to checkpoint on pc: 0x%llx next time"
+                    " in case mem violation\n", toCheckpoint);
 
         } else {
             toNextCycle->diewc2diewc.squash = true;

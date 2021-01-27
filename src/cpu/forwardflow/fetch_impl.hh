@@ -66,6 +66,7 @@
 #include "debug/O3PipeView.hh"
 #include "debug/Reshape.hh"
 #include "debug/Reshape2.hh"
+#include "debug/ValueCommit.hh"
 #include "mem/packet.hh"
 #include "params/DerivFFCPU.hh"
 #include "sim/byteswap.hh"
@@ -385,6 +386,7 @@ DefaultFetch<Impl>::resetStage()
 
     wroteToTimeBuffer = false;
     _status = Inactive;
+    fetchSource = CacheLine;
 }
 
 template<class Impl>
@@ -816,6 +818,8 @@ DefaultFetch<Impl>::doSquash(const TheISA::PCState &newPC,
     ++fetchSquashCycles;
 
     fetchSource = CacheLine;
+
+    isFirstUop = true;
 }
 
 template<class Impl>
@@ -1127,11 +1131,11 @@ DefaultFetch<Impl>::buildInst(ThreadID tid, StaticInstPtr staticInst,
 
     instruction->setThreadState(cpu->thread[tid]);
 
-    DPRINTF(Fetch, "[tid:%i]: Instruction PC %#x (%d) created "
+    DPRINTF(Fetch || Debug::LoopBuffer, "[tid:%i]: Instruction PC %#x (%d) created "
             "[sn:%lli]. @ addr:%p\n", tid, thisPC.instAddr(),
             thisPC.microPC(), seq, instruction.get());
 
-    DPRINTF(Fetch, "[tid:%i]: Instruction %s is: %s\n", tid,
+    DPRINTF(Fetch || Debug::LoopBuffer, "[tid:%i]: Instruction %s is: %s\n", tid,
             instruction->pcState(),
             instruction->staticInst->disassemble(thisPC.instAddr()));
 
@@ -1195,14 +1199,19 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
     bool inRom = isRomMicroPC(thisPC.microPC());
 
-    if (lbuf->enable && fetchSource == LoopBuf &&
-            lbuf->canContinueOnPC(fetchAddr, thisPC.instAddr())) {
-        // pass
-    } else if (lbuf->enable && lbuf->canProvide(fetchAddr)) {
-        fetchSource = LoopBuf;
+    if (isFirstUop) {
+        if (lbuf->enable && fetchSource == LoopBuf &&
+                lbuf->canContinueOnPC(fetchAddr, thisPC.instAddr())) {
+            // pass
 
-    } else {
-        fetchSource = CacheLine;
+        } else if (lbuf->enable && lbuf->canProvide(thisPC.instAddr())) {
+            DPRINTF(LoopBuffer, "Will provide inst from loop buffer for PC %#lx c.PC %#lx\n",
+                    fetchAddr, fetchAddr);
+            fetchSource = LoopBuf;
+
+        } else {
+            fetchSource = CacheLine;
+        }
     }
 
     // If returning from the delay of a cache miss, then update the status
@@ -1305,7 +1314,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                     break;
                 }
 
-                uint8_t *found_line = lbuf->getInst(0, 0);
+                uint8_t *found_line = lbuf->getInst(fetchAddr, thisPC.instAddr());
                 assert(found_line);
                 cacheInsts = reinterpret_cast<TheISA::MachInst *>(found_line);
 
@@ -1326,14 +1335,8 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
             MachInst inst;
             if (fetchSource == CacheLine) {
-                lbuf->recordInst(
-                        reinterpret_cast<uint8_t *>(cacheInsts + blkOffset),
-                        fetchAddr, instSize);
                 inst = cacheInsts[blkOffset];
             } else {
-                lbuf->recordInst(
-                        reinterpret_cast<uint8_t *>(cacheInsts),
-                        fetchAddr, instSize);
                 inst = cacheInsts[0];
             }
 
@@ -1349,10 +1352,16 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         Addr cpc = thisPC.instAddr();
         // Extract as many instructions and/or microops as we can from
         // the memory we've processed so far.
+
+        unsigned decoding_inst_size = 4;
+        isFirstUop = true;
         do {
             if (!(curMacroop || inRom)) {
                 if (decoder[tid]->instReady()) {
                     staticInst = decoder[tid]->decode(thisPC);
+                    // here compressed is computed
+                    DPRINTF(LoopBuffer, "New macro %s is created\n",
+                            staticInst->disassemble(thisPC.instAddr()));
 
                     // Increment stat of fetched instructions.
                     ++fetchedInsts;
@@ -1365,9 +1374,35 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 } else {
                     // We need more bytes for this instruction so blkOffset and
                     // pcOffset will be updated
+                    if (fetchSource == LoopBuf) {
+                        // Bytes eaten are not enough to build a new inst
+                        lbuf->notifyLastInstSize(fetchAddr, thisPC.instAddr(), 0);
+                    }
                     break;
                 }
             }
+            if (thisPC.compressed()) {
+                decoding_inst_size = 2;
+            }
+            if (isFirstUop && staticInst) {
+                uint8_t payload[9];
+                staticInst->asBytes(payload, 8);
+                lbuf->recordInst(payload, thisPC.instAddr(), decoding_inst_size);
+
+                if (fetchSource == LoopBuf) {
+                    lbuf->notifyLastInstSize(fetchAddr, thisPC.instAddr(), decoding_inst_size);
+                }
+
+                DPRINTF(LoopBuffer, "Supplying instruction payload:\n");
+                for (unsigned i = 0; i < 4; i++) {
+                    DPRINTFR(LoopBuffer, "%02x ", payload[i]);
+                }
+                DPRINTFR(LoopBuffer, "\n");
+                isFirstUop = false;
+            } else {
+                DPRINTF(LoopBuffer, "Do not send to lbuf because it is not the first Uop in this inst\n");
+            }
+
             // Whether we're moving to a new macroop because we're at the
             // end of the current one, or the branch predictor incorrectly
             // thinks we are...
@@ -1412,6 +1447,9 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 lookupAndUpdateNextPC(instruction, nextPC);
             predictedBranch = this_is_branch;
 
+            if (thisPC.compressed()) {
+            }
+
             if (this_is_branch) {
                 // predicted backward branch
                 DPRINTF(Fetch, "Taken branch detected with PC : 0x%x => 0x%x\n",
@@ -1449,7 +1487,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         inRom = isRomMicroPC(thisPC.microPC());
 
         Addr npc = nextPC.instAddr();
-
+        if (cpc != npc) {
         if (lbuf->enable && fetchSource == LoopBuf) {
             if (!lbuf->canContinueOnNPC(cpc, npc, predictedBranch)) {
                 if (!lbuf->canProvide(npc)) {
@@ -1465,6 +1503,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 DPRINTF(LoopBuffer, "Will switch to fetch from lbuf\n");
                 fetchSource = LoopBuf;
             }
+        }
         }
     }
 

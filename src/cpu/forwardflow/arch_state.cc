@@ -494,11 +494,14 @@ pair<bool, FFRegValue> ArchState<Impl>::commitInst(const DynInstPtr &inst)
         val = inst->getDestValue();
         if (dest.isIntReg()) {
             intArchRF[dest.index()] = val;
+            DPRINTF(FFCommit, "Committing Int reg %u\n", dest.index());
 
         } else if (dest.isFloatReg()) {
             floatArchRF[dest.index()] = val;
+            DPRINTF(FFCommit, "Committing Float reg %u\n", dest.index());
 
         } else {
+            DPRINTF(FFCommit, "Committing Misc reg %u\n", dest.index());
             panic("not ready for other instructions!");
         }
 

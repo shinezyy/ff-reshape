@@ -240,14 +240,6 @@ BaseDynInst<Impl>::eaSrcsReady() const
     return true;
 }
 
-template <class Impl>
-void
-BaseDynInst<Impl>::setSquashed()
-{
-    DPRINTF(DynInst, "inst[%llu] set squashed!\n", seqNum);
-    status.set(Squashed);
-}
-
 template<class Impl>
 void BaseDynInst<Impl>::setExecuted()
 {
@@ -257,15 +249,12 @@ void BaseDynInst<Impl>::setExecuted()
     wbCount++;
 }
 
-}
-
-
-
 template <class Impl>
 void
 BaseDynInst<Impl>::setSquashed()
 {
     status.set(Squashed);
+    DPRINTF(DynInst, "inst[%llu] set squashed!\n", seqNum);
 
     if (!isPinnedRegsRenamed() || isPinnedRegsSquashDone())
         return;
@@ -287,6 +276,7 @@ BaseDynInst<Impl>::setSquashed()
     setPinnedRegsSquashDone();
 }
 
+}
 
 
 #endif//__CPU_BASE_DYN_INST_IMPL_HH__

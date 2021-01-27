@@ -273,6 +273,7 @@ MemDepUnit<MemDepPred, Impl>::completeBarrier(const DynInstPtr &inst)
     InstSeqNum barr_sn = inst->seqNum;
     DPRINTF(MemDepUnit, "barrier completed: %s SN:%lli\n", inst->pcState(),
             inst->seqNum);
+    DPRINTF(MemDepUnit, "barrier table size: %llu\n", barrierTable.size());
     if (inst->isReadBarrier()) {
         if (loadBarrier.SN == barr_sn)
             loadBarrier.valid = false;

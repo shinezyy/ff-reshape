@@ -98,4 +98,16 @@ void difftest_display(uint8_t mode);
 
 #define DIFFTEST_WIDTH 8
 
+enum DiffAt {
+    NoneDiff = 0,
+    PCDiff,
+    NPCDiff,
+    InstDiff,
+    ValueDiff,
+};
+
+extern uint8_t *pmemStart;
+extern uint64_t pmemSize;
+extern const char *reg_name[];
+
 #endif

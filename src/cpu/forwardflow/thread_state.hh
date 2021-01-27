@@ -95,6 +95,9 @@ struct O3ThreadState : public ThreadState {
      */
     bool trapPending;
 
+    /** Pointer to the hardware transactional memory checkpoint. */
+    std::unique_ptr<BaseHTMCheckpoint> htmCheckpoint;
+
     O3ThreadState(O3CPU *_cpu, int _thread_num, Process *_process)
         : ThreadState(_cpu, _thread_num, _process), cpu(_cpu),
           comInstEventQueue("instruction-based event queue"),

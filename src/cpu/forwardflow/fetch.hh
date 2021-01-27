@@ -229,6 +229,7 @@ class DefaultFetch
     /** Returns the name of fetch. */
     std::string name() const;
 
+    void regStats();
 
     /** Registers probes. */
     void regProbePoints();
@@ -606,8 +607,6 @@ class DefaultFetch
 
     Stats::Scalar fetchFromLoopBuffer;
 
-    void regStats();
-
     FanoutPred *fanoutPred;
 
     void predictFanout(const DynInstPtr &inst);
@@ -625,9 +624,10 @@ class DefaultFetch
     std::list<Addr> recentBranchPCs;
 
     std::mt19937 gen;
-public:
+  public:
     void setFanoutPred(FanoutPred *fanoutPred1);
 
+  private:
     LoopBuffer *lbuf;
 
     enum FetchSource {
@@ -636,6 +636,8 @@ public:
     };
 
     FetchSource fetchSource;
+
+    bool isFirstUop{true};
 };
 
 }

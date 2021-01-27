@@ -59,6 +59,7 @@
 #include "config/the_isa.hh"
 #include "cpu/activity.hh"
 #include "cpu/base.hh"
+#include "cpu/difftest.hh"
 #include "cpu/fanout_pred.hh"
 #include "cpu/forwardflow/comm.hh"
 #include "cpu/forwardflow/cpu_policy.hh"
@@ -356,7 +357,7 @@ class FFCPU : public BaseO3CPU
     InstSeqNum getAndIncrementInstSeq()
     {
         auto old = globalSeqNum;
-        globalSeqNum += 100;
+        globalSeqNum += 1;
         return old;
     }
 
@@ -557,12 +558,6 @@ class FFCPU : public BaseO3CPU
 
     std::vector<TheISA::ISA *> isa;
 
-    /** Instruction port. Note that it has to appear after the fetch stage. */
-    IcachePort icachePort;
-
-    /** Data port. Note that it has to appear after the iew stages */
-    DcachePort dcachePort;
-
   public:
     /** Enum to give each stage a specific index, so when calling
      *  activateStage() or deactivateStage(), they can specify which stage
@@ -703,10 +698,10 @@ class FFCPU : public BaseO3CPU
     }
 
     /** Used by the fetch unit to get a hold of the instruction port. */
-    RequestPort &getInstPort() override { return icachePort; }
+    RequestPort &getInstPort() override { return fetch.getInstPort(); }
 
     /** Get the dcache port (used to find block size for translations). */
-    RequestPort &getDataPort() override { return dcachePort; }
+    RequestPort &getDataPort() override { return this->diewc.ldstQueue.getDataPort(); }
 
     /** Stat for total number of times the CPU is descheduled. */
     Stats::Scalar timesIdled;
@@ -746,10 +741,28 @@ class FFCPU : public BaseO3CPU
 
     Stats::Scalar squashedFUTime;
 
-private:
+  private:
     void setPointers();
 
     FanoutPred fanoutPred;
+
+  private:
+    uint32_t diff_wdst[DIFFTEST_WIDTH];
+    uint64_t diff_wdata[DIFFTEST_WIDTH];
+    uint64_t diff_wpc[DIFFTEST_WIDTH];
+    uint64_t gem5_reg[DIFFTEST_NR_REG];
+    uint64_t nemu_reg[DIFFTEST_NR_REG];
+    DiffState diff;
+    bool hasCommit{};
+
+    void readGem5Regs();
+
+    std::pair<int, bool> diffWithNEMU(const DynInstPtr &inst);
+
+    bool scFenceInFlight{false};
+    unsigned scFailed{0};
+    unsigned totalSCFailures{0};
+
 };
 
 }

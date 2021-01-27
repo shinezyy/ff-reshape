@@ -99,6 +99,7 @@ LSQUnit<Impl>::recvTimingResp(PacketPtr pkt)
 {
     auto senderState = dynamic_cast<LSQSenderState*>(pkt->senderState);
     LSQRequest* req = senderState->request();
+    DPRINTF(LSQUnit, "Recv timing resp for req %#lx\n", req);
     assert(req != nullptr);
     bool ret = true;
     /* Check that the request is still alive before any further action. */
@@ -169,10 +170,6 @@ LSQUnit<Impl>::completeDataAccess(PacketPtr pkt)
                 inst->pcState(), pkt->getAddr(),
                 htmFailureToStr(htm_rc), pkt->getHtmTransactionUid());
         }
-    } else {
-        DPRINTF(DIEWC, "inst[%llu] has been squashed^&@$&?\n", inst->seqNum);
-        cpu->wakeCPU();
-        cpu->activityThisCycle();
     }
 
     cpu->ppDataAccessComplete->notify(std::make_pair(inst, pkt));

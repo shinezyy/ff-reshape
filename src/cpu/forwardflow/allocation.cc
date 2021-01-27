@@ -315,7 +315,7 @@ void Allocation<Impl>::allocateInsts() {
             DPRINTF(DAllocation, "loads in process: %d after inc by inst[%d]\n",
                     loadsInProgress, inst->seqNum);
         }
-        if (inst->isStore()) {
+        if (inst->isStore() || inst->isAtomic()) {
             storesInProgress++;
         }
         ++allocated;
