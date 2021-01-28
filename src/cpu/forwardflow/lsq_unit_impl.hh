@@ -571,10 +571,7 @@ LSQUnit<Impl>::checkViolations(typename LoadQueue::iterator& loadIt,
 
                         ++stats.memOrderViolation;
 
-                        return std::make_shared<GenericISA::M5PanicFault>(
-                            "Detected fault with inst [sn:%lli] and "
-                            "[sn:%lli] at address %#x\n",
-                            inst->seqNum, ld_inst->seqNum, ld_eff_addr1);
+                        return NoFault;
                     }
                 }
 
@@ -607,10 +604,7 @@ LSQUnit<Impl>::checkViolations(typename LoadQueue::iterator& loadIt,
 
                 ++stats.memOrderViolation;
 
-                return std::make_shared<GenericISA::M5PanicFault>(
-                    "Detected fault with "
-                    "inst [sn:%lli] and [sn:%lli] at address %#x\n",
-                    inst->seqNum, ld_inst->seqNum, ld_eff_addr1);
+                return NoFault;
             }
         }
 
