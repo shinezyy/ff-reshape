@@ -1197,10 +1197,10 @@ void DQTop<Impl>::squashLoad(const DQTop::DynInstPtr &inst)
 }
 
 template<class Impl>
-InstSeqNum DQTop<Impl>::walkThroughStores(deque<RecentStore> &recentStoreTable)
+InstSeqNum DQTop<Impl>::walkThroughStores(deque<RecentStore> &recent_store_table)
 {
     unsigned u = tail;
-    InstSeqNum latestStoreSeq = 0;
+    InstSeqNum latest_store_seq = 0;
     while (validPosition(u) && logicallyLET(u, head)) {
         const BasePointer ptr = c.uint2Pointer(u);
         DPRINTF(NoSQPred, "Walk store at" ptrfmt "\n", extptr(ptr));
@@ -1216,7 +1216,7 @@ InstSeqNum DQTop<Impl>::walkThroughStores(deque<RecentStore> &recentStoreTable)
         }
         u = inc(u);
     }
-    return latestStoreSeq;
+    return latest_store_seq;
 }
 
 
