@@ -793,7 +793,9 @@ FFDIEWC<Impl>::
         if (head_inst->isNonSpeculative() || head_inst->isLoadReserved() ||
             head_inst->isStoreConditional() ||
             head_inst->isReadBarrier() || head_inst->isWriteBarrier() ||
-            (head_inst->isLoad() && head_inst->strictlyOrdered())) {
+            (head_inst->isLoad() && head_inst->strictlyOrdered()) ||
+            head_inst->isAtomic()
+            ) {
 
             DPRINTF(Commit || Debug::FFCommit, "Encountered a barrier or non-speculative "
                     "instruction [sn:%lli] at the head of the ROB, PC %s.\n",
@@ -852,8 +854,8 @@ FFDIEWC<Impl>::
                 head_inst->completeTick, curTick(), head_inst->fetchTick);
     }
 
-    if (head_inst->isStoreConditional() && !head_inst->isCompleted()) {
-        DPRINTF(FFCommit, "Inst[%llu] is store cond, and not completed yet,"
+    if ((head_inst->isStoreConditional() || head_inst->isAtomic()) && !head_inst->isCompleted()) {
+        DPRINTF(FFCommit, "Inst[%llu] is store cond / atomic, and not completed yet,"
                 " cannot commit\n", head_inst->seqNum);
         return false;
     }
@@ -1715,7 +1717,7 @@ void FFDIEWC<Impl>::wakeCPU()
 template<class Impl>
 void FFDIEWC<Impl>::instToWriteback(const DynInstPtr &inst)
 {
-    assert(inst->isLoad() || inst->isStoreConditional());
+    assert(inst->isLoad() || inst->isStoreConditional() || inst->isAtomic());
     inst->setCanCommit();
     // assert(inst->sfuWrapper);
     // inst->sfuWrapper->markWb();
