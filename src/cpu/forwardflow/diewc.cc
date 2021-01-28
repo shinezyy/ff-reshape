@@ -840,6 +840,9 @@ FFDIEWC<Impl>::
         return false;
     }
 
+    DPRINTF(FFCommit, "head[sn:%llu] has fault: %i\n",
+            head_inst->seqNum, head_inst->getFault());
+
     if (head_inst->completeTick == curTick() - head_inst->fetchTick) {
         DPRINTF(FFCommit, "Inst[%llu] must not be committed and executed in "
                 "the same cycle\n", head_inst->seqNum);
@@ -955,6 +958,9 @@ FFDIEWC<Impl>::
         // Generate trap squash event.
         generateTrapEvent(DummyTid, inst_fault);
         return false;
+    } else {
+        DPRINTF(Commit, "Instruction [sn:%lli] has no fault\n",
+                head_inst->seqNum);
     }
 
     if (head_inst->isLoad()) {
@@ -2407,6 +2413,12 @@ void FFDIEWC<Impl>::executeInst(const DynInstPtr &inst)
                 dq.deferMemInst(inst);
                 return;
             }
+
+            if (fault != NoFault) {
+                assert(inst->getFault() != NoFault);
+            }
+
+            DPRINTF(DIEWC, "inst[sn:%llu] has fault: %i\n", inst->seqNum, inst->getFault());
 
             // If the store had a fault then it may not have a mem req
             if (fault != NoFault || !inst->readPredicate() ||

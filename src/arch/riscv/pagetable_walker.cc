@@ -406,6 +406,8 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
                 "Loading level%d PTE from %#x\n", level, nextRead);
     }
 
+    DPRINTF(PageTableWalker, "Has fault: %i\n", fault != NoFault);
+
     return fault;
 }
 

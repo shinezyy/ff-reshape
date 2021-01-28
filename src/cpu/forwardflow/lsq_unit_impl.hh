@@ -712,6 +712,7 @@ LSQUnit<Impl>::executeStore(const DynInstPtr &store_inst)
 
     Fault store_fault = store_inst->initiateAcc();
 
+    DPRINTF(LSQUnit, "Translation delayed: %i\n", store_inst->isTranslationDelayed());
     if (store_inst->isTranslationDelayed() &&
         store_fault == NoFault)
         return store_fault;
@@ -724,8 +725,8 @@ LSQUnit<Impl>::executeStore(const DynInstPtr &store_inst)
     }
 
     if (storeQueue[store_idx].size() == 0) {
-        DPRINTF(LSQUnit,"Fault on Store PC %s, [sn:%lli], Size = 0\n",
-                store_inst->pcState(), store_inst->seqNum);
+        DPRINTF(LSQUnit,"Fault on Store PC %s, [sn:%lli], Size = 0. No Fault: %i.\n",
+                store_inst->pcState(), store_inst->seqNum, store_fault == NoFault);
 
         return store_fault;
     }

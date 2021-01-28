@@ -707,6 +707,8 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
 
     const bool htm_cmd = isLoad && (flags & Request::HTM_CMD);
 
+    DPRINTF(LSQ, "Translation start: %i, load verifying: %i\n",
+            inst->translationStarted(), inst->loadVerifying);
     if (inst->translationStarted() && !inst->loadVerifying) {
         req = inst->savedReq;
         assert(req);
@@ -735,6 +737,10 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
         inst->getFault() = NoFault;
 
         req->initiateTranslation();
+        DPRINTF(LSQ, "Req translation completed: %i, "
+                "Inst translation completed: %i\n",
+                req->isTranslationComplete(),
+                inst->translationCompleted());
     }
 
     /* This is the place were instructions get the effAddr. */
@@ -801,6 +807,9 @@ LSQ<Impl>::SingleDataRequest::finish(const Fault &fault, const RequestPtr &req,
         }
 
         LSQRequest::_inst->fault = fault;
+        DPRINTF(LSQ, "Mark translation completed for inst [sn:%llu]\n",
+                _inst->seqNum);
+        DPRINTF(LSQ, "inst [sn:%llu] has fault: %i\n", _inst->seqNum, _inst->getFault() != NoFault);
         LSQRequest::_inst->translationCompleted(true);
     }
 }

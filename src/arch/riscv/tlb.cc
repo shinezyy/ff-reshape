@@ -283,6 +283,7 @@ TLB::doTranslate(const RequestPtr &req, ThreadContext *tc,
         if (translation != nullptr || fault != NoFault) {
             // This gets ignored in atomic mode.
             delayed = true;
+            DPRINTF(TLB, "Translation has fault 1: %i\n", fault != NoFault);
             return fault;
         }
         e = lookup(vaddr, satp.asid, mode, false);
@@ -300,11 +301,14 @@ TLB::doTranslate(const RequestPtr &req, ThreadContext *tc,
             fault = walker->start(tc, translation, req, mode);
             if (translation != nullptr || fault != NoFault) {
                 delayed = true;
+                DPRINTF(TLB, "Translation has fault 2: %i\n", fault != NoFault);
                 return fault;
             }
         }
-        if (fault != NoFault)
+        if (fault != NoFault) {
+            DPRINTF(TLB, "Translation has fault 3: %i\n", fault != NoFault);
             return fault;
+        }
     }
 
     Addr paddr = e->paddr << PageShift | (vaddr & mask(e->logBytes));
@@ -312,6 +316,7 @@ TLB::doTranslate(const RequestPtr &req, ThreadContext *tc,
             vaddr, satp.asid, paddr);
     req->setPaddr(paddr);
 
+    DPRINTF(TLB, "Translation has fault 4: %i\n", fault != NoFault);
     return NoFault;
 }
 
@@ -346,6 +351,7 @@ TLB::translate(const RequestPtr &req, ThreadContext *tc,
             fault = NoFault;
         } else {
             fault = doTranslate(req, tc, translation, mode, delayed);
+            DPRINTF(TLB, "Has translation fault: %i\n", fault != NoFault);
         }
 
         // according to the RISC-V tests, negative physical addresses trigger
@@ -361,6 +367,9 @@ TLB::translate(const RequestPtr &req, ThreadContext *tc,
                 code = ExceptionCode::INST_ACCESS;
             fault = make_shared<AddressFault>(req->getVaddr(), code);
         }
+        DPRINTF(TLB, "Has negative fault: %i\n", fault != NoFault);
+        DPRINTF(TLB, "req size: %u\n", req->getSize());
+
 
         return fault;
     } else {
@@ -399,10 +408,14 @@ TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
     bool delayed;
     assert(translation);
     Fault fault = translate(req, tc, translation, mode, delayed);
-    if (!delayed)
+    DPRINTF(TLB, "Translation has fault 5: %i\n", fault != NoFault);
+    if (!delayed) {
+        DPRINTF(TLB, "Finishing translation\n");
         translation->finish(fault, req, tc, mode);
-    else
+    } else {
+        DPRINTF(TLB, "Delayed translation\n");
         translation->markDelayed();
+    }
 }
 
 Fault
@@ -422,8 +435,10 @@ TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc, Mode mode)
             unsigned logBytes;
             Fault fault = walker->startFunctional(
                     tc, paddr, logBytes, mode);
-            if (fault != NoFault)
+            if (fault != NoFault) {
+                DPRINTF(TLB, "Fault detected, return fault\n");
                 return fault;
+            }
 
             Addr masked_addr = vaddr & mask(logBytes);
             paddr |= masked_addr;
@@ -449,6 +464,7 @@ TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc, Mode mode)
 
     DPRINTF(TLB, "Translated (functional) %#x -> %#x.\n", vaddr, paddr);
     req->setPaddr(paddr);
+    DPRINTF(TLB, "Translation has no fault\n");
     return NoFault;
 }
 
