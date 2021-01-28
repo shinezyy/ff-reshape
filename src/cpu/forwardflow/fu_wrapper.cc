@@ -88,7 +88,8 @@ bool FUWrapper<Impl>::consume(const FUWrapper::DynInstPtr &inst)
             // to_wake[DestPtr].hasVal = true;
             // to_wake[DestPtr].val = inst->bypassVal;
 
-        } else if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder())) {
+        } else if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder()
+                    || inst->isAtomic())) {
             DPRINTFR(FUW, "to wake up " ptrfmt "\n", extptr(dest));
             to_wake[DestPtr] = dest;
 
@@ -113,7 +114,8 @@ bool FUWrapper<Impl>::consume(const FUWrapper::DynInstPtr &inst)
         }
     }
     if (inst->numDestRegs() > 0) {
-        if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder())) {
+        if (!(inst->isLoad() || inst->isStoreConditional() || inst->isForwarder()
+                    || inst->isAtomic())) {
             to_wake[SrcPtr] = inst->dqPosition;
             if (!dest.valid && !inst->isForwarder()) {
                 inst->destReforward = true;
@@ -470,7 +472,7 @@ void FUWrapper<Impl>::executeInsts()
         exec->executeInst(inst);
 
         if (inst->numDestRegs() && inst->isExecuted() &&
-                !(inst->isLoad() || inst->isStoreConditional())) {
+                !(inst->isLoad() || inst->isStoreConditional() || inst->isAtomic())) {
 
             if (it->wbPos != wbQueue.end()) {
                 (*it->wbPos)[DestPtr].hasVal = true;
