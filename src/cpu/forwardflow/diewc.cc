@@ -862,7 +862,7 @@ FFDIEWC<Impl>::
         return false;
     }
 
-    if (head_inst->isLoad() && !head_inst->loadVerified) {
+    if (head_inst->isLoad() && (head_inst->getFault() == NoFault) && !head_inst->loadVerified) {
         headNotVerified++;
         DPRINTF(FFCommit, "Inst[%llu] is load but not verified yet,"
                           " cannot commit\n", head_inst->seqNum);
@@ -1740,9 +1740,11 @@ void FFDIEWC<Impl>::instToWriteback(const DynInstPtr &inst)
 
     if (violation) {
         inst->memPredHistory->willSquash = true;
-        fetchRedirect = true;
-        ++memOrderViolationEvents;
-        squashDueToMemMissPred(inst);
+        if (commitStatus != TrapPending) {
+            fetchRedirect = true;
+            ++memOrderViolationEvents;
+            squashDueToMemMissPred(inst);
+        }
     } else {
         dq.writebackLoad(inst);
     }
@@ -1989,8 +1991,9 @@ void FFDIEWC<Impl>::checkMisprediction(const DynInstPtr &inst)
 template<class Impl>
 void FFDIEWC<Impl>::squashDueToBranch(const DynInstPtr &inst)
 {
-    if (!toNextCycle->diewc2diewc.squash ||
-            inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum) {
+    if ((!toNextCycle->diewc2diewc.squash ||
+            inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum)
+            && (commitStatus != TrapPending)) {
         toNextCycle->diewc2diewc.squash = true;
         toNextCycle->diewc2diewc.doneSeqNum = inst->seqNum;
         toNextCycle->diewc2diewc.squashedSeqNum = inst->seqNum;
@@ -2681,6 +2684,7 @@ void FFDIEWC<Impl>::checkDQHalfSquash()
 
         && (!dqSquashing || victim_seq <= dqSquashSeq)
         // more primary than processing squashing
+        && (commitStatus != TrapPending)
         ) {
 
         InstSeqNum youngest_cpted_inst_seq = archState.getYoungestCPTBefore(victim_seq);
