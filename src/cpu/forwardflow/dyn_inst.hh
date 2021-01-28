@@ -422,6 +422,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
     bool isNormalStore() { return this->isStore() && !this->isRVAmoStoreHalf();}
 
+    bool isGeneralStore() { return this->isStore() || this->isAtomic();}
+
     FFRegValue bypassVal;
 
     TermedPointer dqPosition;

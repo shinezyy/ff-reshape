@@ -1206,10 +1206,10 @@ InstSeqNum DQTop<Impl>::walkThroughStores(deque<RecentStore> &recentStoreTable)
         DPRINTF(NoSQPred, "Walk store at" ptrfmt "\n", extptr(ptr));
         DataflowQueueBank *bank = (*dqGroups[ptr.group])[ptr.bank];
         DynInstPtr inst = bank->readInstsFromBank(ptr);
-        if (inst && inst->isStore()) {
-            recentStoreTable.emplace_front(inst->seqNum, inst->dqPosition);
-            latestStoreSeq = inst->storeSeq;
-            DPRINTF(NoSQPred, "Seq: %lu, store seq: %lu\n", inst->seqNum, latestStoreSeq);
+        if (inst && inst->isGeneralStore()) {
+            recent_store_table.emplace_front(inst->seqNum, inst->dqPosition);
+            latest_store_seq = inst->storeSeq;
+            DPRINTF(NoSQPred, "Seq: %lu, store seq: %lu\n", inst->seqNum, latest_store_seq);
         }
         if (u == head) {
             break;

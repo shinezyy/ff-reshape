@@ -697,7 +697,7 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
             inst->setCanIssue();
         }
 
-        if (inst->isStore()) {
+        if (inst->isGeneralStore()) {
             inst->storeSeq = ++storeSeq;
             DPRINTF(NoSQPred, "Store inst[%lu] store seq: %lu\n", inst->seqNum, inst->storeSeq);
         }

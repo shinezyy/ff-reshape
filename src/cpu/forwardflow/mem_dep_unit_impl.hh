@@ -134,7 +134,7 @@ MemDepUnit<MemDepPred, Impl>::insert(const DynInstPtr &inst)
         DPRINTF(MemDepUnit, "Load barrier [sn:%lli] in flight\n",
                 loadBarrier.SN);
         producing_barrier = loadBarrier.SN;
-    } else if (inst->isStore() && storeBarrier.valid) {
+    } else if (inst->isGeneralStore() && storeBarrier.valid) {
         producing_barrier = storeBarrier.SN;
         DPRINTF(MemDepUnit, "Store barrier [sn:%lli] in flight\n",
                 storeBarrier.SN);

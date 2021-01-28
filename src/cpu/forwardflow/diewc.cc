@@ -156,7 +156,7 @@ void FFDIEWC<Impl>::tryVerifyTailLoads()
     unsigned count = 0;
     for (const DynInstPtr &inst: instsToCommit) {
         DPRINTF(NoSQSMB, "Verifying\n");
-        if (inst->isStore() || inst->isReadBarrier() || inst->isWriteBarrier()) {
+        if (inst->isGeneralStore() || inst->isReadBarrier() || inst->isWriteBarrier()) {
             DPRINTF(NoSQSMB || Debug::FFCommit, "Break verifying because encountered store\n");
             break;
         }
@@ -367,7 +367,7 @@ void FFDIEWC<Impl>::dispatch() {
                                "to LQ = %d",
                         inst->seqNum, toAllocation->diewcInfo.dispatchedToLQ);
             }
-            if (inst->isStore()) {
+            if (inst->isGeneralStore()) {
                 toAllocation->diewcInfo.dispatchedToSQ++;
             }
             if (!inst->isForwarder()) {
@@ -387,7 +387,7 @@ void FFDIEWC<Impl>::dispatch() {
         }
 
         if ((inst->isLoad() && ldstQueue.lqFull()) ||
-            (inst->isStore() && ldstQueue.sqFull())) {
+            (inst->isGeneralStore() && ldstQueue.sqFull())) {
             if (inst->isLoad()) {
                 ++lqFullEvents;
             } else {
@@ -895,7 +895,7 @@ FFDIEWC<Impl>::
     Fault inst_fault = head_inst->getFault();
 
     // Stores mark themselves as completed.
-    if (head_inst->isStore() && inst_fault == NoFault) {
+    if (head_inst->isGeneralStore() && inst_fault == NoFault) {
         head_inst->setCompleted();
 
         mDepPred->commitStore(head_inst->physEffAddr, head_inst->effSize,
@@ -1552,7 +1552,7 @@ FFDIEWC<Impl>::squashInFlight()
         if (skidBuffer.front()->isLoad()) {
             toAllocation->diewcInfo.dispatchedToLQ++;
         }
-        if (skidBuffer.front()->isStore()) {
+        if (skidBuffer.front()->isGeneralStore()) {
             toAllocation->diewcInfo.dispatchedToSQ++;
         }
 
@@ -1578,7 +1578,7 @@ void FFDIEWC<Impl>::clearAllocatedInsts() {
         if (insts.front()->isLoad()) {
             toAllocation->diewcInfo.dispatchedToLQ++;
         }
-        if (insts.front()->isStore()) {
+        if (insts.front()->isGeneralStore()) {
             toAllocation->diewcInfo.dispatchedToSQ++;
         }
         if (!insts.front()->isForwarder()) {
