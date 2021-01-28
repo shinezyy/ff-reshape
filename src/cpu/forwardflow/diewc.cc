@@ -611,6 +611,9 @@ void FFDIEWC<Impl>::setupPointerLink(const FFDIEWC::DynInstPtr &inst, bool jumpe
                 DPRINTF(NoSQSMB, "SMB pair:" ptrfmt " to " ptrfmt "is overridden\n",
                         extptr(last_pair.dest), extptr(last_pair.payload));
                 pairs.pop_back();
+
+                // override prediction
+                inst->memPredHistory->bypass = false;
             }
         }
         insertPointerPairs(pairs);
