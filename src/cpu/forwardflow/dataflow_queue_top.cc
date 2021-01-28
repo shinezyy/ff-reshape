@@ -648,7 +648,6 @@ void DQTop<Impl>::setDIEWC(DIEWC *_diewc)
 template<class Impl>
 void DQTop<Impl>::deferMemInst(const DynInstPtr &inst)
 {
-    inst->translationStarted(false);
     inst->translationCompleted(false);
     inst->clearCanIssue();
     inst->clearIssued();
@@ -700,8 +699,6 @@ template<class Impl>
 void DQTop<Impl>::rescheduleMemInst(const DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive)
 {
     DPRINTF(DQ, "Marking inst[%llu] as need rescheduling\n", inst->seqNum);
-    inst->translationStarted(false);
-    inst->translationCompleted(false);
     if (!isFalsePositive) {
         inst->clearCanIssue();
     }
@@ -734,8 +731,6 @@ void DQTop<Impl>::replayMemInsts()
 template<class Impl>
 void DQTop<Impl>::blockMemInst(const DynInstPtr &inst)
 {
-    inst->translationStarted(false);
-    inst->translationCompleted(false);
     inst->clearCanIssue();
     inst->clearIssued();
 
