@@ -1050,10 +1050,6 @@ FFDIEWC<Impl>::
 
     updateComInstStats(head_inst);
 
-    // If this was a store, record it for this cycle.
-    if (head_inst->isStore())
-        committedStores = true;
-
     // Return true to indicate that we have committed an instruction.
     return true;
 }
