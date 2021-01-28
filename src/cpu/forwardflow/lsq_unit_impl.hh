@@ -674,6 +674,13 @@ LSQUnit<Impl>::executeLoad(const DynInstPtr &inst)
         iewStage->activityThisCycle();
     } else {
         if (inst->effAddrValid()) {
+
+            if (!inst->isNormalBypass()) {
+                inst->seqNVul = iewStage->getLastCompletedStoreSN();
+                DPRINTF(NoSQPred, "Setting Nvul (%lu) for inst[%lu]\n",
+                        inst->seqNVul, inst->seqNum);
+            }
+
             auto it = inst->lqIt;
             ++it;
 
