@@ -745,6 +745,8 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
 
     /* This is the place were instructions get the effAddr. */
     if (req->isTranslationComplete()) {
+        DPRINTF(LSQ, "Vaddr: %#lx, paddr: %#lx, storeSeq: %llu, is load: %i\n",
+                req->getVaddr(), inst->physEffAddr, inst->storeSeq, isLoad);
         if (req->isMemAccessRequired()) {
             inst->effAddr = req->getVaddr();
             inst->effSize = size;

@@ -480,6 +480,10 @@ void FUWrapper<Impl>::executeInsts()
                 DPRINTF(FUW, "Setting dest ptr value to %lu\n",
                         inst->getDestValue().i);
             }
+        } else {
+            DPRINTF(FUW, "num dest: %i, executed: %i, is load: %i, is sc: %i\n",
+                    inst->numDestRegs(), inst->isExecuted(),
+                    inst->isLoad(), inst->isStoreConditional());
         }
 
         insts.erase(it->seq);
