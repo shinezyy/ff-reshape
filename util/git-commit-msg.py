@@ -94,6 +94,7 @@ def _validateTags(commit_header):
     valid_tags.extend(['RFC', 'WIP'
         "cpu-omegaflow", "cpu-nosq", "rv-gcpt",
         "cpu-loopbuf",
+        "cpu-forwardflow",
         "difftest",
         ])
 
