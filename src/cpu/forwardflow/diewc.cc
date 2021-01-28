@@ -423,6 +423,8 @@ void FFDIEWC<Impl>::dispatch() {
             ldstQueue.insertStore(inst);
             ++dispStores;
 
+            mDepPred->addNewStore(inst->dqPosition, inst->seqNum);
+
             // AMOs need to be set as "canCommit()"
             // so that commit can process them when they reach the
             // head of commit.
