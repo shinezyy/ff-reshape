@@ -459,6 +459,10 @@ FFCPU<Impl>::regStats()
     squashedFUTime
         .name(name() + ".squashedFUTime")
         .desc("squashedFUTime");
+
+    lastCommitTick
+        .name(name() + ".lastCommitTick")
+        .desc("lastCommitTick");
 }
 
 template <class Impl>
@@ -1337,6 +1341,8 @@ FFCPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
     }
 
     probeInstCommit(inst->staticInst, inst->instAddr());
+
+    lastCommitTick = curTick();
 }
 
 template <class Impl>

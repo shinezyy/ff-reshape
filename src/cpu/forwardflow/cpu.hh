@@ -741,6 +741,8 @@ class FFCPU : public BaseO3CPU
 
     Stats::Scalar squashedFUTime;
 
+    Stats::Scalar lastCommitTick;
+
   private:
     void setPointers();
 
