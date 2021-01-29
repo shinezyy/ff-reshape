@@ -1057,6 +1057,11 @@ void DQTop<Impl>::addReadyMemInst(DynInstPtr inst, bool isOrderDep)
         DPRINTF(DQWake, "Cancel replaying mem inst[%llu] because it was squashed\n", inst->seqNum);
         return;
     }
+    if (inst->isLoad() && inst->isNormalBypass() && !inst->bypassCanceled && !inst->loadVerifying) {
+        DPRINTF(DQWake, "Cancel replaying mem inst[%llu] because it was bypassing\n",
+                inst->seqNum);
+        return;
+    }
     DPRINTF(DQWake, "Replaying mem inst[%llu]\n", inst->seqNum);
     WKPointer wk(inst->dqPosition);
     if (isOrderDep) { // default to True

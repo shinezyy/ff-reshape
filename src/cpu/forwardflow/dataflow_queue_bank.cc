@@ -298,6 +298,10 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                     inst->seqNum);
             if (!inst->inReadyQueue && !inst->fuGranted) {
                 first = inst;
+            } else if (inst->isNormalBypass()) {
+                DPRINTF(DQWake, "Bypassing load inst [%llu] received unblock/translated pkt, unexpected!\n",
+                        inst->seqNum);
+                panic("Do not wakeup bypassing load after it was blocked/delayed\n");
             } else {
                 DPRINTF(DQWake, "But ignore it because inst [%llu] has already been granted\n",
                         inst->seqNum);
