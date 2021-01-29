@@ -189,16 +189,29 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(const DynInstPtr &tail, bool is_tail) {
             skip_verify = true;
 
         } else {
-            if (!tail->memPredHistory->updated) {
-                skip_verify = mDepPred->checkAddr(tail->seqNum,
-                        tail->memPredHistory->bypass,
-                        tail->physEffAddr, 0,
-                        tail->effSize, tail->seqNVul);
+
+            bool translated = tail->translationCompleted();
+            bool ready = !tail->numBusyOps();
+            if (translated) {
+                if (!tail->memPredHistory->updated) {
+                    skip_verify = mDepPred->checkAddr(tail->seqNum,
+                            tail->memPredHistory->bypass,
+                            tail->physEffAddr, 0,
+                            tail->effSize, tail->seqNVul);
+                } else {
+                    DPRINTF(NoSQSMB, "memPredHistory is record! maybe violation detected, break\n");
+                    skip_verify = false;
+                    break_verif = true;
+                    return break_verif;
+                }
             } else {
-                DPRINTF(NoSQSMB, "memPredHistory is record! maybe violation detected, break\n");
-                skip_verify = false;
-                break_verif = true;
-                return break_verif;
+                if (ready) {
+                    DPRINTF(NoSQSMB, "Translation not completed yet, we cannot check bypass\n");
+                    break_verif = false;
+                    return break_verif;
+                } else { // not ready, let reExec to check its state
+                    skip_verify = false;
+                }
             }
         }
 
