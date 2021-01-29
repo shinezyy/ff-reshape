@@ -69,8 +69,12 @@ LSQUnit<Impl>::WritebackEvent::WritebackEvent(const DynInstPtr &_inst,
     : Event(Default_Pri, AutoDelete),
       inst(_inst), pkt(_pkt), lsqPtr(lsq_ptr)
 {
-    assert(_inst->savedReq);
-    _inst->savedReq->writebackScheduled();
+    if (_inst->loadVerifying && inst->savedVerifyReq) {
+        _inst->savedVerifyReq->writebackScheduled();
+    } else if (_inst->savedReq) {
+        //  assert(inst->savedReq);
+        _inst->savedReq->writebackScheduled();
+    }
 }
 
 template<class Impl>
@@ -81,8 +85,12 @@ LSQUnit<Impl>::WritebackEvent::process()
 
     lsqPtr->writeback(inst, pkt);
 
-    assert(inst->savedReq);
-    inst->savedReq->writebackDone();
+    if (inst->loadVerifying && inst->savedVerifyReq) {
+        inst->savedVerifyReq->writebackDone();
+    } else if (inst->savedReq) {
+        //  assert(inst->savedReq);
+        inst->savedReq->writebackDone();
+    }
     delete pkt;
 }
 

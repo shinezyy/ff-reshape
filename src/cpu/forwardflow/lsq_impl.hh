@@ -712,6 +712,10 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
     if (inst->translationStarted() && !inst->loadVerifying) {
         req = inst->savedReq;
         assert(req);
+
+    } else if (inst->loadVerifying && inst->savedVerifyReq) {
+        req = inst->savedVerifyReq;
+
     } else {
         if (htm_cmd) {
             assert(addr == 0x0lu);
@@ -880,7 +884,11 @@ LSQ<Impl>::SingleDataRequest::initiateTranslation()
         setState(State::Translation);
         flags.set(Flag::TranslationStarted);
 
-        _inst->savedReq = this;
+        if (!_inst->loadVerifying) {
+            _inst->savedReq = this;
+        } else {
+            _inst->savedVerifyReq = this;
+        }
         sendFragmentToTranslation(0);
     } else {
         _inst->setMemAccPredicate(false);
@@ -972,7 +980,11 @@ LSQ<Impl>::SplitDataRequest::initiateTranslation()
         _inst->translationStarted(true);
         setState(State::Translation);
         flags.set(Flag::TranslationStarted);
-        this->_inst->savedReq = this;
+        if (!_inst->loadVerifying) {
+            this->_inst->savedReq = this;
+        } else {
+            this->_inst->savedVerifyReq = this;
+        }
         numInTranslationFragments = 0;
         numTranslatedFragments = 0;
         _fault.resize(_requests.size());
@@ -1277,6 +1289,7 @@ LSQ<Impl>::HtmCmdRequest::HtmCmdRequest(LSQUnit* port,
     this->addRequest(_addr, _size, _byteEnable);
 
     if (_requests.size() > 0) {
+        panic("Omegaflow do not support htm\n");
         _requests.back()->setReqInstSeqNum(_inst->seqNum);
         _requests.back()->taskId(_taskId);
         _requests.back()->setPaddr(_addr);

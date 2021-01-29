@@ -440,6 +440,7 @@ class LSQ
             DPRINTF(FFLSQ, "Dec ref inst[sn:%llu]\n", _inst->seqNum);
             assert(!isAnyOutstandingRequest());
             _inst->savedReq = nullptr;
+            _inst->savedVerifyReq = nullptr;
             DPRINTF(FFLSQ, "Destruct reach 1\n");
             if (_senderState)
                 delete _senderState;

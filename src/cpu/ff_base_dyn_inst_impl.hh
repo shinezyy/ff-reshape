@@ -119,6 +119,7 @@ BaseDynInst<Impl>::initVars()
     fault = NoFault;
 
     savedReq = nullptr;
+    savedVerifyReq = nullptr;
 
     memSize = staticInst->memSize;
 

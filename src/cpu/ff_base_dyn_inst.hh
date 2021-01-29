@@ -242,6 +242,8 @@ class BaseDynInst : public ExecContext, public RefCounted
      */
     LSQRequestPtr savedReq;
 
+    LSQRequestPtr savedVerifyReq;
+
     /////////////////////// Checker //////////////////////
     // Need a copy of main request pointer to verify on writes.
     RequestPtr reqToVerify;
