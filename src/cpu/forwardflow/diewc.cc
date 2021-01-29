@@ -179,12 +179,13 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(const DynInstPtr &tail, bool is_tail) {
                 tail->seqNum, verifiedTailLoad);
         bool skip_verify;
 
+
         if (tail->bypassCanceled) {
             skip_verify = false;
 
-        } else if (tail->isRVAmoLoadHalf() || tail->isLoadReserved()) {
+        } else if (tail->isAtomic() || tail->isLoadReserved()) {
             // AMO load and LR are not verifiable
-            DPRINTF(NoSQSMB, "AMO load/ LR encountered\n");
+            DPRINTF(NoSQSMB, "AMO / LR encountered\n");
             break_verif = true;
             skip_verify = true;
 

@@ -254,7 +254,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         if (!ptr.hasVal) {
             DPRINTFR(DQWake, "\n");
         } else {
-            DPRINTFR(DQWake, "with value: %ld (%lu)\n", ptr.val.i, ptr.val.i);
+            DPRINTFR(DQWake, "with value: %lu (%#lx)\n", ptr.val.i, ptr.val.i);
         }
 
         if (inst->dqPosition.term != ptr.term) {
