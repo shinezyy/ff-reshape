@@ -1726,10 +1726,13 @@ FFCPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
         const auto &dest = inst->staticInst->destRegIdx(0);
         auto dest_tag = dest.index() + dest.isFloatReg() * 32;
 
-        if ((dest.isFloatReg() || dest.isIntReg()) && !dest.isZeroReg()) {
+        auto gem5_val = inst->getResult().asIntegerNoAssert();
+        auto nemu_val = nemu_reg[dest_tag];
 
-            auto gem5_val = inst->getResult().asIntegerNoAssert();
-            auto nemu_val = nemu_reg[dest_tag];
+        DPRINTF(ValueCommit, "%s NEMU value: %#lx, GEM5 value: %#lx\n",
+                ::reg_name[dest_tag], nemu_val, gem5_val);
+
+        if ((dest.isFloatReg() || dest.isIntReg()) && !dest.isZeroReg()) {
 
             if (gem5_val != nemu_val) {
                 if (dest.isFloatReg() && (gem5_val^nemu_val) == ((0xffffffffULL) << 32)) {
