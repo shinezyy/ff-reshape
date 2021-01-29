@@ -376,12 +376,18 @@ decode QUADRANT default Unknown::unknown() {
             format Load {
                 0x0: lb({{
                     Rd_sd = Mem_sb;
+                }}, inst_flags=IsSignedLoad, mem_size_code={{
+                    memSize = 1;
                 }});
                 0x1: lh({{
                     Rd_sd = Mem_sh;
+                }}, inst_flags=IsSignedLoad, mem_size_code={{
+                    memSize = 2;
                 }});
                 0x2: lw({{
                     Rd_sd = Mem_sw;
+                }}, inst_flags=IsSignedLoad, mem_size_code={{
+                    memSize = 4;
                 }});
                 0x3: ld({{
                     Rd_sd = Mem_sd;

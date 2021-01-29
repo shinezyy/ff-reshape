@@ -424,6 +424,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
     bool isGeneralStore() { return this->isStore() || this->isAtomic();}
 
+    bool isSignedLoad() { return this->staticInst->isSignedLoad();}
+
     FFRegValue bypassVal;
 
     TermedPointer dqPosition;

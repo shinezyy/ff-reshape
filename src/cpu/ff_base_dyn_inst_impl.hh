@@ -120,6 +120,8 @@ BaseDynInst<Impl>::initVars()
 
     savedReq = nullptr;
 
+    memSize = staticInst->memSize;
+
 #ifndef NDEBUG
     ++cpu->instcount;
 

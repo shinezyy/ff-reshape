@@ -341,7 +341,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         } else if (ptr.wkType == WKPointer::WKBypass && inst->isNormalBypass()) {
             assert(op == memBypassOp);
             inst->opReady[op] = true;
-            inst->bypassVal = ptr.val;
+            inst->bypassVal.i = assignBypassVal(inst, ptr.val.i);
             inst->orderDepReady = true;
             handle_wakeup = true;
 
@@ -588,7 +588,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                 if (inst->isNormalBypass() && (inst->bypassOp == op) && inst->pointers[0].valid) {
                     auto wk_ptr = WKPointer(inst->pointers[0]);
                     wk_ptr.hasVal = true;
-                    wk_ptr.val = ptr.val;
+                    wk_ptr.val.i = assignBypassVal(inst, ptr.val.i);
                     DPRINTF(DQWake,
                             "Bypassing load from " ptrfmt " to " ptrfmt "\n",
                             extptr(ptr), extptr(wk_ptr));
@@ -955,6 +955,37 @@ void DataflowQueueBank<Impl>::mergeLocalWKPointers()
         }
     }
     RegWriteRxBuf += nOps;
+}
+
+template<class Impl>
+uint64_t
+DataflowQueueBank<Impl>::assignBypassVal(const DynInstPtr &inst, uint64_t val)
+{
+    uint64_t res;
+    if (inst->isSignedLoad()) {
+        switch (inst->memSize) {
+            case 1: {
+                        int8_t narrow = val;
+                        res = (uint64_t) ((int64_t) narrow);
+                        break;
+                    }
+            case 2: {
+                        int16_t narrow = val;
+                        res = (uint64_t) ((int64_t) narrow);
+                        break;
+                    }
+            case 4: {
+                        int32_t narrow = val;
+                        res = (uint64_t) ((int64_t) narrow);
+                        break;
+                    }
+            default:
+                    panic("Unexpected width: %i\n", inst->memSize);
+        }
+    } else {
+        res = val;
+    }
+    return res;
 }
 
 }

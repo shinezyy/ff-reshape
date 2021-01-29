@@ -167,6 +167,7 @@ class StaticInst : public RefCounted, public StaticInstFlags
         return flags[IsLoad] || flags[IsStore] || flags[IsAtomic];
     }
     bool isLoad()         const { return flags[IsLoad]; }
+    bool isSignedLoad()         const { return flags[IsSignedLoad]; }
     bool isStore()        const { return flags[IsStore]; }
     bool isAtomic()       const { return flags[IsAtomic]; }
     bool isLoadReserved()         const { return flags[IsLoadReserved]; }
@@ -410,6 +411,8 @@ class StaticInst : public RefCounted, public StaticInstFlags
      * buffer if there wasn't enough space.
      */
     virtual size_t asBytes(void *buf, size_t max_size) { return 0; }
+
+    short memSize{};
 };
 
 class ForwarderInst : public StaticInst

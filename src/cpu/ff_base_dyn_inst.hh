@@ -246,6 +246,8 @@ class BaseDynInst : public ExecContext, public RefCounted
     // Need a copy of main request pointer to verify on writes.
     RequestPtr reqToVerify;
 
+    short memSize;
+
   private:
     // hardware transactional memory
     uint64_t htmUid;

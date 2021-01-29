@@ -59,20 +59,22 @@ def template LoadStoreConstructor {{
         %(set_reg_idx_arr)s;
         %(constructor)s;
         %(offset_code)s;
+        %(mem_size_code)s;
     }
 }};
 
 let {{
 def LoadStoreBase(name, Name, offset_code, ea_code, memacc_code, mem_flags,
         inst_flags, base_class, postacc_code='', decode_template=BasicDecode,
-        exec_template_base=''):
+        exec_template_base='', mem_size_code=''):
     # Make sure flags are in lists (convert to lists if not).
     mem_flags = makeList(mem_flags)
     inst_flags = makeList(inst_flags)
 
     iop = InstObjParams(name, Name, base_class,
         {'offset_code': offset_code, 'ea_code': ea_code,
-         'memacc_code': memacc_code, 'postacc_code': postacc_code },
+         'memacc_code': memacc_code, 'postacc_code': postacc_code,
+         'mem_size_code': mem_size_code},
         inst_flags)
 
     if mem_flags:
@@ -237,10 +239,11 @@ def template StoreCompleteAcc {{
 
 def format Load(memacc_code, ea_code = {{EA = Rs1 + offset;}},
         offset_code={{offset = sext<12>(IMM12);}},
+        mem_size_code={{;}},
         mem_flags=[], inst_flags=[]) {{
     (header_output, decoder_output, decode_block, exec_output) = \
         LoadStoreBase(name, Name, offset_code, ea_code, memacc_code, mem_flags,
-        inst_flags, 'Load', exec_template_base='Load')
+        inst_flags, 'Load', exec_template_base='Load', mem_size_code=mem_size_code)
 }};
 
 def format Store(memacc_code, ea_code={{EA = Rs1 + offset;}},
