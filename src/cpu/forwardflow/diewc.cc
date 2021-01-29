@@ -644,6 +644,10 @@ void FFDIEWC<Impl>::setupPointerLink(const FFDIEWC::DynInstPtr &inst, bool jumpe
         inst->memPredHistory->bypass = false;
 
     } else {
+        const auto &last_pair = pairs.back();
+        if (pairs.size() && last_pair.isBypass) {
+            setOldestFw(last_pair.dest);
+        }
         DPRINTF(NoSQSMB, "Barrier pair is invalid\n");
         insertPointerPairs(pairs);
     }

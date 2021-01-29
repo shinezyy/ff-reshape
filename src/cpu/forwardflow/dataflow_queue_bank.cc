@@ -605,8 +605,9 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                     wk_ptr.val = ptr.val;
                     wk_ptr.wkType = WKPointer::WKBypass;
                     DPRINTF(DQWake,
-                            "Bypassing from store" ptrfmt "to load" ptrfmt "\n",
+                            "Bypassing from store" ptrfmt "to load" ptrfmt,
                             extptr(ptr), extptr(wk_ptr));
+                    DPRINTFR(DQWake, "with value: %lu (%#lx)\n", ptr.val.i, ptr.val.i);
                     dq->extraWakeup(wk_ptr);
                 }
             }
