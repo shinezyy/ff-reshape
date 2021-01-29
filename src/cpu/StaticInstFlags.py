@@ -105,4 +105,5 @@ class StaticInstFlags(Enum):
 
         # NoSQ
         'IsSignedLoad',
+        'IsFloat32Op',
         ]

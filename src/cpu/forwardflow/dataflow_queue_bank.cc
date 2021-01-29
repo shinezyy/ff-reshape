@@ -2,6 +2,7 @@
 // Created by zyy on 2020/1/15.
 //
 
+#include "arch/riscv/registers.hh"
 #include "dataflow_queue_bank.hh"
 #include "debug/DQ.hh"
 #include "debug/DQGDL.hh"
@@ -987,6 +988,9 @@ DataflowQueueBank<Impl>::assignBypassVal(const DynInstPtr &inst, uint64_t val)
             default:
                     panic("Unexpected width: %i\n", inst->memSize);
         }
+    } else if (inst->isFloat32Op()) {
+        uint32_t narrow = val;
+        res = RiscvISA::freg(RiscvISA::f32(narrow)).v;
     } else {
         res = val;
     }

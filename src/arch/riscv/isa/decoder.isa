@@ -414,7 +414,7 @@ decode QUADRANT default Unknown::unknown() {
                     freg_t fd;
                     fd = freg(f32(Mem_uw));
                     Fd_bits = fd.v;
-                }}, inst_flags=FloatMemReadOp);
+                }}, inst_flags=['FloatMemReadOp','IsFloat32Op']);
                 0x3: fld({{
                     STATUS status = xc->readMiscReg(MISCREG_STATUS);
                     if (status.fs == FPUStatus::OFF)

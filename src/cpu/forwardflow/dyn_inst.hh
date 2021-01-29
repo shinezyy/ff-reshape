@@ -418,13 +418,15 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     int bypassOp{0};
     bool dependOnBarrier{false};
 
-    bool isNormalBypass() { return bypassOp && !dependOnBarrier;}
+    bool isNormalBypass() const { return bypassOp && !dependOnBarrier;}
 
-    bool isNormalStore() { return this->isStore() && !this->isRVAmoStoreHalf();}
+    bool isNormalStore() const { return this->isStore() && !this->isRVAmoStoreHalf();}
 
-    bool isGeneralStore() { return this->isStore() || this->isAtomic();}
+    bool isGeneralStore() const { return this->isStore() || this->isAtomic();}
 
-    bool isSignedLoad() { return this->staticInst->isSignedLoad();}
+    bool isSignedLoad() const { return this->staticInst->isSignedLoad();}
+
+    bool isFloat32Op() const { return this->staticInst->isFloat32Op();}
 
     FFRegValue bypassVal;
 
