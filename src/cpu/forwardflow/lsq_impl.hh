@@ -707,8 +707,8 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
 
     const bool htm_cmd = isLoad && (flags & Request::HTM_CMD);
 
-    DPRINTF(LSQ, "Translation start: %i, load verifying: %i\n",
-            inst->translationStarted(), inst->loadVerifying);
+    DPRINTF(LSQ, "Translation start: %i, load verifying: %i, v_addr: %#lx\n",
+            inst->translationStarted(), inst->loadVerifying, addr);
     if (inst->translationStarted() && !inst->loadVerifying) {
         req = inst->savedReq;
         assert(req);

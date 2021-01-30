@@ -428,6 +428,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
     bool isFloat32Op() const { return this->staticInst->isFloat32Op();}
 
+    bool isUnsignedNarrowLoad() const { return this->staticInst->isUnsignedNarrowLoad();}
+
     FFRegValue bypassVal;
 
     TermedPointer dqPosition;

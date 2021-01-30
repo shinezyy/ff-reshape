@@ -64,11 +64,12 @@ decode QUADRANT default Unknown::unknown() {
                 offset = CIMM2<1:1> << 2 |
                          CIMM3 << 3 |
                          CIMM2<0:0> << 6;
+                memSize = 4;
             }}, {{
                 Rp2_sd = Mem_sw;
             }}, {{
                 EA = Rp1 + offset;
-            }});
+            }}, inst_flags=IsSignedLoad);
             0x3: c_ld({{
                 offset = CIMM3 << 3 | CIMM2 << 6;
             }}, {{
@@ -280,6 +281,7 @@ decode QUADRANT default Unknown::unknown() {
                 offset = CIMM5<4:2> << 2 |
                          CIMM1 << 5 |
                          CIMM5<1:0> << 6;
+                memSize = 4;
             }}, {{
                 if (RC1 == 0) {
                     fault = make_shared<IllegalInstFault>("source reg x0",
@@ -288,7 +290,7 @@ decode QUADRANT default Unknown::unknown() {
                 Rc1_sd = Mem_sw;
             }}, {{
                 EA = sp + offset;
-            }});
+            }}, inst_flags=IsSignedLoad);
             0x3: c_ldsp({{
                 offset = CIMM5<4:3> << 3 |
                          CIMM1 << 5 |
@@ -394,12 +396,18 @@ decode QUADRANT default Unknown::unknown() {
                 }});
                 0x4: lbu({{
                     Rd = Mem_ub;
+                }}, inst_flags=IsNarrowULoad, mem_size_code={{
+                    memSize = 1;
                 }});
                 0x5: lhu({{
                     Rd = Mem_uh;
+                }}, inst_flags=IsNarrowULoad, mem_size_code={{
+                    memSize = 2;
                 }});
                 0x6: lwu({{
                     Rd = Mem_uw;
+                }}, inst_flags=IsNarrowULoad, mem_size_code={{
+                    memSize = 4;
                 }});
             }
         }

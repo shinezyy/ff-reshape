@@ -988,6 +988,26 @@ DataflowQueueBank<Impl>::assignBypassVal(const DynInstPtr &inst, uint64_t val)
             default:
                     panic("Unexpected width: %i\n", inst->memSize);
         }
+    } else if (inst->isUnsignedNarrowLoad()) {
+        switch (inst->memSize) {
+            case 1: {
+                        uint8_t narrow = val;
+                        res = (uint64_t) narrow;
+                        break;
+                    }
+            case 2: {
+                        uint16_t narrow = val;
+                        res = (uint64_t) narrow;
+                        break;
+                    }
+            case 4: {
+                        uint32_t narrow = val;
+                        res = (uint64_t) narrow;
+                        break;
+                    }
+            default:
+                    panic("Unexpected width: %i\n", inst->memSize);
+        }
     } else if (inst->isFloat32Op()) {
         uint32_t narrow = val;
         res = RiscvISA::freg(RiscvISA::f32(narrow)).v;

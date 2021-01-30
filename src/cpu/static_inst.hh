@@ -167,8 +167,9 @@ class StaticInst : public RefCounted, public StaticInstFlags
         return flags[IsLoad] || flags[IsStore] || flags[IsAtomic];
     }
     bool isLoad()         const { return flags[IsLoad]; }
-    bool isSignedLoad()         const { return flags[IsSignedLoad]; }
-    bool isFloat32Op()         const { return flags[IsFloat32Op]; }
+    bool isSignedLoad()   const { return flags[IsSignedLoad]; }
+    bool isUnsignedNarrowLoad() const { return flags[IsNarrowULoad]; }
+    bool isFloat32Op()    const { return flags[IsFloat32Op]; }
     bool isStore()        const { return flags[IsStore]; }
     bool isAtomic()       const { return flags[IsAtomic]; }
     bool isLoadReserved()         const { return flags[IsLoadReserved]; }
