@@ -81,6 +81,7 @@ decode QUADRANT default Unknown::unknown() {
         format CompressedStore {
             0x5: c_fsd({{
                 offset = CIMM3 << 3 | CIMM2 << 6;
+                memSize = 8;
             }}, {{
                 STATUS status = xc->readMiscReg(MISCREG_STATUS);
                 if (status.fs == FPUStatus::OFF)
@@ -95,6 +96,7 @@ decode QUADRANT default Unknown::unknown() {
                 offset = CIMM2<1:1> << 2 |
                          CIMM3 << 3 |
                          CIMM2<0:0> << 6;
+                memSize = 4;
             }}, {{
                 Mem_uw = Rp2_uw;
             }}, ea_code={{
@@ -102,6 +104,7 @@ decode QUADRANT default Unknown::unknown() {
             }});
             0x7: c_sd({{
                 offset = CIMM3 << 3 | CIMM2 << 6;
+                memSize = 8;
             }}, {{
                     Mem_ud = Rp2_ud;
             }}, {{
@@ -350,6 +353,7 @@ decode QUADRANT default Unknown::unknown() {
             0x5: c_fsdsp({{
                 offset = CIMM6<5:3> << 3 |
                          CIMM6<2:0> << 6;
+                memSize = 8;
             }}, {{
                 Mem_ud = Fc2_bits;
             }}, {{
@@ -358,6 +362,7 @@ decode QUADRANT default Unknown::unknown() {
             0x6: c_swsp({{
                 offset = CIMM6<5:2> << 2 |
                          CIMM6<1:0> << 6;
+                memSize = 4;
             }}, {{
                 Mem_uw = Rc2_uw;
             }}, {{
@@ -366,6 +371,7 @@ decode QUADRANT default Unknown::unknown() {
             0x7: c_sdsp({{
                 offset = CIMM6<5:3> << 3 |
                          CIMM6<2:0> << 6;
+                memSize = 8;
             }}, {{
                 Mem = Rc2;
             }}, {{
@@ -505,15 +511,23 @@ decode QUADRANT default Unknown::unknown() {
             format Store {
                 0x0: sb({{
                     Mem_ub = Rs2_ub;
+                }}, mem_size_code={{
+                    memSize = 1;
                 }});
                 0x1: sh({{
                     Mem_uh = Rs2_uh;
+                }}, mem_size_code={{
+                    memSize = 2;
                 }});
                 0x2: sw({{
                     Mem_uw = Rs2_uw;
+                }}, mem_size_code={{
+                    memSize = 4;
                 }});
                 0x3: sd({{
                     Mem_ud = Rs2_ud;
+                }}, mem_size_code={{
+                    memSize = 8;
                 }});
             }
         }
@@ -527,7 +541,9 @@ decode QUADRANT default Unknown::unknown() {
                                                               machInst);
 
                     Mem_uw = (uint32_t)Fs2_bits;
-                }}, inst_flags=FloatMemWriteOp);
+                }}, inst_flags=FloatMemWriteOp, mem_size_code={{
+                    memSize = 4;
+                }});
                 0x3: fsd({{
                     STATUS status = xc->readMiscReg(MISCREG_STATUS);
                     if (status.fs == FPUStatus::OFF)
@@ -535,7 +551,9 @@ decode QUADRANT default Unknown::unknown() {
                                                               machInst);
 
                     Mem_ud = Fs2_bits;
-                }}, inst_flags=FloatMemWriteOp);
+                }}, inst_flags=FloatMemWriteOp, mem_size_code={{
+                    memSize = 8;
+                }});
             }
         }
 
