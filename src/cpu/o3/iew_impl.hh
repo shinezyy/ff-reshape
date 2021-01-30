@@ -1196,6 +1196,12 @@ DefaultIEW<Impl>::executeInsts()
 
         DynInstPtr inst = instQueue.getInstToExecute();
 
+        // TODO: check 'Good Trap' when instructions really commit
+        if (inst->staticInst->machInst == 0x0005006b){
+            inform("Hit Good Trap at pc = %lx\n", inst->instAddr());
+            exit(0);
+        }
+
         DPRINTF(IEW, "Execute: Processing PC %s, [tid:%i] [sn:%llu].\n",
                 inst->pcState(), inst->threadNumber,inst->seqNum);
 
