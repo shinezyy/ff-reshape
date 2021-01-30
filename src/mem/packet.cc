@@ -240,7 +240,7 @@ MemCmd::commandInfo[] =
 AddrRange
 Packet::getAddrRange() const
 {
-    return RangeSize(getAddr(), getSize());
+    return RangeSize(getAddr(), getSize() - 1);
 }
 
 bool
