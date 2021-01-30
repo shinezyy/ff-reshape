@@ -175,6 +175,7 @@ class PhysicalMemory : public Serializable
                    bool mmap_using_noreserve,
                    const std::string& shared_backstore,
                    bool restore_from_gcpt,
+                   const std::string& gcpt_restorer_path,
                    const std::string& gcpt_path);
 
     /**
@@ -288,6 +289,8 @@ class PhysicalMemory : public Serializable
 
   private:
     bool restoreFromGCpt;
+
+    std::string gCptRestorerPath;
 
     std::string gCptPath;
 

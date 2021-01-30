@@ -534,3 +534,5 @@ def addFSOptions(parser):
 
     parser.add_argument("--generic-rv-cpt",
                       help="The path of generic risc-v checkpoint")
+    parser.add_argument("--gcpt-restorer",
+                      help="The path of generic risc-v checkpoint restorer")
