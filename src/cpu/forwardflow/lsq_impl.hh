@@ -795,6 +795,8 @@ LSQ<Impl>::SingleDataRequest::finish(const Fault &fault, const RequestPtr &req,
     /* If the instruction has been squahsed, let the request know
      * as it may have to self-destruct. */
     if (_inst->isSquashed()) {
+        DPRINTF(LSQ, "Mark translation completed for squashed inst [sn:%llu]\n",
+                _inst->seqNum);
         this->squashTranslation();
     } else {
         _inst->strictlyOrdered(req->isStrictlyOrdered());
