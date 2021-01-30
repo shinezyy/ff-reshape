@@ -655,6 +655,13 @@ void DQTop<Impl>::deferMemInst(const DynInstPtr &inst)
     // Omegaflow specific:
     inst->fuGranted = false;
     inst->inReadyQueue = false;
+
+    if (inst->isNormalBypass() && !inst->loadVerifying) {
+        DPRINTF(DQWake, "Dont defer bypasing load[sn:%llu]\n",
+                inst->seqNum);
+        return;
+    }
+
     inst->hasMemDep = true;
     inst->memDepReady = false;
 
@@ -737,6 +744,13 @@ void DQTop<Impl>::blockMemInst(const DynInstPtr &inst)
     // Omegaflow specific:
     inst->fuGranted = false;
     inst->inReadyQueue = false;
+
+    if (inst->isNormalBypass() && !inst->loadVerifying) {
+        DPRINTF(DQWake, "Dont block bypasing load[sn:%llu]\n",
+                inst->seqNum);
+        return;
+    }
+
     inst->hasMemDep = true;
     inst->memDepReady = false;
 
