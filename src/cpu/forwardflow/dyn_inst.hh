@@ -534,6 +534,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     bool sentReExec{false};
 
     bool bypassCanceled{false};
+
+    short getMemSize() {return this->staticInst->memSize; }
 };
 
 }

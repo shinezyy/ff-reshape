@@ -198,7 +198,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(const DynInstPtr &tail, bool is_tail) {
                     skip_verify = mDepPred->checkAddr(tail->seqNum,
                             tail->memPredHistory->bypass,
                             tail->physEffAddr, 0,
-                            tail->effSize, tail->seqNVul);
+                            tail->getMemSize(), tail->seqNVul);
                 } else {
                     DPRINTF(NoSQSMB, "memPredHistory is record! maybe violation detected, break\n");
                     skip_verify = false;
@@ -248,7 +248,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(const DynInstPtr &tail, bool is_tail) {
 
         } else if (!ldstQueue.numStoresToWB(DummyTid)){
             DPRINTF(NoSQSMB, "Did not skip verifying load [%lu] @ 0x%lx size: %u\n",
-                    tail->seqNum, tail->physEffAddr, tail->effSize);
+                    tail->seqNum, tail->physEffAddr, tail->getMemSize());
             auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(tail, is_tail);
             if (sent_reexec) {
                 verifiedTailLoad = tail->seqNum;
@@ -921,7 +921,7 @@ FFDIEWC<Impl>::
     if (head_inst->isGeneralStore() && inst_fault == NoFault) {
         head_inst->setCompleted();
 
-        mDepPred->commitStore(head_inst->physEffAddr, head_inst->effSize,
+        mDepPred->commitStore(head_inst->physEffAddr, head_inst->getMemSize(),
                               head_inst->storeSeq, head_inst->dqPosition);
 
         mDepPred->removeStore(head_inst->seqNum);
