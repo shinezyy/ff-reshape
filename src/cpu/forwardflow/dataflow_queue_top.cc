@@ -648,18 +648,30 @@ void DQTop<Impl>::setDIEWC(DIEWC *_diewc)
 template<class Impl>
 void DQTop<Impl>::deferMemInst(const DynInstPtr &inst)
 {
-    inst->translationCompleted(false);
-    inst->clearCanIssue();
-    inst->clearIssued();
+    bool old_completed = inst->translationCompleted();
 
     // Omegaflow specific:
     inst->fuGranted = false;
     inst->inReadyQueue = false;
 
-    if (inst->isNormalBypass() && !inst->loadVerifying) {
-        DPRINTF(DQWake, "Dont defer bypasing load[sn:%llu]\n",
-                inst->seqNum);
-        return;
+    if (inst->isNormalBypass()) {
+        if (inst->getFault() != NoFault) {
+            DPRINTF(DQWake, "Defer bypasing load[sn:%llu] because of fault\n",
+                    inst->seqNum);
+            // keep old completed
+            inst->translationCompleted(old_completed);
+            // defer
+
+        } else if (!inst->loadVerifying) {
+            inst->translationCompleted(false);
+            DPRINTF(DQWake, "Dont defer bypasing load[sn:%llu]\n",
+                    inst->seqNum);
+            return;
+
+        } else {
+            inst->translationCompleted(false);
+            // defer
+        }
     }
 
     inst->hasMemDep = true;

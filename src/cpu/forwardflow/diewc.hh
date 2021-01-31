@@ -573,6 +573,8 @@ public:
     void setupPointerLink(const DynInstPtr &inst, bool jumped, const PointerPair &pair);
   public:
     void squashLoad(const DynInstPtr &inst);
+
+    void forceDefer(const DynInstPtr &bypass_load);
 };
 
 

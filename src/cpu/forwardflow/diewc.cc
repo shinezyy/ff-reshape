@@ -2900,6 +2900,12 @@ void FFDIEWC<Impl>::squashLoad(const FFDIEWC::DynInstPtr &inst)
     mDepPred->squashLoad(inst->instAddr(), *(inst->memPredHistory));
 }
 
+template<class Impl>
+void
+FFDIEWC<Impl>::forceDefer(const FFDIEWC::DynInstPtr &bypass_load)
+{
+    dq.deferMemInst(bypass_load);
+}
 
 }
 

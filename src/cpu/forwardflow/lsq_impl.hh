@@ -819,6 +819,12 @@ LSQ<Impl>::SingleDataRequest::finish(const Fault &fault, const RequestPtr &req,
                 _inst->seqNum);
         DPRINTF(LSQ, "inst [sn:%llu] has fault: %i\n", _inst->seqNum, _inst->getFault() != NoFault);
         LSQRequest::_inst->translationCompleted(true);
+
+        if (fault != NoFault && _inst->isNormalBypass() && !_inst->loadVerifying) {
+            _inst->setCanCommit();
+            _inst->setExecuted();
+            _inst->loadVerified = true;
+        }
     }
 }
 
