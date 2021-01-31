@@ -1952,6 +1952,11 @@ void DataflowQueues<Impl>::pointerMeetsInst(
             inst->orderFulfilled();
     DPRINTF(DQWake, "pair is barrier: %i, barrier_dep_ready: %i\n", pair.isBarrier, barrier_dep_ready);
 
+    bool barrier_producer_ready = pair.isBarrier && (inst->isWriteBarrier() || inst->isReadBarrier())
+        && op == 0 && inst->orderFulfilled() && inst->fuGranted;
+    DPRINTF(DQWake, "pair is barrier: %i, barrier_producer_ready: %i\n",
+            pair.isBarrier, barrier_producer_ready);
+
     bool store_bypass_value_avail = !pair.isBarrier && !inst->dependOnBarrier &&
         inst->isNormalStore() && op == memBypassOp && inst->storeValueReady();
     value_available |= store_bypass_value_avail;
@@ -1961,13 +1966,14 @@ void DataflowQueues<Impl>::pointerMeetsInst(
 //   value_available  |= store_bypass_value_will_ready;
 
     bool wakeup_successor_before_exec =
-            load_bypass_value_avail || store_bypass_value_avail || barrier_dep_ready;
+            load_bypass_value_avail || store_bypass_value_avail
+            || barrier_dep_ready || barrier_producer_ready;
     DPRINTF(DQWake, "wakeup_successor_before_exec: %i\n", wakeup_successor_before_exec);
 
     bool cannot_deliver_to_fu = op == 0 && (inst->fuGranted || inst->loadVerifying);
     DPRINTF(DQWake, "cannot_deliver_to_fu: %i\n", cannot_deliver_to_fu);
 
-    if (value_available) {
+    if (value_available || barrier_producer_ready) {
         auto wk_ptr = WKPointer(pointer);
         wk_ptr.isFwExtra = true;
         wk_ptr.hasVal = true;
@@ -1984,8 +1990,11 @@ void DataflowQueues<Impl>::pointerMeetsInst(
                 // SMB
             }
 
-        } else if (barrier_dep_ready) {
+        } else if (barrier_dep_ready || barrier_producer_ready) {
             wk_ptr.hasVal = false;
+            if (barrier_producer_ready) {
+                wk_ptr.wkType = WKPointer::WKOrder;
+            }
 
         } else if (op == 0) {
             wk_ptr.val = inst->getDestValue();
