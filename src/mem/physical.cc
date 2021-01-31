@@ -47,6 +47,7 @@
 #include <cerrno>
 #include <climits>
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -78,11 +79,13 @@ PhysicalMemory::PhysicalMemory(const string& _name,
                                bool mmap_using_noreserve,
                                const std::string& shared_backstore,
                                bool restore_from_gcpt,
+                               const std::string& gcpt_restorer_path,
                                const std::string& gcpt_path
                                ) :
     _name(_name), size(0), mmapUsingNoReserve(mmap_using_noreserve),
     sharedBackstore(shared_backstore),
     restoreFromGCpt(restore_from_gcpt),
+    gCptRestorerPath(gcpt_restorer_path),
     gCptPath(gcpt_path)
 {
     if (mmap_using_noreserve)
@@ -491,6 +494,24 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
     }
 
     delete[] temp_page;
+
+    if (restoreFromGCpt) {
+        warn("Overriding Gcpt restorer\n");
+
+        FILE *fp = fopen(gCptRestorerPath.c_str(), "rb");
+        if (!fp) {
+            panic("Can not open '%s'", gCptRestorerPath);
+        }
+
+        // fseek(fp, 0, SEEK_END);
+        // long restorer_size = ftell(fp);
+        // assert( < 0x400);
+
+        uint32_t restorer_size = 0x400;
+        fseek(fp, 0, SEEK_SET);
+        assert(restorer_size == fread(pmem, 1, restorer_size, fp));
+        fclose(fp);
+    }
 
     if (gzclose(compressed_mem))
         fatal("Close failed on physical memory checkpoint file '%s'\n",
