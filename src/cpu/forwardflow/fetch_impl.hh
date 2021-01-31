@@ -567,6 +567,7 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     // A bit of a misnomer...next_PC is actually the current PC until
     // this function updates it.
     bool predict_taken;
+    bool cpc_compressed = nextPC.compressed();
 
     if (!inst->isControl()) {
         TheISA::advancePC(nextPC, inst->staticInst);
@@ -583,8 +584,13 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
         inst->loopInfo = branchPred->moveLastLoopInfo();
     }
 
+    // in case that, pred ``taken'' to the next instruction
+    bool real_pred_taken = cpc_compressed ?
+        branch_pc + 2 != nextPC.pc() :
+        branch_pc + 4 != nextPC.pc();
+
     if (lbuf->enable) {
-        lbuf->probe(branch_pc, nextPC.pc(), predict_taken);
+        lbuf->probe(branch_pc, nextPC.pc(), real_pred_taken);
     }
 
     if (predict_taken) {
@@ -1446,9 +1452,6 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             bool this_is_branch = thisPC.branching() ||
                 lookupAndUpdateNextPC(instruction, nextPC);
             predictedBranch = this_is_branch;
-
-            if (thisPC.compressed()) {
-            }
 
             if (this_is_branch) {
                 // predicted backward branch
