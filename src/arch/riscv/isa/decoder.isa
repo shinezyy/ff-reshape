@@ -50,6 +50,7 @@ decode QUADRANT default Unknown::unknown() {
         format CompressedLoad {
             0x1: c_fld({{
                 offset = CIMM3 << 3 | CIMM2 << 6;
+                memSize = 8;
             }}, {{
                 STATUS status = xc->readMiscReg(MISCREG_STATUS);
                 if (status.fs == FPUStatus::OFF)
@@ -71,6 +72,7 @@ decode QUADRANT default Unknown::unknown() {
                 EA = Rp1 + offset;
             }}, inst_flags=IsSignedLoad);
             0x3: c_ld({{
+                memSize = 8;
                 offset = CIMM3 << 3 | CIMM2 << 6;
             }}, {{
                 Rp2_sd = Mem_sd;
@@ -272,6 +274,7 @@ decode QUADRANT default Unknown::unknown() {
         }}, uint64_t);
         format CompressedLoad {
             0x1: c_fldsp({{
+                memSize = 8;
                 offset = CIMM5<4:3> << 3 |
                          CIMM1 << 5 |
                          CIMM5<2:0> << 6;
@@ -295,6 +298,7 @@ decode QUADRANT default Unknown::unknown() {
                 EA = sp + offset;
             }}, inst_flags=IsSignedLoad);
             0x3: c_ldsp({{
+                memSize = 8;
                 offset = CIMM5<4:3> << 3 |
                          CIMM1 << 5 |
                          CIMM5<2:0> << 6;
@@ -399,6 +403,8 @@ decode QUADRANT default Unknown::unknown() {
                 }});
                 0x3: ld({{
                     Rd_sd = Mem_sd;
+                }}, mem_size_code={{
+                    memSize = 8;
                 }});
                 0x4: lbu({{
                     Rd = Mem_ub;
@@ -428,7 +434,9 @@ decode QUADRANT default Unknown::unknown() {
                     freg_t fd;
                     fd = freg(f32(Mem_uw));
                     Fd_bits = fd.v;
-                }}, inst_flags=['FloatMemReadOp','IsFloat32Op']);
+                }}, inst_flags=['FloatMemReadOp','IsFloat32Op'], mem_size_code={{
+                    memSize = 4;
+                }});
                 0x3: fld({{
                     STATUS status = xc->readMiscReg(MISCREG_STATUS);
                     if (status.fs == FPUStatus::OFF)
@@ -437,7 +445,9 @@ decode QUADRANT default Unknown::unknown() {
                     freg_t fd;
                     fd = freg(f64(Mem));
                     Fd_bits = fd.v;
-                }}, inst_flags=FloatMemReadOp);
+                }}, inst_flags=FloatMemReadOp, mem_size_code={{
+                    memSize = 8;
+                }});
             }
         }
 
