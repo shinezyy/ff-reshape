@@ -891,7 +891,8 @@ FFDIEWC<Impl>::
     }
 
     if (!dq.logicallyLT(dq.c.pointer2uint(head_inst->dqPosition), oldestForwarded) &&
-            !(head_inst->isStoreConditional() || head_inst->isSerializeAfter())) {
+            !(head_inst->isStoreConditional() || head_inst->isSerializeAfter()
+                || head_inst->getFault() != NoFault)) {
         DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is forwarded recently,"
                           " and cannot be committed right now\n",
                           head_inst->seqNum, head_inst->dqPosition.bank,
@@ -899,7 +900,7 @@ FFDIEWC<Impl>::
         return false;
     }
 
-    if (head_inst->numDestRegs() && !head_inst->receivedDest) {
+    if (head_inst->numDestRegs() && !head_inst->receivedDest && head_inst->getFault() == NoFault) {
         DPRINTF(FFCommit, "Instruction[%lu] has not obtained its value from "
                 "interconnect network\n", head_inst->seqNum);
         return false;
