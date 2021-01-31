@@ -279,9 +279,12 @@ MemDepUnit<MemDepPred, Impl>::completeBarrier(const DynInstPtr &inst)
             loadBarrier.valid = false;
         if (storeBarrier.SN == barr_sn)
             storeBarrier.valid = false;
+        checkAndCommitBarrier(inst->seqNum);
+
     } else if (inst->isWriteBarrier()) {
         if (storeBarrier.SN == barr_sn)
             storeBarrier.valid = false;
+        checkAndCommitBarrier(inst->seqNum);
     }
 }
 
@@ -348,6 +351,18 @@ void MemDepUnit<MemDepPred, Impl>::checkAndSquashBarrier(BarrierInfo &barrier, I
     }
 }
 
+template<class MemDepPred, class Impl>
+void MemDepUnit<MemDepPred, Impl>::checkAndCommitBarrier(InstSeqNum commit_sn)
+{
+    auto it = barrierTable.begin();
+    while (it != barrierTable.end()) {
+        if (it->first < commit_sn - 400) {
+            it = barrierTable.erase(it);
+        } else {
+            it++;
+        }
+    }
+}
 
 }
 
