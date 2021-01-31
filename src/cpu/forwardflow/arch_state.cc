@@ -119,6 +119,9 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(con
         }
         auto sb_index = make_pair(src_reg.classValue(), src_reg.index());
 
+        DPRINTF(Rename, "Try to get value for or rename reg %s reg type: %i, reg index: %i\n",
+                src_reg.className(), src_reg.classValue(), src_reg.index());
+
         if (scoreboard.count(sb_index) && scoreboard[sb_index]) {
 
             if (!readyHint) {
@@ -615,6 +618,20 @@ void ArchState<Impl>::squashAll()
 template<class Impl>
 void ArchState<Impl>::dumpMaps()
 {
+    DPRINTF(Rename, "Commint Scoreboard:\n");
+    for (const auto &pair: scoreboard) {
+        SBIndex class_index = pair.first;
+        DPRINTFR(Rename, "reg type: %i, reg index: %i, valid: %i\n",
+                class_index.first, class_index.second, pair.second);
+    }
+
+    DPRINTF(Rename, "Hind Scoreboard:\n");
+    for (const auto &pair: hintSB) {
+        SBIndex class_index = pair.first;
+        DPRINTFR(Rename, "reg type: %i, reg index: %i, valid: %i\n",
+                class_index.first, class_index.second, pair.second);
+    }
+
     DPRINTF(Rename, "Definition map:\n");
     for (const auto &pair: parentMap) {
         DPRINTFR(Rename, "%s %i -> (%i %i) (%i)\n",
