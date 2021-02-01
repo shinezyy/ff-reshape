@@ -711,7 +711,7 @@ template<class Impl>
 void
 ArchState<Impl>::randomizeOp(const DynInstPtr &inst)
 {
-    if (inst->isNormalStore() ||
+    if (inst->isGeneralStore() || inst->isNonSpeculative() ||
         inst->isRVAmoLoadHalf() || inst->isRVAmoStoreHalf() ||
         inst->isLoadReserved() || inst->isStoreConditional()) {
         // no randomization for store
