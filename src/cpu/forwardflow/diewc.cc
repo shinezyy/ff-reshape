@@ -180,6 +180,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(const DynInstPtr &tail, bool is_tail) {
         bool skip_verify;
 
 
+        int32_t mem_size = std::max((int32_t) tail->getMemSize(), (int32_t) tail->effSize);
         if (tail->bypassCanceled) {
             skip_verify = false;
 
@@ -198,7 +199,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(const DynInstPtr &tail, bool is_tail) {
                     skip_verify = mDepPred->checkAddr(tail->seqNum,
                             tail->memPredHistory->bypass,
                             tail->physEffAddr, 0,
-                            tail->getMemSize(), tail->seqNVul);
+                            mem_size, tail->seqNVul);
                 } else {
                     DPRINTF(NoSQSMB, "memPredHistory is record! maybe violation detected, break\n");
                     skip_verify = false;
@@ -248,7 +249,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(const DynInstPtr &tail, bool is_tail) {
 
         } else if (!ldstQueue.numStoresToWB(DummyTid)){
             DPRINTF(NoSQSMB, "Did not skip verifying load [%lu] @ 0x%lx size: %u\n",
-                    tail->seqNum, tail->physEffAddr, tail->getMemSize());
+                    tail->seqNum, tail->physEffAddr, mem_size);
             auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(tail, is_tail);
             if (sent_reexec) {
                 verifiedTailLoad = tail->seqNum;
@@ -922,7 +923,11 @@ FFDIEWC<Impl>::
     if (head_inst->isGeneralStore() && inst_fault == NoFault) {
         head_inst->setCompleted();
 
-        mDepPred->commitStore(head_inst->physEffAddr, head_inst->getMemSize(),
+        int32_t mem_size = head_inst->getMemSize();
+        if (head_inst->getMemSize() == 0) {
+            mem_size = head_inst->effSize;
+        }
+        mDepPred->commitStore(head_inst->physEffAddr, mem_size,
                               head_inst->storeSeq, head_inst->dqPosition);
 
         mDepPred->removeStore(head_inst->seqNum);
@@ -1805,9 +1810,10 @@ void FFDIEWC<Impl>::instToWriteback(const DynInstPtr &inst)
                                   << inst->memPredHistory->patternInfo.localHistory << "\n";
                     }
                 }
+                int32_t mem_size = std::max((int32_t) inst->getMemSize(), (int32_t) inst->effSize);
                 mDepPred->checkSilentViolation(
                         inst->seqNum,
-                        inst->instAddr(), inst->physEffAddr, inst->effSize,
+                        inst->instAddr(), inst->physEffAddr, mem_size,
                         cell,
                         ssn_dist, dq_dist,
                         *(inst->memPredHistory));
