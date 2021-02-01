@@ -1268,6 +1268,16 @@ FFCPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
         // Check for instruction-count-based events.
         thread[tid]->comInstEventQueue.serviceEvents(thread[tid]->numInst);
 
+        if (this->nextDumpInstCount
+                && totalInsts() == this->nextDumpInstCount) {
+            fprintf(stderr, "Will trigger stat dump and reset\n");
+            Stats::schedStatEvent(true, true, curTick(), 0);
+
+            if (this->repeatDumpInstCount) {
+                this->nextDumpInstCount += this->repeatDumpInstCount;
+            };
+        }
+
         if (!hasCommit && inst->instAddr() == 0x80000000u) {
             hasCommit = true;
             readGem5Regs();
