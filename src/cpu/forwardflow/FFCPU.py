@@ -199,14 +199,14 @@ class DerivFFCPU(BaseCPU):
 
     interGroupBW = Param.Unsigned(16, "interGroupBW")
 
-    pendingQueueDepth = Param.Unsigned(8, "max depth of pending wakeup pointers")
+    pendingQueueDepth = Param.Unsigned(16, "max depth of pending wakeup pointers")
 
-    pendingWakeupQueueDepth = Param.Unsigned(8, "depth of pending wakeup pointers")
-    pendingFwPointerQueueDepth = Param.Unsigned(8, "depth of pending forward pointers")
+    pendingWakeupQueueDepth = Param.Unsigned(16, "depth of pending wakeup pointers")
+    pendingFwPointerQueueDepth = Param.Unsigned(16, "depth of pending forward pointers")
 
-    PendingWakeupThreshold = Param.Unsigned(8*6, "PendingWakeupThreshold ")
-    PendingWakeupMaxThreshold = Param.Unsigned(8, "PendingWakeupMaxThreshold ")
-    PendingFwPointerThreshold = Param.Unsigned(8*6, "PendingFwPointerThreshold ")
+    PendingWakeupThreshold = Param.Unsigned(16*6, "PendingWakeupThreshold ")
+    PendingWakeupMaxThreshold = Param.Unsigned(16, "PendingWakeupMaxThreshold ")
+    PendingFwPointerThreshold = Param.Unsigned(16*6, "PendingFwPointerThreshold ")
 
     MaxCheckpoints = Param.Unsigned(16, "Max pending branch instructions")
 

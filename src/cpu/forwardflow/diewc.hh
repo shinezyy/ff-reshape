@@ -497,6 +497,8 @@ public:
     Stats::Scalar DQOccupied;
     Stats::Formula DQUtil;
 
+    Stats::Scalar unclogEvents;
+
     ArchState *getArchState() {return &archState;}
 
     DQTop *getDQ() {return &dq;}

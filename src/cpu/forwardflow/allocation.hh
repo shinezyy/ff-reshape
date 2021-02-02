@@ -186,6 +186,7 @@ public:
     Stats::Scalar allocatedSerializing;
     Stats::Scalar allocationAllocatedInsts;
     Stats::Scalar allocationSkidInsts;
+    Stats::Scalar allocationDIEWCStallEvents;
 
 
 public:

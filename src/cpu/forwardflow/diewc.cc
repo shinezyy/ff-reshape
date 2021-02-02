@@ -705,6 +705,7 @@ bool FFDIEWC<Impl>::checkStall() {
         return true;
     }
     if (dq.stallToUnclog()) {
+        unclogEvents++;
         DPRINTF(DIEWC, "block because dq unclogging\n");
         return true;
     }
@@ -2375,6 +2376,11 @@ void FFDIEWC<Impl>::regStats()
         .desc("DQUtil")
         ;
     DQUtil = DQOccupied / cpu->baseStats.numCycles;
+
+    unclogEvents
+        .name(name() + ".DQStallEvents")
+        .desc("DQStallEvents")
+        ;
 }
 
 template<class Impl>

@@ -436,11 +436,17 @@ DQTop<Impl>::getBankTails()
 }
 
 template<class Impl>
-bool DQTop<Impl>::stallToUnclog() const
+bool DQTop<Impl>::stallToUnclog()
 {
-    if (isFull()) return true;
+    if (isFull()) {
+        DQFullEvents++;
+        return true;
+    }
     for (auto group: dqGroups) {
-        if (group->stallToUnclog()) return true;
+        if (group->stallToUnclog()) {
+            DQUnclogEvents++;
+            return true;
+        }
     }
     return false;
 }
@@ -893,6 +899,13 @@ void DQTop<Impl>::regStats()
     RegWriteInterGroupWKBuf
         .name(name() + ".RegWriteInterGroupWKBuf")
         .desc("RegWriteInterGroupWKBuf");
+
+    DQFullEvents
+        .name(name() + ".DQFullEvents")
+        .desc("DQFullEvents");
+    DQUnclogEvents
+        .name(name() + ".DQUnclogEvents")
+        .desc("DQUnclogEvents");
 }
 
 template<class Impl>

@@ -160,7 +160,7 @@ public:
 
     std::list<DynInstPtr> getBankTails();
 
-    bool stallToUnclog() const;
+    bool stallToUnclog();
 
     void retireHead(bool isSquashed, FFRegValue v);
 
@@ -334,6 +334,9 @@ public:
     Stats::Scalar RegWriteCenterPairBuf;
     Stats::Scalar RegWriteCenterWKBuf;
     Stats::Scalar RegWriteInterGroupWKBuf;
+
+    Stats::Scalar DQFullEvents;
+    Stats::Scalar DQUnclogEvents;
 
     unsigned numInFlightWk() const;
 

@@ -96,12 +96,12 @@ DataflowQueues<Impl>::DataflowQueues(const DerivFFCPUParams *params,
         numPendingWakeups(0),
         numPendingWakeupMax(0),
 
-        PendingWakeupThreshold(params->PendingWakeupThreshold),
+        PendingWakeupThreshold(params->PendingWakeupThreshold * params->numDQGroups),
         PendingWakeupMaxThreshold(params->PendingWakeupMaxThreshold),
 
         numPendingFwPointers(0),
         numPendingFwPointerMax(0),
-        PendingFwPointerThreshold(params->PendingFwPointerThreshold),
+        PendingFwPointerThreshold(params->PendingFwPointerThreshold * params->numDQGroups),
         opPrioList{1, 2, 3, 0},
         gen(0xdeadbeef),
         randAllocator(0, nBanks * nOps),
@@ -360,8 +360,7 @@ DataflowQueues<Impl>::findInst(InstSeqNum num) const
 template<class Impl>
 bool DataflowQueues<Impl>::wakeupQueueClogging() const
 {
-    bool res = numPendingWakeups >= PendingWakeupThreshold ||
-           numPendingWakeupMax >= PendingWakeupMaxThreshold;
+    bool res = numPendingWakeups >= PendingWakeupThreshold;
     if (res) {
         DPRINTF(DQ, "pending wakeup = %d, threshold = %d"
                     "pending wakeup (single queue) = %d, threshold = %d\n",
