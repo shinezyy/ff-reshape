@@ -339,6 +339,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 handle_wakeup = true;
                 inst->loadVerifying = true;
                 inst->fuGranted = false;
+                inst->translationCompleted(false);
             } else {
                 DPRINTF(DQWake, "Inst [%llu] has already been verified\n", inst->seqNum);
             }
