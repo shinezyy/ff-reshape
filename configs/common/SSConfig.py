@@ -114,6 +114,7 @@ def modifyO3CPUConfig(options, cpu):
 
         if options.no_mg_center_latency:
             cpu.MGCenterLatency = False
+        cpu.CrossGroupLatency = options.cross_group_latency
 
     elif options.cpu_type == 'DerivO3CPU':
 

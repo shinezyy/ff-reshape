@@ -37,7 +37,8 @@ DQTop<Impl>::DQTop(const DerivFFCPUParams *params)
         center2GroupRate(16),
         interGroupBuffer(params->numDQGroups),
         group2GroupRate(4),
-        MGCenterLatency(params->MGCenterLatency)
+        MGCenterLatency(params->MGCenterLatency),
+        CrossGroupLatency(params->CrossGroupLatency)
 {
 
     memDepUnit.init(params, DummyTid);
@@ -88,11 +89,18 @@ void DQTop<Impl>::tick()
         group->tick();
     }
 
-    // for each group receive from prev group
-    groupsRxFromPrevGroup();
-    // for each group send
-    // this execute order is  to guarantee 2 cycle latency
-    groupsTxPointers();
+    assert(CrossGroupLatency == 1 || CrossGroupLatency == 2);
+    if (CrossGroupLatency == 2) {
+        // this execute order is  to guarantee 2 cycle latency
+        // for each group receive from prev group
+        groupsRxFromPrevGroup();
+        // for each group send
+        groupsTxPointers();
+    } else {
+        // this execute order incurs only one cycle latency
+        groupsTxPointers();
+        groupsRxFromPrevGroup();
+    }
 
     if (c.nGroups > 1 && MGCenterLatency) {
         // for each group receive from center buffer
@@ -1154,7 +1162,7 @@ unsigned DQTop<Impl>::groupsRxFromBuffers(std::vector<std::list<WKPointer>> &que
         DPRINTF(DQGOF, "Group %u\n", g);
         auto &queue = queues[g];
         unsigned count = 0;
-        while (!queue.empty() && count++ < limit) {
+        while (!queue.empty() && count < limit) {
             count++;
             DPRINTF(DQGOF, "Receiving pointer" ptrfmt "\n", extptr(queue.front()));
             dqGroups[g]->receivePointers(queue.front());

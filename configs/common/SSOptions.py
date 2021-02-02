@@ -166,3 +166,7 @@ def addO3Options(parser):
             action='store_true',
             help='No additional center latency for multi-group')
 
+    parser.add_option("--cross-group-latency",
+            action='store', type='int', default=2,
+            help='cross group latency for multi-group')
+

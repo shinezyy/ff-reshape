@@ -196,6 +196,7 @@ class DerivFFCPU(BaseCPU):
     numDQBanks = Param.Unsigned(4, "number of DQ banks per group")
     numDQGroups = Param.Unsigned(8, "number of DQ groups")
     MGCenterLatency = Param.Bool(True, "One cycle latency for mem acc when using multiple groups")
+    CrossGroupLatency = Param.Unsigned(2, "Cross group latency")
 
     interGroupBW = Param.Unsigned(16, "interGroupBW")
 

@@ -322,6 +322,7 @@ private:
     unsigned decIndex(unsigned u);
 
     const bool MGCenterLatency;
+    const unsigned CrossGroupLatency;
 public:
     std::string name() const {return "DQTop";}
 
