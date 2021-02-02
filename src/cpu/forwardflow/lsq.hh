@@ -232,7 +232,7 @@ class LSQ
      */
     class LSQRequest : public BaseTLB::Translation
     {
-      protected:
+      public:
         typedef uint32_t FlagsStorage;
         typedef ::Flags<FlagsStorage> FlagsType;
 
@@ -277,6 +277,7 @@ class LSQ
         LSQSenderState* _senderState;
         void setState(const State& newState) { _state = newState; }
 
+      protected:
         uint32_t numTranslatedFragments;
         uint32_t numInTranslationFragments;
 

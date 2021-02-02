@@ -354,6 +354,8 @@ public:
 
     void regStats();
 
+    void queueMonitor();
+
         /** Sets the PC of a specific thread. */
     void pcState(const TheISA::PCState &val)
     { pc = val; }
@@ -492,6 +494,9 @@ public:
 
     Stats::Scalar headNotVerified;
 
+    Stats::Scalar DQOccupied;
+    Stats::Formula DQUtil;
+
     ArchState *getArchState() {return &archState;}
 
     DQTop *getDQ() {return &dq;}
@@ -575,6 +580,7 @@ public:
     void squashLoad(const DynInstPtr &inst);
 
     void forceDefer(const DynInstPtr &bypass_load);
+
 };
 
 

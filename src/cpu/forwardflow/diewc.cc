@@ -2366,7 +2366,15 @@ void FFDIEWC<Impl>::regStats()
             .name(name() + ".headNotVerified")
             .desc("headNotVerified")
             ;
-
+    DQOccupied
+        .name(name() + ".DQOccupied")
+        .desc("DQOccupied")
+        ;
+    DQUtil
+        .name(name() + ".DQUtil")
+        .desc("DQUtil")
+        ;
+    DQUtil = DQOccupied / cpu->baseStats.numCycles;
 }
 
 template<class Impl>
@@ -2687,6 +2695,7 @@ template<class Impl>
 void FFDIEWC<Impl>::clearAtEnd()
 {
     dq.endCycle();
+    queueMonitor();
 }
 
 template<class Impl>
@@ -2911,6 +2920,13 @@ void
 FFDIEWC<Impl>::forceDefer(const FFDIEWC::DynInstPtr &bypass_load)
 {
     dq.deferMemInst(bypass_load);
+}
+
+template<class Impl>
+void
+FFDIEWC<Impl>::queueMonitor()
+{
+    DQOccupied += dq.numInDQ();
 }
 
 }

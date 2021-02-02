@@ -738,8 +738,8 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
 
         // There might be fault from a previous execution attempt if this is
         // a strictly ordered load
-        inst->getFault() = NoFault;
 
+        inst->getFault() = NoFault;
         req->initiateTranslation();
         DPRINTF(LSQ, "Req translation completed: %i, "
                 "Inst translation completed: %i\n",
