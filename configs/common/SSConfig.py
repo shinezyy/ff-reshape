@@ -110,6 +110,19 @@ def modifyO3CPUConfig(options, cpu):
         assert options.dq_groups
         cpu.numDQGroups = options.dq_groups
 
+        if options.dq_banks is not None:
+            assert options.dq_banks == 4 or options.dq_banks == 8
+            cpu.numDQBanks = options.dq_banks
+            if options.dq_banks == 8:
+                cpu.fuPool = GroupedFUPool8()
+                cpu.fetchWidth = 8
+                cpu.decodeWidth = 8
+                cpu.dispatchWidth = 8
+                cpu.allocationWidth = 8
+                cpu.issueWidth = 8
+                cpu.wbWidth = 8
+                cpu.commitWidth = 8
+
         cpu.mDepPred.SquashFactor = options.mem_squash_factor
 
         if options.no_mg_center_latency:

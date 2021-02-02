@@ -149,6 +149,11 @@ def addO3Options(parser):
             type='int',
             help='number of DQ groups')
 
+    parser.add_option("--dq-banks",
+            action='store',
+            type='int',
+            help='number of DQ banks')
+
     parser.add_option("--o3-core-width",
             action='store',
             type='int',

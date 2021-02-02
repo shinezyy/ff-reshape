@@ -124,7 +124,7 @@ DataflowQueues<Impl>::DataflowQueues(const DerivFFCPUParams *params,
     assert(MINWakeup + XBarWakeup + NarrowXBarWakeup + DediXBarWakeup == 1);
     // init inputs to omega networks
     for (unsigned b = 0; b < nBanks; b++) {
-        for (unsigned op = 0; op < nBanks; op++) {
+        for (unsigned op = 0; op < nOps; op++) {
             unsigned index = b * nOps + op;
             DQPacket<WKPointer> &dq_pkt = wakeup_requests[index];
             dq_pkt.valid = false;
@@ -155,8 +155,8 @@ DataflowQueues<Impl>::DataflowQueues(const DerivFFCPUParams *params,
 
         fu_req_ptrs[i] = &fu_requests[i];
     }
-    fuPointer[OpGroups::MultDiv] = std::vector<unsigned>{0, 4, 1, 5};
-    fuPointer[OpGroups::FPAdd] = std::vector<unsigned>{2, 6, 3, 7};
+    fuPointer[OpGroups::MultDiv] = std::vector<unsigned>{   0, 4, 1, 5, 0, 4, 1, 5};
+    fuPointer[OpGroups::FPAdd] = std::vector<unsigned>{     2, 6, 3, 7, 2, 6, 3, 7};
 
     resetState();
 
@@ -277,6 +277,7 @@ DataflowQueues<Impl>::coordinateFU(
 {
     // find another FU group with desired capability.
     DPRINTF(FUW, "Coordinating req %u.%u  with llb:%i\n", from/2, from%2, llBlocked);
+    unsigned high = from / (OpGroups::nOpGroups * 4); // 4 banks sharing FUs
     int type = from%2;
     int md = OpGroups::MultDiv,
         fa = OpGroups::FPAdd;
@@ -284,12 +285,13 @@ DataflowQueues<Impl>::coordinateFU(
     unsigned target;
     if (inst->opClass() == OpClass::IprAccess) {
         target = group_ipr;
+        panic("No IPC for RV!\n");
 
     } else if (type == md){ //OpGroups::MultDiv
-        target = fuPointer[md][fuMDIndex++];
+        target = fuPointer[md][fuMDIndex++] + high;
 
     } else { // type == fa
-        target = fuPointer[fa][fuFAIndex++];
+        target = fuPointer[fa][fuFAIndex++] + high;
     }
     DPRINTF(FUW || ObExec, "Routing inst[%lu] to %i\n", inst->seqNum, target);
     return std::make_pair(target, c->uint2Bits(target));
@@ -645,9 +647,11 @@ void DataflowQueues<Impl>::readPairQueueHeads()
             } else {
                 fw_pkt = forwardPointerQueue[i].front();
                 QueueReadPairBuf++;
-                DPRINTF(DQGOF, "Read valid pair:" ptrfmt "\n", extptr(fw_pkt.payload.dest));
+                DPRINTF(DQGOF, "Read valid pair:" ptrfmt " to fw pair Q [%i]\n",
+                        extptr(fw_pkt.payload.dest), i);
             }
         }
+        dumpPairPackets(insert_req_ptrs);
     }
 }
 

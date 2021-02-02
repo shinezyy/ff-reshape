@@ -51,10 +51,10 @@ def getCommonOpList():
 
         OpDesc(opClass='Forwarder'),]
 
-class GroupCommon(FUDesc):
+class GroupBase(FUDesc):
     count = 1
 
-class Group0(GroupCommon):
+class MDGroupBase(GroupBase):
     opList = getCommonOpList()
     # int MD
     opList += [ OpDesc(opClass='IntMult', opLat=3),
@@ -66,7 +66,7 @@ class Group0(GroupCommon):
             OpDesc(opClass='FloatDiv', opLat=12, pipelined=False),
             OpDesc(opClass='FloatSqrt', opLat=24, pipelined=False) ]
 
-class Group1(GroupCommon):
+class FAddGroupBase(GroupBase):
     opList = getCommonOpList()
     # FP ALU
     opList += [ OpDesc(opClass='FloatAdd', opLat=2),
@@ -75,28 +75,33 @@ class Group1(GroupCommon):
     # FP convert
     opList += [ OpDesc(opClass='FloatCvt', opLat=2)]
 
+class Group0(MDGroupBase):
+    pass
 
-class Group2(GroupCommon):
+class Group1(FAddGroupBase):
+    pass
+
+class Group2(MDGroupBase):
+    pass
+
+class Group3(FAddGroupBase):
+    pass
+
+class Group4(MDGroupBase):
+    pass
+
+class Group5(FAddGroupBase):
+    pass
+
+class Group6(MDGroupBase):
+    pass
+
+class Group7(FAddGroupBase):
+    pass
+
+# not used
+class GroupIPR(FAddGroupBase):
     opList = getCommonOpList()
-    # int MD
-    opList += [ OpDesc(opClass='IntMult', opLat=3),
-            OpDesc(opClass='IntDiv', opLat=20, pipelined=False) ]
-    # FP MD
-    opList += [ OpDesc(opClass='FloatMult', opLat=4),
-            OpDesc(opClass='FloatMultAcc', opLat=5),
-            OpDesc(opClass='FloatMisc', opLat=3),
-            OpDesc(opClass='FloatDiv', opLat=12, pipelined=False),
-            OpDesc(opClass='FloatSqrt', opLat=24, pipelined=False) ]
-
-class Group3(GroupCommon):
-    opList = getCommonOpList()
-    # FP ALU
-    opList += [ OpDesc(opClass='FloatAdd', opLat=2),
-            OpDesc(opClass='FloatCmp', opLat=2)]
-
-    # FP convert
-    opList += [ OpDesc(opClass='FloatCvt', opLat=2)]
-
     # IPR (not available in RV?)
     opList += [ OpDesc(opClass='IprAccess', opLat = 3, pipelined = False) ]
 
