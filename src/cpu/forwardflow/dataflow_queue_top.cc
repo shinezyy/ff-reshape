@@ -36,7 +36,8 @@ DQTop<Impl>::DQTop(const DerivFFCPUParams *params)
         pseudoCenterWKPointerBuffer(params->numDQGroups),
         center2GroupRate(16),
         interGroupBuffer(params->numDQGroups),
-        group2GroupRate(4)
+        group2GroupRate(4),
+        MGCenterLatency(params->MGCenterLatency)
 {
 
     memDepUnit.init(params, DummyTid);
@@ -71,7 +72,7 @@ void DQTop<Impl>::tick()
     // for each group dispatch
     distributeInstsToGroup();
 
-    if (c.nGroups == 1) {
+    if (c.nGroups == 1 || !MGCenterLatency) {
         groupsRxFromCenterBuffer();
         for (auto group: dqGroups) {
             group->mergeExtraWKPointers();
@@ -93,7 +94,7 @@ void DQTop<Impl>::tick()
     // this execute order is  to guarantee 2 cycle latency
     groupsTxPointers();
 
-    if (c.nGroups > 1) {
+    if (c.nGroups > 1 && MGCenterLatency) {
         // for each group receive from center buffer
         // this will be executed before lsq/mdu send to guarantee 2 cycle latency
         groupsRxFromCenterBuffer();

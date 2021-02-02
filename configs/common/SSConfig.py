@@ -112,6 +112,9 @@ def modifyO3CPUConfig(options, cpu):
 
         cpu.mDepPred.SquashFactor = options.mem_squash_factor
 
+        if options.no_mg_center_latency:
+            cpu.MGCenterLatency = False
+
     elif options.cpu_type == 'DerivO3CPU':
 
         if options.o3_core_width is not None:

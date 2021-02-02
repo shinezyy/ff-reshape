@@ -162,3 +162,7 @@ def addO3Options(parser):
             action='store',
             help='The factor to zoom the importance of squashed events')
 
+    parser.add_option("--no-mg-center-latency",
+            action='store_true',
+            help='No additional center latency for multi-group')
+
