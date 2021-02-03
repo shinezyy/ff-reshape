@@ -126,12 +126,12 @@ BaseDynInst<Impl>::initVars()
 #ifndef NDEBUG
     ++cpu->instcount;
 
-    if (cpu->instcount > 3000) {
+    if (cpu->instcount > 10000) {
 #ifdef DEBUG
         cpu->dumpInsts();
         dumpSNList();
 #endif
-        assert(cpu->instcount <= 3000);
+        assert(cpu->instcount <= 10000);
     }
 
     DPRINTF(DynInst,
