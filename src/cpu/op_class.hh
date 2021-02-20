@@ -50,6 +50,8 @@
 using Enums::OpClass;
 using Enums::No_OpClass;
 
+static const OpClass JumpOp = Enums::Jump;
+static const OpClass AuipcOp = Enums::Auipc;
 static const OpClass IntAluOp = Enums::IntAlu;
 static const OpClass IntMultOp = Enums::IntMult;
 static const OpClass IntDivOp = Enums::IntDiv;

@@ -311,7 +311,7 @@ decode QUADRANT default Unknown::unknown() {
                                                               machInst);
                     }
                     NPC = Rc1;
-                }}, IsIndirectControl, IsUncondControl, IsCall);
+                }}, IsIndirectControl, IsUncondControl, IsCall, JumpOp);
                 default: CROp::c_mv({{
                     if (RC1 == 0) {
                         fault = make_shared<IllegalInstFault>("source reg x0",
@@ -337,7 +337,7 @@ decode QUADRANT default Unknown::unknown() {
                         }
                         ra = NPC;
                         NPC = Rc1;
-                    }}, IsIndirectControl, IsUncondControl, IsCall);
+                    }}, IsIndirectControl, IsUncondControl, IsCall, JumpOp);
                     default: CompressedROp::c_add({{
                         Rc1_sd = Rc1_sd + Rc2_sd;
                     }});
@@ -466,7 +466,7 @@ decode QUADRANT default Unknown::unknown() {
 
         0x05: UOp::auipc({{
             Rd = PC + (sext<20>(imm) << 12);
-        }});
+        }}, AuipcOp);
 
         0x06: decode FUNCT3 {
             format IOp {
@@ -1343,13 +1343,13 @@ decode QUADRANT default Unknown::unknown() {
             0x0: Jump::jalr({{
                 Rd = NPC;
                 NPC = (imm + Rs1) & (~0x1);
-            }}, IsIndirectControl, IsUncondControl, IsCall);
+            }}, IsIndirectControl, IsUncondControl, IsCall, JumpOp);
         }
 
         0x1b: JOp::jal({{
             Rd = NPC;
             NPC = PC + imm;
-        }}, IsDirectControl, IsUncondControl, IsCall);
+        }}, IsDirectControl, IsUncondControl, IsCall, JumpOp);
 
         0x1c: decode FUNCT3 {
             format SystemOp {
