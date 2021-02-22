@@ -602,6 +602,7 @@ void FFDIEWC<Impl>::dispatch() {
         DPRINTF(DIEWC || Debug::FFDisp, "DIEWC blocked because instructions are not used up\n");
         block();
         toAllocation->diewcUnblock = false;
+        toDispNotEmpty++;
     }
 
     if (dispatchStatus == Idle && dispatched) {
@@ -1161,7 +1162,7 @@ FFDIEWC<Impl>::commitInsts()
             DPRINTF(CommitObserve, "youngestExecuted: %lu, head_inst: %lu\n",
                     youngestExecuted, head_inst->seqNum);
             if (youngestExecuted > head_inst->seqNum) {
-                headExecDistance += ((youngestExecuted - head_inst->seqNum) / 100);
+                headExecDistance += ((youngestExecuted - head_inst->seqNum));
             }
             break;
         }
@@ -2379,7 +2380,16 @@ void FFDIEWC<Impl>::regStats()
 
     unclogEvents
         .name(name() + ".DQStallEvents")
-        .desc("DQStallEvents")
+        .desc("DQUnclogEvents")
+        ;
+
+    toDispNotEmpty
+        .name(name() + ".toDispNotEmpty")
+        .desc("toDispNotEmpty")
+        ;
+    cannotResetHeadWhenDQFull
+        .name(name() + ".cannotResetHeadWhenDQFull")
+        .desc("cannotResetHeadWhenDQFull")
         ;
 }
 
@@ -2842,8 +2852,13 @@ FFDIEWC<Impl>::tryResetRef()
 {
     if (dq.numInFlightFw() == 0) {
         resetOldestFw();
-    } else if (Debug::DQV2 || Debug::FFCommit) {
-        dq.dumpFwQSize();
+    } else {
+        if (dq.isFull()) {
+            cannotResetHeadWhenDQFull++;
+        }
+        if (Debug::DQV2 || Debug::FFCommit) {
+            dq.dumpFwQSize();
+        }
     }
 }
 

@@ -499,6 +499,10 @@ public:
 
     Stats::Scalar unclogEvents;
 
+    Stats::Scalar toDispNotEmpty;
+
+    Stats::Scalar cannotResetHeadWhenDQFull;
+
     ArchState *getArchState() {return &archState;}
 
     DQTop *getDQ() {return &dq;}
