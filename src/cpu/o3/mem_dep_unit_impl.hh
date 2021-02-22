@@ -242,16 +242,16 @@ MemDepUnit<MemDepPred, Impl>::insert(const DynInstPtr &inst)
     std::vector<MemDepEntryPtr> store_entries;
 
     // If there is a producing store, try to find the entry.
-    for (auto producing_store : producing_stores) {
-        DPRINTF(MemDepUnit, "Searching for producer [sn:%lli]\n",
-                            producing_store);
-        MemDepHashIt hash_it = memDepHash.find(producing_store);
-
-        if (hash_it != memDepHash.end()) {
-            store_entries.push_back((*hash_it).second);
-            DPRINTF(MemDepUnit, "Producer found\n");
-        }
-    }
+//    for (auto producing_store : producing_stores) {
+//        DPRINTF(MemDepUnit, "Searching for producer [sn:%lli]\n",
+//                            producing_store);
+//        MemDepHashIt hash_it = memDepHash.find(producing_store);
+//
+//        if (hash_it != memDepHash.end()) {
+//            store_entries.push_back((*hash_it).second);
+//            DPRINTF(MemDepUnit, "Producer found\n");
+//        }
+//    }
 
     // If no store entry, then instruction can issue as soon as the registers
     // are ready.

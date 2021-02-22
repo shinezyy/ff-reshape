@@ -77,7 +77,7 @@ class DerivO3CPU(BaseCPU):
     def support_take_over(cls):
         return True
 
-    _coreWidth = 4
+    _coreWidth = 6
     activity = Param.Unsigned(0, "Initial count")
 
     cacheStorePorts = Param.Unsigned(200, "Cache Ports. "
@@ -132,8 +132,8 @@ class DerivO3CPU(BaseCPU):
     forwardComSize = Param.Unsigned(10,
             "Time buffer size for forward communication")
 
-    LQEntries = Param.Unsigned(72, "Number of load queue entries")
-    SQEntries = Param.Unsigned(56, "Number of store queue entries")
+    LQEntries = Param.Unsigned(64, "Number of load queue entries")
+    SQEntries = Param.Unsigned(48, "Number of store queue entries")
     LSQDepCheckShift = Param.Unsigned(4,
             "Number of places to shift addr before check")
     LSQCheckLoads = Param.Bool(True,
@@ -147,8 +147,8 @@ class DerivO3CPU(BaseCPU):
 
     numRobs = Param.Unsigned(1, "Number of Reorder Buffers");
 
-    numPhysIntRegs = Param.Unsigned(256, "Number of physical integer registers")
-    numPhysFloatRegs = Param.Unsigned(256, "Number of physical floating point "
+    numPhysIntRegs = Param.Unsigned(160, "Number of physical integer registers")
+    numPhysFloatRegs = Param.Unsigned(160, "Number of physical floating point "
                                       "registers")
     # most ISAs don't use condition-code regs, so default is 0
     _defaultNumPhysCCRegs = 0
@@ -167,7 +167,7 @@ class DerivO3CPU(BaseCPU):
     numPhysCCRegs = Param.Unsigned(_defaultNumPhysCCRegs,
                                    "Number of physical cc registers")
     numIQEntries = Param.Unsigned(96, "Number of instruction queue entries")
-    numROBEntries = Param.Unsigned(224, "Number of reorder buffer entries")
+    numROBEntries = Param.Unsigned(192, "Number of reorder buffer entries")
 
     smtNumFetchingThreads = Param.Unsigned(1, "SMT Number of Fetching Threads")
     smtFetchPolicy = Param.SMTFetchPolicy('RoundRobin', "SMT Fetch policy")
@@ -184,7 +184,7 @@ class DerivO3CPU(BaseCPU):
 
     #branchPred = Param.BranchPredictor(TournamentBP(numThreads =
     #                                                   Parent.numThreads),
-    branchPred = Param.BranchPredictor(LTAGE(numThreads =
+    branchPred = Param.BranchPredictor(TAGE(numThreads =
                                                        Parent.numThreads),
                                        "Branch Predictor")
     loopBuffer = Param.LoopBuffer(LoopBuffer(), "Loopo Buffer")

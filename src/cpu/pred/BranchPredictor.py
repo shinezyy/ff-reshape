@@ -109,14 +109,14 @@ class TAGEBase(SimObject):
     instShiftAmt = Param.Unsigned(Parent.instShiftAmt,
         "Number of bits to shift instructions by")
 
-    nHistoryTables = Param.Unsigned(7, "Number of history tables")
-    minHist = Param.Unsigned(5, "Minimum history size of TAGE")
-    maxHist = Param.Unsigned(130, "Maximum history size of TAGE")
+    nHistoryTables = Param.Unsigned(6, "Number of history tables")
+    minHist = Param.Unsigned(2, "Minimum history size of TAGE")
+    maxHist = Param.Unsigned(64, "Maximum history size of TAGE")
 
     tagTableTagWidths = VectorParam.Unsigned(
-        [0, 9, 9, 10, 10, 11, 11, 12], "Tag size in TAGE tag tables")
+        [0, 7, 7, 8, 8, 9, 9], "Tag size in TAGE tag tables")
     logTagTableSizes = VectorParam.Int(
-        [13, 9, 9, 9, 9, 9, 9, 9], "Log2 of TAGE table sizes")
+        [12, 11, 11, 12, 12, 11, 11], "Log2 of TAGE table sizes")
     logRatioBiModalHystEntries = Param.Unsigned(2,
         "Log num of prediction entries for a shared hysteresis bit " \
         "for the Bimodal")
@@ -152,11 +152,11 @@ class TAGE(BranchPredictor):
     tage = Param.TAGEBase(TAGEBase(), "Tage object")
 
 class LTAGE_TAGE(TAGEBase):
-    nHistoryTables = 12
-    minHist = 4
-    maxHist = 640
-    tagTableTagWidths = [0, 7, 7, 8, 8, 9, 10, 11, 12, 12, 13, 14, 15]
-    logTagTableSizes = [14, 10, 10, 11, 11, 11, 11, 10, 10, 10, 10, 9, 9]
+    nHistoryTables = 6
+    minHist = 2
+    maxHist = 64
+    tagTableTagWidths = [0, 7, 7, 8, 8, 9, 9]
+    logTagTableSizes = [12, 11, 11, 12, 12, 11, 11]
     logUResetPeriod = 19
 
 class LoopPredictor(SimObject):

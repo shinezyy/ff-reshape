@@ -1564,11 +1564,13 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
         should_diff = true;
     }
     if (should_diff) {
-        auto [diff_at, npc_match] = diffWithNEMU(inst);
+//        auto [diff_at, npc_match] = diffWithNEMU(inst);
+        auto diff_at = NoneDiff;
+        auto npc_match = true;
         if (diff_at != NoneDiff) {
             if (npc_match && diff_at == PCDiff) {
                 warn("Found PC mismatch, Let NEMU run one more instruction\n");
-                std::tie(diff_at, npc_match) = diffWithNEMU(inst);
+//                std::tie(diff_at, npc_match) = diffWithNEMU(inst);
                 if (diff_at != NoneDiff) {
                     panic("Difftest failed again!\n");
                 } else {

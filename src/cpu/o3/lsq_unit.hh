@@ -762,13 +762,24 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
             auto st_s = store_it->instruction()->effAddr;
             auto st_e = st_s - 1 + store_size;
 
+            DPRINTF(LSQUnit, "req [%x, %x] st [%x, %x] store size: %x store pc: %s\n",
+                    req_s, req_e, st_s, st_e, store_size, store_it->instruction()->pcState()
+                    );
+
             bool store_has_lower_limit = req_s >= st_s;
-            // bool store_has_upper_limit = req_e <= st_e;
-            bool store_has_upper_limit =
-                req_s - store_size <= st_s - req->mainRequest()->getSize();
+            bool store_has_upper_limit = req_e <= st_e;
+//            bool store_has_upper_limit =
+//                req_s - store_size <= st_s - req->mainRequest()->getSize();
 
             bool lower_load_has_store_part = req_s <= st_e;
             bool upper_load_has_store_part = req_e >= st_s;
+
+            DPRINTF(LSQUnit, "(%d %d %d %d)\n",
+                    store_has_lower_limit,
+                    store_has_upper_limit,
+                    lower_load_has_store_part,
+                    upper_load_has_store_part
+                    );
 
             auto coverage = AddrRangeCoverage::NoAddrRangeCoverage;
 
@@ -818,14 +829,24 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
                 if (store_it->isAllZeros())
                     memset(load_inst->memData, 0,
                             req->mainRequest()->getSize());
-                else
-                    memcpy(load_inst->memData,
-                        store_it->data() + shift_amt,
-                        req->mainRequest()->getSize());
+                else{
 
-                DPRINTF(LSQUnit, "Forwarding from store idx %i to load to "
-                        "addr %#x\n", store_it._idx,
-                        req->mainRequest()->getVaddr());
+                    DPRINTF(LSQUnit, "Forwarding from store idx %i to load to "
+                                     "addr %#x size: %d\n", store_it._idx,
+                            req->mainRequest()->getVaddr(),
+                            req->mainRequest()->getSize()
+                            );
+
+                    DPRINTF(LSQUnit, "store eff addr: %x  shift amt: %x\n",
+                            store_it->instruction()->effAddr,
+                            shift_amt
+                            );
+
+                    memcpy(load_inst->memData,
+                           store_it->data() + shift_amt,
+                           req->mainRequest()->getSize());
+                }
+
 
                 PacketPtr data_pkt = new Packet(req->mainRequest(),
                         MemCmd::ReadReq);

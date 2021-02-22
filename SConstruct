@@ -1270,7 +1270,7 @@ Build variables for {dir}:
                     "attribute. KVM instruction counts will be inaccurate.")
 
     env.Append(CPPDEFINES={
-    'REF_SO': '\\\"/home51/zyy/projects/NEMU/build/riscv64-nemu-interpreter-so\\\"'})
+    'REF_SO': '\\\"../riscv64-nemu-interpreter-so\\\"'})
 
     # Save sticky variable settings back to current variables file
     sticky_vars.Save(current_vars_file, env)

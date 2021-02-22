@@ -60,6 +60,7 @@
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
 #include "params/DerivO3CPU.hh"
+#include "sim/stat_control.hh"
 
 using namespace std;
 
@@ -1199,6 +1200,7 @@ DefaultIEW<Impl>::executeInsts()
         // TODO: check 'Good Trap' when instructions really commit
         if (inst->staticInst->machInst == 0x0005006b){
             inform("Hit Good Trap at pc = %lx\n", inst->instAddr());
+            Stats::dump();
             exit(0);
         }
 

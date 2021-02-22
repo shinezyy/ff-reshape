@@ -66,6 +66,7 @@ class L1_ICache(L1Cache):
 
 class L1_DCache(L1Cache):
     write_buffers = 16
+    data_latency = 4
 
 class L2Cache(Cache):
     writeback_clean = True
