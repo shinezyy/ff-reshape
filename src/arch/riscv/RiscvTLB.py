@@ -46,6 +46,6 @@ class RiscvTLB(BaseTLB):
     type = 'RiscvTLB'
     cxx_class = 'RiscvISA::TLB'
     cxx_header = 'arch/riscv/tlb.hh'
-    size = Param.Int(64, "TLB size")
+    size = Param.Int(256, "TLB size")
     walker = Param.RiscvPagetableWalker(\
             RiscvPagetableWalker(), "page table walker")
