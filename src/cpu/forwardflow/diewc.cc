@@ -852,6 +852,9 @@ FFDIEWC<Impl>::
                     head_inst->seqNum);
 
             HeadNotExec++;
+            if (head_inst->isLoad()) {
+                HeadIsLoad++;
+            }
             if (youngestExecuted == 0) {
                 youngestExecuted = head_inst->seqNum;
             }
@@ -862,7 +865,7 @@ FFDIEWC<Impl>::
             DPRINTF(CommitObserve, "youngestExecuted: %lu, head_inst: %lu\n",
                     youngestExecuted, head_inst->seqNum);
             if (youngestExecuted > head_inst->seqNum) {
-                headExecDistance += ((youngestExecuted - head_inst->seqNum) / 100);
+                headExecDistance += ((youngestExecuted - head_inst->seqNum));
             }
         }
         return false;
@@ -1150,7 +1153,13 @@ FFDIEWC<Impl>::commitInsts()
         }
         if (!head_inst->readyToCommit()) {
             DPRINTF(Commit || Debug::FFCommit, "Break commit because oldest inst is not ready to commit\n");
-            HeadNotExec++;
+            HeadNotReadyToCommit++;
+            if (head_inst->isLoad()) {
+                HeadIsLoad++;
+                if (!head_inst->translationCompleted()) {
+                    HeadIsTLBDelayed++;
+                }
+            }
             if (youngestExecuted == 0) {
                 youngestExecuted = head_inst->seqNum;
             }
@@ -1732,6 +1741,7 @@ void FFDIEWC<Impl>::cacheUnblocked()
 template<class Impl>
 void FFDIEWC<Impl>::blockMemInst(const DynInstPtr &inst)
 {
+    CacheBlockCount++;
     dq.blockMemInst(inst);
 }
 
@@ -2334,6 +2344,10 @@ void FFDIEWC<Impl>::regStats()
         .name(name() + ".FUContentionDelay")
         .desc("FUContentionDelay");
 
+    HeadNotReadyToCommit
+        .name(name() + ".HeadNotReadyToCommit")
+        .desc("HeadNotReadyToCommit")
+        ;
     HeadNotExec
         .name(name() + ".HeadNotExec")
         .desc("HeadNotExec")
@@ -2346,7 +2360,7 @@ void FFDIEWC<Impl>::regStats()
         .name(name() + ".meanHeadExecDistance")
         .desc("meanHeadExecDistance")
         ;
-    meanHeadExecDistance = headExecDistance / HeadNotExec;
+    meanHeadExecDistance = headExecDistance / (HeadNotReadyToCommit + HeadNotExec);
 
     readyExecDelayTicks
         .name(name() + ".readyExecDelayTicks")
@@ -2390,6 +2404,18 @@ void FFDIEWC<Impl>::regStats()
     cannotResetHeadWhenDQFull
         .name(name() + ".cannotResetHeadWhenDQFull")
         .desc("cannotResetHeadWhenDQFull")
+        ;
+    HeadIsLoad
+        .name(name() + ".HeadIsLoad")
+        .desc("HeadIsLoad")
+        ;
+    HeadIsTLBDelayed
+        .name(name() + ".HeadIsTLBDelayed")
+        .desc("HeadIsTLBDelayed")
+        ;
+    CacheBlockCount
+        .name(name() + ".CacheBlockCount")
+        .desc("CacheBlockCount")
         ;
 }
 

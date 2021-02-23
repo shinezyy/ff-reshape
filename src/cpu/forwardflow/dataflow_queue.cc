@@ -631,6 +631,10 @@ void DataflowQueues<Impl>::regStats()
     SRAMWritePointer
         .name(name() + ".SRAMWritePointer")
         .desc("SRAMWritePointer");
+
+    TailQueuingDelay
+        .name(name() + ".TailQueuingDelay")
+        .desc("TailQueuingDelay");
 }
 
 template<class Impl>
@@ -1320,10 +1324,18 @@ template<class Impl>
 void
 DataflowQueues<Impl>::countCycles(const typename Impl::DynInstPtr &inst, WKPointer *wk)
 {
+
     inst->ssrDelay = wk->ssrDelay;
     inst->queueingDelay = wk->queueTime;
     inst->pendingDelay = wk->pendingTime;
     KeySrcPacket++;
+
+    unsigned tail_i = top->getTailPtr();
+    unsigned inst_i = c->pointer2uint(inst->dqPosition);
+    int dist = (int) inst_i - (int) tail_i;
+    if (dist >= 0 and dist < 4) {
+        TailQueuingDelay += wk->queueTime;
+    }
 }
 
 template<class Impl>

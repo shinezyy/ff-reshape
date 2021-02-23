@@ -339,6 +339,8 @@ public:
     Stats::Scalar DQFullEvents;
     Stats::Scalar DQUnclogEvents;
 
+    Stats::Scalar TLBDelayCount;
+
     unsigned numInFlightWk() const;
 
     void checkSanity() const;

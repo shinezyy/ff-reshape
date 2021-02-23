@@ -450,6 +450,8 @@ public:
 
     Stats::Scalar SRAMWritePointer;
 
+    Stats::Scalar TailQueuingDelay;
+
     void checkSanity() const;
 };
 

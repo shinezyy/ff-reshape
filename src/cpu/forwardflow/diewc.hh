@@ -467,6 +467,7 @@ public:
     Stats::Scalar pendingDelay;
     Stats::Scalar FUContentionDelay;
 
+    Stats::Scalar HeadNotReadyToCommit;
     Stats::Scalar HeadNotExec;
     Stats::Scalar headExecDistance;
     Stats::Formula meanHeadExecDistance;
@@ -502,6 +503,11 @@ public:
     Stats::Scalar toDispNotEmpty;
 
     Stats::Scalar cannotResetHeadWhenDQFull;
+
+    Stats::Scalar HeadIsLoad;
+    Stats::Scalar HeadIsTLBDelayed;
+
+    Stats::Scalar CacheBlockCount;
 
     ArchState *getArchState() {return &archState;}
 

@@ -527,7 +527,7 @@ class DefaultCommit
         /** Number of cycles where the commit bandwidth limit is reached. */
         Stats::Scalar commitEligibleSamples;
 
-        Stats::Scalar HeadNotExec;
+        Stats::Scalar HeadNotReadyToCommit;
     } stats;
 
 

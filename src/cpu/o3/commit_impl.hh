@@ -179,7 +179,7 @@ DefaultCommit<Impl>::CommitStats::CommitStats(O3CPU *cpu,
       ADD_STAT(commitEligibleSamples, "number cycles where commit BW limit"
           " reached")
 
-      , ADD_STAT(HeadNotExec, "HeadNotExec")
+      , ADD_STAT(HeadNotReadyToCommit, "HeadNotReadyToCommit")
 {
     using namespace Stats;
 
@@ -1031,7 +1031,7 @@ DefaultCommit<Impl>::commitInsts()
 
         if (commit_thread == -1 || !rob->isHeadReady(commit_thread)) {
             DPRINTF(Commit, "commit_thread = %i || ROB head not ready.\n", commit_thread);
-            stats.HeadNotExec++;
+            stats.HeadNotReadyToCommit++;
             break;
         }
 

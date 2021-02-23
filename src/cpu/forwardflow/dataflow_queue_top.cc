@@ -692,6 +692,7 @@ void DQTop<Impl>::deferMemInst(const DynInstPtr &inst)
     inst->hasMemDep = true;
     inst->memDepReady = false;
 
+    TLBDelayCount++;
     deferredMemInsts.push_back(inst);
 }
 
@@ -914,6 +915,11 @@ void DQTop<Impl>::regStats()
     DQUnclogEvents
         .name(name() + ".DQUnclogEvents")
         .desc("DQUnclogEvents");
+
+    TLBDelayCount
+        .name(name() + ".TLBDelayCount")
+        .desc("TLBDelayCount")
+        ;
 }
 
 template<class Impl>
