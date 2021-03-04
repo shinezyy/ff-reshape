@@ -69,8 +69,12 @@ LSQUnit<Impl>::WritebackEvent::WritebackEvent(const DynInstPtr &_inst,
     : Event(Default_Pri, AutoDelete),
       inst(_inst), pkt(_pkt), lsqPtr(lsq_ptr)
 {
-    assert(_inst->savedReq);
-    _inst->savedReq->writebackScheduled();
+    if (_inst->loadVerifying && inst->savedVerifyReq) {
+        _inst->savedVerifyReq->writebackScheduled();
+    } else if (_inst->savedReq) {
+        //  assert(inst->savedReq);
+        _inst->savedReq->writebackScheduled();
+    }
 }
 
 template<class Impl>
@@ -81,8 +85,12 @@ LSQUnit<Impl>::WritebackEvent::process()
 
     lsqPtr->writeback(inst, pkt);
 
-    assert(inst->savedReq);
-    inst->savedReq->writebackDone();
+    if (inst->loadVerifying && inst->savedVerifyReq) {
+        inst->savedVerifyReq->writebackDone();
+    } else if (inst->savedReq) {
+        //  assert(inst->savedReq);
+        inst->savedReq->writebackDone();
+    }
     delete pkt;
 }
 
@@ -99,6 +107,7 @@ LSQUnit<Impl>::recvTimingResp(PacketPtr pkt)
 {
     auto senderState = dynamic_cast<LSQSenderState*>(pkt->senderState);
     LSQRequest* req = senderState->request();
+    DPRINTF(LSQUnit, "Recv timing resp for req %#lx\n", req);
     assert(req != nullptr);
     bool ret = true;
     /* Check that the request is still alive before any further action. */
@@ -169,10 +178,6 @@ LSQUnit<Impl>::completeDataAccess(PacketPtr pkt)
                 inst->pcState(), pkt->getAddr(),
                 htmFailureToStr(htm_rc), pkt->getHtmTransactionUid());
         }
-    } else {
-        DPRINTF(DIEWC, "inst[%llu] has been squashed^&@$&?\n", inst->seqNum);
-        cpu->wakeCPU();
-        cpu->activityThisCycle();
     }
 
     cpu->ppDataAccessComplete->notify(std::make_pair(inst, pkt));
@@ -574,10 +579,7 @@ LSQUnit<Impl>::checkViolations(typename LoadQueue::iterator& loadIt,
 
                         ++stats.memOrderViolation;
 
-                        return std::make_shared<GenericISA::M5PanicFault>(
-                            "Detected fault with inst [sn:%lli] and "
-                            "[sn:%lli] at address %#x\n",
-                            inst->seqNum, ld_inst->seqNum, ld_eff_addr1);
+                        return NoFault;
                     }
                 }
 
@@ -610,10 +612,7 @@ LSQUnit<Impl>::checkViolations(typename LoadQueue::iterator& loadIt,
 
                 ++stats.memOrderViolation;
 
-                return std::make_shared<GenericISA::M5PanicFault>(
-                    "Detected fault with "
-                    "inst [sn:%lli] and [sn:%lli] at address %#x\n",
-                    inst->seqNum, ld_inst->seqNum, ld_eff_addr1);
+                return NoFault;
             }
         }
 
@@ -683,6 +682,13 @@ LSQUnit<Impl>::executeLoad(const DynInstPtr &inst)
         iewStage->activityThisCycle();
     } else {
         if (inst->effAddrValid()) {
+
+            if (!inst->isNormalBypass()) {
+                inst->seqNVul = iewStage->getLastCompletedStoreSN();
+                DPRINTF(NoSQPred, "Setting Nvul (%lu) for inst[%lu]\n",
+                        inst->seqNVul, inst->seqNum);
+            }
+
             auto it = inst->lqIt;
             ++it;
 
@@ -715,6 +721,7 @@ LSQUnit<Impl>::executeStore(const DynInstPtr &store_inst)
 
     Fault store_fault = store_inst->initiateAcc();
 
+    DPRINTF(LSQUnit, "Translation delayed: %i\n", store_inst->isTranslationDelayed());
     if (store_inst->isTranslationDelayed() &&
         store_fault == NoFault)
         return store_fault;
@@ -727,8 +734,8 @@ LSQUnit<Impl>::executeStore(const DynInstPtr &store_inst)
     }
 
     if (storeQueue[store_idx].size() == 0) {
-        DPRINTF(LSQUnit,"Fault on Store PC %s, [sn:%lli], Size = 0\n",
-                store_inst->pcState(), store_inst->seqNum);
+        DPRINTF(LSQUnit,"Fault on Store PC %s, [sn:%lli], Size = 0. No Fault: %i.\n",
+                store_inst->pcState(), store_inst->seqNum, store_fault == NoFault);
 
         return store_fault;
     }

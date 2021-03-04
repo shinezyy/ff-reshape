@@ -43,3 +43,6 @@ class DefaultFFFUPool(FFFUPool):
 
 class GroupedFUPool(FFFUPool):
     FUList = [Group0(), Group1(), Group2(), Group3()]
+
+class GroupedFUPool8(FFFUPool):
+    FUList = [Group0(), Group1(), Group2(), Group3(), Group4(), Group5(), Group6(), Group7()]

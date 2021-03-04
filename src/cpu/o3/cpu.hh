@@ -790,13 +790,6 @@ class FullO3CPU : public BaseO3CPU
 
     void readGem5Regs();
 
-    enum DiffAt {
-        NoneDiff = 0,
-        PCDiff,
-        NPCDiff,
-        InstDiff,
-        ValueDiff,
-    };
     std::pair<int, bool> diffWithNEMU(const DynInstPtr &inst);
 
     bool scFenceInFlight{false};

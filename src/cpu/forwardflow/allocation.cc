@@ -172,6 +172,7 @@ bool Allocation<Impl>::checkStall() {
 
     if (diewcStall) {
         DPRINTF(DAllocation,"Stall from DIEWC stage detected.\n");
+        allocationDIEWCStallEvents++;
         ret_val = true;
 
     } else if (calcFreeDQEntries() <= 0) {
@@ -273,12 +274,12 @@ void Allocation<Impl>::allocateInsts() {
             continue;
         }
 
-        if (!canAllocate()) {
-            ++allocationDQFullEvents;
-            DPRINTF(DAllocation, "break because cannot allocate anymore\n");
-            to_allocate.push_front(inst);
-            break;
-        }
+        // if (!canAllocate()) {
+        //     ++allocationDQFullEvents;
+        //     DPRINTF(DAllocation, "break because cannot allocate anymore\n");
+        //     to_allocate.push_front(inst);
+        //     break;
+        // }
 
         if ((inst->isSerializeBefore()) &&
                 !inst->isSerializeHandled()) {
@@ -315,7 +316,7 @@ void Allocation<Impl>::allocateInsts() {
             DPRINTF(DAllocation, "loads in process: %d after inc by inst[%d]\n",
                     loadsInProgress, inst->seqNum);
         }
-        if (inst->isStore()) {
+        if (inst->isStore() || inst->isAtomic()) {
             storesInProgress++;
         }
         ++allocated;
@@ -420,6 +421,9 @@ void Allocation<Impl>::regStats() {
     allocationSkidInsts
         .name(name() + ".allocationSkidInsts")
         .desc("allocationSkidInsts");
+    allocationDIEWCStallEvents
+        .name(name() + ".allocationDIEWCStallEvents")
+        .desc("allocationDIEWCStallEvents");
 }
 
 template<class Impl>

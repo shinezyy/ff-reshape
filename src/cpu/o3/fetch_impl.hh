@@ -531,6 +531,7 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     // A bit of a misnomer...next_PC is actually the current PC until
     // this function updates it.
     bool predict_taken;
+    bool cpc_compressed = nextPC.compressed();
 
     if (!inst->isControl()) {
         DPRINTF(Fetch, "Advancing PC from %s", nextPC);
@@ -547,8 +548,12 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
                                         nextPC, tid);
 
+    bool real_pred_taken = cpc_compressed ?
+        branch_pc + 2 != nextPC.pc() :
+        branch_pc + 4 != nextPC.pc();
+
     if (lbuf->enable) {
-        lbuf->probe(branch_pc, nextPC.pc(), predict_taken);
+        lbuf->probe(branch_pc, nextPC.pc(), real_pred_taken);
     }
 
     if (predict_taken) {

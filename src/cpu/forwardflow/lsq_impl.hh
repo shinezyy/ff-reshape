@@ -172,8 +172,13 @@ void
 LSQ<Impl>::tick()
 {
     // Re-issue loads which got blocked on the per-cycle load ports limit.
-    if (usedLoadPorts == cacheLoadPorts && !_cacheBlocked)
+    if (usedLoadPorts == cacheLoadPorts && !_cacheBlocked) {
         iewStage->cacheUnblocked();
+    } else {
+        DPRINTF(LSQ, "Cannot unblock cache, usedLoadPorts=%i,"
+                " cacheLoadPorts=%i, _cacheBlocked=%i\n",
+                usedLoadPorts, cacheLoadPorts, _cacheBlocked);
+    }
 
     usedLoadPorts = 0;
     usedStorePorts = 0;
@@ -702,9 +707,15 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
 
     const bool htm_cmd = isLoad && (flags & Request::HTM_CMD);
 
-    if (inst->translationStarted()) {
+    DPRINTF(LSQ, "Translation start: %i, load verifying: %i, v_addr: %#lx\n",
+            inst->translationStarted(), inst->loadVerifying, addr);
+    if (inst->translationStarted() && !inst->loadVerifying) {
         req = inst->savedReq;
         assert(req);
+
+    } else if (inst->loadVerifying && inst->savedVerifyReq) {
+        req = inst->savedVerifyReq;
+
     } else {
         if (htm_cmd) {
             assert(addr == 0x0lu);
@@ -717,6 +728,7 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
             req = new SingleDataRequest(&thread[tid], inst, isLoad, addr,
                     size, flags, data, res, std::move(amo_op));
         }
+        DPRINTF(LSQ, "Creating new req for inst[sn:%llu] -> %#lx\n", inst->seqNum, req);
         assert(req);
         if (!byte_enable.empty()) {
             req->_byteEnable = byte_enable;
@@ -726,13 +738,19 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
 
         // There might be fault from a previous execution attempt if this is
         // a strictly ordered load
-        inst->getFault() = NoFault;
 
+        inst->getFault() = NoFault;
         req->initiateTranslation();
+        DPRINTF(LSQ, "Req translation completed: %i, "
+                "Inst translation completed: %i\n",
+                req->isTranslationComplete(),
+                inst->translationCompleted());
     }
 
     /* This is the place were instructions get the effAddr. */
     if (req->isTranslationComplete()) {
+        DPRINTF(LSQ, "Vaddr: %#lx, paddr: %#lx, storeSeq: %llu, is load: %i\n",
+                req->getVaddr(), inst->physEffAddr, inst->storeSeq, isLoad);
         if (req->isMemAccessRequired()) {
             inst->effAddr = req->getVaddr();
             inst->effSize = size;
@@ -777,6 +795,8 @@ LSQ<Impl>::SingleDataRequest::finish(const Fault &fault, const RequestPtr &req,
     /* If the instruction has been squahsed, let the request know
      * as it may have to self-destruct. */
     if (_inst->isSquashed()) {
+        DPRINTF(LSQ, "Mark translation completed for squashed inst [sn:%llu]\n",
+                _inst->seqNum);
         this->squashTranslation();
     } else {
         _inst->strictlyOrdered(req->isStrictlyOrdered());
@@ -795,7 +815,16 @@ LSQ<Impl>::SingleDataRequest::finish(const Fault &fault, const RequestPtr &req,
         }
 
         LSQRequest::_inst->fault = fault;
+        DPRINTF(LSQ, "Mark translation completed for inst [sn:%llu]\n",
+                _inst->seqNum);
+        DPRINTF(LSQ, "inst [sn:%llu] has fault: %i\n", _inst->seqNum, _inst->getFault() != NoFault);
         LSQRequest::_inst->translationCompleted(true);
+
+        if (fault != NoFault && _inst->isNormalBypass() && !_inst->loadVerifying) {
+            _inst->setCanCommit();
+            _inst->setExecuted();
+            _inst->loadVerified = true;
+        }
     }
 }
 
@@ -863,7 +892,11 @@ LSQ<Impl>::SingleDataRequest::initiateTranslation()
         setState(State::Translation);
         flags.set(Flag::TranslationStarted);
 
-        _inst->savedReq = this;
+        if (!_inst->loadVerifying) {
+            _inst->savedReq = this;
+        } else {
+            _inst->savedVerifyReq = this;
+        }
         sendFragmentToTranslation(0);
     } else {
         _inst->setMemAccPredicate(false);
@@ -955,7 +988,11 @@ LSQ<Impl>::SplitDataRequest::initiateTranslation()
         _inst->translationStarted(true);
         setState(State::Translation);
         flags.set(Flag::TranslationStarted);
-        this->_inst->savedReq = this;
+        if (!_inst->loadVerifying) {
+            this->_inst->savedReq = this;
+        } else {
+            this->_inst->savedVerifyReq = this;
+        }
         numInTranslationFragments = 0;
         numTranslatedFragments = 0;
         _fault.resize(_requests.size());
@@ -1026,6 +1063,9 @@ LSQ<Impl>::SingleDataRequest::buildPackets()
 {
     assert(_senderState);
     /* Retries do not create new packets. */
+    if (this->smbVerifying) {
+        _packets.clear();
+    }
     if (_packets.size() == 0) {
         _packets.push_back(
                 isLoad()
@@ -1060,6 +1100,10 @@ LSQ<Impl>::SplitDataRequest::buildPackets()
 {
     /* Extra data?? */
     Addr base_address = _addr;
+
+    if (this->smbVerifying) {
+        _packets.clear();
+    }
 
     if (_packets.size() == 0) {
         /* New stuff */
@@ -1253,6 +1297,7 @@ LSQ<Impl>::HtmCmdRequest::HtmCmdRequest(LSQUnit* port,
     this->addRequest(_addr, _size, _byteEnable);
 
     if (_requests.size() > 0) {
+        panic("Omegaflow do not support htm\n");
         _requests.back()->setReqInstSeqNum(_inst->seqNum);
         _requests.back()->taskId(_taskId);
         _requests.back()->setPaddr(_addr);

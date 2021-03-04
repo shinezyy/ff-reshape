@@ -46,9 +46,11 @@
 #include <queue>
 
 #include "arch/generic/tlb.hh"
-#include "cpu/inst_seq.hh"
+#include "base/trace.hh"
 #include "cpu/forwardflow/lsq_unit.hh"
+#include "cpu/inst_seq.hh"
 #include "cpu/utils.hh"
+#include "debug/FFLSQ.hh"
 #include "enums/SMTQueuePolicy.hh"
 #include "mem/port.hh"
 #include "sim/sim_object.hh"
@@ -230,7 +232,7 @@ class LSQ
      */
     class LSQRequest : public BaseTLB::Translation
     {
-      protected:
+      public:
         typedef uint32_t FlagsStorage;
         typedef ::Flags<FlagsStorage> FlagsType;
 
@@ -275,6 +277,7 @@ class LSQ
         LSQSenderState* _senderState;
         void setState(const State& newState) { _state = newState; }
 
+      protected:
         uint32_t numTranslatedFragments;
         uint32_t numInTranslationFragments;
 
@@ -299,6 +302,8 @@ class LSQ
         std::vector<bool> _byteEnable;
         uint32_t _numOutstandingPackets;
         AtomicOpFunctorPtr _amo_op;
+
+        bool smbVerifying{false};
       protected:
         LSQUnit* lsqUnit() { return &_port; }
         LSQRequest(LSQUnit* port, const DynInstPtr& inst, bool isLoad) :
@@ -307,6 +312,7 @@ class LSQ
             _res(nullptr), _addr(0), _size(0), _flags(0),
             _numOutstandingPackets(0), _amo_op(nullptr)
         {
+            DPRINTF(FFLSQ, "Inc ref inst[sn:%llu]\n", _inst->seqNum);
             flags.set(Flag::IsLoad, isLoad);
             flags.set(Flag::WbStore,
                       _inst->isStoreConditional() || _inst->isAtomic());
@@ -327,11 +333,14 @@ class LSQ
             _numOutstandingPackets(0),
             _amo_op(std::move(amo_op))
         {
+            DPRINTF(FFLSQ, "Inc ref inst[sn:%llu]\n", _inst->seqNum);
             flags.set(Flag::IsLoad, isLoad);
             flags.set(Flag::WbStore,
                       _inst->isStoreConditional() || _inst->isAtomic());
             flags.set(Flag::IsAtomic, _inst->isAtomic());
-            install();
+            if (!inst->loadVerifying) {
+                install();
+            }
         }
 
         bool
@@ -386,10 +395,13 @@ class LSQ
          */
         void release(Flag reason)
         {
+            DPRINTF(FFLSQ, "Destruct reach 0.5\n");
             assert(reason == Flag::LSQEntryFreed || reason == Flag::Discarded);
             if (!isAnyOutstandingRequest()) {
+                DPRINTF(FFLSQ, "Destruct reach 0.75\n");
                 delete this;
             } else {
+                DPRINTF(FFLSQ, "Found outstanding request, delete them\n");
                 if (_senderState) {
                     _senderState->deleteRequest();
                 }
@@ -426,13 +438,18 @@ class LSQ
          */
         virtual ~LSQRequest()
         {
+            DPRINTF(FFLSQ, "Dec ref inst[sn:%llu]\n", _inst->seqNum);
             assert(!isAnyOutstandingRequest());
             _inst->savedReq = nullptr;
+            _inst->savedVerifyReq = nullptr;
+            DPRINTF(FFLSQ, "Destruct reach 1\n");
             if (_senderState)
                 delete _senderState;
+            DPRINTF(FFLSQ, "Destruct reach 2\n");
 
             for (auto r: _packets)
                 delete r;
+            DPRINTF(FFLSQ, "Destruct reach 3\n");
         };
 
 
@@ -634,6 +651,7 @@ class LSQ
         void
         freeLSQEntry()
         {
+            DPRINTF(FFLSQ, "Destruct reach 0\n");
             release(Flag::LSQEntryFreed);
         }
 

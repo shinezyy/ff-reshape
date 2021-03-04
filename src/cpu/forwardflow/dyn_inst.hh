@@ -359,7 +359,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     setFloatRegOperandBits(const StaticInst *si, int idx, RegVal val) override
     {
         // this->cpu->setFloatReg(this->_destRegIdx[idx], val);
-        DPRINTF(FFExec, "Inst [%llu] %s setting dest float reg(%i) to %f\n",
+        DPRINTF(FFExec, "Inst [%llu] %s setting dest float reg(%i) to %llu\n",
                 this->seqNum, si->disassemble(this->instAddr()), idx, val);
         destValue.i = val;
         BaseDynInst<Impl>::setFloatRegOperandBits(si, idx, val);
@@ -418,9 +418,17 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     int bypassOp{0};
     bool dependOnBarrier{false};
 
-    bool isNormalBypass() { return bypassOp && !dependOnBarrier;}
+    bool isNormalBypass() const { return bypassOp && !dependOnBarrier;}
 
-    bool isNormalStore() { return this->isStore() && !this->isRVAmoStoreHalf();}
+    bool isNormalStore() const { return this->isStore() && !this->isRVAmoStoreHalf();}
+
+    bool isGeneralStore() const { return this->isStore() || this->isAtomic();}
+
+    bool isSignedLoad() const { return this->staticInst->isSignedLoad();}
+
+    bool isFloat32Op() const { return this->staticInst->isFloat32Op();}
+
+    bool isUnsignedNarrowLoad() const { return this->staticInst->isUnsignedNarrowLoad();}
 
     FFRegValue bypassVal;
 
@@ -526,6 +534,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     bool sentReExec{false};
 
     bool bypassCanceled{false};
+
+    short getMemSize() {return this->staticInst->memSize; }
 };
 
 }

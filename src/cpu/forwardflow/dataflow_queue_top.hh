@@ -160,7 +160,7 @@ public:
 
     std::list<DynInstPtr> getBankTails();
 
-    bool stallToUnclog() const;
+    bool stallToUnclog();
 
     void retireHead(bool isSquashed, FFRegValue v);
 
@@ -321,6 +321,8 @@ private:
 
     unsigned decIndex(unsigned u);
 
+    const bool MGCenterLatency;
+    const unsigned CrossGroupLatency;
 public:
     std::string name() const {return "DQTop";}
 
@@ -333,6 +335,11 @@ public:
     Stats::Scalar RegWriteCenterPairBuf;
     Stats::Scalar RegWriteCenterWKBuf;
     Stats::Scalar RegWriteInterGroupWKBuf;
+
+    Stats::Scalar DQFullEvents;
+    Stats::Scalar DQUnclogEvents;
+
+    Stats::Scalar TLBDelayCount;
 
     unsigned numInFlightWk() const;
 

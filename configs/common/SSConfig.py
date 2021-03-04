@@ -36,7 +36,8 @@ def modifyO3CPUConfig(options, cpu):
         cpu.branchPred.outcomePath = options.outcome_path
         cpu.branchPred.checkAddr = options.check_outcome_addr is not None
     elif options.use_bp is None:
-        print('Keep default BP without modification')
+        print('Using TAGE_SC_L_64KB BP')
+        cpu.branchPred = TAGE_SC_L_64KB()
     else:
         print('Unknow BP:', options.use_bp)
         assert False
@@ -109,7 +110,24 @@ def modifyO3CPUConfig(options, cpu):
         assert options.dq_groups
         cpu.numDQGroups = options.dq_groups
 
+        if options.dq_banks is not None:
+            assert options.dq_banks == 4 or options.dq_banks == 8
+            cpu.numDQBanks = options.dq_banks
+            if options.dq_banks == 8:
+                cpu.fuPool = GroupedFUPool8()
+                cpu.fetchWidth = 8
+                cpu.decodeWidth = 8
+                cpu.dispatchWidth = 8
+                cpu.allocationWidth = 8
+                cpu.issueWidth = 8
+                cpu.wbWidth = 8
+                cpu.commitWidth = 8
+
         cpu.mDepPred.SquashFactor = options.mem_squash_factor
+
+        if options.no_mg_center_latency:
+            cpu.MGCenterLatency = False
+        cpu.CrossGroupLatency = options.cross_group_latency
 
     elif options.cpu_type == 'DerivO3CPU':
 

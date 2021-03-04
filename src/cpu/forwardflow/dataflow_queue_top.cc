@@ -36,7 +36,9 @@ DQTop<Impl>::DQTop(const DerivFFCPUParams *params)
         pseudoCenterWKPointerBuffer(params->numDQGroups),
         center2GroupRate(16),
         interGroupBuffer(params->numDQGroups),
-        group2GroupRate(4)
+        group2GroupRate(4),
+        MGCenterLatency(params->MGCenterLatency),
+        CrossGroupLatency(params->CrossGroupLatency)
 {
 
     memDepUnit.init(params, DummyTid);
@@ -71,7 +73,7 @@ void DQTop<Impl>::tick()
     // for each group dispatch
     distributeInstsToGroup();
 
-    if (c.nGroups == 1) {
+    if (c.nGroups == 1 || !MGCenterLatency) {
         groupsRxFromCenterBuffer();
         for (auto group: dqGroups) {
             group->mergeExtraWKPointers();
@@ -87,13 +89,20 @@ void DQTop<Impl>::tick()
         group->tick();
     }
 
-    // for each group receive from prev group
-    groupsRxFromPrevGroup();
-    // for each group send
-    // this execute order is  to guarantee 2 cycle latency
-    groupsTxPointers();
+    assert(CrossGroupLatency == 1 || CrossGroupLatency == 2);
+    if (CrossGroupLatency == 2) {
+        // this execute order is  to guarantee 2 cycle latency
+        // for each group receive from prev group
+        groupsRxFromPrevGroup();
+        // for each group send
+        groupsTxPointers();
+    } else {
+        // this execute order incurs only one cycle latency
+        groupsTxPointers();
+        groupsRxFromPrevGroup();
+    }
 
-    if (c.nGroups > 1) {
+    if (c.nGroups > 1 && MGCenterLatency) {
         // for each group receive from center buffer
         // this will be executed before lsq/mdu send to guarantee 2 cycle latency
         groupsRxFromCenterBuffer();
@@ -435,11 +444,17 @@ DQTop<Impl>::getBankTails()
 }
 
 template<class Impl>
-bool DQTop<Impl>::stallToUnclog() const
+bool DQTop<Impl>::stallToUnclog()
 {
-    if (isFull()) return true;
+    if (isFull()) {
+        DQFullEvents++;
+        return true;
+    }
     for (auto group: dqGroups) {
-        if (group->stallToUnclog()) return true;
+        if (group->stallToUnclog()) {
+            DQUnclogEvents++;
+            return true;
+        }
     }
     return false;
 }
@@ -648,6 +663,36 @@ void DQTop<Impl>::setDIEWC(DIEWC *_diewc)
 template<class Impl>
 void DQTop<Impl>::deferMemInst(const DynInstPtr &inst)
 {
+    bool old_completed = inst->translationCompleted();
+
+    // Omegaflow specific:
+    inst->fuGranted = false;
+    inst->inReadyQueue = false;
+
+    if (inst->isNormalBypass()) {
+        if (inst->getFault() != NoFault) {
+            DPRINTF(DQWake, "Defer bypasing load[sn:%llu] because of fault\n",
+                    inst->seqNum);
+            // keep old completed
+            inst->translationCompleted(old_completed);
+            // defer
+
+        } else if (!inst->loadVerifying) {
+            inst->translationCompleted(false);
+            DPRINTF(DQWake, "Dont defer bypasing load[sn:%llu]\n",
+                    inst->seqNum);
+            return;
+
+        } else {
+            inst->translationCompleted(false);
+            // defer
+        }
+    }
+
+    inst->hasMemDep = true;
+    inst->memDepReady = false;
+
+    TLBDelayCount++;
     deferredMemInsts.push_back(inst);
 }
 
@@ -655,12 +700,15 @@ template<class Impl>
 typename Impl::DynInstPtr
 DQTop<Impl>::getDeferredMemInstToExecute()
 {
+    DPRINTF(DQ, "Deferred size: %lu\n", deferredMemInsts.size());
     auto it = deferredMemInsts.begin();
     while (it != deferredMemInsts.end()) {
         if ((*it)->translationCompleted() || (*it)->isSquashed()) {
             DynInstPtr inst = *it;
             deferredMemInsts.erase(it);
             return inst;
+        } else {
+            it++;
         }
     }
     return nullptr;
@@ -670,6 +718,7 @@ template<class Impl>
 typename Impl::DynInstPtr DQTop<Impl>::getBlockedMemInst()
 {
     if (retryMemInsts.empty()) {
+        DPRINTF(DQ, "retry mem insts size: %llu\n", retryMemInsts.size());
         return nullptr;
     } else {
         auto inst = retryMemInsts.front();
@@ -685,8 +734,6 @@ template<class Impl>
 void DQTop<Impl>::rescheduleMemInst(const DynInstPtr &inst, bool isStrictOrdered, bool isFalsePositive)
 {
     DPRINTF(DQ, "Marking inst[%llu] as need rescheduling\n", inst->seqNum);
-    inst->translationStarted(false);
-    inst->translationCompleted(false);
     if (!isFalsePositive) {
         inst->clearCanIssue();
     }
@@ -719,14 +766,19 @@ void DQTop<Impl>::replayMemInsts()
 template<class Impl>
 void DQTop<Impl>::blockMemInst(const DynInstPtr &inst)
 {
-    inst->translationStarted(false);
-    inst->translationCompleted(false);
     inst->clearCanIssue();
     inst->clearIssued();
 
     // Omegaflow specific:
     inst->fuGranted = false;
     inst->inReadyQueue = false;
+
+    if (inst->isNormalBypass() && !inst->loadVerifying) {
+        DPRINTF(DQWake, "Dont block bypasing load[sn:%llu]\n",
+                inst->seqNum);
+        return;
+    }
+
     inst->hasMemDep = true;
     inst->memDepReady = false;
 
@@ -856,6 +908,18 @@ void DQTop<Impl>::regStats()
     RegWriteInterGroupWKBuf
         .name(name() + ".RegWriteInterGroupWKBuf")
         .desc("RegWriteInterGroupWKBuf");
+
+    DQFullEvents
+        .name(name() + ".DQFullEvents")
+        .desc("DQFullEvents");
+    DQUnclogEvents
+        .name(name() + ".DQUnclogEvents")
+        .desc("DQUnclogEvents");
+
+    TLBDelayCount
+        .name(name() + ".TLBDelayCount")
+        .desc("TLBDelayCount")
+        ;
 }
 
 template<class Impl>
@@ -1047,6 +1111,11 @@ void DQTop<Impl>::addReadyMemInst(DynInstPtr inst, bool isOrderDep)
         DPRINTF(DQWake, "Cancel replaying mem inst[%llu] because it was squashed\n", inst->seqNum);
         return;
     }
+    if (inst->isLoad() && inst->isNormalBypass() && !inst->bypassCanceled && !inst->loadVerifying) {
+        DPRINTF(DQWake, "Cancel replaying mem inst[%llu] because it was bypassing\n",
+                inst->seqNum);
+        return;
+    }
     DPRINTF(DQWake, "Replaying mem inst[%llu]\n", inst->seqNum);
     WKPointer wk(inst->dqPosition);
     if (isOrderDep) { // default to True
@@ -1099,7 +1168,7 @@ unsigned DQTop<Impl>::groupsRxFromBuffers(std::vector<std::list<WKPointer>> &que
         DPRINTF(DQGOF, "Group %u\n", g);
         auto &queue = queues[g];
         unsigned count = 0;
-        while (!queue.empty() && count++ < limit) {
+        while (!queue.empty() && count < limit) {
             count++;
             DPRINTF(DQGOF, "Receiving pointer" ptrfmt "\n", extptr(queue.front()));
             dqGroups[g]->receivePointers(queue.front());
@@ -1187,26 +1256,26 @@ void DQTop<Impl>::squashLoad(const DQTop::DynInstPtr &inst)
 }
 
 template<class Impl>
-InstSeqNum DQTop<Impl>::walkThroughStores(deque<RecentStore> &recentStoreTable)
+InstSeqNum DQTop<Impl>::walkThroughStores(deque<RecentStore> &recent_store_table)
 {
     unsigned u = tail;
-    InstSeqNum latestStoreSeq = 0;
+    InstSeqNum latest_store_seq = 0;
     while (validPosition(u) && logicallyLET(u, head)) {
         const BasePointer ptr = c.uint2Pointer(u);
         DPRINTF(NoSQPred, "Walk store at" ptrfmt "\n", extptr(ptr));
         DataflowQueueBank *bank = (*dqGroups[ptr.group])[ptr.bank];
         DynInstPtr inst = bank->readInstsFromBank(ptr);
-        if (inst && inst->isStore()) {
-            recentStoreTable.emplace_front(inst->seqNum, inst->dqPosition);
-            latestStoreSeq = inst->storeSeq;
-            DPRINTF(NoSQPred, "Seq: %lu, store seq: %lu\n", inst->seqNum, latestStoreSeq);
+        if (inst && inst->isGeneralStore()) {
+            recent_store_table.emplace_front(inst->seqNum, inst->dqPosition);
+            latest_store_seq = inst->storeSeq;
+            DPRINTF(NoSQPred, "Seq: %lu, store seq: %lu\n", inst->seqNum, latest_store_seq);
         }
         if (u == head) {
             break;
         }
         u = inc(u);
     }
-    return latestStoreSeq;
+    return latest_store_seq;
 }
 
 

@@ -149,6 +149,11 @@ def addO3Options(parser):
             type='int',
             help='number of DQ groups')
 
+    parser.add_option("--dq-banks",
+            action='store',
+            type='int',
+            help='number of DQ banks')
+
     parser.add_option("--o3-core-width",
             action='store',
             type='int',
@@ -161,4 +166,12 @@ def addO3Options(parser):
     parser.add_option("--mem-squash-factor",
             action='store',
             help='The factor to zoom the importance of squashed events')
+
+    parser.add_option("--no-mg-center-latency",
+            action='store_true',
+            help='No additional center latency for multi-group')
+
+    parser.add_option("--cross-group-latency",
+            action='store', type='int', default=2,
+            help='cross group latency for multi-group')
 

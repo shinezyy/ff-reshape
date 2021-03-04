@@ -2,7 +2,7 @@ import re
 
 dispatched = set()
 destroyed = set()
-dispatch_pattern = re.compile('\d+: system.switch_cpus.diewc: Dispatching inst\[(\d+)\]')
+dispatch_pattern = re.compile('\d+: system.cpu.diewc: Dispatching inst\[(\d+)\]')
 destroy_pattern = re.compile('\d+: global: DynInst: \[sn:(\d+)\] Instruction destroyed')
 
 def match_and_append(pattern, l):
@@ -11,7 +11,7 @@ def match_and_append(pattern, l):
         # print(m.group(1))
         l.add(m.group(1))
 
-with open('./gem5_out.txt') as f:
+with open('./simulator_out.txt') as f:
     for line in f:
         match_and_append(dispatch_pattern, dispatched)
         match_and_append(destroy_pattern, destroyed)

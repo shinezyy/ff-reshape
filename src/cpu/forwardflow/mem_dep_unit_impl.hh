@@ -134,7 +134,7 @@ MemDepUnit<MemDepPred, Impl>::insert(const DynInstPtr &inst)
         DPRINTF(MemDepUnit, "Load barrier [sn:%lli] in flight\n",
                 loadBarrier.SN);
         producing_barrier = loadBarrier.SN;
-    } else if (inst->isStore() && storeBarrier.valid) {
+    } else if (inst->isGeneralStore() && storeBarrier.valid) {
         producing_barrier = storeBarrier.SN;
         DPRINTF(MemDepUnit, "Store barrier [sn:%lli] in flight\n",
                 storeBarrier.SN);
@@ -273,14 +273,18 @@ MemDepUnit<MemDepPred, Impl>::completeBarrier(const DynInstPtr &inst)
     InstSeqNum barr_sn = inst->seqNum;
     DPRINTF(MemDepUnit, "barrier completed: %s SN:%lli\n", inst->pcState(),
             inst->seqNum);
+    DPRINTF(MemDepUnit, "barrier table size: %llu\n", barrierTable.size());
     if (inst->isReadBarrier()) {
         if (loadBarrier.SN == barr_sn)
             loadBarrier.valid = false;
         if (storeBarrier.SN == barr_sn)
             storeBarrier.valid = false;
+        checkAndCommitBarrier(inst->seqNum);
+
     } else if (inst->isWriteBarrier()) {
         if (storeBarrier.SN == barr_sn)
             storeBarrier.valid = false;
+        checkAndCommitBarrier(inst->seqNum);
     }
 }
 
@@ -347,6 +351,18 @@ void MemDepUnit<MemDepPred, Impl>::checkAndSquashBarrier(BarrierInfo &barrier, I
     }
 }
 
+template<class MemDepPred, class Impl>
+void MemDepUnit<MemDepPred, Impl>::checkAndCommitBarrier(InstSeqNum commit_sn)
+{
+    auto it = barrierTable.begin();
+    while (it != barrierTable.end()) {
+        if (it->first < commit_sn - 400) {
+            it = barrierTable.erase(it);
+        } else {
+            it++;
+        }
+    }
+}
 
 }
 

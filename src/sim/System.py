@@ -136,3 +136,4 @@ class System(SimObject):
     restore_from_gcpt = Param.Bool(False, "Restoring from gcpt")
     # Generic Checkpoint image file
     gcpt_file = Param.String("/the/mid/of/nowhere.xhit", "Generic Checkpoint image file")
+    gcpt_restorer_file = Param.String("/the/mid/of/nowhere.xhit", "GCPT restorer image file")

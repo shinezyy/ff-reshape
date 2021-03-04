@@ -327,14 +327,14 @@ template <class Impl>
 BaseHTMCheckpointPtr&
 O3ThreadContext<Impl>::getHtmCheckpointPtr()
 {
-    panic("No htm support in RV-ForwardFlow");
+    return thread->htmCheckpoint;
 }
 
 template <class Impl>
 void
 O3ThreadContext<Impl>::setHtmCheckpointPtr(BaseHTMCheckpointPtr new_cpt)
 {
-    panic("No htm support in RV-ForwardFlow");
+     thread->htmCheckpoint = std::move(new_cpt);
 }
 
 

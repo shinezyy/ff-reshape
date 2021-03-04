@@ -61,6 +61,7 @@
 #include "debug/FFInit.hh"
 #include "debug/FFSquash.hh"
 #include "debug/Quiesce.hh"
+#include "debug/ValueCommit.hh"
 #include "enums/MemoryMode.hh"
 #include "sim/core.hh"
 #include "sim/full_system.hh"
@@ -150,9 +151,6 @@ FFCPU<Impl>::FFCPU(const DerivFFCPUParams *params)
 
       isa(numThreads, NULL),
 
-      icachePort(&fetch, this),
-      dcachePort(&diewc.ldstQueue, this),
-
       timeBuffer(params->backComSize, params->forwardComSize),
       fetchQueue(params->backComSize, params->forwardComSize),
       decodeQueue(params->backComSize, params->forwardComSize),
@@ -178,7 +176,7 @@ FFCPU<Impl>::FFCPU(const DerivFFCPUParams *params)
     if (params->checker) {
         BaseCPU *temp_checker = params->checker;
         checker = dynamic_cast<Checker<Impl> *>(temp_checker);
-        checker->setIcachePort(&icachePort);
+        checker->setIcachePort(&this->fetch.getInstPort());
         checker->setSystem(params->system);
     } else {
         checker = NULL;
@@ -310,6 +308,13 @@ FFCPU<Impl>::FFCPU(const DerivFFCPUParams *params)
         isa[tid] = dynamic_cast<TheISA::ISA *>(params->isa[tid]);
         this->thread[tid]->setFuncExeInst(0);
     }
+
+    init_difftest();
+
+    diff.nemu_reg = nemu_reg;
+    diff.wpc = diff_wpc;
+    diff.wdata = diff_wdata;
+    diff.wdst = diff_wdst;
 }
 
 template <class Impl>
@@ -396,6 +401,7 @@ FFCPU<Impl>::regStats()
         .precision(6);
     totalIpc =  sum(committedInsts) / baseStats.numCycles;
 
+    this->fetch.regStats();
     this->decode.regStats();
     this->allocation.regStats();
     this->diewc.regStats();
@@ -453,6 +459,10 @@ FFCPU<Impl>::regStats()
     squashedFUTime
         .name(name() + ".squashedFUTime")
         .desc("squashedFUTime");
+
+    lastCommitTick
+        .name(name() + ".lastCommitTick")
+        .desc("lastCommitTick");
 }
 
 template <class Impl>
@@ -526,6 +536,7 @@ FFCPU<Impl>::init()
         thread[tid]->noSquashFromTC = true;
         // Initialise the ThreadContext's memory proxies
         thread[tid]->initMemProxies(thread[tid]->getTC());
+        DPRINTF(FFInit, "Init cpu\n");
     }
 
     // Clear noSquashFromTC.
@@ -1245,16 +1256,94 @@ template <class Impl>
 void
 FFCPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
 {
+    bool should_diff = false;
     // Keep an instruction count.
     if ((!inst->isMicroop() || inst->isLastMicroop()) &&
             !inst->isForwarder()) {
+        should_diff = true;
         thread[tid]->numInst++;
         thread[tid]->threadStats.numInsts++;
         committedInsts[tid]++;
 
         // Check for instruction-count-based events.
         thread[tid]->comInstEventQueue.serviceEvents(thread[tid]->numInst);
+
+        if (this->nextDumpInstCount
+                && totalInsts() == this->nextDumpInstCount) {
+            fprintf(stderr, "Will trigger stat dump and reset\n");
+            Stats::schedStatEvent(true, true, curTick(), 0);
+
+            if (this->repeatDumpInstCount) {
+                this->nextDumpInstCount += this->repeatDumpInstCount;
+            };
+        }
+
+        if (!hasCommit && inst->instAddr() == 0x80000000u) {
+            hasCommit = true;
+            readGem5Regs();
+            gem5_reg[DIFFTEST_THIS_PC] = inst->instAddr();
+            ref_difftest_memcpy_from_dut(0x80000000, pmemStart, pmemSize);
+            ref_difftest_setregs(gem5_reg);
+        }
+
+        if (scFailed) {
+            DPRINTF(ValueCommit,
+                    "Skip inst after scFailed. Insts since this failure: %u, total failure count = %u\n",
+                    scFailed, totalSCFailures);
+            should_diff = false;
+            scFailed++;
+
+        } else if (scFenceInFlight) {
+            assert(inst->isWriteBarrier() && inst->isReadBarrier());
+            DPRINTF(ValueCommit, "Skip diff fence generated from LR/SC\n");
+            should_diff = false;
+
+        } else {
+            should_diff = true;
+        }
     }
+
+    scFenceInFlight = false;
+
+    auto old_sc_failed = false;
+    if (!inst->isLastMicroop() &&
+            inst->isStoreConditional() && !inst->isLastMicroop() && inst->isDelayedCommit()) {
+        if (scFailed) {
+            old_sc_failed = true;
+            scFailed = 0;
+        }
+        scFenceInFlight = true;
+        DPRINTF(ValueCommit, "Diff SC even if it is not the last Microop\n");
+        should_diff = true;
+    }
+    if (should_diff) {
+        auto [diff_at, npc_match] = diffWithNEMU(inst);
+        if (diff_at != NoneDiff) {
+            if (npc_match && diff_at == PCDiff) {
+                warn("Found PC mismatch, Let NEMU run one more instruction\n");
+                std::tie(diff_at, npc_match) = diffWithNEMU(inst);
+                if (diff_at != NoneDiff) {
+                    panic("Difftest failed again!\n");
+                } else {
+                    warn("Difftest matched again, NEMU seems to commit the failed mem instruction\n");
+                }
+
+            } else if (scFenceInFlight) {
+                scFailed = 1;
+                totalSCFailures++;
+                warn("SC failed, Let GEM5 run alone until next SC, SC failure #%u\n",
+                        totalSCFailures);
+
+            } else {
+                panic("Difftest failed!\n");
+            }
+        } else { // no diff
+            if (old_sc_failed) {
+                warn("SC failure #%u resolved\n", totalSCFailures);
+            }
+        }
+    }
+
     if (!inst->isForwarder()) {
         thread[tid]->numOp++;
         thread[tid]->threadStats.numOps++;
@@ -1262,6 +1351,8 @@ FFCPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
     }
 
     probeInstCommit(inst->staticInst, inst->instAddr());
+
+    lastCommitTick = curTick();
 }
 
 template <class Impl>
@@ -1328,13 +1419,20 @@ template <class Impl>
 void
 FFCPU<Impl>::removeInstsUntil(const InstSeqNum &seq_num, ThreadID tid)
 {
-    assert(!instList.empty());
+    if (seq_num > 0) {
+        assert(!instList.empty());
+    }
 
     removeInstsThisCycle = true;
 
     ListIt inst_iter = instList.end();
 
     inst_iter--;
+
+    if (inst_iter == instList.end()) {
+        DPRINTF(FFSquash, "Ignore squash because no inst found\n");
+        return;
+    }
 
     DPRINTF(FFCommit, "Deleting instructions from instruction "
             "list that are from [tid:%i] and above [sn:%lli] (end=%lli).\n",
@@ -1398,10 +1496,8 @@ FFCPU<Impl>::cleanUpRemovedInsts()
         instList.erase(removeList.front());
 
         removeList.pop();
-        DPRINTF(FFCommit, "Removed 1\n");
     }
 
-    DPRINTF(FFCommit, "Removed 2\n");
     if (Debug::FFCommit) {
         if (curTick() % 50000 == 0 || curTick() % 50500 == 0) {
             dumpInsts();
@@ -1409,7 +1505,6 @@ FFCPU<Impl>::cleanUpRemovedInsts()
     }
 
     removeInstsThisCycle = false;
-    DPRINTF(FFCommit, "Removed 3\n");
 }
 /*
 template <class Impl>
@@ -1548,6 +1643,127 @@ void FFCPU<Impl>::setPointers()
 {
     archState = diewc.getArchState();
     dq = diewc.getDQ();
+}
+
+template <class Impl>
+void
+FFCPU<Impl>::readGem5Regs()
+{
+    for (int i = 0; i < 32; i++) {
+        gem5_reg[i] = 0;
+        gem5_reg[i + 32] = 0;
+    }
+}
+
+template <class Impl>
+std::pair<int, bool>
+FFCPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
+{
+    int diff_at = DiffAt::NoneDiff;
+    bool npc_match = false;
+
+    difftest_step(&diff);
+
+    auto gem5_pc = inst->instAddr();
+    auto nemu_pc = nemu_reg[DIFFTEST_THIS_PC];
+    DPRINTF(ValueCommit, "NEMU PC: %#x, GEM5 PC: %#x\n", nemu_pc, gem5_pc);
+
+    auto nemu_store_addr = nemu_reg[DIFFTEST_STORE_ADDR];
+    if (nemu_store_addr) {
+        DPRINTF(ValueCommit, "NEMU store addr: %#lx\n", nemu_store_addr);
+    }
+
+    uint8_t gem5_inst[5];
+    uint8_t nemu_inst[9];
+
+    int nemu_inst_len = nemu_reg[DIFFTEST_RVC] ? 2 : 4;
+    int gem5_inst_len = inst->pcState().compressed() ? 2 : 4;
+
+    assert(inst->staticInst->asBytes(gem5_inst, 8));
+    *reinterpret_cast<uint32_t *>(nemu_inst) =
+        htole<uint32_t>(nemu_reg[DIFFTEST_INST_PAYLOAD]);
+
+    if (nemu_pc != gem5_pc) {
+        warn("NEMU store addr: %#lx\n", nemu_store_addr);
+        warn("Inst [sn:%lli]\n", inst->seqNum);
+        warn("Diff at %s, NEMU: %#lx, GEM5: %#lx\n",
+                "PC", nemu_pc, gem5_pc
+            );
+        if (!diff_at) {
+            diff_at = PCDiff;
+            if (diff.npc == gem5_pc) {
+                npc_match = true;
+            }
+        }
+    }
+
+    if (diff.npc != inst->nextInstAddr()) {
+        warn("Inst [sn:%lli]\n", inst->seqNum);
+        warn("Diff at %s, NEMU: %#lx, GEM5: %#lx\n",
+                "NPC", diff.npc, inst->nextInstAddr()
+            );
+        if (!diff_at)
+            diff_at = NPCDiff;
+    } else {
+        DPRINTF(ValueCommit, "Inst [sn:%lli] %s, NEMU: %#lx, GEM5: %#lx\n",
+                inst->seqNum, "NPC", diff.npc, inst->nextInstAddr()
+               );
+    }
+
+    if (nemu_inst_len != gem5_inst_len ||
+            memcmp(gem5_inst, nemu_inst, nemu_inst_len) != 0) {
+        warn("Inst [sn:%lli]\n", inst->seqNum);
+        warn("Diff at %s, NEMU: %02x %02x %02x %02x (%i),"
+                "GEM5: %02x %02x %02x %02x (%i)\n",
+                "inst payload",
+                nemu_inst[0], nemu_inst[1], nemu_inst[2], nemu_inst[3], nemu_inst_len,
+                gem5_inst[0], gem5_inst[1], gem5_inst[2], gem5_inst[3], gem5_inst_len
+            );
+        if (!diff_at)
+            diff_at = InstDiff;
+    }
+
+    DPRINTF(ValueCommit, "Inst [sn:%llu] @ %#lx is %s\n",
+            inst->seqNum, inst->instAddr(),
+            inst->staticInst->disassemble(inst->instAddr()));
+
+    // auto gem5_mstatus = readMiscRegNoEffect(MISCREG_STATUS, 0);
+    // auto nemu_mstatus = nemu_reg[DIFFTEST_MSTATUS];
+    // DPRINTF(ValueCommit, "%s: NEMU = %#lx, GEM5 = %#lx\n",
+    //         "mstatus", nemu_mstatus, gem5_mstatus);
+
+    if (inst->numDestRegs() > 0) {
+        const auto &dest = inst->staticInst->destRegIdx(0);
+        auto dest_tag = dest.index() + dest.isFloatReg() * 32;
+
+        auto gem5_val = inst->getResult().asIntegerNoAssert();
+        auto nemu_val = nemu_reg[dest_tag];
+
+        DPRINTF(ValueCommit, "%s NEMU value: %#lx, GEM5 value: %#lx\n",
+                ::reg_name[dest_tag], nemu_val, gem5_val);
+
+        if ((dest.isFloatReg() || dest.isIntReg()) && !dest.isZeroReg()) {
+
+            if (gem5_val != nemu_val) {
+                if (dest.isFloatReg() && (gem5_val^nemu_val) == ((0xffffffffULL) << 32)) {
+                    DPRINTF(ValueCommit, "Difference might be caused by box, ignore it\n");
+
+                // } else if (0x40600000 <= inst->physEffAddr && inst->physEffAddr <= 0x4060000c) {
+                //     DPRINTF(ValueCommit, "Difference might be caused by read %s at %#lx, ignore it\n",
+                //             "serial", inst->physEffAddr);
+
+                } else {
+                    warn("Inst [sn:%lli]\n", inst->seqNum);
+                    warn("Diff at %s Ref value: %#lx, GEM5 value: %#lx\n",
+                            ::reg_name[dest_tag], nemu_val, gem5_val
+                        );
+                    if (!diff_at)
+                        diff_at = ValueDiff;
+                }
+            }
+        }
+    }
+    return std::make_pair(diff_at, npc_match);
 }
 
 ThreadID DummyTid = 0;

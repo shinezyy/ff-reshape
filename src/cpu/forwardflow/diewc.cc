@@ -44,6 +44,8 @@ void FFDIEWC<Impl>::tick() {
 
     clearAtStart();
 
+    ldstQueue.tick();
+
     // todo: Execute ready insts
     // execute();
 
@@ -154,7 +156,7 @@ void FFDIEWC<Impl>::tryVerifyTailLoads()
     unsigned count = 0;
     for (const DynInstPtr &inst: instsToCommit) {
         DPRINTF(NoSQSMB, "Verifying\n");
-        if (inst->isStore() || inst->isReadBarrier() || inst->isWriteBarrier()) {
+        if (inst->isGeneralStore() || inst->isReadBarrier() || inst->isWriteBarrier()) {
             DPRINTF(NoSQSMB || Debug::FFCommit, "Break verifying because encountered store\n");
             break;
         }
@@ -177,26 +179,41 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(const DynInstPtr &tail, bool is_tail) {
                 tail->seqNum, verifiedTailLoad);
         bool skip_verify;
 
+
+        int32_t mem_size = std::max((int32_t) tail->getMemSize(), (int32_t) tail->effSize);
         if (tail->bypassCanceled) {
             skip_verify = false;
 
-        } else if (tail->isRVAmoLoadHalf() || tail->isLoadReserved()) {
+        } else if (tail->isAtomic() || tail->isLoadReserved()) {
             // AMO load and LR are not verifiable
-            DPRINTF(NoSQSMB, "AMO load/ LR encountered\n");
+            DPRINTF(NoSQSMB, "AMO / LR encountered\n");
             break_verif = true;
             skip_verify = true;
 
         } else {
-            if (!tail->memPredHistory->updated) {
-                skip_verify = mDepPred->checkAddr(tail->seqNum,
-                        tail->memPredHistory->bypass,
-                        tail->physEffAddr, 0,
-                        tail->effSize, tail->seqNVul);
+
+            bool translated = tail->translationCompleted();
+            bool ready = !tail->numBusyOps();
+            if (translated) {
+                if (!tail->memPredHistory->updated) {
+                    skip_verify = mDepPred->checkAddr(tail->seqNum,
+                            tail->memPredHistory->bypass,
+                            tail->physEffAddr, 0,
+                            mem_size, tail->seqNVul);
+                } else {
+                    DPRINTF(NoSQSMB, "memPredHistory is record! maybe violation detected, break\n");
+                    skip_verify = false;
+                    break_verif = true;
+                    return break_verif;
+                }
             } else {
-                DPRINTF(NoSQSMB, "memPredHistory is record! maybe violation detected, break\n");
-                skip_verify = false;
-                break_verif = true;
-                return break_verif;
+                if (ready) {
+                    DPRINTF(NoSQSMB, "Translation not completed yet, we cannot check bypass\n");
+                    break_verif = false;
+                    return break_verif;
+                } else { // not ready, let reExec to check its state
+                    skip_verify = false;
+                }
             }
         }
 
@@ -232,7 +249,7 @@ bool FFDIEWC<Impl>::tryVerifyTailLoad(const DynInstPtr &tail, bool is_tail) {
 
         } else if (!ldstQueue.numStoresToWB(DummyTid)){
             DPRINTF(NoSQSMB, "Did not skip verifying load [%lu] @ 0x%lx size: %u\n",
-                    tail->seqNum, tail->physEffAddr, tail->effSize);
+                    tail->seqNum, tail->physEffAddr, mem_size);
             auto [sent_reexec, canceled_bypassing] = dq.reExecTailLoad(tail, is_tail);
             if (sent_reexec) {
                 verifiedTailLoad = tail->seqNum;
@@ -365,7 +382,7 @@ void FFDIEWC<Impl>::dispatch() {
                                "to LQ = %d",
                         inst->seqNum, toAllocation->diewcInfo.dispatchedToLQ);
             }
-            if (inst->isStore()) {
+            if (inst->isGeneralStore()) {
                 toAllocation->diewcInfo.dispatchedToSQ++;
             }
             if (!inst->isForwarder()) {
@@ -385,7 +402,7 @@ void FFDIEWC<Impl>::dispatch() {
         }
 
         if ((inst->isLoad() && ldstQueue.lqFull()) ||
-            (inst->isStore() && ldstQueue.sqFull())) {
+            (inst->isGeneralStore() && ldstQueue.sqFull())) {
             if (inst->isLoad()) {
                 ++lqFullEvents;
             } else {
@@ -414,7 +431,28 @@ void FFDIEWC<Impl>::dispatch() {
         DPRINTF(DIEWC||Debug::RSProbe1, "Dispatching inst[%llu] %s PC: %s\n",
                 inst->seqNum, inst->staticInst->disassemble(inst->instAddr()),
                 inst->pcState());
-        if (inst->isLoad()) {
+        if (inst->isAtomic()) {
+            DPRINTF(IEW, "Dispatch: Atomic instruction "
+                    "encountered, adding to LSQ.\n");
+
+            ldstQueue.insertStore(inst);
+            ++dispStores;
+
+            mDepPred->addNewStore(inst->dqPosition, inst->seqNum);
+
+            // AMOs need to be set as "canCommit()"
+            // so that commit can process them when they reach the
+            // head of commit.
+            inst->setCanCommit();
+            std::tie(jumped, pair) = dq.insertNonSpec(inst);
+            setupPointerLink(inst, jumped, pair);
+            normally_add_to_dq = false;
+
+            ++dispNonSpecInsts;
+
+            toAllocation->diewcInfo.dispatchedToSQ++;
+
+        } else if (inst->isLoad()) {
             ldstQueue.insertLoad(inst);
             ++dispaLoads;
 
@@ -564,6 +602,7 @@ void FFDIEWC<Impl>::dispatch() {
         DPRINTF(DIEWC || Debug::FFDisp, "DIEWC blocked because instructions are not used up\n");
         block();
         toAllocation->diewcUnblock = false;
+        toDispNotEmpty++;
     }
 
     if (dispatchStatus == Idle && dispatched) {
@@ -588,6 +627,9 @@ void FFDIEWC<Impl>::setupPointerLink(const FFDIEWC::DynInstPtr &inst, bool jumpe
                 DPRINTF(NoSQSMB, "SMB pair:" ptrfmt " to " ptrfmt "is overridden\n",
                         extptr(last_pair.dest), extptr(last_pair.payload));
                 pairs.pop_back();
+
+                // override prediction
+                inst->memPredHistory->bypass = false;
             }
         }
         insertPointerPairs(pairs);
@@ -604,6 +646,10 @@ void FFDIEWC<Impl>::setupPointerLink(const FFDIEWC::DynInstPtr &inst, bool jumpe
         inst->memPredHistory->bypass = false;
 
     } else {
+        const auto &last_pair = pairs.back();
+        if (pairs.size() && last_pair.isBypass) {
+            setOldestFw(last_pair.dest);
+        }
         DPRINTF(NoSQSMB, "Barrier pair is invalid\n");
         insertPointerPairs(pairs);
     }
@@ -660,6 +706,7 @@ bool FFDIEWC<Impl>::checkStall() {
         return true;
     }
     if (dq.stallToUnclog()) {
+        unclogEvents++;
         DPRINTF(DIEWC, "block because dq unclogging\n");
         return true;
     }
@@ -772,7 +819,9 @@ FFDIEWC<Impl>::
         if (head_inst->isNonSpeculative() || head_inst->isLoadReserved() ||
             head_inst->isStoreConditional() ||
             head_inst->isReadBarrier() || head_inst->isWriteBarrier() ||
-            (head_inst->isLoad() && head_inst->strictlyOrdered())) {
+            (head_inst->isLoad() && head_inst->strictlyOrdered()) ||
+            head_inst->isAtomic()
+            ) {
 
             DPRINTF(Commit || Debug::FFCommit, "Encountered a barrier or non-speculative "
                     "instruction [sn:%lli] at the head of the ROB, PC %s.\n",
@@ -803,6 +852,9 @@ FFDIEWC<Impl>::
                     head_inst->seqNum);
 
             HeadNotExec++;
+            if (head_inst->isLoad()) {
+                HeadIsLoad++;
+            }
             if (youngestExecuted == 0) {
                 youngestExecuted = head_inst->seqNum;
             }
@@ -813,11 +865,14 @@ FFDIEWC<Impl>::
             DPRINTF(CommitObserve, "youngestExecuted: %lu, head_inst: %lu\n",
                     youngestExecuted, head_inst->seqNum);
             if (youngestExecuted > head_inst->seqNum) {
-                headExecDistance += ((youngestExecuted - head_inst->seqNum) / 100);
+                headExecDistance += ((youngestExecuted - head_inst->seqNum));
             }
         }
         return false;
     }
+
+    DPRINTF(FFCommit, "head[sn:%llu] has fault: %i\n",
+            head_inst->seqNum, head_inst->getFault());
 
     if (head_inst->completeTick == curTick() - head_inst->fetchTick) {
         DPRINTF(FFCommit, "Inst[%llu] must not be committed and executed in "
@@ -828,13 +883,13 @@ FFDIEWC<Impl>::
                 head_inst->completeTick, curTick(), head_inst->fetchTick);
     }
 
-    if (head_inst->isStoreConditional() && !head_inst->isCompleted()) {
-        DPRINTF(FFCommit, "Inst[%llu] is store cond, and not completed yet,"
+    if ((head_inst->isStoreConditional() || head_inst->isAtomic()) && !head_inst->isCompleted()) {
+        DPRINTF(FFCommit, "Inst[%llu] is store cond / atomic, and not completed yet,"
                 " cannot commit\n", head_inst->seqNum);
         return false;
     }
 
-    if (head_inst->isLoad() && !head_inst->loadVerified) {
+    if (head_inst->isLoad() && (head_inst->getFault() == NoFault) && !head_inst->loadVerified) {
         headNotVerified++;
         DPRINTF(FFCommit, "Inst[%llu] is load but not verified yet,"
                           " cannot commit\n", head_inst->seqNum);
@@ -842,7 +897,8 @@ FFDIEWC<Impl>::
     }
 
     if (!dq.logicallyLT(dq.c.pointer2uint(head_inst->dqPosition), oldestForwarded) &&
-            !(head_inst->isStoreConditional() || head_inst->isSerializeAfter())) {
+            !(head_inst->isStoreConditional() || head_inst->isSerializeAfter()
+                || head_inst->getFault() != NoFault)) {
         DPRINTF(FFCommit, "Inst[%llu] @(%i %i) is forwarded recently,"
                           " and cannot be committed right now\n",
                           head_inst->seqNum, head_inst->dqPosition.bank,
@@ -850,7 +906,7 @@ FFDIEWC<Impl>::
         return false;
     }
 
-    if (head_inst->numDestRegs() && !head_inst->receivedDest) {
+    if (head_inst->numDestRegs() && !head_inst->receivedDest && head_inst->getFault() == NoFault) {
         DPRINTF(FFCommit, "Instruction[%lu] has not obtained its value from "
                 "interconnect network\n", head_inst->seqNum);
         return false;
@@ -869,10 +925,14 @@ FFDIEWC<Impl>::
     Fault inst_fault = head_inst->getFault();
 
     // Stores mark themselves as completed.
-    if (head_inst->isStore() && inst_fault == NoFault) {
+    if (head_inst->isGeneralStore() && inst_fault == NoFault) {
         head_inst->setCompleted();
 
-        mDepPred->commitStore(head_inst->physEffAddr, head_inst->effSize,
+        int32_t mem_size = head_inst->getMemSize();
+        if (head_inst->getMemSize() == 0) {
+            mem_size = head_inst->effSize;
+        }
+        mDepPred->commitStore(head_inst->physEffAddr, mem_size,
                               head_inst->storeSeq, head_inst->dqPosition);
 
         mDepPred->removeStore(head_inst->seqNum);
@@ -934,9 +994,10 @@ FFDIEWC<Impl>::
         // Generate trap squash event.
         generateTrapEvent(DummyTid, inst_fault);
         return false;
+    } else {
+        DPRINTF(Commit, "Instruction [sn:%lli] has no fault\n",
+                head_inst->seqNum);
     }
-
-    updateComInstStats(head_inst);
 
     if (head_inst->isLoad()) {
         mDepPred->commitLoad(head_inst->physEffAddr,
@@ -945,8 +1006,8 @@ FFDIEWC<Impl>::
     }
 
     if (FullSystem) {
-        panic("FF does not consider FullSystem yet\n");
     }
+
     DPRINTF(Commit || Debug::FFCommit, "Committing instruction with [sn:%lli] PC %s @DQ(%d %d)\n",
             head_inst->seqNum, head_inst->pcState(),
             head_inst->dqPosition.bank, head_inst->dqPosition.index);
@@ -1019,9 +1080,7 @@ FFDIEWC<Impl>::
     }
 #endif
 
-    // If this was a store, record it for this cycle.
-    if (head_inst->isStore())
-        committedStores = true;
+    updateComInstStats(head_inst);
 
     // Return true to indicate that we have committed an instruction.
     return true;
@@ -1094,7 +1153,13 @@ FFDIEWC<Impl>::commitInsts()
         }
         if (!head_inst->readyToCommit()) {
             DPRINTF(Commit || Debug::FFCommit, "Break commit because oldest inst is not ready to commit\n");
-            HeadNotExec++;
+            HeadNotReadyToCommit++;
+            if (head_inst->isLoad()) {
+                HeadIsLoad++;
+                if (!head_inst->translationCompleted()) {
+                    HeadIsTLBDelayed++;
+                }
+            }
             if (youngestExecuted == 0) {
                 youngestExecuted = head_inst->seqNum;
             }
@@ -1106,7 +1171,7 @@ FFDIEWC<Impl>::commitInsts()
             DPRINTF(CommitObserve, "youngestExecuted: %lu, head_inst: %lu\n",
                     youngestExecuted, head_inst->seqNum);
             if (youngestExecuted > head_inst->seqNum) {
-                headExecDistance += ((youngestExecuted - head_inst->seqNum) / 100);
+                headExecDistance += ((youngestExecuted - head_inst->seqNum));
             }
             break;
         }
@@ -1523,7 +1588,7 @@ FFDIEWC<Impl>::squashInFlight()
         if (skidBuffer.front()->isLoad()) {
             toAllocation->diewcInfo.dispatchedToLQ++;
         }
-        if (skidBuffer.front()->isStore()) {
+        if (skidBuffer.front()->isGeneralStore()) {
             toAllocation->diewcInfo.dispatchedToSQ++;
         }
 
@@ -1549,7 +1614,7 @@ void FFDIEWC<Impl>::clearAllocatedInsts() {
         if (insts.front()->isLoad()) {
             toAllocation->diewcInfo.dispatchedToLQ++;
         }
-        if (insts.front()->isStore()) {
+        if (insts.front()->isGeneralStore()) {
             toAllocation->diewcInfo.dispatchedToSQ++;
         }
         if (!insts.front()->isForwarder()) {
@@ -1676,6 +1741,7 @@ void FFDIEWC<Impl>::cacheUnblocked()
 template<class Impl>
 void FFDIEWC<Impl>::blockMemInst(const DynInstPtr &inst)
 {
+    CacheBlockCount++;
     dq.blockMemInst(inst);
 }
 
@@ -1688,7 +1754,7 @@ void FFDIEWC<Impl>::wakeCPU()
 template<class Impl>
 void FFDIEWC<Impl>::instToWriteback(const DynInstPtr &inst)
 {
-    assert(inst->isLoad() || inst->isStoreConditional());
+    assert(inst->isLoad() || inst->isStoreConditional() || inst->isAtomic());
     inst->setCanCommit();
     // assert(inst->sfuWrapper);
     // inst->sfuWrapper->markWb();
@@ -1709,9 +1775,11 @@ void FFDIEWC<Impl>::instToWriteback(const DynInstPtr &inst)
 
     if (violation) {
         inst->memPredHistory->willSquash = true;
-        fetchRedirect = true;
-        ++memOrderViolationEvents;
-        squashDueToMemMissPred(inst);
+        if (commitStatus != TrapPending) {
+            fetchRedirect = true;
+            ++memOrderViolationEvents;
+            squashDueToMemMissPred(inst);
+        }
     } else {
         dq.writebackLoad(inst);
     }
@@ -1754,9 +1822,10 @@ void FFDIEWC<Impl>::instToWriteback(const DynInstPtr &inst)
                                   << inst->memPredHistory->patternInfo.localHistory << "\n";
                     }
                 }
+                int32_t mem_size = std::max((int32_t) inst->getMemSize(), (int32_t) inst->effSize);
                 mDepPred->checkSilentViolation(
                         inst->seqNum,
-                        inst->instAddr(), inst->physEffAddr, inst->effSize,
+                        inst->instAddr(), inst->physEffAddr, mem_size,
                         cell,
                         ssn_dist, dq_dist,
                         *(inst->memPredHistory));
@@ -1958,8 +2027,9 @@ void FFDIEWC<Impl>::checkMisprediction(const DynInstPtr &inst)
 template<class Impl>
 void FFDIEWC<Impl>::squashDueToBranch(const DynInstPtr &inst)
 {
-    if (!toNextCycle->diewc2diewc.squash ||
-            inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum) {
+    if ((!toNextCycle->diewc2diewc.squash ||
+            inst->seqNum <= toNextCycle->diewc2diewc.squashedSeqNum)
+            && (commitStatus != TrapPending)) {
         toNextCycle->diewc2diewc.squash = true;
         toNextCycle->diewc2diewc.doneSeqNum = inst->seqNum;
         toNextCycle->diewc2diewc.squashedSeqNum = inst->seqNum;
@@ -2274,6 +2344,10 @@ void FFDIEWC<Impl>::regStats()
         .name(name() + ".FUContentionDelay")
         .desc("FUContentionDelay");
 
+    HeadNotReadyToCommit
+        .name(name() + ".HeadNotReadyToCommit")
+        .desc("HeadNotReadyToCommit")
+        ;
     HeadNotExec
         .name(name() + ".HeadNotExec")
         .desc("HeadNotExec")
@@ -2286,7 +2360,7 @@ void FFDIEWC<Impl>::regStats()
         .name(name() + ".meanHeadExecDistance")
         .desc("meanHeadExecDistance")
         ;
-    meanHeadExecDistance = headExecDistance / HeadNotExec;
+    meanHeadExecDistance = headExecDistance / (HeadNotReadyToCommit + HeadNotExec);
 
     readyExecDelayTicks
         .name(name() + ".readyExecDelayTicks")
@@ -2308,7 +2382,41 @@ void FFDIEWC<Impl>::regStats()
             .name(name() + ".headNotVerified")
             .desc("headNotVerified")
             ;
+    DQOccupied
+        .name(name() + ".DQOccupied")
+        .desc("DQOccupied")
+        ;
+    DQUtil
+        .name(name() + ".DQUtil")
+        .desc("DQUtil")
+        ;
+    DQUtil = DQOccupied / cpu->baseStats.numCycles;
 
+    unclogEvents
+        .name(name() + ".DQStallEvents")
+        .desc("DQUnclogEvents")
+        ;
+
+    toDispNotEmpty
+        .name(name() + ".toDispNotEmpty")
+        .desc("toDispNotEmpty")
+        ;
+    cannotResetHeadWhenDQFull
+        .name(name() + ".cannotResetHeadWhenDQFull")
+        .desc("cannotResetHeadWhenDQFull")
+        ;
+    HeadIsLoad
+        .name(name() + ".HeadIsLoad")
+        .desc("HeadIsLoad")
+        ;
+    HeadIsTLBDelayed
+        .name(name() + ".HeadIsTLBDelayed")
+        .desc("HeadIsTLBDelayed")
+        ;
+    CacheBlockCount
+        .name(name() + ".CacheBlockCount")
+        .desc("CacheBlockCount")
+        ;
 }
 
 template<class Impl>
@@ -2347,7 +2455,18 @@ void FFDIEWC<Impl>::executeInst(const DynInstPtr &inst)
     Fault fault = NoFault;
 
     if (inst->isMemRef()) {
-        if (inst->isLoad()) {
+        DPRINTF(DIEWC || Debug::FFExec, "Execute: Calculating address for memory "
+                "reference.\n");
+
+        if (inst->isAtomic()) {
+            fault = ldstQueue.executeStore(inst);
+            if (inst->isTranslationDelayed() && fault == NoFault) {
+                DPRINTF(IEW || Debug::FFExec, "Execute: Delayed translation, deferring atomic "
+                        "store.\n");
+                dq.deferMemInst(inst);
+                return;
+            }
+        } else if (inst->isLoad()) {
             fault = ldstQueue.executeLoad(inst);
 
             if (inst->isTranslationDelayed() &&
@@ -2375,6 +2494,12 @@ void FFDIEWC<Impl>::executeInst(const DynInstPtr &inst)
                 dq.deferMemInst(inst);
                 return;
             }
+
+            if (fault != NoFault) {
+                assert(inst->getFault() != NoFault);
+            }
+
+            DPRINTF(DIEWC, "inst[sn:%llu] has fault: %i\n", inst->seqNum, inst->getFault());
 
             // If the store had a fault then it may not have a mem req
             if (fault != NoFault || !inst->readPredicate() ||
@@ -2510,11 +2635,11 @@ FFDIEWC<Impl>::squashDueToMemMissPred(const DynInstPtr &violator)
 
         if (!youngest_cpted_inst_seq) {
             squashAll();
-             // Where to find a cpt hint?
-             cptHint = true;
-             toCheckpoint = violator->instAddr() - 4;
-             DPRINTF(FFSquash, "Hint to checkpoint on pc: 0x%llx next time"
-                     " in case mem violation\n", toCheckpoint);
+            // Where to find a cpt hint?
+            cptHint = true;
+            toCheckpoint = violator->instAddr() - 4;
+            DPRINTF(FFSquash, "Hint to checkpoint on pc: 0x%llx next time"
+                    " in case mem violation\n", toCheckpoint);
 
         } else {
             toNextCycle->diewc2diewc.squash = true;
@@ -2612,6 +2737,7 @@ template<class Impl>
 void FFDIEWC<Impl>::clearAtEnd()
 {
     dq.endCycle();
+    queueMonitor();
 }
 
 template<class Impl>
@@ -2633,6 +2759,7 @@ void FFDIEWC<Impl>::checkDQHalfSquash()
 
         && (!dqSquashing || victim_seq <= dqSquashSeq)
         // more primary than processing squashing
+        && (commitStatus != TrapPending)
         ) {
 
         InstSeqNum youngest_cpted_inst_seq = archState.getYoungestCPTBefore(victim_seq);
@@ -2751,8 +2878,13 @@ FFDIEWC<Impl>::tryResetRef()
 {
     if (dq.numInFlightFw() == 0) {
         resetOldestFw();
-    } else if (Debug::DQV2 || Debug::FFCommit) {
-        dq.dumpFwQSize();
+    } else {
+        if (dq.isFull()) {
+            cannotResetHeadWhenDQFull++;
+        }
+        if (Debug::DQV2 || Debug::FFCommit) {
+            dq.dumpFwQSize();
+        }
     }
 }
 
@@ -2830,6 +2962,19 @@ void FFDIEWC<Impl>::squashLoad(const FFDIEWC::DynInstPtr &inst)
     mDepPred->squashLoad(inst->instAddr(), *(inst->memPredHistory));
 }
 
+template<class Impl>
+void
+FFDIEWC<Impl>::forceDefer(const FFDIEWC::DynInstPtr &bypass_load)
+{
+    dq.deferMemInst(bypass_load);
+}
+
+template<class Impl>
+void
+FFDIEWC<Impl>::queueMonitor()
+{
+    DQOccupied += dq.numInDQ();
+}
 
 }
 

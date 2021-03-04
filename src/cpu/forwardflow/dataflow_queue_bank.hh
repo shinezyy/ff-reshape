@@ -192,6 +192,9 @@ public:
     Stats::Scalar RegReadRxBuf;
     Stats::Scalar QueueReadReadyInstBuf;
     Stats::Scalar QueueWriteReadyInstBuf;
+
+  private:
+    uint64_t assignBypassVal(const DynInstPtr &inst, uint64_t val);
 };
 
 }

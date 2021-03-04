@@ -2,6 +2,7 @@
 // Created by zyy on 2020/1/15.
 //
 
+#include "arch/riscv/registers.hh"
 #include "dataflow_queue_bank.hh"
 #include "debug/DQ.hh"
 #include "debug/DQGDL.hh"
@@ -254,7 +255,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         if (!ptr.hasVal) {
             DPRINTFR(DQWake, "\n");
         } else {
-            DPRINTFR(DQWake, "with value: %ld (%lu)\n", ptr.val.i, ptr.val.i);
+            DPRINTFR(DQWake, "with value: %lu (%#lx)\n", ptr.val.i, ptr.val.i);
         }
 
         if (inst->dqPosition.term != ptr.term) {
@@ -298,6 +299,10 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                     inst->seqNum);
             if (!inst->inReadyQueue && !inst->fuGranted) {
                 first = inst;
+            } else if (inst->isNormalBypass()) {
+                DPRINTF(DQWake, "Bypassing load inst [%llu] received unblock/translated pkt, unexpected!\n",
+                        inst->seqNum);
+                panic("Do not wakeup bypassing load after it was blocked/delayed\n");
             } else {
                 DPRINTF(DQWake, "But ignore it because inst [%llu] has already been granted\n",
                         inst->seqNum);
@@ -334,6 +339,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
                 handle_wakeup = true;
                 inst->loadVerifying = true;
                 inst->fuGranted = false;
+                inst->translationCompleted(false);
             } else {
                 DPRINTF(DQWake, "Inst [%llu] has already been verified\n", inst->seqNum);
             }
@@ -341,7 +347,7 @@ DataflowQueueBank<Impl>::wakeupInstsFromBank()
         } else if (ptr.wkType == WKPointer::WKBypass && inst->isNormalBypass()) {
             assert(op == memBypassOp);
             inst->opReady[op] = true;
-            inst->bypassVal = ptr.val;
+            inst->bypassVal.i = assignBypassVal(inst, ptr.val.i);
             inst->orderDepReady = true;
             handle_wakeup = true;
 
@@ -588,7 +594,7 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                 if (inst->isNormalBypass() && (inst->bypassOp == op) && inst->pointers[0].valid) {
                     auto wk_ptr = WKPointer(inst->pointers[0]);
                     wk_ptr.hasVal = true;
-                    wk_ptr.val = ptr.val;
+                    wk_ptr.val.i = assignBypassVal(inst, ptr.val.i);
                     DPRINTF(DQWake,
                             "Bypassing load from " ptrfmt " to " ptrfmt "\n",
                             extptr(ptr), extptr(wk_ptr));
@@ -601,8 +607,9 @@ DataflowQueueBank<Impl>::readPointersFromBank()
                     wk_ptr.val = ptr.val;
                     wk_ptr.wkType = WKPointer::WKBypass;
                     DPRINTF(DQWake,
-                            "Bypassing from store" ptrfmt "to load" ptrfmt "\n",
+                            "Bypassing from store" ptrfmt "to load" ptrfmt,
                             extptr(ptr), extptr(wk_ptr));
+                    DPRINTFR(DQWake, "with value: %lu (%#lx)\n", ptr.val.i, ptr.val.i);
                     dq->extraWakeup(wk_ptr);
                 }
             }
@@ -955,6 +962,60 @@ void DataflowQueueBank<Impl>::mergeLocalWKPointers()
         }
     }
     RegWriteRxBuf += nOps;
+}
+
+template<class Impl>
+uint64_t
+DataflowQueueBank<Impl>::assignBypassVal(const DynInstPtr &inst, uint64_t val)
+{
+    uint64_t res;
+    if (inst->isSignedLoad()) {
+        switch (inst->memSize) {
+            case 1: {
+                        int8_t narrow = val;
+                        res = (uint64_t) ((int64_t) narrow);
+                        break;
+                    }
+            case 2: {
+                        int16_t narrow = val;
+                        res = (uint64_t) ((int64_t) narrow);
+                        break;
+                    }
+            case 4: {
+                        int32_t narrow = val;
+                        res = (uint64_t) ((int64_t) narrow);
+                        break;
+                    }
+            default:
+                    panic("Unexpected width: %i\n", inst->memSize);
+        }
+    } else if (inst->isUnsignedNarrowLoad()) {
+        switch (inst->memSize) {
+            case 1: {
+                        uint8_t narrow = val;
+                        res = (uint64_t) narrow;
+                        break;
+                    }
+            case 2: {
+                        uint16_t narrow = val;
+                        res = (uint64_t) narrow;
+                        break;
+                    }
+            case 4: {
+                        uint32_t narrow = val;
+                        res = (uint64_t) narrow;
+                        break;
+                    }
+            default:
+                    panic("Unexpected width: %i\n", inst->memSize);
+        }
+    } else if (inst->isFloat32Op()) {
+        uint32_t narrow = val;
+        res = RiscvISA::freg(RiscvISA::f32(narrow)).v;
+    } else {
+        res = val;
+    }
+    return res;
 }
 
 }

@@ -84,7 +84,7 @@ struct FFCPUImpl
     };
 
     enum {
-        MaxBanks = 4,
+        MaxBanks = 8,
         MaxOps = 4
     };
     enum {

@@ -104,6 +104,8 @@ class LSQUnit
         DynInstPtr inst;
         /** The request. */
         LSQRequest* req;
+        /** The verifying request. */
+        LSQRequest* verifyReq;
         /** The size of the operation. */
         uint32_t _size;
         /** Valid entry. */
@@ -111,7 +113,8 @@ class LSQUnit
       public:
         /** Constructs an empty store queue entry. */
         LSQEntry()
-            : inst(nullptr), req(nullptr), _size(0), _valid(false)
+            : inst(nullptr), req(nullptr), verifyReq(nullptr),
+            _size(0), _valid(false)
         {
         }
 
@@ -122,6 +125,11 @@ class LSQUnit
                 req->freeLSQEntry();
                 req = nullptr;
             }
+
+            if (verifyReq != nullptr) {
+                verifyReq->freeLSQEntry();
+                verifyReq = nullptr;
+            }
         }
 
         void
@@ -129,9 +137,17 @@ class LSQUnit
         {
             inst = nullptr;
             if (req != nullptr) {
+                DPRINTFR(LSQUnit, "Clearing main req %#lx\n", req);
                 req->freeLSQEntry();
             }
             req = nullptr;
+
+            if (verifyReq != nullptr) {
+                DPRINTFR(LSQUnit, "Clearing verify req %#lx\n", verifyReq);
+                verifyReq->freeLSQEntry();
+            }
+            verifyReq = nullptr;
+
             _valid = false;
             _size = 0;
         }
@@ -145,7 +161,12 @@ class LSQUnit
             _size = 0;
         }
         LSQRequest* request() { return req; }
-        void setRequest(LSQRequest* r) { req = r; }
+        void setRequest(LSQRequest* r) {
+            req = r;
+        }
+        void setVerifyReq(LSQRequest* r) {
+            verifyReq = r;
+        }
         bool hasRequest() { return req != nullptr; }
         /** Member accessors. */
         /** @{ */
@@ -429,8 +450,8 @@ class LSQUnit
     {
         using LSQSenderState::alive;
       public:
-        LQSenderState(typename LoadQueue::iterator idx_)
-            : LSQSenderState(idx_->request(), true), idx(idx_) { }
+        LQSenderState(typename LoadQueue::iterator idx_, LSQRequest *req)
+            : LSQSenderState(req, true), idx(idx_) { }
 
         /** The LQ index of the instruction. */
         typename LoadQueue::iterator idx;
@@ -655,8 +676,14 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
     LQEntry& load_req = loadQueue[load_idx];
     const DynInstPtr& load_inst = load_req.instruction();
 
-    load_req.setRequest(req);
     assert(load_inst);
+    if (!load_inst->loadVerifying) {
+        DPRINTF(LSQUnit, "Set request for inst[sn:%llu]\n", load_inst->seqNum);
+        load_req.setRequest(req);
+    } else {
+        DPRINTF(LSQUnit, "Set verifying request for inst[sn:%llu]\n", load_inst->seqNum);
+        load_req.setVerifyReq(req);
+    }
 
     assert(!load_inst->isExecuted() || load_inst->loadVerifying);
 
@@ -762,6 +789,9 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
         load_inst->memData = new uint8_t[req->mainRequest()->getSize()];
     }
 
+    if (req->request()->getPaddr() < 0x80000000UL) {
+        req->request()->setFlags(Request::UNCACHEABLE);
+    }
 
     // hardware transactional memory
     if (req->mainRequest()->isHTMCmd()) {
@@ -779,17 +809,24 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
 
     // if we the cache is not blocked, do cache access
     if (req->senderState() == nullptr) {
+        DPRINTF(LSQUnit || Debug::NoSQSMB, "Setting sender state for inst[sn:%llu]\n",
+                load_inst->seqNum);
         LQSenderState *state = new LQSenderState(
-                loadQueue.getIterator(load_idx));
+                loadQueue.getIterator(load_idx), req);
         state->isLoad = true;
         state->inst = load_inst;
         state->isSplit = req->isSplit();
         req->senderState(state);
+    } else {
+        DPRINTF(LSQUnit || Debug::NoSQSMB, "Skip setting sender state\n");
     }
+    DPRINTF(LSQUnit, "Sending timing req %#lx\n", req);
     req->buildPackets();
     req->sendPacketToCache();
-    if (!req->isSent())
+    if (!req->isSent()) {
         iewStage->blockMemInst(load_inst);
+        DPRINTF(LSQUnit, "timing req %#lx is blocked\n", req);
+    }
 
     return NoFault;
 }

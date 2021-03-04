@@ -119,16 +119,19 @@ BaseDynInst<Impl>::initVars()
     fault = NoFault;
 
     savedReq = nullptr;
+    savedVerifyReq = nullptr;
+
+    memSize = staticInst->memSize;
 
 #ifndef NDEBUG
     ++cpu->instcount;
 
-    if (cpu->instcount > 3000) {
+    if (cpu->instcount > 10000) {
 #ifdef DEBUG
         cpu->dumpInsts();
         dumpSNList();
 #endif
-        assert(cpu->instcount <= 3000);
+        assert(cpu->instcount <= 10000);
     }
 
     DPRINTF(DynInst,
@@ -240,14 +243,6 @@ BaseDynInst<Impl>::eaSrcsReady() const
     return true;
 }
 
-template <class Impl>
-void
-BaseDynInst<Impl>::setSquashed()
-{
-    DPRINTF(DynInst, "inst[%llu] set squashed!\n", seqNum);
-    status.set(Squashed);
-}
-
 template<class Impl>
 void BaseDynInst<Impl>::setExecuted()
 {
@@ -257,15 +252,12 @@ void BaseDynInst<Impl>::setExecuted()
     wbCount++;
 }
 
-}
-
-
-
 template <class Impl>
 void
 BaseDynInst<Impl>::setSquashed()
 {
     status.set(Squashed);
+    DPRINTF(DynInst, "inst[%llu] set squashed!\n", seqNum);
 
     if (!isPinnedRegsRenamed() || isPinnedRegsSquashDone())
         return;
@@ -287,6 +279,7 @@ BaseDynInst<Impl>::setSquashed()
     setPinnedRegsSquashDone();
 }
 
+}
 
 
 #endif//__CPU_BASE_DYN_INST_IMPL_HH__

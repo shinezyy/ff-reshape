@@ -381,6 +381,29 @@ BaseO3DynInst<Impl>::readStoreValue()
         assert(indirectRegIndices.at(1).size() == 2); // identical register
         v = readIntRegOperand(nullptr, 0); // 0 is both base and src reg of store
     }
+    assert(0 < this->memSize && this->memSize <= 8);
+    switch(this->memSize) {
+        case 1: {
+                    uint8_t narrow = v;
+                    v = narrow;
+                    break;
+                }
+        case 2: {
+                    uint16_t narrow = v;
+                    v = narrow;
+                    break;
+                }
+        case 4: {
+                    uint32_t narrow = v;
+                    v = narrow;
+                    break;
+                }
+        case 8: {
+                    break;
+                }
+        default:
+            panic("Unexpected memSize: %u\n", this->memSize);
+    }
     return v;
 }
 

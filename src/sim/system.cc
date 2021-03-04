@@ -220,6 +220,7 @@ System::System(const Params &p)
       physmem(name() + ".physmem", p.memories, p.mmap_using_noreserve,
               p.shared_backstore,
               p.restore_from_gcpt,
+              p.gcpt_restorer_file,
               p.gcpt_file
               ),
       memoryMode(p.mem_mode),

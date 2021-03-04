@@ -1528,8 +1528,6 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
             hasCommit = true;
             readGem5Regs();
             gem5_reg[DIFFTEST_THIS_PC] = inst->instAddr();
-            extern uint8_t *pmemStart;
-            extern uint64_t pmemSize;
             ref_difftest_memcpy_from_dut(0x80000000, pmemStart, pmemSize);
             ref_difftest_setregs(gem5_reg);
         }
@@ -1955,7 +1953,6 @@ FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
     bool npc_match = false;
 
     difftest_step(&diff);
-    extern const char *reg_name[];
 
     auto gem5_pc = inst->instAddr();
     auto nemu_pc = nemu_reg[DIFFTEST_THIS_PC];

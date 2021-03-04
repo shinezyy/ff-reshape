@@ -96,12 +96,12 @@ DataflowQueues<Impl>::DataflowQueues(const DerivFFCPUParams *params,
         numPendingWakeups(0),
         numPendingWakeupMax(0),
 
-        PendingWakeupThreshold(params->PendingWakeupThreshold),
+        PendingWakeupThreshold(params->PendingWakeupThreshold * params->numDQGroups),
         PendingWakeupMaxThreshold(params->PendingWakeupMaxThreshold),
 
         numPendingFwPointers(0),
         numPendingFwPointerMax(0),
-        PendingFwPointerThreshold(params->PendingFwPointerThreshold),
+        PendingFwPointerThreshold(params->PendingFwPointerThreshold * params->numDQGroups),
         opPrioList{1, 2, 3, 0},
         gen(0xdeadbeef),
         randAllocator(0, nBanks * nOps),
@@ -124,7 +124,7 @@ DataflowQueues<Impl>::DataflowQueues(const DerivFFCPUParams *params,
     assert(MINWakeup + XBarWakeup + NarrowXBarWakeup + DediXBarWakeup == 1);
     // init inputs to omega networks
     for (unsigned b = 0; b < nBanks; b++) {
-        for (unsigned op = 0; op < nBanks; op++) {
+        for (unsigned op = 0; op < nOps; op++) {
             unsigned index = b * nOps + op;
             DQPacket<WKPointer> &dq_pkt = wakeup_requests[index];
             dq_pkt.valid = false;
@@ -155,8 +155,8 @@ DataflowQueues<Impl>::DataflowQueues(const DerivFFCPUParams *params,
 
         fu_req_ptrs[i] = &fu_requests[i];
     }
-    fuPointer[OpGroups::MultDiv] = std::vector<unsigned>{0, 4, 1, 5};
-    fuPointer[OpGroups::FPAdd] = std::vector<unsigned>{2, 6, 3, 7};
+    fuPointer[OpGroups::MultDiv] = std::vector<unsigned>{   0, 4, 1, 5, 0, 4, 1, 5};
+    fuPointer[OpGroups::FPAdd] = std::vector<unsigned>{     2, 6, 3, 7, 2, 6, 3, 7};
 
     resetState();
 
@@ -277,6 +277,7 @@ DataflowQueues<Impl>::coordinateFU(
 {
     // find another FU group with desired capability.
     DPRINTF(FUW, "Coordinating req %u.%u  with llb:%i\n", from/2, from%2, llBlocked);
+    unsigned high = from / (OpGroups::nOpGroups * 4); // 4 banks sharing FUs
     int type = from%2;
     int md = OpGroups::MultDiv,
         fa = OpGroups::FPAdd;
@@ -284,12 +285,13 @@ DataflowQueues<Impl>::coordinateFU(
     unsigned target;
     if (inst->opClass() == OpClass::IprAccess) {
         target = group_ipr;
+        panic("No IPC for RV!\n");
 
     } else if (type == md){ //OpGroups::MultDiv
-        target = fuPointer[md][fuMDIndex++];
+        target = fuPointer[md][fuMDIndex++] + high;
 
     } else { // type == fa
-        target = fuPointer[fa][fuFAIndex++];
+        target = fuPointer[fa][fuFAIndex++] + high;
     }
     DPRINTF(FUW || ObExec, "Routing inst[%lu] to %i\n", inst->seqNum, target);
     return std::make_pair(target, c->uint2Bits(target));
@@ -360,8 +362,7 @@ DataflowQueues<Impl>::findInst(InstSeqNum num) const
 template<class Impl>
 bool DataflowQueues<Impl>::wakeupQueueClogging() const
 {
-    bool res = numPendingWakeups >= PendingWakeupThreshold ||
-           numPendingWakeupMax >= PendingWakeupMaxThreshold;
+    bool res = numPendingWakeups >= PendingWakeupThreshold;
     if (res) {
         DPRINTF(DQ, "pending wakeup = %d, threshold = %d"
                     "pending wakeup (single queue) = %d, threshold = %d\n",
@@ -630,6 +631,10 @@ void DataflowQueues<Impl>::regStats()
     SRAMWritePointer
         .name(name() + ".SRAMWritePointer")
         .desc("SRAMWritePointer");
+
+    TailQueuingDelay
+        .name(name() + ".TailQueuingDelay")
+        .desc("TailQueuingDelay");
 }
 
 template<class Impl>
@@ -646,9 +651,11 @@ void DataflowQueues<Impl>::readPairQueueHeads()
             } else {
                 fw_pkt = forwardPointerQueue[i].front();
                 QueueReadPairBuf++;
-                DPRINTF(DQGOF, "Read valid pair:" ptrfmt "\n", extptr(fw_pkt.payload.dest));
+                DPRINTF(DQGOF, "Read valid pair:" ptrfmt " to fw pair Q [%i]\n",
+                        extptr(fw_pkt.payload.dest), i);
             }
         }
+        dumpPairPackets(insert_req_ptrs);
     }
 }
 
@@ -1317,10 +1324,18 @@ template<class Impl>
 void
 DataflowQueues<Impl>::countCycles(const typename Impl::DynInstPtr &inst, WKPointer *wk)
 {
+
     inst->ssrDelay = wk->ssrDelay;
     inst->queueingDelay = wk->queueTime;
     inst->pendingDelay = wk->pendingTime;
     KeySrcPacket++;
+
+    unsigned tail_i = top->getTailPtr();
+    unsigned inst_i = c->pointer2uint(inst->dqPosition);
+    int dist = (int) inst_i - (int) tail_i;
+    if (dist >= 0 and dist < 4) {
+        TailQueuingDelay += wk->queueTime;
+    }
 }
 
 template<class Impl>
@@ -1952,6 +1967,11 @@ void DataflowQueues<Impl>::pointerMeetsInst(
             inst->orderFulfilled();
     DPRINTF(DQWake, "pair is barrier: %i, barrier_dep_ready: %i\n", pair.isBarrier, barrier_dep_ready);
 
+    bool barrier_producer_ready = pair.isBarrier && (inst->isWriteBarrier() || inst->isReadBarrier())
+        && op == 0 && inst->orderFulfilled() && inst->fuGranted;
+    DPRINTF(DQWake, "pair is barrier: %i, barrier_producer_ready: %i\n",
+            pair.isBarrier, barrier_producer_ready);
+
     bool store_bypass_value_avail = !pair.isBarrier && !inst->dependOnBarrier &&
         inst->isNormalStore() && op == memBypassOp && inst->storeValueReady();
     value_available |= store_bypass_value_avail;
@@ -1961,13 +1981,14 @@ void DataflowQueues<Impl>::pointerMeetsInst(
 //   value_available  |= store_bypass_value_will_ready;
 
     bool wakeup_successor_before_exec =
-            load_bypass_value_avail || store_bypass_value_avail || barrier_dep_ready;
+            load_bypass_value_avail || store_bypass_value_avail
+            || barrier_dep_ready || barrier_producer_ready;
     DPRINTF(DQWake, "wakeup_successor_before_exec: %i\n", wakeup_successor_before_exec);
 
     bool cannot_deliver_to_fu = op == 0 && (inst->fuGranted || inst->loadVerifying);
     DPRINTF(DQWake, "cannot_deliver_to_fu: %i\n", cannot_deliver_to_fu);
 
-    if (value_available) {
+    if (value_available || barrier_producer_ready) {
         auto wk_ptr = WKPointer(pointer);
         wk_ptr.isFwExtra = true;
         wk_ptr.hasVal = true;
@@ -1984,8 +2005,11 @@ void DataflowQueues<Impl>::pointerMeetsInst(
                 // SMB
             }
 
-        } else if (barrier_dep_ready) {
+        } else if (barrier_dep_ready || barrier_producer_ready) {
             wk_ptr.hasVal = false;
+            if (barrier_producer_ready) {
+                wk_ptr.wkType = WKPointer::WKOrder;
+            }
 
         } else if (op == 0) {
             wk_ptr.val = inst->getDestValue();

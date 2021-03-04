@@ -278,6 +278,8 @@ class MemDepUnit
 
   private:
     void checkAndSquashBarrier(BarrierInfo &info, InstSeqNum squash_sn);
+
+    void checkAndCommitBarrier(InstSeqNum commit_sn);
 };
 
 }

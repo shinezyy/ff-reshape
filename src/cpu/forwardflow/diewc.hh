@@ -354,6 +354,8 @@ public:
 
     void regStats();
 
+    void queueMonitor();
+
         /** Sets the PC of a specific thread. */
     void pcState(const TheISA::PCState &val)
     { pc = val; }
@@ -465,6 +467,7 @@ public:
     Stats::Scalar pendingDelay;
     Stats::Scalar FUContentionDelay;
 
+    Stats::Scalar HeadNotReadyToCommit;
     Stats::Scalar HeadNotExec;
     Stats::Scalar headExecDistance;
     Stats::Formula meanHeadExecDistance;
@@ -491,6 +494,20 @@ public:
     Stats::Formula verifSkipRate;
 
     Stats::Scalar headNotVerified;
+
+    Stats::Scalar DQOccupied;
+    Stats::Formula DQUtil;
+
+    Stats::Scalar unclogEvents;
+
+    Stats::Scalar toDispNotEmpty;
+
+    Stats::Scalar cannotResetHeadWhenDQFull;
+
+    Stats::Scalar HeadIsLoad;
+    Stats::Scalar HeadIsTLBDelayed;
+
+    Stats::Scalar CacheBlockCount;
 
     ArchState *getArchState() {return &archState;}
 
@@ -573,6 +590,9 @@ public:
     void setupPointerLink(const DynInstPtr &inst, bool jumped, const PointerPair &pair);
   public:
     void squashLoad(const DynInstPtr &inst);
+
+    void forceDefer(const DynInstPtr &bypass_load);
+
 };
 
 
