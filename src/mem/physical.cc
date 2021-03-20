@@ -495,7 +495,7 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
 
     delete[] temp_page;
 
-    if (restoreFromGCpt) {
+    if (restoreFromGCpt && !gCptRestorerPath.empty()) {
         warn("Overriding Gcpt restorer\n");
 
         FILE *fp = fopen(gCptRestorerPath.c_str(), "rb");

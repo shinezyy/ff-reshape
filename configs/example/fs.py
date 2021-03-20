@@ -338,8 +338,11 @@ if options.generic_rv_cpt is not None:
     assert(buildEnv['TARGET_ISA'] == "riscv")
     test_sys.restore_from_gcpt = True
     test_sys.gcpt_file = options.generic_rv_cpt
-    assert(options.gcpt_restorer is not None)
-    test_sys.gcpt_restorer_file = options.gcpt_restorer
+    # assert(options.gcpt_restorer is not None)
+    if options.gcpt_restorer is None:
+        test_sys.gcpt_restorer_file = ""
+    else:
+        test_sys.gcpt_restorer_file = options.gcpt_restorer
 
 if len(bm) == 2:
     drive_sys = build_drive_system(np)
