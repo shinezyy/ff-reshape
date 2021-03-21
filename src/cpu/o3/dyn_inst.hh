@@ -98,6 +98,9 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     /** Initializes variables. */
     void initVars();
 
+    /** Function unit index of this inst. */
+    unsigned fu_idx;
+
   protected:
     /** Explicitation of dependent names. */
     using BaseDynInst<Impl>::cpu;
@@ -129,6 +132,16 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     int32_t commitTick;
     int32_t storeTick;
 #endif
+
+    void
+    setFuIdx(unsigned i) {
+        fu_idx = i;
+    }
+
+    int
+    getFuIdx() {
+        return fu_idx;
+    }
 
     /** Reads a misc. register, including any side-effects the read
      * might have as defined by the architecture.

@@ -306,7 +306,16 @@ class InstructionQueue
     //////////////////////////////////////
 
     /** List of all the instructions in the IQ (some of which may be issued). */
-    std::list<DynInstPtr> instList[Impl::MaxThreads];
+    typedef typename std::list<DynInstPtr> InstList;
+
+    /** We still use `instList` to simplify modifications from unified IQ
+     *  to distributed IQ.
+     */
+    InstList instList[Impl::MaxThreads];
+
+    /** Distributed IQ (each function unit has a distributed IQ). */
+    std::vector<InstList> distInstLists[Impl::MaxThreads];
+
 
     /** List of instructions that are ready to be executed. */
     std::list<DynInstPtr> instsToExecute;
@@ -341,10 +350,8 @@ class InstructionQueue
     typedef std::priority_queue<DynInstPtr, std::vector<DynInstPtr>, pqCompare>
     ReadyInstQueue;
 
-    /** List of ready instructions, per op class.  They are separated by op
-     *  class to allow for easy mapping to FUs.
-     */
-    ReadyInstQueue readyInsts[Num_OpClasses];
+    /** List of ready instructions, per function unit. */
+    std::vector<ReadyInstQueue> readyInsts;
 
     /** List of non-speculative instructions that will be scheduled
      *  once the IQ gets a signal from commit.  While it's redundant to
@@ -359,31 +366,32 @@ class InstructionQueue
 
     /** Entry for the list age ordering by op class. */
     struct ListOrderEntry {
-        OpClass queueType;
+        int fu_idx;
         InstSeqNum oldestInst;
     };
 
     /** List that contains the age order of the oldest instruction of each
      *  ready queue.  Used to select the oldest instruction available
      *  among op classes.
-     *  @todo: Might be better to just move these entries around instead
-     *  of creating new ones every time the position changes due to an
-     *  instruction issuing.  Not sure std::list supports this.
      */
-    std::list<ListOrderEntry> listOrder;
+    typedef typename std::list<ListOrderEntry> ListOrder;
+    std::vector<ListOrder> listOrders;
 
     typedef typename std::list<ListOrderEntry>::iterator ListOrderIt;
 
-    /** Tracks if each ready queue is on the age order list. */
-    bool queueOnList[Num_OpClasses];
+    /** Tracks if each ready queue is on the age order list (per function unit). */
+    std::vector<bool> queueOnList;
 
-    /** Iterators of each ready queue.  Points to their spot in the age order
+    /** Iterators of each ready queue (per function unit).  Points to their spot in the age order
      *  list.
      */
-    ListOrderIt readyIt[Num_OpClasses];
+    std::vector<ListOrderIt> readyIt;
 
-    /** Add an op class to the age order list. */
-    void addToOrderList(OpClass op_class);
+    /** Add an inst to its dist-IQ's age order list. */
+    void addToOrderList(int fu_idx);
+
+    /** Number of functions units. */
+    unsigned numFU;
 
     /**
      * Called when the oldest instruction has been removed from a ready queue;

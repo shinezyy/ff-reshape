@@ -43,7 +43,7 @@ from m5.params import *
 from m5.objects.FuncUnit import *
 
 class JumpUnit(FUDesc):
-    opList = [ OpDesc(opClass='Jump'), OpDesc(opClass='Auipc') ]
+    opList = [ OpDesc(opClass='Jump'), OpDesc(opClass='Auipc'), OpDesc(opClass='No_OpClass')]
     count = 1
 
 class IntALU(FUDesc):

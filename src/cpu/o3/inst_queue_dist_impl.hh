@@ -96,6 +96,12 @@ InstructionQueue<Impl>::InstructionQueue(O3CPU *cpu_ptr, IEW *iew_ptr,
       iqIOStats(cpu)
 {
     assert(fuPool);
+    numFU = fuPool->size();
+
+    readyInsts = std::vector<ReadyInstQueue>(numFU);
+    listOrders = std::vector<ListOrder>(numFU);
+    queueOnList = std::vector<bool>(numFU);
+    readyIt = std::vector<ListOrderIt>(numFU);
 
     // Set the number of total physical registers
     // As the vector registers have two addressing modes, they are added twice
@@ -112,10 +118,12 @@ InstructionQueue<Impl>::InstructionQueue(O3CPU *cpu_ptr, IEW *iew_ptr,
     // Resize the register scoreboard.
     regScoreboard.resize(numPhysRegs);
 
-    //Initialize Mem Dependence Units
     for (ThreadID tid = 0; tid < Impl::MaxThreads; tid++) {
+        //Initialize Mem Dependence Units
         memDepUnit[tid].init(params, tid, cpu_ptr);
         memDepUnit[tid].setIQ(this);
+        //Initialize Distributed Inst Queue
+        distInstLists[tid] = std::vector<InstList>(numFU);
     }
 
     resetState();
@@ -376,6 +384,9 @@ InstructionQueue<Impl>::resetState()
     for (ThreadID tid = 0; tid < Impl::MaxThreads; tid++) {
         count[tid] = 0;
         instList[tid].clear();
+        for (int idx = 0; idx < numFU; ++idx){
+            distInstLists[tid][idx].clear();
+        }
     }
 
     // Initialize the number of free IQ entries.
@@ -394,14 +405,14 @@ InstructionQueue<Impl>::resetState()
         squashedSeqNum[tid] = 0;
     }
 
-    for (int i = 0; i < Num_OpClasses; ++i) {
+    for (int i = 0; i < numFU; ++i) {
         while (!readyInsts[i].empty())
             readyInsts[i].pop();
         queueOnList[i] = false;
-        readyIt[i] = listOrder.end();
+        readyIt[i] = listOrders[i].end();
+        listOrders[i].clear();
     }
     nonSpecInsts.clear();
-    listOrder.clear();
     deferredMemInsts.clear();
     blockedMemInsts.clear();
     retryMemInsts.clear();
@@ -538,12 +549,8 @@ template <class Impl>
 bool
 InstructionQueue<Impl>::hasReadyInsts()
 {
-    if (!listOrder.empty()) {
-        return true;
-    }
-
-    for (int i = 0; i < Num_OpClasses; ++i) {
-        if (!readyInsts[i].empty()) {
+    for (int i = 0; i < numFU; ++i) {
+        if (!listOrders[i].empty() || !readyInsts[i].empty()){
             return true;
         }
     }
@@ -565,12 +572,21 @@ InstructionQueue<Impl>::insert(const DynInstPtr &new_inst)
     // Make sure the instruction is valid
     assert(new_inst);
 
-    DPRINTF(IQ, "Adding instruction [sn:%llu] PC %s to the IQ.\n",
-            new_inst->seqNum, new_inst->pcState());
 
     assert(freeEntries != 0);
 
     instList[new_inst->threadNumber].push_back(new_inst);
+
+    // For now, we don't add any constraints here
+    OpClass op_class = new_inst->opClass();
+    int fu_idx = fuPool->allocUnit(op_class);
+    new_inst->setFuIdx(fu_idx);
+    if (fu_idx > FUPool::NoFreeFU){
+        distInstLists[new_inst->threadNumber][fu_idx].push_back(new_inst);
+    }
+
+    DPRINTF(IQ, "Adding instruction [sn:%llu] PC %s fuidx:%i to the IQ.\n",
+            new_inst->seqNum, new_inst->pcState(), fu_idx);
 
     --freeEntries;
 
@@ -615,13 +631,21 @@ InstructionQueue<Impl>::insertNonSpec(const DynInstPtr &new_inst)
 
     nonSpecInsts[new_inst->seqNum] = new_inst;
 
-    DPRINTF(IQ, "Adding non-speculative instruction [sn:%llu] PC %s "
-            "to the IQ.\n",
-            new_inst->seqNum, new_inst->pcState());
 
     assert(freeEntries != 0);
 
     instList[new_inst->threadNumber].push_back(new_inst);
+
+    // For now, we don't add any constraints here
+    OpClass op_class = new_inst->opClass();
+    int fu_idx = fuPool->allocUnit(op_class);
+    new_inst->setFuIdx(fu_idx);
+    if (fu_idx > FUPool::NoFreeFU){
+        distInstLists[new_inst->threadNumber][fu_idx].push_back(new_inst);
+    }
+    DPRINTF(IQ, "Adding non-speculative instruction [sn:%llu] PC %s fuidx:%i"
+                "to the IQ.\n",
+            new_inst->seqNum, new_inst->pcState(), fu_idx);
 
     --freeEntries;
 
@@ -672,15 +696,16 @@ InstructionQueue<Impl>::getInstToExecute()
 
 template <class Impl>
 void
-InstructionQueue<Impl>::addToOrderList(OpClass op_class)
+InstructionQueue<Impl>::addToOrderList(int fu_idx)
 {
-    assert(!readyInsts[op_class].empty());
+    assert(!readyInsts[fu_idx].empty());
 
     ListOrderEntry queue_entry;
 
-    queue_entry.queueType = op_class;
+    queue_entry.fu_idx = fu_idx;
+    queue_entry.oldestInst = readyInsts[fu_idx].top()->seqNum;
 
-    queue_entry.oldestInst = readyInsts[op_class].top()->seqNum;
+    ListOrder& listOrder = listOrders[fu_idx];
 
     ListOrderIt list_it = listOrder.begin();
     ListOrderIt list_end_it = listOrder.end();
@@ -693,8 +718,12 @@ InstructionQueue<Impl>::addToOrderList(OpClass op_class)
         list_it++;
     }
 
-    readyIt[op_class] = listOrder.insert(list_it, queue_entry);
-    queueOnList[op_class] = true;
+    readyIt[fu_idx] = listOrder.insert(list_it, queue_entry);
+    queueOnList[fu_idx] = true;
+
+    DPRINTF(IQ, "[%s] fu=[%i] ready size: %d list size: %d (%d)\n",
+            __FUNCTION__,
+            fu_idx, readyInsts[fu_idx].size(), listOrder.size(), listOrders[fu_idx].size());
 }
 
 template <class Impl>
@@ -707,20 +736,22 @@ InstructionQueue<Impl>::moveToYoungerInst(ListOrderIt list_order_it)
     // than the new instruction.  If so, then add in a new iterator right here.
     // If not, then move along.
     ListOrderEntry queue_entry;
-    OpClass op_class = (*list_order_it).queueType;
+    unsigned fu_idx = (*list_order_it).fu_idx;
     ListOrderIt next_it = list_order_it;
 
     ++next_it;
 
-    queue_entry.queueType = op_class;
-    queue_entry.oldestInst = readyInsts[op_class].top()->seqNum;
+    queue_entry.fu_idx = fu_idx;
+    queue_entry.oldestInst = readyInsts[fu_idx].top()->seqNum;
+
+    ListOrder& listOrder = listOrders[fu_idx];
 
     while (next_it != listOrder.end() &&
            (*next_it).oldestInst < queue_entry.oldestInst) {
         ++next_it;
     }
 
-    readyIt[op_class] = listOrder.insert(next_it, queue_entry);
+    readyIt[fu_idx] = listOrder.insert(next_it, queue_entry);
 }
 
 template <class Impl>
@@ -752,7 +783,7 @@ void
 InstructionQueue<Impl>::scheduleReadyInsts()
 {
     DPRINTF(IQ, "Attempting to schedule ready instructions from "
-            "the IQ.\n");
+                "the IQ.\n");
 
     IssueStruct *i2e_info = issueToExecuteQueue->access(0);
 
@@ -766,58 +797,61 @@ InstructionQueue<Impl>::scheduleReadyInsts()
         addReadyMemInst(mem_inst);
     }
 
-    // Have iterator to head of the list
-    // While I haven't exceeded bandwidth or reached the end of the list,
-    // Try to get a FU that can do what this op needs.
-    // If successful, change the oldestInst to the new top of the list, put
-    // the queue in the proper place in the list.
-    // Increment the iterator.
-    // This will avoid trying to schedule a certain op class if there are no
-    // FUs that handle it.
     int total_issued = 0;
-    ListOrderIt order_it = listOrder.begin();
-    ListOrderIt order_end_it = listOrder.end();
+    // For each distributed-IQ, pick a oldest ready inst.
+    for (int fu_idx = 0; fu_idx < numFU; fu_idx++) {
 
-    while (total_issued < totalWidth && order_it != order_end_it) {
-        OpClass op_class = (*order_it).queueType;
+        ListOrder& listOrder = listOrders[fu_idx];
+        ListOrderIt order_it = listOrder.begin();
+        ListOrderIt order_end_it = listOrder.end();
+        bool fu_issued = false;
 
-        assert(!readyInsts[op_class].empty());
+        DPRINTF(IQ, "Schedule FU[%i] list size:%d ready size: %d\n",
+                fu_idx, listOrder.size(), readyInsts[fu_idx].size());
 
-        DynInstPtr issuing_inst = readyInsts[op_class].top();
+        while (order_it != order_end_it && !fu_issued) {
+            assert(!readyInsts[fu_idx].empty());
+            DynInstPtr issuing_inst = readyInsts[fu_idx].top();
 
-        if (issuing_inst->isFloating()) {
-            iqIOStats.fpInstQueueReads++;
-        } else if (issuing_inst->isVector()) {
-            iqIOStats.vecInstQueueReads++;
-        } else {
-            iqIOStats.intInstQueueReads++;
-        }
-
-        assert(issuing_inst->seqNum == (*order_it).oldestInst);
-
-        if (issuing_inst->isSquashed()) {
-            readyInsts[op_class].pop();
-
-            if (!readyInsts[op_class].empty()) {
-                moveToYoungerInst(order_it);
+            if (issuing_inst->isFloating()) {
+                iqIOStats.fpInstQueueReads++;
+            } else if (issuing_inst->isVector()) {
+                iqIOStats.vecInstQueueReads++;
             } else {
-                readyIt[op_class] = listOrder.end();
-                queueOnList[op_class] = false;
+                iqIOStats.intInstQueueReads++;
             }
 
-            listOrder.erase(order_it++);
+            assert(issuing_inst->seqNum == (*order_it).oldestInst);
 
-            ++iqStats.squashedInstsIssued;
+            if (issuing_inst->isSquashed()) {
+                readyInsts[fu_idx].pop();
 
-            continue;
-        }
+                if (!readyInsts[fu_idx].empty()) {
+                    moveToYoungerInst(order_it);
+                } else {
+                    readyIt[fu_idx] = listOrder.end();
+                    queueOnList[fu_idx] = false;
+                }
 
-        int idx = FUPool::NoCapableFU;
-        Cycles op_latency = Cycles(1);
-        ThreadID tid = issuing_inst->threadNumber;
+                listOrder.erase(order_it++);
 
-        if (op_class != No_OpClass) {
-            idx = fuPool->getUnit(op_class);
+                ++iqStats.squashedInstsIssued;
+
+                continue;
+            }
+
+            int idx = fuPool->getUnit(fu_idx);
+
+            // In our distributed implementation,
+            // every op_class(even No_OpClass) must go to a function unit.
+            // TODO: remove this assert to handle speculative execute
+            //  instructions with idx == FUPool::NoCapableFU
+            assert(idx > FUPool::NoCapableFU);
+
+            Cycles op_latency = Cycles(1);
+            ThreadID tid = issuing_inst->threadNumber;
+
+            OpClass op_class = issuing_inst->opClass();
             if (issuing_inst->isFloating()) {
                 iqIOStats.fpAluAccesses++;
             } else if (issuing_inst->isVector()) {
@@ -828,76 +862,79 @@ InstructionQueue<Impl>::scheduleReadyInsts()
             if (idx > FUPool::NoFreeFU) {
                 op_latency = fuPool->getOpLatency(op_class);
             }
-        }
 
-        // If we have an instruction that doesn't require a FU, or a
-        // valid FU, then schedule for execution.
-        if (idx != FUPool::NoFreeFU) {
-            if (op_latency == Cycles(1)) {
-                i2e_info->size++;
-                instsToExecute.push_back(issuing_inst);
+            DPRINTF(IQ, "FU[%d] op_class: %d idx: %d\n", fu_idx, op_class, idx);
 
-                // Add the FU onto the list of FU's to be freed next
-                // cycle if we used one.
-                if (idx >= 0)
-                    fuPool->freeUnitNextCycle(idx);
-            } else {
-                bool pipelined = fuPool->isPipelined(op_class);
-                // Generate completion event for the FU
-                ++wbOutstanding;
-                FUCompletion *execution = new FUCompletion(issuing_inst,
-                                                           idx, this);
+            // If we have an instruction that doesn't require a FU, or a
+            // valid FU, then schedule for execution.
+            if (idx != FUPool::NoFreeFU) {
+                if (op_latency == Cycles(1)) {
+                    i2e_info->size++;
+                    instsToExecute.push_back(issuing_inst);
 
-                cpu->schedule(execution,
-                              cpu->clockEdge(Cycles(op_latency - 1)));
-
-                if (!pipelined) {
-                    // If FU isn't pipelined, then it must be freed
-                    // upon the execution completing.
-                    execution->setFreeFU();
+                    // Add the FU onto the list of FU's to be freed next
+                    // cycle if we used one.
+                    if (idx >= 0)
+                        fuPool->freeUnitNextCycle(idx);
                 } else {
-                    // Add the FU onto the list of FU's to be freed next cycle.
-                    fuPool->freeUnitNextCycle(idx);
+                    bool pipelined = fuPool->isPipelined(op_class);
+                    // Generate completion event for the FU
+                    ++wbOutstanding;
+                    FUCompletion *execution = new FUCompletion(issuing_inst,
+                                                               idx, this);
+
+                    cpu->schedule(execution,
+                                  cpu->clockEdge(Cycles(op_latency - 1)));
+
+                    if (!pipelined) {
+                        // If FU isn't pipelined, then it must be freed
+                        // upon the execution completing.
+                        execution->setFreeFU();
+                    } else {
+                        // Add the FU onto the list of FU's to be freed next cycle.
+                        fuPool->freeUnitNextCycle(idx);
+                    }
                 }
-            }
 
-            DPRINTF(IQ, "Thread %i: Issuing instruction PC %s "
-                    "[sn:%llu]\n",
-                    tid, issuing_inst->pcState(),
-                    issuing_inst->seqNum);
+                DPRINTF(IQ, "Thread %i: Issuing instruction PC %s "
+                            "[sn:%llu]\n",
+                        tid, issuing_inst->pcState(),
+                        issuing_inst->seqNum);
 
-            readyInsts[op_class].pop();
+                readyInsts[idx].pop();
 
-            if (!readyInsts[op_class].empty()) {
-                moveToYoungerInst(order_it);
-            } else {
-                readyIt[op_class] = listOrder.end();
-                queueOnList[op_class] = false;
-            }
+                if (!readyInsts[idx].empty()) {
+                    moveToYoungerInst(order_it);
+                } else {
+                    readyIt[idx] = listOrder.end();
+                    queueOnList[idx] = false;
+                }
 
-            issuing_inst->setIssued();
-            ++total_issued;
+                issuing_inst->setIssued();
+                ++total_issued;
+                fu_issued = true;
 
 #if TRACING_ON
-            issuing_inst->issueTick = curTick() - issuing_inst->fetchTick;
+                issuing_inst->issueTick = curTick() - issuing_inst->fetchTick;
 #endif
 
-            if (!issuing_inst->isMemRef()) {
-                // Memory instructions can not be freed from the IQ until they
-                // complete.
-                ++freeEntries;
-                count[tid]--;
-                issuing_inst->clearInIQ();
-            } else {
-                memDepUnit[tid].issue(issuing_inst);
-            }
+                if (!issuing_inst->isMemRef()) {
+                    // Memory instructions can not be freed from the IQ until they
+                    // complete.
+                    ++freeEntries;
+                    count[tid]--;
+                    issuing_inst->clearInIQ();
+                } else {
+                    memDepUnit[tid].issue(issuing_inst);
+                }
 
-            listOrder.erase(order_it++);
-            iqStats.statIssuedInstType[tid][op_class]++;
-        } else {
-            iqStats.statFuBusy[op_class]++;
-            iqStats.fuBusy[tid]++;
-            ++order_it;
+                listOrder.erase(order_it++);
+                iqStats.statIssuedInstType[tid][op_class]++;
+            } else {
+                iqStats.statFuBusy[op_class]++;
+                iqStats.fuBusy[tid]++;
+                ++order_it;
+            }
         }
     }
 
@@ -950,6 +987,7 @@ InstructionQueue<Impl>::commit(const InstSeqNum &inst, ThreadID tid)
     DPRINTF(IQ, "[tid:%i] Committing instructions older than [sn:%llu]\n",
             tid,inst);
 
+    // Update unified IQ
     ListIt iq_it = instList[tid].begin();
 
     while (iq_it != instList[tid].end() &&
@@ -957,8 +995,20 @@ InstructionQueue<Impl>::commit(const InstSeqNum &inst, ThreadID tid)
         ++iq_it;
         instList[tid].pop_front();
     }
-
     assert(freeEntries == (numEntries - countInsts()));
+
+    // Update distributed IQ
+
+    // This is slow, but it works...
+    for (int fu_idx = 0; fu_idx < numFU; fu_idx++){
+        InstList& iList = distInstLists[tid][fu_idx];
+        iq_it = iList.begin();
+        while (iq_it != iList.end() && (*iq_it)->seqNum <= inst){
+            ++iq_it;
+            iList.pop_front();
+        }
+    }
+    // TODO: check instruction count in distributed IQ
 }
 
 template <class Impl>
@@ -1066,17 +1116,20 @@ void
 InstructionQueue<Impl>::addReadyMemInst(const DynInstPtr &ready_inst)
 {
     OpClass op_class = ready_inst->opClass();
+    int fu_idx = ready_inst->getFuIdx();
 
-    readyInsts[op_class].push(ready_inst);
+    readyInsts[fu_idx].push(ready_inst);
 
     // Will need to reorder the list if either a queue is not on the list,
     // or it has an older instruction than last time.
-    if (!queueOnList[op_class]) {
-        addToOrderList(op_class);
-    } else if (readyInsts[op_class].top()->seqNum  <
-               (*readyIt[op_class]).oldestInst) {
-        listOrder.erase(readyIt[op_class]);
-        addToOrderList(op_class);
+    if (!queueOnList[fu_idx]) {
+        addToOrderList(fu_idx);
+    } else if (readyInsts[fu_idx].top()->seqNum  <
+               (*readyIt[fu_idx]).oldestInst) {
+        DPRINTF(IQ, "[%s] erase order list of fu[%i]\n",
+                __FUNCTION__, fu_idx);
+        listOrders[fu_idx].erase(readyIt[fu_idx]);
+        addToOrderList(fu_idx);
     }
 
     DPRINTF(IQ, "Instruction is ready to issue, putting it onto "
@@ -1325,6 +1378,16 @@ InstructionQueue<Impl>::doSquash(ThreadID tid)
         instList[tid].erase(squash_it--);
         ++iqStats.squashedInstsExamined;
     }
+
+    for (int fu_idx = 0; fu_idx < numFU; fu_idx++){
+        InstList& iList = distInstLists[tid][fu_idx];
+        squash_it = iList.end();
+        --squash_it;
+        while (squash_it != iList.end() &&
+               (*squash_it)->seqNum > squashedSeqNum[tid]){
+            iList.erase(squash_it--);
+        }
+    }
 }
 
 template <class Impl>
@@ -1432,22 +1495,27 @@ InstructionQueue<Impl>::addIfReady(const DynInstPtr &inst)
         }
 
         OpClass op_class = inst->opClass();
+        int fu_idx = inst->getFuIdx();
 
         DPRINTF(IQ, "Instruction is ready to issue, putting it onto "
-                "the ready list, PC %s opclass:%i [sn:%llu].\n",
-                inst->pcState(), op_class, inst->seqNum);
+                "the ready list, PC %s opclass:%i fuidx:%i [sn:%llu].\n",
+                inst->pcState(), op_class, fu_idx, inst->seqNum);
 
-        readyInsts[op_class].push(inst);
+        readyInsts[fu_idx].push(inst);
 
         // Will need to reorder the list if either a queue is not on the list,
         // or it has an older instruction than last time.
-        if (!queueOnList[op_class]) {
-            addToOrderList(op_class);
-        } else if (readyInsts[op_class].top()->seqNum  <
-                   (*readyIt[op_class]).oldestInst) {
-            listOrder.erase(readyIt[op_class]);
-            addToOrderList(op_class);
+        if (!queueOnList[fu_idx]) {
+            addToOrderList(fu_idx);
+        } else if (readyInsts[fu_idx].top()->seqNum  <
+                   (*readyIt[fu_idx]).oldestInst) {
+            DPRINTF(IQ, "[%s] erase order list of fu[%i]\n",
+                    __FUNCTION__, fu_idx);
+            listOrders[fu_idx].erase(readyIt[fu_idx]);
+            addToOrderList(fu_idx);
         }
+        DPRINTF(IQ, "[%s] fu_idx:[%i] ready size:%i order size:%i\n",
+                __FUNCTION__, fu_idx, readyInsts[fu_idx].size(), listOrders[fu_idx].size());
     }
 }
 
@@ -1462,7 +1530,7 @@ template <class Impl>
 void
 InstructionQueue<Impl>::dumpLists()
 {
-    for (int i = 0; i < Num_OpClasses; ++i) {
+    for (int i = 0; i < numFU; ++i) {
         cprintf("Ready list %i size: %i\n", i, readyInsts[i].size());
 
         cprintf("\n");
@@ -1483,23 +1551,24 @@ InstructionQueue<Impl>::dumpLists()
 
     cprintf("\n");
 
-    ListOrderIt list_order_it = listOrder.begin();
-    ListOrderIt list_order_end_it = listOrder.end();
-    int i = 1;
+    for (int fu_idx = 0; fu_idx < numFU; ++fu_idx) {
+        ListOrderIt list_order_it = listOrders[fu_idx].begin();
+        ListOrderIt list_order_end_it = listOrders[fu_idx].end();
 
-    cprintf("List order: ");
+        int i = 1;
+        cprintf("List order (fu: %i):", fu_idx);
 
-    while (list_order_it != list_order_end_it) {
-        cprintf("%i OpClass:%i [sn:%llu] ", i, (*list_order_it).queueType,
-                (*list_order_it).oldestInst);
+        while (list_order_it != list_order_end_it) {
+            cprintf("%i [sn:%llu] ", i, (*list_order_it).oldestInst);
 
-        ++list_order_it;
-        ++i;
+            ++list_order_it;
+            ++i;
+        }
+
+        cprintf("\n");
     }
 
-    cprintf("\n");
 }
-
 
 template <class Impl>
 void

@@ -1591,6 +1591,8 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
         }
     }
 
+    DPRINTF(ValueCommit, "commit_pc: %s\n", inst->pcState());
+
     thread[tid]->numOp++;
     thread[tid]->threadStats.numOps++;
     cpuStats.committedOps[tid]++;
@@ -2040,7 +2042,7 @@ FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
                 //             "serial", inst->physEffAddr);
 
                 } else {
-                    warn("Inst [sn:%lli]\n", inst->seqNum);
+                    warn("Inst [sn:%lli] pc:%s\n", inst->seqNum, inst->pcState());
                     warn("Diff at %s Ref value: %#lx, GEM5 value: %#lx\n",
                             reg_name[dest_tag], nemu_val, gem5_val
                         );

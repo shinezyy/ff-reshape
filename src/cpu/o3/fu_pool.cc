@@ -182,6 +182,26 @@ FUPool::getUnit(OpClass capability)
     return fu_idx;
 }
 
+int
+FUPool::getUnit(int fu_idx) {
+    if (fu_idx < 0 || fu_idx >= numFU)
+        return -2;
+
+    if (unitBusy[fu_idx])
+        return -1;
+
+    unitBusy[fu_idx] = true;
+
+    return fu_idx;
+}
+
+int
+FUPool::allocUnit(OpClass capability) {
+    if (!capabilityList[capability])
+        return -2;
+    return fuPerCapList[capability].getFU();
+}
+
 void
 FUPool::freeUnitNextCycle(int fu_idx)
 {

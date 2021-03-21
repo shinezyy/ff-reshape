@@ -146,6 +146,22 @@ class FUPool : public SimObject
      */
     int getUnit(OpClass capability);
 
+    /**
+     *
+     * @param fu_idx
+     * @return Returns NoCapableFU if the FU pool does not have the
+     * capability, NoFreeFU if FU[fu_idx] is busy, and fu_idx itself
+     * otherwise.
+     */
+    int getUnit(int fu_idx);
+
+    /**
+     * Assign a fu_idx to a inst when the inst are inserting into IQ
+     * @param capability
+     * @return
+     */
+    int allocUnit(OpClass capability);
+
     /** Frees a FU at the end of this cycle. */
     void freeUnitNextCycle(int fu_idx);
 
