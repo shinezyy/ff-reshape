@@ -36,6 +36,7 @@
 #include "cpu/o3/fetch.hh"
 #include "cpu/o3/free_list.hh"
 #include "cpu/o3/iew.hh"
+#include "cpu/o3/inst_queue.hh"
 #include "cpu/o3/inst_queue_dist.hh"
 #include "cpu/o3/lsq.hh"
 #include "cpu/o3/lsq_unit.hh"
@@ -64,8 +65,11 @@ struct SimpleCPUPolicy
     typedef UnifiedRenameMap RenameMap;
     /** Typedef for the ROB. */
     typedef ::ROB<Impl> ROB;
+
     /** Typedef for the instruction queue/scheduler. */
-    typedef InstructionQueue<Impl> IQ;
+    // typedef InstructionQueue<Impl> IQ;
+    typedef InstructionQueueDist<Impl> IQ;
+
     /** Typedef for the memory dependence unit. */
     typedef ::MemDepUnit<StoreSet, Impl> MemDepUnit;
     /** Typedef for the LSQ. */

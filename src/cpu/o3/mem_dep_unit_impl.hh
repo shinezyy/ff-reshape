@@ -161,7 +161,7 @@ MemDepUnit<MemDepPred, Impl>::takeOverFrom()
 
 template <class MemDepPred, class Impl>
 void
-MemDepUnit<MemDepPred, Impl>::setIQ(InstructionQueue<Impl> *iq_ptr)
+MemDepUnit<MemDepPred, Impl>::setIQ(IQ *iq_ptr)
 {
     iqPtr = iq_ptr;
 }

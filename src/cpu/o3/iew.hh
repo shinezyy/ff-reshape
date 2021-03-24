@@ -498,6 +498,9 @@ class DefaultIEW
         /** Average number of woken instructions per writeback. */
         Stats::Formula wbFanout;
     } iewStats;
+
+  public:
+    void setIqMDU();
 };
 
 #endif // __CPU_O3_IEW_HH__

@@ -46,6 +46,7 @@ if 'O3CPU' in env['CPU_MODELS']:
     Source('fu_pool.cc')
     Source('iew.cc')
     Source('inst_queue.cc')
+    Source('inst_queue_dist.cc')
     Source('loop_buffer.cc')
     Source('lsq.cc')
     Source('lsq_unit.cc')

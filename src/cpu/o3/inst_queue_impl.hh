@@ -115,7 +115,6 @@ InstructionQueue<Impl>::InstructionQueue(O3CPU *cpu_ptr, IEW *iew_ptr,
     //Initialize Mem Dependence Units
     for (ThreadID tid = 0; tid < Impl::MaxThreads; tid++) {
         memDepUnit[tid].init(params, tid, cpu_ptr);
-        memDepUnit[tid].setIQ(this);
     }
 
     resetState();

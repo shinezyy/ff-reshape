@@ -62,9 +62,6 @@ struct SNHash {
 
 struct DerivO3CPUParams;
 
-template <class Impl>
-class InstructionQueue;
-
 /**
  * Memory dependency unit class.  This holds the memory dependence predictor.
  * As memory operations are issued to the IQ, they are also issued to this
@@ -86,6 +83,8 @@ class MemDepUnit
     typedef typename Impl::DynInstPtr DynInstPtr;
     typedef typename Impl::DynInstConstPtr DynInstConstPtr;
     typedef typename Impl::O3CPU O3CPU;
+    typedef typename Impl::CPUPol CPUPol;
+    typedef typename CPUPol::IQ IQ;
 
     /** Empty constructor. Must call init() prior to using in this case. */
     MemDepUnit();
@@ -112,7 +111,7 @@ class MemDepUnit
     void takeOverFrom();
 
     /** Sets the pointer to the IQ. */
-    void setIQ(InstructionQueue<Impl> *iq_ptr);
+    void setIQ(IQ *iq_ptr);
 
     /** Inserts a memory instruction. */
     void insert(const DynInstPtr &inst);
@@ -273,7 +272,7 @@ class MemDepUnit
     void insertBarrierSN(const DynInstPtr &barr_inst);
 
     /** Pointer to the IQ. */
-    InstructionQueue<Impl> *iqPtr;
+    IQ *iqPtr;
 
     /** The thread id of this memory dependence unit. */
     int id;

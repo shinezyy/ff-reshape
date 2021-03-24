@@ -26,8 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "cpu/o3/inst_queue_impl.hh"
+#include "cpu/o3/inst_queue_dist_impl.hh"
 #include "cpu/o3/isa_specific.hh"
 
 // Force instantiation of InstructionQueue.
-template class InstructionQueue<O3CPUImpl>;
+template class InstructionQueueDist<O3CPUImpl>;

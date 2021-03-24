@@ -287,6 +287,11 @@ class InstructionQueue
      */
     MemDepUnit memDepUnit[Impl::MaxThreads];
 
+  public:
+    MemDepUnit *getMDU() {return memDepUnit;}
+
+  private:
+
     /** The queue to the execute stage.  Issued instructions will be written
      *  into it.
      */

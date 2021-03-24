@@ -39,8 +39,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __CPU_O3_INST_QUEUE_HH__
-#define __CPU_O3_INST_QUEUE_HH__
+#ifndef __CPU_O3_INST_QUEUE_DIST_HH__
+#define __CPU_O3_INST_QUEUE_DIST_HH__
 
 #include <list>
 #include <map>
@@ -78,7 +78,7 @@ class MemInterface;
  * @todo: Make IQ able to handle multiple FU pools.
  */
 template <class Impl>
-class InstructionQueue
+class InstructionQueueDist
 {
   public:
     //Typedefs from the Impl.
@@ -103,7 +103,7 @@ class InstructionQueue
         int fuIdx;
 
         /** Pointer back to the instruction queue. */
-        InstructionQueue<Impl> *iqPtr;
+        InstructionQueueDist<Impl> *iqPtr;
 
         /** Should the FU be added to the list to be freed upon
          * completing this event.
@@ -113,7 +113,7 @@ class InstructionQueue
       public:
         /** Construct a FU completion event. */
         FUCompletion(const DynInstPtr &_inst, int fu_idx,
-                     InstructionQueue<Impl> *iq_ptr);
+                     InstructionQueueDist<Impl> *iq_ptr);
 
         virtual void process();
         virtual const char *description() const;
@@ -121,11 +121,11 @@ class InstructionQueue
     };
 
     /** Constructs an IQ. */
-    InstructionQueue(O3CPU *cpu_ptr, IEW *iew_ptr,
+    InstructionQueueDist(O3CPU *cpu_ptr, IEW *iew_ptr,
                      const DerivO3CPUParams &params);
 
     /** Destructs the IQ. */
-    ~InstructionQueue();
+    ~InstructionQueueDist();
 
     /** Returns the name of the IQ. */
     std::string name() const;
@@ -286,6 +286,11 @@ class InstructionQueue
      *  between instructions.
      */
     MemDepUnit memDepUnit[Impl::MaxThreads];
+
+  public:
+    MemDepUnit *getMDU() {return memDepUnit;}
+
+  private:
 
     /** The queue to the execute stage.  Issued instructions will be written
      *  into it.
@@ -560,4 +565,4 @@ class InstructionQueue
     } iqIOStats;
 };
 
-#endif //__CPU_O3_INST_QUEUE_HH__
+#endif //__CPU_O3_INST_QUEUE_DIST_HH__

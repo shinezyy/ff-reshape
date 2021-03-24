@@ -1674,4 +1674,15 @@ DefaultIEW<Impl>::checkMisprediction(const DynInstPtr& inst)
     }
 }
 
+template <class Impl>
+void
+DefaultIEW<Impl>::setIqMDU()
+{
+    auto *mdu = instQueue.getMDU();
+    for (ThreadID tid = 0; tid < numThreads; tid++) {
+        mdu[tid].setIQ(&instQueue);
+    }
+}
+
+
 #endif//__CPU_O3_IEW_IMPL_IMPL_HH__
