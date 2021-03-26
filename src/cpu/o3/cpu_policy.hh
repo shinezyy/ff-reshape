@@ -38,6 +38,7 @@
 #include "cpu/o3/iew.hh"
 #include "cpu/o3/inst_queue.hh"
 #include "cpu/o3/inst_queue_dist.hh"
+#include "cpu/o3/inst_queue_rand.hh"
 #include "cpu/o3/lsq.hh"
 #include "cpu/o3/lsq_unit.hh"
 #include "cpu/o3/mem_dep_unit.hh"
@@ -69,6 +70,7 @@ struct SimpleCPUPolicy
     /** Typedef for the instruction queue/scheduler. */
     // typedef InstructionQueue<Impl> IQ;
     typedef InstructionQueueDist<Impl> IQ;
+    // typedef InstructionQueueRand<Impl> IQ;
 
     /** Typedef for the memory dependence unit. */
     typedef ::MemDepUnit<StoreSet, Impl> MemDepUnit;

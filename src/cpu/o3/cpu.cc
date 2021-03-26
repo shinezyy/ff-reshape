@@ -212,6 +212,7 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
 
     rename.setScoreboard(&scoreboard);
     iew.setScoreboard(&scoreboard);
+    iew.setIqMDU();
 
     // Setup the rename map for whichever stages need it.
     for (ThreadID tid = 0; tid < numThreads; tid++) {

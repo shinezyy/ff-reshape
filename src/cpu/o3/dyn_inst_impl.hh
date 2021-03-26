@@ -106,6 +106,8 @@ BaseO3DynInst<Impl>::initVars()
 
     _numDestMiscRegs = 0;
 
+    iqIndex = -1;
+
 #if TRACING_ON
     // Value -1 indicates that particular phase
     // hasn't happened (yet).

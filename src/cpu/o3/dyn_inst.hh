@@ -433,6 +433,8 @@ class BaseO3DynInst : public BaseDynInst<Impl>
         this->cpu->setCCReg(this->_destRegIdx[idx], val);
         BaseDynInst<Impl>::setCCRegOperand(si, idx, val);
     }
+
+    int iqIndex;
 };
 
 #endif // __CPU_O3_ALPHA_DYN_INST_HH__
