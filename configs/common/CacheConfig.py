@@ -72,6 +72,11 @@ def _get_cache_opts(level, options):
     if hasattr(options, prefetcher_attr):
         opts['prefetcher'] = _get_hwp(getattr(options, prefetcher_attr))
 
+    latency_attr = '{}_latency'.format(level)
+    if hasattr(options, latency_attr):
+        opts['tag_latency'] = getattr(options, latency_attr)
+        opts['data_latency'] = getattr(options, latency_attr)
+
     return opts
 
 def config_cache(options, system):
@@ -130,7 +135,7 @@ def config_cache(options, system):
         system.l2.cpu_side = system.tol2bus.master
 
         if options.l3_cache:
-            system.l3 = L3Cache(clk_domain=system.cpu_clk_domain)
+            system.l3 = L3Cache(clk_domain=system.cpu_clk_domain, **_get_cache_opts('l3', options))
 
             system.l3.tags.num_slices = options.l3_slices
             if options.l3_complex:
