@@ -172,6 +172,8 @@ class InstructionQueue
     /** Returns if there are any ready instructions in the IQ. */
     bool hasReadyInsts();
 
+    int numReadyInsts();
+
     /** Inserts a new instruction into the IQ. */
     void insert(const DynInstPtr &new_inst);
 
@@ -476,7 +478,7 @@ class InstructionQueue
 
     struct IQStats : public Stats::Group
     {
-        IQStats(O3CPU *cpu, const unsigned &total_width);
+        IQStats(O3CPU *cpu, const unsigned &total_width, const unsigned &num_entries);
         /** Stat for number of instructions added. */
         Stats::Scalar instsAdded;
         /** Stat for number of non-speculative instructions added. */
@@ -520,6 +522,10 @@ class InstructionQueue
          * instruction. */
         // Stats::VectorDistribution issueDelayDist;
 
+        Stats::Distribution numReadyDist;
+        Stats::Distribution utilDist;
+
+        Stats::Scalar underIssued;
         /** Number of times an instruction could not be issued because a
          * FU was busy.
          */

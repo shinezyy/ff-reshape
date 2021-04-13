@@ -92,7 +92,7 @@ InstructionQueueRand<Impl>::InstructionQueueRand(O3CPU *cpu_ptr, IEW *iew_ptr,
       numEntries(params.numIQEntries),
       totalWidth(params.issueWidth),
       commitToIEWDelay(params.commitToIEWDelay),
-      iqStats(cpu, totalWidth),
+      iqStats(cpu, totalWidth, numEntries),
       iqIOStats(cpu)
 {
     assert(fuPool);
@@ -178,7 +178,7 @@ InstructionQueueRand<Impl>::name() const
 
 template <class Impl>
 InstructionQueueRand<Impl>::
-IQStats::IQStats(O3CPU *cpu, const unsigned &total_width)
+IQStats::IQStats(O3CPU *cpu, const unsigned &total_width, const unsigned &num_entries)
     : Stats::Group(cpu),
     ADD_STAT(instsAdded,
              "Number of instructions added to the IQ (excludes non-spec)"),
@@ -200,6 +200,9 @@ IQStats::IQStats(O3CPU *cpu, const unsigned &total_width)
     ADD_STAT(squashedNonSpecRemoved,
              "Number of squashed non-spec instructions that were removed"),
     ADD_STAT(numIssuedDist, "Number of insts issued each cycle"),
+    ADD_STAT(numReadyDist, "Number of insts ready each cycle"),
+    ADD_STAT(utilDist, "Number of insts occupied"),
+    ADD_STAT(underIssued, "Issue width is not full even when there are rest insts"),
     ADD_STAT(statFuBusy, "attempts to use FU when none available"),
     ADD_STAT(statIssuedInstType, "Type of FU issued"),
     ADD_STAT(issueRate, "Inst issue rate",
@@ -257,6 +260,15 @@ IQStats::IQStats(O3CPU *cpu, const unsigned &total_width)
         .init(0,total_width,1)
         .flags(Stats::pdf)
         ;
+    numReadyDist
+        .init(0, num_entries, 1)
+        .flags(Stats::pdf)
+        ;
+    utilDist
+        .init(0, num_entries, 1)
+        .flags(Stats::pdf)
+        ;
+
 /*
     dist_unissued
         .init(Num_OpClasses+2)
@@ -540,6 +552,18 @@ InstructionQueueRand<Impl>::hasReadyInsts()
     return numReady > 0;
 }
 
+
+template <class Impl>
+int
+InstructionQueueRand<Impl>::numReadyInsts()
+{
+    int n = 0;
+    for (int i = 0; i < Num_OpClasses; ++i) {
+        n += (int) readyBitMap[i].count();
+    }
+    return n;
+}
+
 template <class Impl>
 void
 InstructionQueueRand<Impl>::insert(const DynInstPtr &new_inst)
@@ -794,9 +818,9 @@ InstructionQueueRand<Impl>::scheduleReadyInsts()
             }
 
             DPRINTF(IQ, "Thread %i: Issuing instruction PC %s "
-                    "[sn:%llu]\n",
+                    "[sn:%llu], opClass: %i\n",
                     tid, issuing_inst->pcState(),
-                    issuing_inst->seqNum);
+                    issuing_inst->seqNum, op_class);
 
             readyBitMap[op_class][issue_index] = false;
             numReady--;
@@ -832,6 +856,14 @@ InstructionQueueRand<Impl>::scheduleReadyInsts()
 
     iqStats.numIssuedDist.sample(total_issued);
     iqStats.instsIssued+= total_issued;
+
+    iqStats.numReadyDist.sample(numReadyInsts());
+    iqStats.utilDist.sample(countInsts());
+
+    if (numReadyInsts()) {
+        DPRINTF(IQ, "issued: %i, num ready: %i\n", total_issued, numReadyInsts());
+        iqStats.underIssued++;
+    }
 
     // If we issued any instructions, tell the CPU we had activity.
     // @todo If the way deferred memory instructions are handeled due to
@@ -1516,6 +1548,7 @@ void InstructionQueueRand<Impl>::insertToHole(const DynInstPtr &inst)
 {
     assert(numFreeEntries());
     unsigned c = 0;
+    holeCursor = 0;
     unsigned cursor = incHoleCursor();
     while (instList[cursor] && c <= numEntries) {
         c++;
