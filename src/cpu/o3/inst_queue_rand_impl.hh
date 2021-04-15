@@ -46,6 +46,7 @@
 #include <vector>
 
 #include "base/logging.hh"
+#include "base/random.hh"
 #include "cpu/o3/fu_pool.hh"
 #include "cpu/o3/inst_queue_rand.hh"
 #include "debug/IQ.hh"
@@ -1548,7 +1549,8 @@ void InstructionQueueRand<Impl>::insertToHole(const DynInstPtr &inst)
 {
     assert(numFreeEntries());
     unsigned c = 0;
-    holeCursor = 0;
+    // holeCursor = random_mt.random<unsigned>() % numEntries;
+    holeCursor = numEntries;
     unsigned cursor = incHoleCursor();
     while (instList[cursor] && c <= numEntries) {
         c++;

@@ -321,7 +321,7 @@ class InstructionQueueRand
 
     unsigned incHoleCursor() {
         unsigned old_ = holeCursor;
-        holeCursor = (holeCursor + 1) % numEntries;
+        holeCursor = (holeCursor - 1) % numEntries;
         return old_;
     };
 
