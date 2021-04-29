@@ -184,7 +184,7 @@ class DerivO3CPU(BaseCPU):
 
     #branchPred = Param.BranchPredictor(TournamentBP(numThreads =
     #                                                   Parent.numThreads),
-    branchPred = Param.BranchPredictor(TAGE(numThreads =
+    branchPred = Param.BranchPredictor(LTAGE(numThreads =
                                                        Parent.numThreads),
                                        "Branch Predictor")
     loopBuffer = Param.LoopBuffer(LoopBuffer(), "Loopo Buffer")

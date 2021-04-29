@@ -37,7 +37,8 @@ def modifyO3CPUConfig(options, cpu):
         cpu.branchPred.checkAddr = options.check_outcome_addr is not None
     elif options.use_bp is None:
         print('Using TAGE_SC_L_64KB BP')
-        cpu.branchPred = TAGE_SC_L_64KB()
+        # cpu.branchPred = TAGE_SC_L_64KB()
+        cpu.branchPred = LTAGE()
     else:
         print('Unknow BP:', options.use_bp)
         assert False

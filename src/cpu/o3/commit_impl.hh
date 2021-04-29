@@ -924,7 +924,10 @@ DefaultCommit<Impl>::commit()
                 if (toIEW->commitInfo[tid].mispredictInst->isUncondCtrl()) {
                      toIEW->commitInfo[tid].branchTaken = true;
                 }
-                ++stats.branchMispredicts;
+
+                if (toIEW->commitInfo[tid].mispredictInst->isCondCtrl()) {
+                    ++stats.branchMispredicts;
+                }
             }
 
             toIEW->commitInfo[tid].pc = fromIEW->pc[tid];

@@ -51,6 +51,10 @@ void init_difftest() {
   void *handle;
   handle = dlopen(REF_SO, RTLD_LAZY | RTLD_DEEPBIND);
   puts("Using " REF_SO " for difftest");
+
+  if (handle == NULL) {
+    printf("dlopen - %sn", dlerror());
+  }
   assert(handle);
 
   ref_difftest_memcpy_from_dut = (void (*)(paddr_t, void *, size_t))dlsym(handle, "difftest_memcpy_from_dut");
