@@ -34,6 +34,7 @@
 #include "cpu/o3/commit.hh"
 #include "cpu/o3/decode.hh"
 #include "cpu/o3/fetch.hh"
+#include "cpu/o3/fetch_pipe.hh"
 #include "cpu/o3/free_list.hh"
 #include "cpu/o3/iew.hh"
 #include "cpu/o3/inst_queue.hh"
@@ -80,7 +81,7 @@ struct SimpleCPUPolicy
     typedef ::LSQUnit<Impl> LSQUnit;
 
     /** Typedef for fetch. */
-    typedef DefaultFetch<Impl> Fetch;
+    typedef PipelineFetch<Impl> Fetch;
     /** Typedef for decode. */
     typedef DefaultDecode<Impl> Decode;
     /** Typedef for rename. */
@@ -92,6 +93,9 @@ struct SimpleCPUPolicy
 
     /** The struct for communication between fetch and decode. */
     typedef DefaultFetchDefaultDecode<Impl> FetchStruct;
+
+    /** The struct for communication between fetch stages. */
+    typedef DefaultFetchDefaultFetch<Impl> FetchStageStruct;
 
     /** The struct for communication between decode and rename. */
     typedef DefaultDecodeDefaultRename<Impl> DecodeStruct;

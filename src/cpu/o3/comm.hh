@@ -62,6 +62,12 @@ struct DefaultFetchDefaultDecode {
     bool clearFetchFault;
 };
 
+/** Struct that defines the information passed between fetch stages. */
+template<class Impl>
+struct DefaultFetchDefaultFetch {
+    TheISA::PCState pc;
+};
+
 /** Struct that defines the information passed from decode to rename. */
 template<class Impl>
 struct DefaultDecodeDefaultRename {

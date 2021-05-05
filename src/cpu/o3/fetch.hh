@@ -134,7 +134,7 @@ class DefaultFetch
         }
     };
 
-  private:
+  public:
     /* Event to delay delivery of a fetch translation result in case of
      * a fault and the nop to carry the fault cannot be generated
      * immediately */
@@ -198,7 +198,7 @@ class DefaultFetch
         NoGoodAddr
     };
 
-  private:
+  public:
     /** Fetch status. */
     FetchStatus _status;
 
@@ -276,7 +276,7 @@ class DefaultFetch
 
     /** For priority-based fetch policies, need to keep update priorityList */
     void deactivateThread(ThreadID tid);
-  private:
+  public:
     /** Reset this pipeline stage */
     void resetStage();
 
@@ -379,7 +379,7 @@ class DefaultFetch
 
     RequestPort &getInstPort() { return icachePort; }
 
-  private:
+  public:
     DynInstPtr buildInst(ThreadID tid, StaticInstPtr staticInst,
                          StaticInstPtr curMacroop, TheISA::PCState thisPC,
                          TheISA::PCState nextPC, bool trace);
@@ -406,7 +406,7 @@ class DefaultFetch
     /** Profile the reasons of fetch stall. */
     void profileStall(ThreadID tid);
 
-  private:
+  public:
     /** Pointer to the O3CPU. */
     O3CPU *cpu;
 
@@ -611,7 +611,7 @@ class DefaultFetch
 
     } fetchStats;
 
-  private:
+  public:
 
     LoopBuffer *lbuf;
 
