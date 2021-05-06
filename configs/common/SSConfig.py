@@ -39,8 +39,7 @@ def modifyO3CPUConfig(options, cpu):
         print('Using TAGE_SC_L_64KB BP')
         cpu.branchPred = TAGE_SC_L_64KB()
     else:
-        print('Unknow BP:', options.use_bp)
-        assert False
+        cpu.branchPred = eval(f'{options.use_bp}()')
 
     if options.enable_loop_buffer:
         cpu.loopBuffer.enable = True
