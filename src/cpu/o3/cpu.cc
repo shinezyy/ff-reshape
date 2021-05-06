@@ -421,7 +421,8 @@ FullO3CPUStats::FullO3CPUStats(FullO3CPU *cpu)
       ADD_STAT(ccRegfileReads, "number of cc regfile reads"),
       ADD_STAT(ccRegfileWrites, "number of cc regfile writes"),
       ADD_STAT(miscRegfileReads, "number of misc regfile reads"),
-      ADD_STAT(miscRegfileWrites, "number of misc regfile writes")
+      ADD_STAT(miscRegfileWrites, "number of misc regfile writes"),
+      ADD_STAT(lastCommitTick, "lastCommitTick")
 {
     // Register any of the O3CPU's stats here.
     timesIdled
@@ -1599,6 +1600,8 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
     cpuStats.committedOps[tid]++;
 
     probeInstCommit(inst->staticInst, inst->instAddr());
+
+    cpuStats.lastCommitTick = curTick();
 }
 
 template <class Impl>

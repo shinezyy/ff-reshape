@@ -772,6 +772,8 @@ class FullO3CPU : public BaseO3CPU
         //number of misc
         Stats::Scalar miscRegfileReads;
         Stats::Scalar miscRegfileWrites;
+
+        Stats::Scalar lastCommitTick;
     } cpuStats;
 
   public:
