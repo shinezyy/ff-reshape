@@ -1,0 +1,8 @@
+# -*- mode:python -*-
+
+Import('*')
+
+if 'NemuCPU' in env['CPU_MODELS']:
+    SimObject('NemuCPU.py')
+
+    Source('cpu.cc')

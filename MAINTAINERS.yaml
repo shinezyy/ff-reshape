@@ -124,6 +124,9 @@ cpu-minor:
 cpu-o3:
   status: orphaned
 
+cpu-nemu:
+  status: orphaned
+
 cpu-simple:
   status: maintained
   maintainers:

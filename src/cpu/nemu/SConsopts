@@ -1,0 +1,5 @@
+# -*- mode:python -*-
+
+Import('*')
+
+CpuModel('NemuCPU', default=True)

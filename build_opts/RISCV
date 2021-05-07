@@ -1,3 +1,3 @@
 TARGET_ISA = 'riscv'
-CPU_MODELS = 'AtomicSimpleCPU,TimingSimpleCPU,MinorCPU,O3CPU,FFCPU'
+CPU_MODELS = 'AtomicSimpleCPU,TimingSimpleCPU,MinorCPU,O3CPU,FFCPU,NemuCPU'
 PROTOCOL = 'MI_example'
