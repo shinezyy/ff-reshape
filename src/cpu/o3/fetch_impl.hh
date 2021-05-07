@@ -116,7 +116,7 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
     instSize = sizeof(TheISA::MachInst);
 
     for (int i = 0; i < Impl::MaxThreads; i++) {
-        fetchStatus[i] = Idle;
+        setFetchStatus(Idle, i);
         decoder[i] = nullptr;
         pc[i] = 0;
         fetchOffset[i] = 0;
@@ -287,6 +287,13 @@ DefaultFetch<Impl>::setFetchQueue(TimeBuffer<FetchStruct> *ftb_ptr)
 
 template<class Impl>
 void
+DefaultFetch<Impl>::setFetchStatus(ThreadStatus status, ThreadID tid)
+{
+    fetchStatus[tid] = status;
+}
+
+template<class Impl>
+void
 DefaultFetch<Impl>::startupStage()
 {
     assert(priorityList.empty());
@@ -301,7 +308,7 @@ template<class Impl>
 void
 DefaultFetch<Impl>::clearStates(ThreadID tid)
 {
-    fetchStatus[tid] = Running;
+    setFetchStatus(Running, tid);
     pc[tid] = cpu->pcState(tid);
     fetchOffset[tid] = 0;
     macroop[tid] = NULL;
@@ -329,7 +336,7 @@ DefaultFetch<Impl>::resetStage()
 
     // Setup PC and nextPC with initial state.
     for (ThreadID tid = 0; tid < numThreads; ++tid) {
-        fetchStatus[tid] = Running;
+        setFetchStatus(Running, tid);
         pc[tid] = cpu->pcState(tid);
         fetchOffset[tid] = 0;
         macroop[tid] = NULL;
@@ -385,9 +392,9 @@ DefaultFetch<Impl>::processCacheCompletion(PacketPtr pkt)
 
     // Only switch to IcacheAccessComplete if we're not stalled as well.
     if (checkStall(tid)) {
-        fetchStatus[tid] = Blocked;
+        setFetchStatus(Blocked, tid);
     } else {
-        fetchStatus[tid] = IcacheAccessComplete;
+        setFetchStatus(IcacheAccessComplete, tid);
     }
 
     pkt->req->setAccessLatency();
@@ -482,7 +489,7 @@ DefaultFetch<Impl>::wakeFromQuiesce()
     DPRINTF(Fetch, "Waking up from quiesce\n");
     // Hopefully this is safe
     // @todo: Allow other threads to wake from quiesce.
-    fetchStatus[0] = Running;
+    setFetchStatus(Running, 0);
 }
 
 template <class Impl>
@@ -624,7 +631,7 @@ DefaultFetch<Impl>::fetchCacheLine(Addr vaddr, ThreadID tid, Addr pc)
     memReq[tid] = mem_req;
 
     // Initiate translation of the icache block
-    fetchStatus[tid] = ItlbWait;
+    setFetchStatus(ItlbWait, tid);
     FetchTranslation *trans = new FetchTranslation(this);
     cpu->mmu->translateTiming(mem_req, cpu->thread[tid]->getTC(),
                               trans, BaseTLB::Execute);
@@ -661,7 +668,7 @@ DefaultFetch<Impl>::finishTranslation(const Fault &fault,
         if (!cpu->system->isMemAddr(mem_req->getPaddr())) {
             warn("Address %#x is outside of physical memory, stopping fetch\n",
                     mem_req->getPaddr());
-            fetchStatus[tid] = NoGoodAddr;
+            setFetchStatus(NoGoodAddr, tid);
             memReq[tid] = NULL;
             return;
         }
@@ -682,7 +689,7 @@ DefaultFetch<Impl>::finishTranslation(const Fault &fault,
             assert(retryTid == InvalidThreadID);
             DPRINTF(Fetch, "[tid:%i] Out of MSHRs!\n", tid);
 
-            fetchStatus[tid] = IcacheWaitRetry;
+            setFetchStatus(IcacheWaitRetry, tid);
             retryPkt = data_pkt;
             retryTid = tid;
             cacheBlocked = true;
@@ -691,7 +698,7 @@ DefaultFetch<Impl>::finishTranslation(const Fault &fault,
             DPRINTF(Activity, "[tid:%i] Activity: Waiting on I-cache "
                     "response.\n", tid);
             lastIcacheStall[tid] = curTick();
-            fetchStatus[tid] = IcacheWaitResponse;
+            setFetchStatus(IcacheWaitResponse, tid);
             // Notify Fetch Request probe when a packet containing a fetch
             // request is successfully sent
             ppFetchRequestSent->notify(mem_req);
@@ -729,7 +736,7 @@ DefaultFetch<Impl>::finishTranslation(const Fault &fault,
         DPRINTF(Activity, "Activity this cycle.\n");
         cpu->activityThisCycle();
 
-        fetchStatus[tid] = TrapPending;
+        setFetchStatus(TrapPending, tid);
 
         DPRINTF(Fetch, "[tid:%i] Blocked, need to handle the trap.\n", tid);
         DPRINTF(Fetch, "[tid:%i] fault (%s) detected @ PC %s.\n",
@@ -775,7 +782,7 @@ DefaultFetch<Impl>::doSquash(const TheISA::PCState &newPC,
         retryTid = InvalidThreadID;
     }
 
-    fetchStatus[tid] = Squashing;
+    setFetchStatus(Squashing, tid);
 
     // Empty fetch queue
     fetchQueue[tid].clear();
@@ -1066,7 +1073,7 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
         fetchStatus[tid] != QuiescePending) {
         DPRINTF(Fetch, "[tid:%i] Setting to blocked\n",tid);
 
-        fetchStatus[tid] = Blocked;
+        setFetchStatus(Blocked, tid);
 
         return true;
     }
@@ -1078,7 +1085,7 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
         DPRINTF(Fetch, "[tid:%i] Done squashing, switching to running.\n",
                 tid);
 
-        fetchStatus[tid] = Running;
+        setFetchStatus(Running, tid);
 
         return true;
     }
@@ -1195,7 +1202,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
     if (fetchStatus[tid] == IcacheAccessComplete) {
         DPRINTF(Fetch, "[tid:%i] Icache miss is complete.\n", tid);
 
-        fetchStatus[tid] = Running;
+        setFetchStatus(Running, tid);
         status_change = true;
 
     } else if (fetchStatus[tid] == Running) {
@@ -1450,7 +1457,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             if (instruction->isQuiesce()) {
                 DPRINTF(Fetch,
                         "Quiesce instruction encountered, halting fetch!\n");
-                fetchStatus[tid] = QuiescePending;
+                setFetchStatus(QuiescePending, tid);
                 status_change = true;
                 quiesce = true;
                 break;
@@ -1532,7 +1539,7 @@ DefaultFetch<Impl>::recvReqRetry()
         assert(fetchStatus[retryTid] == IcacheWaitRetry);
 
         if (icachePort.sendTimingReq(retryPkt)) {
-            fetchStatus[retryTid] = IcacheWaitResponse;
+            setFetchStatus(IcacheWaitResponse, retryTid);
             // Notify Fetch Request probe when a retryPkt is successfully sent.
             // Note that notify must be called before retryPkt is set to NULL.
             ppFetchRequestSent->notify(retryPkt->req);

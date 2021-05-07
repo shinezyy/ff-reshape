@@ -28,6 +28,8 @@ class PipelineFetch : public DefaultFetch<Impl>
 
     typedef typename CPUPol::FetchStageStruct FetchStageStruct;
 
+    typedef typename DefaultFetch<Impl>::ThreadStatus ThreadStatus;
+
     /** PipelineFetch constructor. */
     PipelineFetch(O3CPU *_cpu, const DerivO3CPUParams &params);
 
@@ -35,6 +37,9 @@ class PipelineFetch : public DefaultFetch<Impl>
      * as many instructions as possible.
      */
     void tick();
+
+    /** Sets fetchStatus of active threads. */
+    virtual void setFetchStatus(ThreadStatus status, ThreadID tid) override;
 
     // std::list<ThreadID> *getActiveThreads() {
     //   return this->activeThreads;
@@ -74,6 +79,19 @@ class PipelineFetch : public DefaultFetch<Impl>
     typename TimeBuffer<FetchStageStruct>::wire fromFetch2;
     typename TimeBuffer<FetchStageStruct>::wire fromFetch3;
     typename TimeBuffer<FetchStageStruct>::wire fromFetch4;
+
+    /** Source of possible stalls. */
+    struct Stalls {
+        bool fetch1;
+        bool fetch2;
+        bool fetch3;
+        bool fetch4;
+        bool decode;
+        bool drain;
+    };
+
+    /** Tracks which stages are telling fetch to stall. */
+    Stalls stalls[Impl::MaxThreads];
 };
 
 
@@ -115,8 +133,9 @@ class BaseFetchStage
         NoGoodAddr
     };
 
-  protected:
-    TheISA::PCState pc[Impl::MaxThreads];
+  public:
+
+    TheISA::PCState pcReg[Impl::MaxThreads];
 
     /** Size of instructions. */
     int instSize;
@@ -149,7 +168,7 @@ class BaseFetchStage
 
   public:
     /** BaseFetchStage constructor. */
-    BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params);
+    BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper);
 
     /** Returns the name of fetch. */
     virtual std::string name() const;
@@ -167,9 +186,9 @@ class BaseFetchStage
     /** Ticks the fetch stage, processing all inputs signals and fetching
      * as many instructions as possible.
      */
-    void tick(PipelineFetch<Impl> *upper);
+    void tick(bool &status_change);
 
-    virtual void fetch(bool &status_change, PipelineFetch<Impl> *upper)
+    virtual void fetch(bool &status_change)
     { printf("This function shouldn't be call\n"); }
 
     /** Checks all input signals and updates the status as necessary.
@@ -189,9 +208,18 @@ class BaseFetchStage
     /** Returns the appropriate thread to fetch, given the fetch policy. */
     ThreadID getFetchingThread();
 
+    /** Sets fetchStatus of active threads. */
+    void setFetchStatus(ThreadStatus status, ThreadID tid){
+      fetchStatus[tid] = status;
+    }
+
+    std::string printStatus(int status);
+
   protected:
     /** Pointer to the O3CPU. */
     O3CPU *cpu;
+
+    PipelineFetch<Impl> *upper;
 
     typename TimeBuffer<TimeStruct>::wire fromNextStage;
 
@@ -199,19 +227,6 @@ class BaseFetchStage
      * cycle. Used to tell CPU if there is activity this cycle.
      */
     bool wroteToTimeBuffer;
-
-    /** Source of possible stalls. */
-    struct Stalls {
-        bool fetch1;
-        bool fetch2;
-        bool fetch3;
-        bool fetch4;
-        bool decode;
-        bool drain;
-    };
-
-    /** Tracks which stages are telling fetch to stall. */
-    Stalls stalls[Impl::MaxThreads];
 
     /** The width of fetch in instructions. */
     unsigned fetchWidth;
@@ -230,9 +245,10 @@ class FetchStage1 : public BaseFetchStage<Impl>
   public:
     typedef typename Impl::O3CPU O3CPU;
 
-    FetchStage1(O3CPU *_cpu, const DerivO3CPUParams &params) : BaseFetchStage<Impl>(_cpu, params) {}
+    FetchStage1(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper)
+      : BaseFetchStage<Impl>(_cpu, params, upper) {}
 
-    virtual void fetch(bool &status_change, PipelineFetch<Impl> *upper) override;
+    virtual void fetch(bool &status_change) override;
 
     virtual std::string name() const override;
 };
@@ -243,9 +259,10 @@ class FetchStage2 : public BaseFetchStage<Impl>
   public:
     typedef typename Impl::O3CPU O3CPU;
 
-    FetchStage2(O3CPU *_cpu, const DerivO3CPUParams &params) : BaseFetchStage<Impl>(_cpu, params) {}
+    FetchStage2(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper)
+      : BaseFetchStage<Impl>(_cpu, params, upper) {}
 
-    virtual void fetch(bool &status_change, PipelineFetch<Impl> *upper) override;
+    virtual void fetch(bool &status_change) override;
 
     virtual std::string name() const override;
 };
@@ -256,9 +273,10 @@ class FetchStage3 : public BaseFetchStage<Impl>
   public:
     typedef typename Impl::O3CPU O3CPU;
 
-    FetchStage3(O3CPU *_cpu, const DerivO3CPUParams &params) : BaseFetchStage<Impl>(_cpu, params) {}
+    FetchStage3(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper)
+      : BaseFetchStage<Impl>(_cpu, params, upper) {}
 
-    virtual void fetch(bool &status_change, PipelineFetch<Impl> *upper) override;
+    virtual void fetch(bool &status_change) override;
 
     virtual std::string name() const override;
 };
@@ -278,7 +296,9 @@ class FetchStage4 : public BaseFetchStage<Impl>
   public:
     typedef typename Impl::O3CPU O3CPU;
 
-    FetchStage4(O3CPU *_cpu, const DerivO3CPUParams &params) : BaseFetchStage<Impl>(_cpu, params) {
+    FetchStage4(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper)
+      : BaseFetchStage<Impl>(_cpu, params, upper)
+    {
       for (int i = 0; i < Impl::MaxThreads; i++) {
         decoder[i] = nullptr;
       }
@@ -289,7 +309,7 @@ class FetchStage4 : public BaseFetchStage<Impl>
                   dynamic_cast<TheISA::ISA *>(params.isa[tid]));
       }
 
-      branchPred = params.branchPred;
+      branchPred = upper->branchPred;
     }
 
     typedef typename Impl::DynInstPtr DynInstPtr;
@@ -297,7 +317,7 @@ class FetchStage4 : public BaseFetchStage<Impl>
     virtual std::string name() const override;
 
   public:
-    virtual void fetch(bool &status_change, PipelineFetch<Impl> *upper) override;
+    virtual void fetch(bool &status_change) override;
 
     bool lookupAndUpdateNextPC(const DynInstPtr &inst, TheISA::PCState &pc);
 

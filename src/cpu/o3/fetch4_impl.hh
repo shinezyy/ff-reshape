@@ -5,22 +5,41 @@
 // IF4 do branch predict
 template<class Impl>
 void
-FetchStage4<Impl>::fetch(bool &status_change, PipelineFetch<Impl> *upper)
+FetchStage4<Impl>::fetch(bool &status_change)
 {
-    printf("FetchStage4.fetch() is called\n");
-    ThreadID tid = upper->getFetchingThread();
+    DPRINTF(Fetch4, "FetchStage4.fetch() is called\n");
+    // ThreadID tid = this->upper->getFetchingThread();
+    ThreadID tid = 0;
 
-    assert(!upper->cpu->switchedOut());
+    assert(!this->upper->cpu->switchedOut());
 
     if (tid == InvalidThreadID) {
         return;
     }
 
+    TheISA::PCState thisPC;
+
     // squash logic
+    if (this->fetchStatus[tid] == this->Squashing) {
+        thisPC = 0;
+        this->pcReg[tid] = 0;
+        DPRINTF(Fetch4, "fetch4: thisPC = %08lx\n", thisPC.pc());
+        return;
+    }
+
+    this->fetchStatus[tid] =
+        static_cast<typename BaseFetchStage<Impl>::ThreadStatus>
+        (this->upper->toFetch4->lastStatus);
 
     // The current PC.
-    TheISA::PCState thisPC = upper->toFetch4->pc;
-    printf("fetch4: thisPC = %08lx\n", thisPC.pc());
+    if (this->upper->toFetch4->lastStatus == this->Running) {
+        thisPC = this->upper->toFetch4->pc;
+        this->pcReg[tid] = thisPC;
+    } else {
+        thisPC = this->pcReg[tid];
+    }
+
+    DPRINTF(Fetch4, "fetch4: thisPC = %08lx\n", thisPC.pc());
 
     TheISA::PCState nextPC = thisPC;
 
@@ -30,18 +49,21 @@ FetchStage4<Impl>::fetch(bool &status_change, PipelineFetch<Impl> *upper)
     }
 
     // DynInstPtr instruction =
-    //     upper->buildInst(tid, staticInst, nullptr,
+    //     this->upper->buildInst(tid, staticInst, nullptr,
     //                 thisPC, nextPC, true);
 
     // lookupAndUpdateNextPC(instruction, nextPC);
 
-    if (!this->stalls[tid].decode) {
-        // upper->toDecode->pc[upper->toDecode->size++] = thisPC;
+    DPRINTF(Fetch4, "fetch4: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
+
+    if (!this->upper->stalls[tid].decode && this->fetchStatus[tid] == this->Running) {
+        // this->upper->toDecode->pc[this->upper->toDecode->size++] = thisPC;
         DPRINTF(Fetch4, "[tid:%i] Sending if4 pc:%x to decode\n", tid, thisPC);
         this->wroteToTimeBuffer = true;
+    } else {
+        DPRINTF(Fetch4, "[tid:%i] *Stall* if4 pc:%x to decode\n", tid, thisPC);
     }
 
-    // upper->pc[tid] = nextPC;
 }
 
 template <class Impl>

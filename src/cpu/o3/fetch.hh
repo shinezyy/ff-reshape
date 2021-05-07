@@ -236,6 +236,9 @@ class DefaultFetch
     /** Sets pointer to time buffer used to communicate to the next stage. */
     void setFetchQueue(TimeBuffer<FetchStruct> *fq_ptr);
 
+    /** Sets fetchStatus of active threads. */
+    virtual void setFetchStatus(ThreadStatus status, ThreadID tid);
+
     /** Initialize stage. */
     void startupStage();
 

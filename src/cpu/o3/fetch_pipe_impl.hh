@@ -40,10 +40,10 @@ PipelineFetch<Impl>::PipelineFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
         toFetch3Buffer(10, 10),
         toFetch4Buffer(10, 10)
     {
-        fetch1 = new FetchStage1<Impl>(_cpu, params);
-        fetch2 = new FetchStage2<Impl>(_cpu, params);
-        fetch3 = new FetchStage3<Impl>(_cpu, params);
-        fetch4 = new FetchStage4<Impl>(_cpu, params);
+        fetch1 = new FetchStage1<Impl>(_cpu, params, this);
+        fetch2 = new FetchStage2<Impl>(_cpu, params, this);
+        fetch3 = new FetchStage3<Impl>(_cpu, params, this);
+        fetch4 = new FetchStage4<Impl>(_cpu, params, this);
 
         fromFetch1 = toFetch2Buffer.getWire(0);
         fromFetch2 = toFetch3Buffer.getWire(0);
@@ -54,83 +54,135 @@ PipelineFetch<Impl>::PipelineFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
         toFetch2 = toFetch2Buffer.getWire(-1);
         toFetch3 = toFetch3Buffer.getWire(-1);
         toFetch4 = toFetch4Buffer.getWire(-1);
+
+        for (int i = 0; i < 1; i++) {
+            stalls[i] = {false, false, false, false, false, false};
+        }
     }
-/*template<class Impl>
-PipelineFetch<Impl>::PipelineFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
-    : fetchPolicy(params.smtFetchPolicy),
-      cpu(_cpu),
-      fetchWidth(params.fetchWidth),
-      decodeWidth(params.decodeWidth),
-      retryPkt(NULL),
-      retryTid(InvalidThreadID),
-      cacheBlkSize(cpu->cacheLineSize()),
-      fetchBufferSize(params.fetchBufferSize),
-      fetchBufferMask(fetchBufferSize - 1),
-      fetchQueueSize(params.fetchQueueSize),
-      numThreads(params.numThreads),
-      numFetchingThreads(params.smtNumFetchingThreads),
-      icachePort(this, _cpu),
-      finishTranslationEvent(this), fetchStats(_cpu, this),
-      fetch1(_cpu, params), fetch2(_cpu, params),
-      fetch3(_cpu, params), fetch4(_cpu, params)
-{
-    if (numThreads > Impl::MaxThreads)
-        fatal("numThreads (%d) is larger than compiled limit (%d),\n"
-              "\tincrease MaxThreads in src/cpu/o3/impl.hh\n",
-              numThreads, static_cast<int>(Impl::MaxThreads));
-    if (fetchWidth > Impl::MaxWidth)
-        fatal("fetchWidth (%d) is larger than compiled limit (%d),\n"
-             "\tincrease MaxWidth in src/cpu/o3/impl.hh\n",
-             fetchWidth, static_cast<int>(Impl::MaxWidth));
-    if (fetchBufferSize > cacheBlkSize)
-        fatal("fetch buffer size (%u bytes) is greater than the cache "
-              "block size (%u bytes)\n", fetchBufferSize, cacheBlkSize);
-    if (cacheBlkSize % fetchBufferSize)
-        fatal("cache block (%u bytes) is not a multiple of the "
-              "fetch buffer (%u bytes)\n", cacheBlkSize, fetchBufferSize);
-
-    // Get the size of an instruction.
-    instSize = sizeof(TheISA::MachInst);
-
-    for (int i = 0; i < Impl::MaxThreads; i++) {
-        fetchStatus[i] = Idle;
-        pc[i] = 0;
-        memReq[i] = nullptr;
-        stalls[i] = {false, false};
-        fetchBuffer[i] = NULL;
-        fetchBufferPC[i] = 0;
-        fetchBufferValid[i] = false;
-    }
-
-    branchPred = params.branchPred;
-
-    for (ThreadID tid = 0; tid < numThreads; tid++) {
-        decoder[tid] = new TheISA::Decoder(
-                dynamic_cast<TheISA::ISA *>(params.isa[tid]));
-        // Create space to buffer the cache line data,
-        // which may not hold the entire cache line.
-        fetchBuffer[tid] = new uint8_t[fetchBufferSize];
-    }
-}*/
 
 template <class Impl>
 void
 PipelineFetch<Impl>::tick()
 {
-    fetch1->tick(this);
-    fetch2->tick(this);
-    fetch3->tick(this);
-    fetch4->tick(this);
+    list<ThreadID>::iterator threads = this->activeThreads->begin();
+    list<ThreadID>::iterator end = this->activeThreads->end();
+    bool status_change = false;
+
+    this->wroteToTimeBuffer = false;
+
+    DPRINTF(Fetch1, "********************************************************\n");
+
+    while (threads != end) {
+        [[maybe_unused]] ThreadID tid = *threads++;
+
+        // Check the signals for each thread to determine the proper status
+        // for each thread.
+        bool updated_status = this->checkSignalsAndUpdate(tid);
+        // bool updated_status = false;
+        status_change = status_change || updated_status;
+    }
+
+    /*if (stalls[0].fetch1)
+        DPRINTF(Fetch, "=|= stalls: fetch1\n");
+
+    if (stalls[0].fetch2)
+        DPRINTF(Fetch, "=|= stalls: fetch2\n");
+
+    if (stalls[0].fetch3)
+        DPRINTF(Fetch, "=|= stalls: fetch3\n");
+
+    if (stalls[0].fetch4)
+        DPRINTF(Fetch, "=|= stalls: fetch4\n");
+
+    if (stalls[0].decode)
+        DPRINTF(Fetch, "=|= stalls: decode\n");
+
+    if (stalls[0].drain)
+        DPRINTF(Fetch, "=|= stalls: drain\n");
+    */
+
+    fetch1->tick(status_change);
+    fetch2->tick(status_change);
+    fetch3->tick(status_change);
+    fetch4->tick(status_change);
+
+    if (status_change) {
+        // Change the fetch stage status if there was a status change.
+        this->_status = this->updateFetchStatus();
+        // this->_status = this->Active;
+    }
+
+    // If there was activity this cycle, inform the CPU of it.
+    if (this->wroteToTimeBuffer) {
+        DPRINTF(Activity, "Activity this cycle.\n");
+        this->cpu->activityThisCycle();
+    }
 
     toFetch1Buffer.advance();
     toFetch2Buffer.advance();
     toFetch3Buffer.advance();
     toFetch4Buffer.advance();
+
 }
 
 template<class Impl>
-BaseFetchStage<Impl>::BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params)
+void
+PipelineFetch<Impl>::setFetchStatus(ThreadStatus status, ThreadID tid)
+{
+    DPRINTF(Fetch, "setFetchStatus is called: %d\n", status);
+
+    this->fetchStatus[tid] = status;
+
+    switch(status) {
+        case this->Running :
+        case this->Idle :
+        case this->Squashing :
+        case this->Blocked :
+        case this->TrapPending :
+        case this->QuiescePending :
+            fetch1->setFetchStatus(static_cast<typename BaseFetchStage<Impl>::ThreadStatus>(status), tid);
+            fetch2->setFetchStatus(static_cast<typename BaseFetchStage<Impl>::ThreadStatus>(status), tid);
+            fetch3->setFetchStatus(static_cast<typename BaseFetchStage<Impl>::ThreadStatus>(status), tid);
+            fetch4->setFetchStatus(static_cast<typename BaseFetchStage<Impl>::ThreadStatus>(status), tid);
+            break;
+
+        case this->ItlbWait :
+        case this->IcacheWaitRetry :
+        case this->IcacheWaitResponse :
+        case this->IcacheAccessComplete :
+        case this->NoGoodAddr :
+            fetch1->setFetchStatus(static_cast<typename BaseFetchStage<Impl>::ThreadStatus>(status), tid);
+            break;
+
+        default: break;
+    }
+}
+
+template<class Impl>
+std::string
+BaseFetchStage<Impl>::printStatus(int status)
+{
+  switch (status) {
+    case  0: return std::string("Running");
+    case  1: return std::string("Idle");
+    case  2: return std::string("Squashing");
+    case  3: return std::string("Blocked");
+    case  4: return std::string("Fetching");
+    case  5: return std::string("TrapPending");
+    case  6: return std::string("QuiescePending");
+    case  7: return std::string("ItlbWait");
+    case  8: return std::string("IcacheWaitResponse");
+    case  9: return std::string("IcacheWaitRetry");
+    case 10: return std::string("IcacheAccessComplete");
+    case 11: return std::string("NoGoodAddr");
+    default: return std::string("Wrong Status");
+  }
+}
+
+template<class Impl>
+BaseFetchStage<Impl>::BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper)
   : cpu(_cpu),
+    upper(upper),
     fetchWidth(params.fetchWidth),
     decodeWidth(params.decodeWidth)
 {
@@ -139,8 +191,7 @@ BaseFetchStage<Impl>::BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params
 
   for (int i = 0; i < Impl::MaxThreads; i++) {
       fetchStatus[i] = Idle;
-      pc[i] = 0;
-      stalls[i] = {false, false, false, false, false, false};
+      pcReg[i] = 0;
   }
 }
 
@@ -150,13 +201,13 @@ BaseFetchStage<Impl>::checkSignalsAndUpdate(ThreadID tid)
 {
     // Update the per thread stall statuses.
     if (fromNextStage->block) {
-        stalls[tid].nextStage = true;
+        this->upper->stalls[tid].nextStage = true;
     }
 
     if (fromNextStage->unblock) {
-        assert(stalls[tid].nextStage);
+        assert(this->upper->stalls[tid].nextStage);
         assert(!fromNextStage->block[tid]);
-        stalls[tid].nextStage = false;
+        this->upper->stalls[tid].nextStage = false;
     }
 
     // Check squash signals from commit.
@@ -235,43 +286,15 @@ BaseFetchStage<Impl>::updateFetchStatus()
 
 template <class Impl>
 void
-BaseFetchStage<Impl>::tick(PipelineFetch<Impl> *upper)
+BaseFetchStage<Impl>::tick(bool &status_change)
 {
-    list<ThreadID>::iterator threads = upper->activeThreads->begin();
-    list<ThreadID>::iterator end = upper->activeThreads->end();
-    bool status_change = false;
-
-    wroteToTimeBuffer = false;
-
-    while (threads != end) {
-        [[maybe_unused]] ThreadID tid = *threads++;
-
-        // Check the signals for each thread to determine the proper status
-        // for each thread.
-        // bool updated_status = checkSignalsAndUpdate(tid);
-        bool updated_status = false;
-        status_change = status_change || updated_status;
-    }
-
-    DPRINTF(Fetch, "Running %s stage.\n", this->name());
+    // DPRINTF(Fetch, "Running %s stage. fetchStatus: %s\n", this->name(), printStatus(this->fetchStatus[0]));
 
     // for (threadFetched = 0; threadFetched < numFetchingThreads;
     for (threadFetched = 0; threadFetched < 1;
          threadFetched++) {
         // Fetch each of the actively fetching threads.
-        fetch(status_change, upper);
-    }
-
-    if (status_change) {
-        // Change the fetch stage status if there was a status change.
-        // _status = updateFetchStatus();
-        _status = Active;
-    }
-
-    // If there was activity this cycle, inform the CPU of it.
-    if (wroteToTimeBuffer) {
-        DPRINTF(Activity, "Activity this cycle.\n");
-        cpu->activityThisCycle();
+        fetch(status_change);
     }
 }
 
@@ -312,7 +335,7 @@ BaseFetchStage<Impl>::checkStall(ThreadID tid) const
 {
     bool ret_val = false;
 
-    if (stalls[tid].drain) {
+    if (this->upper->stalls[tid].drain) {
         assert(cpu->isDraining());
         DPRINTF(Fetch,"[tid:%i] Drain stall detected.\n",tid);
         ret_val = true;
@@ -320,162 +343,5 @@ BaseFetchStage<Impl>::checkStall(ThreadID tid) const
 
     return ret_val;
 }
-
-/*template <class Impl>
-bool
-PipelineFetch<Impl>::fetchCacheLine(Addr vaddr, ThreadID tid, Addr pc)
-{
-    Fault fault = NoFault;
-
-    assert(!cpu->switchedOut());
-
-    // @todo: not sure if these should block translation.
-    //AlphaDep
-    if (cacheBlocked) {
-        DPRINTF(Fetch, "[tid:%i] Can't fetch cache line, cache blocked\n",
-                tid);
-        return false;
-    } else if (checkInterrupt(pc) && !delayedCommit[tid]) {
-        // Hold off fetch from getting new instructions when:
-        // Cache is blocked, or
-        // while an interrupt is pending and we're not in PAL mode, or
-        // fetch is switched out.
-        DPRINTF(Fetch, "[tid:%i] Can't fetch cache line, interrupt pending\n",
-                tid);
-        return false;
-    }
-
-    // Align the fetch address to the start of a fetch buffer segment.
-    Addr fetchBufferBlockPC = bufferAlignPC(vaddr, fetchBufferMask);
-
-    DPRINTF(Fetch, "[tid:%i] Fetching cache line %#x for addr %#x\n",
-            tid, fetchBufferBlockPC, vaddr);
-
-    // Setup the memReq to do a read of the first instruction's address.
-    // Set the appropriate read size and flags as well.
-    // Build request here.
-    RequestPtr mem_req = std::make_shared<Request>(
-        fetchBufferBlockPC, fetchBufferSize,
-        Request::INST_FETCH, cpu->instRequestorId(), pc,
-        cpu->thread[tid]->contextId());
-
-    mem_req->taskId(cpu->taskId());
-
-    memReq[tid] = mem_req;
-
-    // Initiate translation of the icache block
-    fetchStatus[tid] = ItlbWait;
-    FetchTranslation *trans = new FetchTranslation(this);
-    cpu->mmu->translateTiming(mem_req, cpu->thread[tid]->getTC(),
-                              trans, BaseTLB::Execute);
-    return true;
-}
-
-template <class Impl>
-void
-PipelineFetch<Impl>::finishTranslation(const Fault &fault,
-                                      const RequestPtr &mem_req)
-{
-    ThreadID tid = cpu->contextToThread(mem_req->contextId());
-    Addr fetchBufferBlockPC = mem_req->getVaddr();
-
-    assert(!cpu->switchedOut());
-
-    // Wake up CPU if it was idle
-    cpu->wakeCPU();
-
-    if (fetchStatus[tid] != ItlbWait || mem_req != memReq[tid] ||
-        mem_req->getVaddr() != memReq[tid]->getVaddr()) {
-        DPRINTF(Fetch, "[tid:%i] Ignoring itlb completed after squash\n",
-                tid);
-        ++fetchStats.tlbSquashes;
-        return;
-    }
-
-
-    // If translation was successful, attempt to read the icache block.
-    if (fault == NoFault) {
-        // Check that we're not going off into random memory
-        // If we have, just wait around for commit to squash something and put
-        // us on the right track
-        if (!cpu->system->isMemAddr(mem_req->getPaddr())) {
-            warn("Address %#x is outside of physical memory, stopping fetch\n",
-                    mem_req->getPaddr());
-            fetchStatus[tid] = NoGoodAddr;
-            memReq[tid] = NULL;
-            return;
-        }
-
-        // Build packet here.
-        PacketPtr data_pkt = new Packet(mem_req, MemCmd::ReadReq);
-        data_pkt->dataDynamic(new uint8_t[fetchBufferSize]);
-
-        fetchBufferPC[tid] = fetchBufferBlockPC;
-        fetchBufferValid[tid] = false;
-        DPRINTF(Fetch, "Fetch: Doing instruction read.\n");
-
-        fetchStats.cacheLines++;
-
-        // Access the cache.
-        if (!icachePort.sendTimingReq(data_pkt)) {
-            assert(retryPkt == NULL);
-            assert(retryTid == InvalidThreadID);
-            DPRINTF(Fetch, "[tid:%i] Out of MSHRs!\n", tid);
-
-            fetchStatus[tid] = IcacheWaitRetry;
-            retryPkt = data_pkt;
-            retryTid = tid;
-            cacheBlocked = true;
-        } else {
-            DPRINTF(Fetch, "[tid:%i] Doing Icache access.\n", tid);
-            DPRINTF(Activity, "[tid:%i] Activity: Waiting on I-cache "
-                    "response.\n", tid);
-            lastIcacheStall[tid] = curTick();
-            fetchStatus[tid] = IcacheWaitResponse;
-            // Notify Fetch Request probe when a packet containing a fetch
-            // request is successfully sent
- ppFetchRequestSent->notify(mem_req);
-        }
-    } else {
-        // Don't send an instruction to decode if we can't handle it.
-        if (!(numInst < fetchWidth) || !(fetchQueue[tid].size() < fetchQueueSize)) {
-            assert(!finishTranslationEvent.scheduled());
-            finishTranslationEvent.setFault(fault);
-            finishTranslationEvent.setReq(mem_req);
-            cpu->schedule(finishTranslationEvent,
-                          cpu->clockEdge(Cycles(1)));
-            return;
-        }
-        DPRINTF(Fetch, "[tid:%i] Got back req with addr %#x but expected %#x\n",
-                tid, mem_req->getVaddr(), memReq[tid]->getVaddr());
-        // Translation faulted, icache request won't be sent.
-        memReq[tid] = NULL;
-
-        // Send the fault to commit.  This thread will not do anything
-        // until commit handles the fault.  The only other way it can
-        // wake up is if a squash comes along and changes the PC.
-        TheISA::PCState fetchPC = pc[tid];
-
-        DPRINTF(Fetch, "[tid:%i] Translation faulted, building noop.\n", tid);
-        // We will use a nop in ordier to carry the fault.
-        DynInstPtr instruction = buildInst(tid, StaticInst::nopStaticInstPtr,
-                                           NULL, fetchPC, fetchPC, false);
-        instruction->setNotAnInst();
-
-        instruction->setPredTarg(fetchPC);
-        instruction->fault = fault;
-        wroteToTimeBuffer = true;
-
-        DPRINTF(Activity, "Activity this cycle.\n");
-        cpu->activityThisCycle();
-
-        fetchStatus[tid] = TrapPending;
-
-        DPRINTF(Fetch, "[tid:%i] Blocked, need to handle the trap.\n", tid);
-        DPRINTF(Fetch, "[tid:%i] fault (%s) detected @ PC %s.\n",
-                tid, fault->name(), pc[tid]);
-    }
-    _status = updateFetchStatus();
-}*/
 
 #endif//__CPU_O3_FETCH_PIPE_IMPL_HH__

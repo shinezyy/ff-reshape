@@ -4,36 +4,103 @@
 // IF3 receive ICache date from IF1, and do predecode
 template<class Impl>
 void
-FetchStage3<Impl>::fetch(bool &status_change, PipelineFetch<Impl> *upper)
+FetchStage3<Impl>::fetch(bool &status_change)
 {
-    printf("FetchStage3.fetch() is called\n");
-    ThreadID tid = upper->getFetchingThread();
+    /** Typedefs from ISA. */
+    typedef TheISA::MachInst MachInst;
 
-    assert(!upper->cpu->switchedOut());
+    DPRINTF(Fetch3, "FetchStage3.fetch() is called\n");
+    // ThreadID tid = this->upper->getFetchingThread();
+    ThreadID tid = 0;
+
+    assert(!this->upper->cpu->switchedOut());
 
     if (tid == InvalidThreadID) {
         return;
     }
 
+    TheISA::PCState thisPC;
+
     // squash logic
+    if (this->fetchStatus[tid] == this->Squashing) {
+        thisPC = 0;
+        this->pcReg[tid] = 0;
+        DPRINTF(Fetch3, "fetch3: thisPC = %08lx\n", thisPC.pc());
+        return;
+    }
 
-    // Receive Icache response
-    // getFetchData();
-    // doPredecode();
+    this->fetchStatus[tid] =
+        static_cast<typename BaseFetchStage<Impl>::ThreadStatus>
+        (this->upper->toFetch3->lastStatus);
 
-    // The current PC.
-    TheISA::PCState thisPC = upper->toFetch3->pc;
-    printf("fetch3: thisPC = %08lx\n", thisPC.pc());
+    // The current PC
+    if (this->upper->toFetch3->lastStatus == this->Running) {
+        thisPC = this->upper->toFetch3->pc;
+        this->pcReg[tid] = thisPC;
+    } else {
+        thisPC = this->pcReg[tid];
+    }
+
+    DPRINTF(Fetch3, "fetch3: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
+
+    DPRINTF(Fetch3, "fetch3: thisPC = %08lx\n", thisPC.pc());
 
     TheISA::PCState nextPC = thisPC;
 
-    if (!this->stalls[tid].fetch4) {
-        upper->fromFetch3->pc = thisPC;
-        DPRINTF(Fetch3, "[tid:%i] Sending if3 pc:%x to if4\n", tid, thisPC);
-        this->wroteToTimeBuffer = true;
+    if (this->fetchStatus[tid] == this->IcacheAccessComplete) {
+        DPRINTF(Fetch, "[tid:%i] Icache miss is complete.\n", tid);
+
+        this->fetchStatus[tid] = this->Running;
+        this->upper->stalls[tid].fetch3 = false;
+        status_change = true;
+    } else if (this->fetchStatus[tid] == this->ItlbWait ||
+            this->fetchStatus[tid] == this->IcacheWaitRetry ||
+            this->fetchStatus[tid] == this->IcacheWaitResponse)
+    {
+        this->upper->stalls[tid].fetch3 = true;
     }
 
-    // upper->pc[tid] = nextPC;
+    Addr fetchAddr = thisPC.instAddr() & BaseCPU::PCMask;
+    Addr fetchBufferBlockPC = this->upper->bufferAlignPC(fetchAddr, this->upper->fetchBufferMask);
+
+    unsigned blkOffset = (fetchAddr - this->upper->fetchBufferPC[tid]) / this->upper->instSize;
+
+    // squash logic
+
+    // Receive Icache response
+    MachInst inst;
+    if (this->upper->fetchBufferValid[tid]) {
+      if (this->upper->fetchBufferPC[tid] == fetchBufferBlockPC) {
+        TheISA::MachInst *cacheInsts =
+            reinterpret_cast<TheISA::MachInst *>(this->upper->fetchBuffer[tid]);
+
+        inst = cacheInsts[blkOffset];
+
+        DPRINTF(Fetch3, "if3 get the data: %08x\n", inst);
+        this->upper->fromFetch3->lastStatus = this->Running;
+        this->fetchStatus[tid] = this->Running;
+      } else {
+        DPRINTF(Fetch3, "fetchBufferValid, but PC is %08x, excepted %08x",
+                this->upper->fetchBufferPC[tid], fetchBufferBlockPC);
+        this->upper->fromFetch3->lastStatus = this->IcacheWaitResponse;
+        this->fetchStatus[tid] = this->IcacheWaitResponse;
+      }
+    } else {
+        this->upper->fromFetch3->lastStatus = this->IcacheWaitResponse;
+        this->fetchStatus[tid] = this->IcacheWaitResponse;
+    }
+
+
+    // doPredecode();
+
+    if (this->fetchStatus[tid] == this->Running && !this->upper->stalls[tid].fetch4) {
+        this->upper->fromFetch3->pc = thisPC;
+        DPRINTF(Fetch3, "[tid:%i] Sending if3 pc:%x to if4\n", tid, thisPC);
+        this->wroteToTimeBuffer = true;
+    } else {
+        DPRINTF(Fetch3, "[tid:%i] *Stall* if3 pc:%x to if4\n", tid, thisPC);
+    }
+
 }
 
 template<class Impl>

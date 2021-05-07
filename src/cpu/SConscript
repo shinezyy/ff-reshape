@@ -83,6 +83,7 @@ CompoundFlag('Exec', [ 'ExecEnable', 'ExecOpClass', 'ExecThread',
     'ExecEffAddr', 'ExecResult', 'ExecSymbol', 'ExecMicro', 'ExecMacro',
     'ExecFaulting', 'ExecUser', 'ExecKernel' ])
 CompoundFlag('ExecNoTicks', [ 'Exec', 'FmtTicksOff' ])
+CompoundFlag('FetchTotal', [ 'Fetch', 'Fetch1', 'Fetch2', 'Fetch3', 'Fetch4'])
 
 Source('pc_event.cc')
 

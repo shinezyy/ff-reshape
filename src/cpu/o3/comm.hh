@@ -66,6 +66,8 @@ struct DefaultFetchDefaultDecode {
 template<class Impl>
 struct DefaultFetchDefaultFetch {
     TheISA::PCState pc;
+
+    int lastStatus;
 };
 
 /** Struct that defines the information passed from decode to rename. */
