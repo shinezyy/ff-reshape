@@ -45,6 +45,10 @@ PipelineFetch<Impl>::PipelineFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
         fetch3 = new FetchStage3<Impl>(_cpu, params, this);
         fetch4 = new FetchStage4<Impl>(_cpu, params, this);
 
+        fetch1->connNextStage(fetch2);
+        fetch2->connNextStage(fetch3);
+        fetch3->connNextStage(fetch4);
+
         fromFetch1 = toFetch2Buffer.getWire(0);
         fromFetch2 = toFetch3Buffer.getWire(0);
         fromFetch3 = toFetch4Buffer.getWire(0);
@@ -58,6 +62,7 @@ PipelineFetch<Impl>::PipelineFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
         for (int i = 0; i < 1; i++) {
             stalls[i] = {false, false, false, false, false, false};
         }
+
     }
 
 template <class Impl>
@@ -70,7 +75,7 @@ PipelineFetch<Impl>::tick()
 
     this->wroteToTimeBuffer = false;
 
-    DPRINTF(Fetch1, "********************************************************\n");
+    DPRINTF(Fetch, "********************************************************\n");
 
     while (threads != end) {
         [[maybe_unused]] ThreadID tid = *threads++;
@@ -102,14 +107,54 @@ PipelineFetch<Impl>::tick()
     */
 
     fetch1->tick(status_change);
+    DPRINTF(Fetch, "\n");
     fetch2->tick(status_change);
+    DPRINTF(Fetch, "\n");
     fetch3->tick(status_change);
+    DPRINTF(Fetch, "\n");
     fetch4->tick(status_change);
+    DPRINTF(Fetch, "\n");
 
     if (status_change) {
         // Change the fetch stage status if there was a status change.
         this->_status = this->updateFetchStatus();
         // this->_status = this->Active;
+    }
+
+    // Send instructions enqueued into the fetch queue to decode.
+    // Limit rate by fetchWidth.  Stall if decode is stalled.
+    unsigned insts_to_decode = 0;
+    unsigned available_insts = 0;
+
+    for (auto tid : *(this->activeThreads)) {
+        if (!stalls[tid].decode) {
+            available_insts += this->fetchQueue[tid].size();
+        }
+    }
+
+    // Pick a random thread to start trying to grab instructions from
+    auto tid_itr = this->activeThreads->begin();
+    std::advance(tid_itr, random_mt.random<uint8_t>(0, this->activeThreads->size() - 1));
+
+    while (available_insts != 0 && insts_to_decode < this->decodeWidth) {
+        ThreadID tid = *tid_itr;
+        if (!stalls[tid].decode && !this->fetchQueue[tid].empty()) {
+            const auto& inst = this->fetchQueue[tid].front();
+            this->toDecode->insts[this->toDecode->size++] = inst;
+            DPRINTF(Fetch, "[tid:%i] [sn:%llu] Sending instruction %08x to decode "
+                    "from fetch queue. Fetch queue size: %i.\n",
+                    tid, inst->seqNum, inst->staticInst->machInst, this->fetchQueue[tid].size());
+
+            this->wroteToTimeBuffer = true;
+            this->fetchQueue[tid].pop_front();
+            insts_to_decode++;
+            available_insts--;
+        }
+
+        tid_itr++;
+        // Wrap around if at end of active threads list
+        if (tid_itr == this->activeThreads->end())
+            tid_itr = this->activeThreads->begin();
     }
 
     // If there was activity this cycle, inform the CPU of it.
@@ -134,7 +179,6 @@ PipelineFetch<Impl>::setFetchStatus(ThreadStatus status, ThreadID tid)
     this->fetchStatus[tid] = status;
 
     switch(status) {
-        case this->Running :
         case this->Idle :
         case this->Squashing :
         case this->Blocked :
@@ -146,6 +190,7 @@ PipelineFetch<Impl>::setFetchStatus(ThreadStatus status, ThreadID tid)
             fetch4->setFetchStatus(static_cast<typename BaseFetchStage<Impl>::ThreadStatus>(status), tid);
             break;
 
+        case this->Running :
         case this->ItlbWait :
         case this->IcacheWaitRetry :
         case this->IcacheWaitResponse :
@@ -157,6 +202,58 @@ PipelineFetch<Impl>::setFetchStatus(ThreadStatus status, ThreadID tid)
         default: break;
     }
 }
+
+template <class Impl>
+void
+PipelineFetch<Impl>::fetchSquash(const TheISA::PCState &newPC, ThreadID tid)
+{
+    DPRINTF(Fetch, "[tid:%i] Squashing, setting PC to: %s.\n",
+            tid, newPC);
+
+    this->pc[tid] = newPC;
+    this->fetchOffset[tid] = 0;
+
+    // Clear the icache miss if it's outstanding.
+    if (this->fetchStatus[tid] == this->IcacheWaitResponse) {
+        DPRINTF(Fetch, "[tid:%i] Squashing outstanding Icache miss.\n",
+                tid);
+        this->memReq[tid] = NULL;
+    } else if (this->fetchStatus[tid] == this->ItlbWait) {
+        DPRINTF(Fetch, "[tid:%i] Squashing outstanding ITLB miss.\n",
+                tid);
+        this->memReq[tid] = NULL;
+    }
+
+    // Get rid of the retrying packet if it was from this thread.
+    if (this->retryTid == tid) {
+        assert(this->cacheBlocked);
+        if (this->retryPkt) {
+            delete this->retryPkt;
+        }
+        this->retryPkt = NULL;
+        this->retryTid = InvalidThreadID;
+    }
+
+    this->setFetchStatus(this->Squashing, tid);
+}
+
+/*template <class Impl>
+bool
+PipelineFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
+{
+    bool needUpdate = DefaultFetch<Impl>::checkSignalsAndUpdate(tid);
+
+    if (this->checkStall(tid) &&
+        fetch4->fetchStatus[tid] == fetch4->Running) {
+        DPRINTF(Fetch, "[tid:%i] Setting to blocked\n",tid);
+
+        setFetchStatus(this->Blocked, tid);
+
+        return true;
+    }
+
+    return needUpdate;
+}*/
 
 template<class Impl>
 std::string
@@ -183,8 +280,7 @@ template<class Impl>
 BaseFetchStage<Impl>::BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper)
   : cpu(_cpu),
     upper(upper),
-    fetchWidth(params.fetchWidth),
-    decodeWidth(params.decodeWidth)
+    decoupledBuffer(1, 1)
 {
   // Get the size of an instruction.
   instSize = sizeof(TheISA::MachInst);
@@ -193,56 +289,19 @@ BaseFetchStage<Impl>::BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params
       fetchStatus[i] = Idle;
       pcReg[i] = 0;
   }
+
+  thisStage = decoupledBuffer.getWire(0);
+  // nextStage = nullptr;
+  // prevStage = nullptr;
 }
 
-template <class Impl>
-bool
-BaseFetchStage<Impl>::checkSignalsAndUpdate(ThreadID tid)
+template<class Impl>
+void
+BaseFetchStage<Impl>::connNextStage(BaseFetchStage<Impl> *next)
 {
-    // Update the per thread stall statuses.
-    if (fromNextStage->block) {
-        this->upper->stalls[tid].nextStage = true;
-    }
-
-    if (fromNextStage->unblock) {
-        assert(this->upper->stalls[tid].nextStage);
-        assert(!fromNextStage->block[tid]);
-        this->upper->stalls[tid].nextStage = false;
-    }
-
-    // Check squash signals from commit.
-    if (fromNextStage->squash) {
-        // Squash this stage
-        return true;
-    }
-
-    if (checkStall(tid) &&
-        fetchStatus[tid] != IcacheWaitResponse &&
-        fetchStatus[tid] != IcacheWaitRetry &&
-        fetchStatus[tid] != ItlbWait &&
-        fetchStatus[tid] != QuiescePending) {
-        DPRINTF(Fetch, "[tid:%i] Setting to blocked\n",tid);
-
-        fetchStatus[tid] = Blocked;
-
-        return true;
-    }
-
-    if (fetchStatus[tid] == Blocked ||
-        fetchStatus[tid] == Squashing) {
-        // Switch status to running if fetch isn't being told to block or
-        // squash this cycle.
-        DPRINTF(Fetch, "[tid:%i] Done squashing, switching to running.\n",
-                tid);
-
-        fetchStatus[tid] = Running;
-
-        return true;
-    }
-
-    // If we've reached this point, we have not gotten any signals that
-    // cause fetch to change its status.  Fetch remains the same as before.
-    return false;
+    // This need replace by set and get functions
+    this->nextStage = next->decoupledBuffer.getWire(1);
+    next->prevStage = this->decoupledBuffer.getWire(-1);
 }
 
 template<class Impl>
@@ -327,21 +386,6 @@ BaseFetchStage<Impl>::getFetchingThread()
             return InvalidThreadID;
         }
     }
-}
-
-template<class Impl>
-bool
-BaseFetchStage<Impl>::checkStall(ThreadID tid) const
-{
-    bool ret_val = false;
-
-    if (this->upper->stalls[tid].drain) {
-        assert(cpu->isDraining());
-        DPRINTF(Fetch,"[tid:%i] Drain stall detected.\n",tid);
-        ret_val = true;
-    }
-
-    return ret_val;
 }
 
 #endif//__CPU_O3_FETCH_PIPE_IMPL_HH__

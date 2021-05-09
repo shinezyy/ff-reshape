@@ -27,7 +27,8 @@ FetchStage1<Impl>::fetch(bool &status_change)
     if (this->fetchStatus[tid] == this->Squashing) {
         thisPC = 0;
         this->pcReg[tid] = 0;
-        DPRINTF(Fetch1, "fetch1: thisPC = %08lx\n", thisPC.pc());
+        this->fetchStatus[tid] = this->Running;
+        DPRINTF(Fetch1, "fetch1: Squashing\n");
         return;
     }
 
@@ -42,10 +43,15 @@ FetchStage1<Impl>::fetch(bool &status_change)
     DPRINTF(Fetch1, "fetch1: thisPC = %08lx\n", thisPC.pc());
 
     Addr fetchAddr = thisPC.instAddr() & BaseCPU::PCMask;
-    [[maybe_unused]] Addr fetchBufferBlockPC = this->upper->bufferAlignPC(fetchAddr, this->upper->fetchBufferMask);
+    Addr fetchBufferBlockPC = this->upper->bufferAlignPC(fetchAddr, this->upper->fetchBufferMask);
 
     // TheISA::PCState nextPC = thisPC;
-    TheISA::PCState nextPC = thisPC.instAddr() + this->fetchWidth * sizeof(MachInst);
+    TheISA::PCState nextPC = thisPC.instAddr() + this->upper->fetchWidth * sizeof(MachInst);
+    Addr nextPCBlockPC = this->upper->bufferAlignPC(nextPC.instAddr(), this->upper->fetchBufferMask);
+
+    if (fetchBufferBlockPC != nextPCBlockPC ) {
+        nextPC = nextPCBlockPC;
+    }
 
     if (this->fetchStatus[tid] == this->IcacheAccessComplete) {
         this->upper->fromFetch1->lastStatus = this->Running;
@@ -86,8 +92,7 @@ FetchStage1<Impl>::fetch(bool &status_change)
                     "instruction, starting at PC %s.\n", tid, thisPC);
 
             this->upper->fetchCacheLine(fetchAddr, tid, thisPC.instAddr());
-            nextPC = thisPC.instAddr() + this->fetchWidth * sizeof(MachInst);
-            DPRINTF(Fetch1, "nextPC = %x, thisPC = %x\n", nextPC, thisPC);
+            // nextPC = thisPC.instAddr() + this->upper->fetchWidth * sizeof(MachInst);
         }
 
         // I should handle all read ICache operations at here, and dump the data returend,
@@ -95,7 +100,7 @@ FetchStage1<Impl>::fetch(bool &status_change)
     }
 
     this->upper->pc[tid] = nextPC;
-    DPRINTF(Fetch1, "nextPC = %x, pc = %x\n", nextPC, this->upper->pc[tid]);
+    DPRINTF(Fetch1, "nextPC = %x, thisPC = %x\n", nextPC, thisPC);
 }
 
 template<class Impl>

@@ -25,7 +25,8 @@ FetchStage3<Impl>::fetch(bool &status_change)
     if (this->fetchStatus[tid] == this->Squashing) {
         thisPC = 0;
         this->pcReg[tid] = 0;
-        DPRINTF(Fetch3, "fetch3: thisPC = %08lx\n", thisPC.pc());
+        this->fetchStatus[tid] = this->Idle;
+        DPRINTF(Fetch3, "fetch3: Squashing\n");
         return;
     }
 
@@ -74,20 +75,27 @@ FetchStage3<Impl>::fetch(bool &status_change)
         TheISA::MachInst *cacheInsts =
             reinterpret_cast<TheISA::MachInst *>(this->upper->fetchBuffer[tid]);
 
+        this->upper->fromFetch3->cacheData = new uint8_t[this->upper->fetchBufferSize];
+        memcpy(this->upper->fromFetch3->cacheData, this->upper->fetchBuffer[tid], this->upper->fetchBufferSize);
+
         inst = cacheInsts[blkOffset];
 
         DPRINTF(Fetch3, "if3 get the data: %08x\n", inst);
         this->upper->fromFetch3->lastStatus = this->Running;
         this->fetchStatus[tid] = this->Running;
+        this->upper->stalls[tid].fetch3 = false;
       } else {
         DPRINTF(Fetch3, "fetchBufferValid, but PC is %08x, excepted %08x",
                 this->upper->fetchBufferPC[tid], fetchBufferBlockPC);
         this->upper->fromFetch3->lastStatus = this->IcacheWaitResponse;
         this->fetchStatus[tid] = this->IcacheWaitResponse;
+        this->upper->fromFetch3->cacheData = nullptr;
+        assert(false);
       }
     } else {
         this->upper->fromFetch3->lastStatus = this->IcacheWaitResponse;
         this->fetchStatus[tid] = this->IcacheWaitResponse;
+        this->upper->fromFetch3->cacheData = nullptr;
     }
 
 

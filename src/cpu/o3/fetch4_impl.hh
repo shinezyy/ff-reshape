@@ -11,6 +11,11 @@ FetchStage4<Impl>::fetch(bool &status_change)
     // ThreadID tid = this->upper->getFetchingThread();
     ThreadID tid = 0;
 
+    unsigned fetchBufferSize = this->upper->fetchBufferSize;
+    int instSize = this->upper->instSize;
+    unsigned fetchWidth = this->upper->fetchWidth;
+    unsigned fetchQueueSize = this->upper->fetchQueueSize;
+
     assert(!this->upper->cpu->switchedOut());
 
     if (tid == InvalidThreadID) {
@@ -23,7 +28,9 @@ FetchStage4<Impl>::fetch(bool &status_change)
     if (this->fetchStatus[tid] == this->Squashing) {
         thisPC = 0;
         this->pcReg[tid] = 0;
-        DPRINTF(Fetch4, "fetch4: thisPC = %08lx\n", thisPC.pc());
+        decoder[tid]->reset();
+        this->fetchStatus[tid] = this->Idle;
+        DPRINTF(Fetch4, "fetch4: Squashing\n");
         return;
     }
 
@@ -43,10 +50,120 @@ FetchStage4<Impl>::fetch(bool &status_change)
 
     TheISA::PCState nextPC = thisPC;
 
-    // decode
-    if (decoder[tid]->instReady()) {
-        staticInst = decoder[tid]->decode(thisPC);
+    DPRINTF(Fetch4, "fetch4: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
+
+    //---------------------------------------------------------//
+    //                   decode and predict                    //
+    //---------------------------------------------------------//
+
+    if (this->upper->stalls[tid].decode || this->fetchStatus[tid] != this->Running) {
+        DPRINTF(Fetch4, "[tid:%i] *Stall* if4 pc:%x to decode\n", tid, thisPC);
+        return;
     }
+    Addr pcOffset = fetchOffset[tid];
+    Addr fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
+    Addr fetchBufferBlockPC = this->upper->bufferAlignPC(thisPC.instAddr() & BaseCPU::PCMask,
+            this->upper->fetchBufferMask);
+
+    unsigned numInsts = fetchBufferSize / instSize;
+    unsigned blkOffset = (fetchAddr - fetchBufferBlockPC) / this->upper->instSize;
+
+    TheISA::MachInst *cacheInsts =
+        reinterpret_cast<TheISA::MachInst *>(this->upper->toFetch4->cacheData);
+
+    // THis run once when system wtartup
+    if (cacheInsts == nullptr) { return; }
+
+    DPRINTF(Fetch4, "==========\n");
+    for (int i = 0; i < numInsts; i++) {
+        DPRINTF(Fetch4, "%08x\n", cacheInsts[i]);
+    }
+    DPRINTF(Fetch4, "==========\n");
+
+    bool predictedBranch = false;
+
+    bool quiesce = false;
+
+    StaticInstPtr staticInst = NULL;
+
+    while (numInst < this->upper->fetchWidth
+           && this->upper->fetchQueue[tid].size() < this->upper->fetchQueueSize
+           && !predictedBranch && !quiesce)
+    {
+        fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
+
+        fetchBufferBlockPC = this->upper->bufferAlignPC(fetchAddr, this->upper->fetchBufferMask);
+
+        if (blkOffset >= numInsts) { break; }
+
+        TheISA::MachInst inst = cacheInsts[blkOffset];
+
+        decoder[tid]->moreBytes(thisPC, fetchAddr, inst);
+
+        if (decoder[tid]->needMoreBytes()) {
+            blkOffset++;
+            fetchAddr += instSize;
+            pcOffset += instSize;
+        }
+
+        do {
+            if (decoder[tid]->instReady()) {
+                staticInst = decoder[tid]->decode(thisPC);
+
+                pcOffset = 0;
+            } else {
+                break;
+            }
+
+            DynInstPtr instruction =
+                this->upper->buildInst(tid, staticInst, nullptr,
+                          thisPC, nextPC, true);
+            numInst++;
+
+            nextPC = thisPC;
+            DPRINTF(Fetch4, "Compressed: %i, This PC: 0x%x, NPC: 0x%x\n",
+                    thisPC.compressed(),
+                    thisPC.pc(),
+                    thisPC.npc());
+
+            predictedBranch = thisPC.branching() ||
+                this->upper->lookupAndUpdateNextPC(instruction, nextPC);
+
+            if (predictedBranch) {
+                // predicted backward branch
+                DPRINTF(Fetch, "Taken branch detected with PC : 0x%x => 0x%x\n",
+                        thisPC.pc(),
+                        thisPC.npc());
+                this->upper->fetchSquash(nextPC, tid);
+            }
+
+            thisPC = nextPC;
+
+            if (instruction->isQuiesce()) {
+                DPRINTF(Fetch4,
+                        "Quiesce instruction encountered, halting fetch!\n");
+                // setFetchStatus(QuiescePending, tid);
+                status_change = true;
+                quiesce = true;
+                break;
+            }
+
+        } while (decoder[tid]->instReady() &&
+                numInst < fetchWidth &&
+                this->upper->fetchQueue[tid].size() < fetchQueueSize);
+    } // outer loop end
+
+    fetchOffset[tid] = pcOffset;
+
+    if (numInst > 0) {
+        this->wroteToTimeBuffer = true;
+    }
+
+    delete this->upper->toFetch4->cacheData;
+
+    //---------------------------------------------------------//
+    //                   decode and predict                    //
+    //---------------------------------------------------------//
 
     // DynInstPtr instruction =
     //     this->upper->buildInst(tid, staticInst, nullptr,
@@ -54,14 +171,17 @@ FetchStage4<Impl>::fetch(bool &status_change)
 
     // lookupAndUpdateNextPC(instruction, nextPC);
 
-    DPRINTF(Fetch4, "fetch4: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
+    numInst = 0;
 
-    if (!this->upper->stalls[tid].decode && this->fetchStatus[tid] == this->Running) {
+    // if (!this->upper->stalls[tid].decode && this->fetchStatus[tid] == this->Running) {
+    if (!this->upper->stalls[tid].decode) {
         // this->upper->toDecode->pc[this->upper->toDecode->size++] = thisPC;
         DPRINTF(Fetch4, "[tid:%i] Sending if4 pc:%x to decode\n", tid, thisPC);
         this->wroteToTimeBuffer = true;
+        this->upper->stalls[tid].fetch4 = false;
     } else {
         DPRINTF(Fetch4, "[tid:%i] *Stall* if4 pc:%x to decode\n", tid, thisPC);
+        this->upper->stalls[tid].fetch4 = true;
     }
 
 }

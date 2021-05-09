@@ -252,8 +252,10 @@ DefaultDecode<Impl>::block(ThreadID tid)
         decodeStatus[tid] = Blocked;
 
         if (toFetch->decodeUnblock[tid]) {
+            DPRINTF(Decode, "set decodeUnblock = false\n");
             toFetch->decodeUnblock[tid] = false;
         } else {
+            DPRINTF(Decode, "set decodeBlock = true\n");
             toFetch->decodeBlock[tid] = true;
             wroteToTimeBuffer = true;
         }

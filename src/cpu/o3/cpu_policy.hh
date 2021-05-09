@@ -97,6 +97,9 @@ struct SimpleCPUPolicy
     /** The struct for communication between fetch stages. */
     typedef DefaultFetchDefaultFetch<Impl> FetchStageStruct;
 
+    /** The decoupledIO. */
+    typedef DefaultDecoupledIO<Impl> DecoupledIO;
+
     /** The struct for communication between decode and rename. */
     typedef DefaultDecodeDefaultRename<Impl> DecodeStruct;
 

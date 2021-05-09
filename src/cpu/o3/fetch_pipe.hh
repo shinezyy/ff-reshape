@@ -41,6 +41,13 @@ class PipelineFetch : public DefaultFetch<Impl>
     /** Sets fetchStatus of active threads. */
     virtual void setFetchStatus(ThreadStatus status, ThreadID tid) override;
 
+    void fetchSquash(const TheISA::PCState &newPC, ThreadID tid);
+
+    /** Checks all input signals and updates the status as necessary.
+     *  @return: Returns if the status has changed due to input signals.
+     */
+    // bool checkSignalsAndUpdate(ThreadID tid);
+
     // std::list<ThreadID> *getActiveThreads() {
     //   return this->activeThreads;
     // }
@@ -108,6 +115,7 @@ class BaseFetchStage
     /** Typedefs from the CPU policy. */
     typedef typename CPUPol::FetchStruct FetchStruct;
     typedef typename CPUPol::TimeStruct TimeStruct;
+    typedef typename CPUPol::DecoupledIO DecoupledIO;
 
     /** Overall fetch status. Used to determine if the CPU can
      * deschedule itsef due to a lack of activity.
@@ -134,7 +142,6 @@ class BaseFetchStage
     };
 
   public:
-
     TheISA::PCState pcReg[Impl::MaxThreads];
 
     /** Size of instructions. */
@@ -170,6 +177,9 @@ class BaseFetchStage
     /** BaseFetchStage constructor. */
     BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper);
 
+    /** Connect pipeline with next stage. */
+    void connNextStage(BaseFetchStage<Impl> *next);
+
     /** Returns the name of fetch. */
     virtual std::string name() const;
 
@@ -194,10 +204,10 @@ class BaseFetchStage
     /** Checks all input signals and updates the status as necessary.
      *  @return: Returns if the status has changed due to input signals.
      */
-    bool checkSignalsAndUpdate(ThreadID tid);
+    // bool checkSignalsAndUpdate(ThreadID tid);
 
     /** Checks if a thread is stalled. */
-    bool checkStall(ThreadID tid) const;
+    // bool checkStall(ThreadID tid) const;
 
     /** Align a PC to the start of a fetch buffer block. */
     Addr bufferAlignPC(Addr addr, Addr mask)
@@ -221,18 +231,15 @@ class BaseFetchStage
 
     PipelineFetch<Impl> *upper;
 
-    typename TimeBuffer<TimeStruct>::wire fromNextStage;
+    TimeBuffer<DecoupledIO> decoupledBuffer;
+    typename TimeBuffer<DecoupledIO>::wire thisStage;
+    typename TimeBuffer<DecoupledIO>::wire nextStage;
+    typename TimeBuffer<DecoupledIO>::wire prevStage;
 
     /** Variable that tracks if fetch has written to the time buffer this
      * cycle. Used to tell CPU if there is activity this cycle.
      */
     bool wroteToTimeBuffer;
-
-    /** The width of fetch in instructions. */
-    unsigned fetchWidth;
-
-    /** The width of decode in instructions. */
-    unsigned decodeWidth;
 
     /** Updates overall fetch stage status; to be called at the end of each
      * cycle. */
@@ -293,11 +300,16 @@ class FetchStage4 : public BaseFetchStage<Impl>
     /** The decoder. */
     TheISA::Decoder *decoder[Impl::MaxThreads];
 
+    int numInst;
+
+    Addr fetchOffset[Impl::MaxThreads];
+
   public:
     typedef typename Impl::O3CPU O3CPU;
 
     FetchStage4(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper)
-      : BaseFetchStage<Impl>(_cpu, params, upper)
+      : BaseFetchStage<Impl>(_cpu, params, upper),
+        numInst(0)
     {
       for (int i = 0; i < Impl::MaxThreads; i++) {
         decoder[i] = nullptr;

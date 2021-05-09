@@ -22,7 +22,8 @@ FetchStage2<Impl>::fetch(bool &status_change)
     if (this->fetchStatus[tid] == this->Squashing) {
         thisPC = 0;
         this->pcReg[tid] = 0;
-        DPRINTF(Fetch2, "fetch2: thisPC = %08lx\n", thisPC.pc());
+        this->fetchStatus[tid] = this->Idle;
+        DPRINTF(Fetch2, "fetch2: Squashing\n");
         return;
     }
 
@@ -46,7 +47,7 @@ FetchStage2<Impl>::fetch(bool &status_change)
     this->upper->fromFetch2->lastStatus = this->fetchStatus[tid];
     DPRINTF(Fetch2, "fetch2: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
 
-    if (this->fetchStatus[tid] == this->Running && !this->upper->stalls[tid].fetch2) {
+    if (this->fetchStatus[tid] == this->Running && !this->upper->stalls[tid].fetch3) {
         this->upper->fromFetch2->pc = thisPC;
         DPRINTF(Fetch2, "[tid:%i] Sending if2 pc:%x to if3\n", tid, thisPC);
         this->wroteToTimeBuffer = true;

@@ -68,6 +68,14 @@ struct DefaultFetchDefaultFetch {
     TheISA::PCState pc;
 
     int lastStatus;
+
+    uint8_t *cacheData;
+};
+
+template<class Impl>
+struct DefaultDecoupledIO {
+    bool valid;
+    bool ready;
 };
 
 /** Struct that defines the information passed from decode to rename. */
