@@ -225,6 +225,10 @@ class BaseFetchStage
 
     std::string printStatus(int status);
 
+    void decoupledBufferAdvance() {
+      decoupledBuffer.advance();
+    }
+
   protected:
     /** Pointer to the O3CPU. */
     O3CPU *cpu;
@@ -235,6 +239,10 @@ class BaseFetchStage
     typename TimeBuffer<DecoupledIO>::wire thisStage;
     typename TimeBuffer<DecoupledIO>::wire nextStage;
     typename TimeBuffer<DecoupledIO>::wire prevStage;
+
+    // This stage's status last tick
+    bool lastValid;
+    bool lastReady;
 
     /** Variable that tracks if fetch has written to the time buffer this
      * cycle. Used to tell CPU if there is activity this cycle.

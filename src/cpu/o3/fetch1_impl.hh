@@ -10,6 +10,12 @@ FetchStage1<Impl>::fetch(bool &status_change)
 {
     /** Typedefs from ISA. */
     typedef TheISA::MachInst MachInst;
+    typedef typename Impl::CPUPol CPUPol;
+    typedef typename CPUPol::DecoupledIO DecoupledIO;
+
+    typename TimeBuffer<DecoupledIO>::wire thisStage = this->thisStage;
+    typename TimeBuffer<DecoupledIO>::wire nextStage = this->nextStage;
+    [[maybe_unused]] typename TimeBuffer<DecoupledIO>::wire prevStage = this->prevStage;
 
     DPRINTF(Fetch1, "FetchStage1.fetch() is called\n");
     // ThreadID tid = this->upper->getFetchingThread();
@@ -23,11 +29,14 @@ FetchStage1<Impl>::fetch(bool &status_change)
 
     TheISA::PCState thisPC;
 
+    thisStage->valid = this->lastValid;
+
     // squash logic
     if (this->fetchStatus[tid] == this->Squashing) {
         thisPC = 0;
         this->pcReg[tid] = 0;
         this->fetchStatus[tid] = this->Running;
+        thisStage->valid = false;
         DPRINTF(Fetch1, "fetch1: Squashing\n");
         return;
     }
@@ -59,15 +68,19 @@ FetchStage1<Impl>::fetch(bool &status_change)
         this->upper->fromFetch1->lastStatus = this->fetchStatus[tid];
     }
 
-    DPRINTF(Fetch1, "fetch1: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
+    thisStage->valid =
+        this->upper->fetchStatus[tid] == this->upper->IcacheAccessComplete
+        || this->upper->fetchStatus[tid] == this->upper->Running;
 
-    if (this->fetchStatus[tid] == this->Running && !this->upper->stalls[tid].fetch2) {
+    thisStage->fire = thisStage->valid && nextStage->ready;
+
+    DPRINTF(Fetch1, "fetch1: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
+    DPRINTF(Fetch1, "if1 v:%d, if2 r:%d, if1 fire:%d\n",
+            thisStage->valid, nextStage->ready, thisStage->fire);
+
+    if (thisStage->fire) {
         this->upper->fromFetch1->pc = thisPC;
         DPRINTF(Fetch1, "[tid:%i] Sending if1 pc:%x to if2\n", tid, thisPC);
-        this->wroteToTimeBuffer = true;
-    } else if (this->fetchStatus[tid] == this->IcacheAccessComplete && !this->upper->stalls[tid].fetch2) {
-        this->upper->fromFetch1->pc = nextPC;
-        DPRINTF(Fetch1, "[tid:%i] Sending if1 pc:%x to if2\n", tid, nextPC);
         this->wroteToTimeBuffer = true;
     } else {
         DPRINTF(Fetch1, "[tid:%i] *Stall* if1 pc:%x to if2\n", tid, thisPC);
@@ -101,6 +114,9 @@ FetchStage1<Impl>::fetch(bool &status_change)
 
     this->upper->pc[tid] = nextPC;
     DPRINTF(Fetch1, "nextPC = %x, thisPC = %x\n", nextPC, thisPC);
+
+    this->lastValid = thisStage->valid;
+    this->lastReady = thisStage->ready;
 }
 
 template<class Impl>

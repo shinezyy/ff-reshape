@@ -7,6 +7,14 @@ template<class Impl>
 void
 FetchStage4<Impl>::fetch(bool &status_change)
 {
+    typedef typename Impl::CPUPol CPUPol;
+    typedef typename CPUPol::DecoupledIO DecoupledIO;
+
+    typename TimeBuffer<DecoupledIO>::wire thisStage = this->thisStage;
+    [[maybe_unused]] typename TimeBuffer<DecoupledIO>::wire nextStage = this->nextStage;
+    typename TimeBuffer<DecoupledIO>::wire prevStage = this->prevStage;
+
+
     DPRINTF(Fetch4, "FetchStage4.fetch() is called\n");
     // ThreadID tid = this->upper->getFetchingThread();
     ThreadID tid = 0;
@@ -24,12 +32,16 @@ FetchStage4<Impl>::fetch(bool &status_change)
 
     TheISA::PCState thisPC;
 
+    thisStage->valid = this->lastValid;
+
     // squash logic
     if (this->fetchStatus[tid] == this->Squashing) {
         thisPC = 0;
         this->pcReg[tid] = 0;
         decoder[tid]->reset();
         this->fetchStatus[tid] = this->Idle;
+        thisStage->valid = false;
+        thisStage->ready = true;
         DPRINTF(Fetch4, "fetch4: Squashing\n");
         return;
     }
@@ -38,19 +50,34 @@ FetchStage4<Impl>::fetch(bool &status_change)
         static_cast<typename BaseFetchStage<Impl>::ThreadStatus>
         (this->upper->toFetch4->lastStatus);
 
+    thisStage->fire = this->lastValid && !this->upper->stalls[tid].decode;
+
     // The current PC.
-    if (this->upper->toFetch4->lastStatus == this->Running) {
-        thisPC = this->upper->toFetch4->pc;
-        this->pcReg[tid] = thisPC;
-    } else {
-        thisPC = this->pcReg[tid];
+    if (this->fetchStatus[tid] != this->Squashing) {
+        if (prevStage->fire) {
+            thisPC = this->upper->toFetch4->pc;
+            this->pcReg[tid] = thisPC;
+            thisStage->valid = true;
+        } else {
+            thisPC = this->pcReg[tid];
+            if (thisStage->fire) {
+                thisStage->valid = false;
+            }
+        }
     }
+
+    thisStage->ready = !this->upper->stalls[tid].decode || !thisStage->valid;
+    thisStage->fire = thisStage->valid && !this->upper->stalls[tid].decode;
+
+
+    DPRINTF(Fetch4, "fetch4: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
+    DPRINTF(Fetch4, "if4 v:%d, decode r:%d, if4 fire:%d\n",
+            thisStage->valid, !this->upper->stalls[tid].decode, thisStage->fire);
 
     DPRINTF(Fetch4, "fetch4: thisPC = %08lx\n", thisPC.pc());
 
     TheISA::PCState nextPC = thisPC;
 
-    DPRINTF(Fetch4, "fetch4: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
 
     //---------------------------------------------------------//
     //                   decode and predict                    //
@@ -173,8 +200,7 @@ FetchStage4<Impl>::fetch(bool &status_change)
 
     numInst = 0;
 
-    // if (!this->upper->stalls[tid].decode && this->fetchStatus[tid] == this->Running) {
-    if (!this->upper->stalls[tid].decode) {
+    if (thisStage->fire) {
         // this->upper->toDecode->pc[this->upper->toDecode->size++] = thisPC;
         DPRINTF(Fetch4, "[tid:%i] Sending if4 pc:%x to decode\n", tid, thisPC);
         this->wroteToTimeBuffer = true;
@@ -184,6 +210,8 @@ FetchStage4<Impl>::fetch(bool &status_change)
         this->upper->stalls[tid].fetch4 = true;
     }
 
+    this->lastValid = thisStage->valid;
+    this->lastReady = thisStage->ready;
 }
 
 template <class Impl>

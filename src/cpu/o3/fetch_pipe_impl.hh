@@ -168,6 +168,10 @@ PipelineFetch<Impl>::tick()
     toFetch3Buffer.advance();
     toFetch4Buffer.advance();
 
+    fetch1->decoupledBufferAdvance();
+    fetch2->decoupledBufferAdvance();
+    fetch3->decoupledBufferAdvance();
+    fetch4->decoupledBufferAdvance();
 }
 
 template<class Impl>
@@ -280,7 +284,8 @@ template<class Impl>
 BaseFetchStage<Impl>::BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper)
   : cpu(_cpu),
     upper(upper),
-    decoupledBuffer(1, 1)
+    decoupledBuffer(1, 1),
+    lastValid(false), lastReady(false)
 {
   // Get the size of an instruction.
   instSize = sizeof(TheISA::MachInst);
@@ -300,7 +305,7 @@ void
 BaseFetchStage<Impl>::connNextStage(BaseFetchStage<Impl> *next)
 {
     // This need replace by set and get functions
-    this->nextStage = next->decoupledBuffer.getWire(1);
+    this->nextStage = next->decoupledBuffer.getWire(-1);
     next->prevStage = this->decoupledBuffer.getWire(-1);
 }
 

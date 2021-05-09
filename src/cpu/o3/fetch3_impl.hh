@@ -8,6 +8,13 @@ FetchStage3<Impl>::fetch(bool &status_change)
 {
     /** Typedefs from ISA. */
     typedef TheISA::MachInst MachInst;
+    typedef typename Impl::CPUPol CPUPol;
+    typedef typename CPUPol::DecoupledIO DecoupledIO;
+
+    typename TimeBuffer<DecoupledIO>::wire thisStage = this->thisStage;
+    typename TimeBuffer<DecoupledIO>::wire nextStage = this->nextStage;
+    typename TimeBuffer<DecoupledIO>::wire prevStage = this->prevStage;
+
 
     DPRINTF(Fetch3, "FetchStage3.fetch() is called\n");
     // ThreadID tid = this->upper->getFetchingThread();
@@ -21,11 +28,15 @@ FetchStage3<Impl>::fetch(bool &status_change)
 
     TheISA::PCState thisPC;
 
+    thisStage->valid = this->lastValid;
+
     // squash logic
     if (this->fetchStatus[tid] == this->Squashing) {
         thisPC = 0;
         this->pcReg[tid] = 0;
         this->fetchStatus[tid] = this->Idle;
+        thisStage->valid = false;
+        thisStage->ready = true;
         DPRINTF(Fetch3, "fetch3: Squashing\n");
         return;
     }
@@ -34,12 +45,20 @@ FetchStage3<Impl>::fetch(bool &status_change)
         static_cast<typename BaseFetchStage<Impl>::ThreadStatus>
         (this->upper->toFetch3->lastStatus);
 
+    thisStage->fire = this->lastValid && !this->upper->stalls[tid].decode;
+
     // The current PC
-    if (this->upper->toFetch3->lastStatus == this->Running) {
-        thisPC = this->upper->toFetch3->pc;
-        this->pcReg[tid] = thisPC;
-    } else {
-        thisPC = this->pcReg[tid];
+    if (this->fetchStatus[tid] != this->Squashing) {
+        if (prevStage->fire) {
+            thisPC = this->upper->toFetch3->pc;
+            this->pcReg[tid] = thisPC;
+            thisStage->valid = true;
+        } else {
+            thisPC = this->pcReg[tid];
+            if (nextStage->fire) {
+                thisStage->valid = false;
+            }
+        }
     }
 
     DPRINTF(Fetch3, "fetch3: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
@@ -70,6 +89,7 @@ FetchStage3<Impl>::fetch(bool &status_change)
 
     // Receive Icache response
     MachInst inst;
+    bool getData = false;
     if (this->upper->fetchBufferValid[tid]) {
       if (this->upper->fetchBufferPC[tid] == fetchBufferBlockPC) {
         TheISA::MachInst *cacheInsts =
@@ -77,6 +97,7 @@ FetchStage3<Impl>::fetch(bool &status_change)
 
         this->upper->fromFetch3->cacheData = new uint8_t[this->upper->fetchBufferSize];
         memcpy(this->upper->fromFetch3->cacheData, this->upper->fetchBuffer[tid], this->upper->fetchBufferSize);
+        getData = true;
 
         inst = cacheInsts[blkOffset];
 
@@ -98,10 +119,15 @@ FetchStage3<Impl>::fetch(bool &status_change)
         this->upper->fromFetch3->cacheData = nullptr;
     }
 
+    thisStage->ready = nextStage->ready || !thisStage->valid;
+    thisStage->fire = thisStage->valid && getData && nextStage->ready;
+
+    DPRINTF(Fetch3, "if3 v:%d, if4 r:%d, if3 fire:%d\n",
+            thisStage->valid, nextStage->ready, thisStage->fire);
 
     // doPredecode();
 
-    if (this->fetchStatus[tid] == this->Running && !this->upper->stalls[tid].fetch4) {
+    if (thisStage->fire) {
         this->upper->fromFetch3->pc = thisPC;
         DPRINTF(Fetch3, "[tid:%i] Sending if3 pc:%x to if4\n", tid, thisPC);
         this->wroteToTimeBuffer = true;
@@ -109,6 +135,8 @@ FetchStage3<Impl>::fetch(bool &status_change)
         DPRINTF(Fetch3, "[tid:%i] *Stall* if3 pc:%x to if4\n", tid, thisPC);
     }
 
+    this->lastValid = thisStage->valid;
+    this->lastReady = thisStage->ready;
 }
 
 template<class Impl>
