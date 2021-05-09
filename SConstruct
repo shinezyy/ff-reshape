@@ -1246,6 +1246,8 @@ Build variables for {dir}:
     if env['EFENCE']:
         env.Append(LIBS=['efence'])
 
+    env.Append(LIBS=['readline', 'dl', 'SDL2'])
+
     if env['USE_KVM']:
         if not have_kvm:
             warning("Can not enable KVM, host seems to lack KVM support")

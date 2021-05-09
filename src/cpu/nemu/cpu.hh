@@ -37,15 +37,15 @@ class NemuCPU: public BaseCPU
     /** Unused dummy port for the instruction interface */
     NemuCpuPort instPort;
 
-    Port &getDataPort() {return dataPort;}
+    Port &getDataPort() override {return dataPort;}
 
-    Port &getInstPort() {return instPort;}
+    Port &getInstPort() override {return instPort;}
 
-    void wakeup(ThreadID tid);
+    void wakeup(ThreadID tid) override;
 
-    Counter totalInsts() const;
+    Counter totalInsts() const override;
 
-    Counter totalOps() const;
+    Counter totalOps() const override;
 };
 
 
