@@ -35,6 +35,7 @@
 template<class Impl>
 PipelineFetch<Impl>::PipelineFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
     : DefaultFetch<Impl>(_cpu, params),
+        cacheReading(false),
         toFetch1Buffer(10, 10),
         toFetch2Buffer(10, 10),
         toFetch3Buffer(10, 10),
@@ -76,6 +77,7 @@ PipelineFetch<Impl>::tick()
     this->wroteToTimeBuffer = false;
 
     DPRINTF(Fetch, "********************************************************\n");
+    DPRINTF(Fetch, "fetchBufferValid: %d\n", this->fetchBufferValid);
 
     while (threads != end) {
         [[maybe_unused]] ThreadID tid = *threads++;
@@ -127,7 +129,9 @@ PipelineFetch<Impl>::tick()
     unsigned available_insts = 0;
 
     for (auto tid : *(this->activeThreads)) {
-        if (!stalls[tid].decode) {
+        this->stalls[tid].decode = DefaultFetch<Impl>::stalls[tid].decode;
+
+        if (!this->stalls[tid].decode) {
             available_insts += this->fetchQueue[tid].size();
         }
     }
@@ -138,7 +142,7 @@ PipelineFetch<Impl>::tick()
 
     while (available_insts != 0 && insts_to_decode < this->decodeWidth) {
         ThreadID tid = *tid_itr;
-        if (!stalls[tid].decode && !this->fetchQueue[tid].empty()) {
+        if (!this->stalls[tid].decode && !this->fetchQueue[tid].empty()) {
             const auto& inst = this->fetchQueue[tid].front();
             this->toDecode->insts[this->toDecode->size++] = inst;
             DPRINTF(Fetch, "[tid:%i] [sn:%llu] Sending instruction %08x to decode "
@@ -168,10 +172,15 @@ PipelineFetch<Impl>::tick()
     toFetch3Buffer.advance();
     toFetch4Buffer.advance();
 
-    fetch1->decoupledBufferAdvance();
-    fetch2->decoupledBufferAdvance();
-    fetch3->decoupledBufferAdvance();
-    fetch4->decoupledBufferAdvance();
+    // fetch1->decoupledBufferAdvance();
+    // fetch2->decoupledBufferAdvance();
+    // fetch3->decoupledBufferAdvance();
+    // fetch4->decoupledBufferAdvance();
+
+    fetch1->advance();
+    fetch2->advance();
+    fetch3->advance();
+    fetch4->advance();
 }
 
 template<class Impl>
@@ -283,9 +292,7 @@ BaseFetchStage<Impl>::printStatus(int status)
 template<class Impl>
 BaseFetchStage<Impl>::BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper)
   : cpu(_cpu),
-    upper(upper),
-    decoupledBuffer(1, 1),
-    lastValid(false), lastReady(false)
+    upper(upper)
 {
   // Get the size of an instruction.
   instSize = sizeof(TheISA::MachInst);
@@ -295,9 +302,9 @@ BaseFetchStage<Impl>::BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params
       pcReg[i] = 0;
   }
 
-  thisStage = decoupledBuffer.getWire(0);
-  // nextStage = nullptr;
-  // prevStage = nullptr;
+  thisStage = new DecoupledIO();
+  nextStage = nullptr;
+  prevStage = nullptr;
 }
 
 template<class Impl>
@@ -305,8 +312,8 @@ void
 BaseFetchStage<Impl>::connNextStage(BaseFetchStage<Impl> *next)
 {
     // This need replace by set and get functions
-    this->nextStage = next->decoupledBuffer.getWire(-1);
-    next->prevStage = this->decoupledBuffer.getWire(-1);
+    this->nextStage = next->thisStage;
+    next->prevStage = this->thisStage;
 }
 
 template<class Impl>
@@ -360,6 +367,15 @@ BaseFetchStage<Impl>::tick(bool &status_change)
         // Fetch each of the actively fetching threads.
         fetch(status_change);
     }
+}
+
+template <class Impl>
+void
+BaseFetchStage<Impl>::advance()
+{
+    thisStage->lastValid(thisStage->valid());
+    thisStage->lastReady(thisStage->ready());
+    thisStage->lastFire(thisStage->fire());
 }
 
 template <class Impl>

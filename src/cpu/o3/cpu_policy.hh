@@ -98,7 +98,7 @@ struct SimpleCPUPolicy
     typedef DefaultFetchDefaultFetch<Impl> FetchStageStruct;
 
     /** The decoupledIO. */
-    typedef DefaultDecoupledIO<Impl> DecoupledIO;
+    // typedef DefaultDecoupledIO<Impl> DecoupledIO;
 
     /** The struct for communication between decode and rename. */
     typedef DefaultDecodeDefaultRename<Impl> DecodeStruct;

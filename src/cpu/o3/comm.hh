@@ -72,12 +72,12 @@ struct DefaultFetchDefaultFetch {
     uint8_t *cacheData;
 };
 
-template<class Impl>
-struct DefaultDecoupledIO {
-    bool valid;
-    bool ready;
-    bool fire;
-};
+// template<class Impl>
+// struct DefaultDecoupledIO {
+//     // bool valid;
+//     // bool ready;
+//     bool fire;
+// };
 
 /** Struct that defines the information passed from decode to rename. */
 template<class Impl>

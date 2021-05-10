@@ -753,6 +753,11 @@ DefaultFetch<Impl>::doSquash(const TheISA::PCState &newPC,
     DPRINTF(Fetch, "[tid:%i] Squashing, setting PC to: %s.\n",
             tid, newPC);
 
+    if (newPC.instAddr() == 0x78) {
+        DPRINTF(Fetch, "FUCK!!!\n");
+        assert(newPC.instAddr() != 0x78);
+    }
+
     pc[tid] = newPC;
     fetchOffset[tid] = 0;
     if (squashInst && squashInst->pcState().instAddr() == newPC.instAddr())

@@ -10,12 +10,9 @@ FetchStage1<Impl>::fetch(bool &status_change)
 {
     /** Typedefs from ISA. */
     typedef TheISA::MachInst MachInst;
-    typedef typename Impl::CPUPol CPUPol;
-    typedef typename CPUPol::DecoupledIO DecoupledIO;
 
-    typename TimeBuffer<DecoupledIO>::wire thisStage = this->thisStage;
-    typename TimeBuffer<DecoupledIO>::wire nextStage = this->nextStage;
-    [[maybe_unused]] typename TimeBuffer<DecoupledIO>::wire prevStage = this->prevStage;
+    DecoupledIO *thisStage = this->thisStage;
+    DecoupledIO *nextStage = this->nextStage;
 
     DPRINTF(Fetch1, "FetchStage1.fetch() is called\n");
     // ThreadID tid = this->upper->getFetchingThread();
@@ -29,14 +26,14 @@ FetchStage1<Impl>::fetch(bool &status_change)
 
     TheISA::PCState thisPC;
 
-    thisStage->valid = this->lastValid;
+    thisStage->valid(thisStage->lastValid());
 
     // squash logic
     if (this->fetchStatus[tid] == this->Squashing) {
         thisPC = 0;
         this->pcReg[tid] = 0;
         this->fetchStatus[tid] = this->Running;
-        thisStage->valid = false;
+        thisStage->reset();
         DPRINTF(Fetch1, "fetch1: Squashing\n");
         return;
     }
@@ -68,17 +65,16 @@ FetchStage1<Impl>::fetch(bool &status_change)
         this->upper->fromFetch1->lastStatus = this->fetchStatus[tid];
     }
 
-    thisStage->valid =
+    thisStage->valid (
         this->upper->fetchStatus[tid] == this->upper->IcacheAccessComplete
-        || this->upper->fetchStatus[tid] == this->upper->Running;
-
-    thisStage->fire = thisStage->valid && nextStage->ready;
+        || this->upper->fetchStatus[tid] == this->upper->Running);
+    thisStage->fire(thisStage->valid() && nextStage->ready());
 
     DPRINTF(Fetch1, "fetch1: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
     DPRINTF(Fetch1, "if1 v:%d, if2 r:%d, if1 fire:%d\n",
-            thisStage->valid, nextStage->ready, thisStage->fire);
+            thisStage->valid(), nextStage->ready(), thisStage->fire());
 
-    if (thisStage->fire) {
+    if (thisStage->fire()) {
         this->upper->fromFetch1->pc = thisPC;
         DPRINTF(Fetch1, "[tid:%i] Sending if1 pc:%x to if2\n", tid, thisPC);
         this->wroteToTimeBuffer = true;
@@ -100,10 +96,11 @@ FetchStage1<Impl>::fetch(bool &status_change)
         // [[maybe_unused]] Addr fetchBufferBlockPC = upper->bufferAlignPC(fetchAddr, upper->fetchBufferMask);
 
         // Send a request to ICache
-        if (!this->upper->stalls[tid].fetch2) {
+        if (thisStage->fire()) {
             DPRINTF(Fetch1, "[tid:%i] Attempting to translate and read "
                     "instruction, starting at PC %s.\n", tid, thisPC);
 
+            this->upper->cacheReading = true;
             this->upper->fetchCacheLine(fetchAddr, tid, thisPC.instAddr());
             // nextPC = thisPC.instAddr() + this->upper->fetchWidth * sizeof(MachInst);
         }
@@ -112,11 +109,11 @@ FetchStage1<Impl>::fetch(bool &status_change)
         // then check the if3, if if3 need a cache bolck in the dumped data, then send it to if3
     }
 
-    this->upper->pc[tid] = nextPC;
+    if (thisStage->fire() || !thisStage->valid()) {
+        this->upper->pc[tid] = nextPC;
+    }
     DPRINTF(Fetch1, "nextPC = %x, thisPC = %x\n", nextPC, thisPC);
 
-    this->lastValid = thisStage->valid;
-    this->lastReady = thisStage->ready;
 }
 
 template<class Impl>
