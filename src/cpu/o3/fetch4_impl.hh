@@ -83,7 +83,6 @@ FetchStage4<Impl>::fetch(bool &status_change)
     //                   decode and predict                    //
     //---------------------------------------------------------//
 
-    // if (this->upper->stalls[tid].decode || this->fetchStatus[tid] != this->Running) {
     if (!thisStage->fire()) {
         DPRINTF(Fetch4, "[tid:%i] *Stall* if4 pc:%x to decode\n", tid, thisPC);
         return;
@@ -193,16 +192,9 @@ FetchStage4<Impl>::fetch(bool &status_change)
     //                   decode and predict                    //
     //---------------------------------------------------------//
 
-    // DynInstPtr instruction =
-    //     this->upper->buildInst(tid, staticInst, nullptr,
-    //                 thisPC, nextPC, true);
-
-    // lookupAndUpdateNextPC(instruction, nextPC);
-
     numInst = 0;
 
     if (thisStage->fire()) {
-        // this->upper->toDecode->pc[this->upper->toDecode->size++] = thisPC;
         DPRINTF(Fetch4, "[tid:%i] Sending if4 pc:%x to decode\n", tid, thisPC);
         this->wroteToTimeBuffer = true;
         this->upper->stalls[tid].fetch4 = false;

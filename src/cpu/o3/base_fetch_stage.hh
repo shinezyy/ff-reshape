@@ -12,21 +12,11 @@ class BaseFetchStage
   public:
     /** Typedefs from Impl. */
     typedef typename Impl::CPUPol CPUPol;
-    typedef typename Impl::DynInst DynInst;
     typedef typename Impl::DynInstPtr DynInstPtr;
     typedef typename Impl::O3CPU O3CPU;
 
     /** Typedefs from the CPU policy. */
-    typedef typename CPUPol::FetchStruct FetchStruct;
     typedef typename CPUPol::TimeStruct TimeStruct;
-
-    /** Overall fetch status. Used to determine if the CPU can
-     * deschedule itsef due to a lack of activity.
-     */
-    enum FetchStatus {
-        Active,
-        Inactive
-    };
 
     /** Individual thread status. */
     enum ThreadStatus {
@@ -47,34 +37,11 @@ class BaseFetchStage
   public:
     TheISA::PCState pcReg[Impl::MaxThreads];
 
-    /** Size of instructions. */
-    int instSize;
-
-    /** Fetch status. */
-    FetchStatus _status;
-
     /** Per-thread status. */
     ThreadStatus fetchStatus[Impl::MaxThreads];
 
-    /** List of Active Threads */
-    std::list<ThreadID> *activeThreads;
-
-    /** Number of threads. */
-    ThreadID numThreads;
-
-    /** Number of threads that are actively fetching. */
-    ThreadID numFetchingThreads;
-
     /** Thread ID being fetched. */
     ThreadID threadFetched;
-
-    /** The size of the fetch buffer in bytes. The fetch buffer
-     *  itself may be smaller than a cache line.
-     */
-    unsigned fetchBufferSize;
-
-    /** Mask to align a fetch address to a fetch buffer boundary. */
-    Addr fetchBufferMask;
 
   public:
     /** BaseFetchStage constructor. */
@@ -123,9 +90,6 @@ class BaseFetchStage
         return (addr & ~mask);
     }
 
-    /** Returns the appropriate thread to fetch, given the fetch policy. */
-    ThreadID getFetchingThread();
-
     /** Sets fetchStatus of active threads. */
     void setFetchStatus(ThreadStatus status, ThreadID tid){
       fetchStatus[tid] = status;
@@ -147,10 +111,6 @@ class BaseFetchStage
      * cycle. Used to tell CPU if there is activity this cycle.
      */
     bool wroteToTimeBuffer;
-
-    /** Updates overall fetch stage status; to be called at the end of each
-     * cycle. */
-    FetchStatus updateFetchStatus();
 };
 
 template <class Impl>

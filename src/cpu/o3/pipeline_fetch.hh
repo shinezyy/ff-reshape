@@ -4,17 +4,12 @@
 #include "cpu/o3/fetch.hh"
 #include "params/DerivO3CPU.hh"
 
-template <class Impl>
-class FetchStage1;
+template <class Impl> class FetchStage1;
+template <class Impl> class FetchStage2;
 
-template <class Impl>
-class FetchStage2;
+template <class Impl> class FetchStage3;
 
-template <class Impl>
-class FetchStage3;
-
-template <class Impl>
-class FetchStage4;
+template <class Impl> class FetchStage4;
 
 template <class Impl>
 class PipelineFetch : public DefaultFetch<Impl>
@@ -22,8 +17,6 @@ class PipelineFetch : public DefaultFetch<Impl>
   public:
     /** Typedefs from Impl. */
     typedef typename Impl::CPUPol CPUPol;
-    typedef typename Impl::DynInst DynInst;
-    typedef typename Impl::DynInstPtr DynInstPtr;
     typedef typename Impl::O3CPU O3CPU;
 
     typedef typename CPUPol::FetchStageStruct FetchStageStruct;

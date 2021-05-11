@@ -85,8 +85,6 @@ FetchStage3<Impl>::fetch(bool &status_change)
 
     unsigned blkOffset = (fetchAddr - this->upper->fetchBufferPC[tid]) / this->upper->instSize;
 
-    // squash logic
-
     // Receive Icache response
     MachInst inst;
     if (!hasData && thisStage->valid() && this->upper->fetchBufferValid[tid]) {

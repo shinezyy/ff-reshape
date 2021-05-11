@@ -105,9 +105,6 @@ FetchStage1<Impl>::fetch(bool &status_change)
             this->upper->fetchCacheLine(fetchAddr, tid, thisPC.instAddr());
             // nextPC = thisPC.instAddr() + this->upper->fetchWidth * sizeof(MachInst);
         }
-
-        // I should handle all read ICache operations at here, and dump the data returend,
-        // then check the if3, if if3 need a cache bolck in the dumped data, then send it to if3
     }
 
     if (thisStage->fire() || !thisStage->valid()) {
