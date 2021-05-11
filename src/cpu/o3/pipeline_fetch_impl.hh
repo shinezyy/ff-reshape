@@ -1,5 +1,5 @@
-#ifndef __CPU_O3_FETCH_PIPE_IMPL_HH__
-#define __CPU_O3_FETCH_PIPE_IMPL_HH__
+#ifndef __CPU_O3_PIPELINE_FETCH_IMPL_HH__
+#define __CPU_O3_PIPELINE_FETCH_IMPL_HH__
 
 #include <algorithm>
 #include <cstring>
@@ -14,10 +14,11 @@
 #include "config/the_isa.hh"
 #include "cpu/base.hh"
 #include "cpu/exetrace.hh"
+#include "cpu/o3/base_fetch_stage.hh"
 #include "cpu/o3/cpu.hh"
 #include "cpu/o3/fetch.hh"
-#include "cpu/o3/fetch_pipe.hh"
 #include "cpu/o3/isa_specific.hh"
+#include "cpu/o3/pipeline_fetch.hh"
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
 #include "debug/Fetch.hh"
@@ -60,7 +61,7 @@ PipelineFetch<Impl>::PipelineFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
         toFetch3 = toFetch3Buffer.getWire(-1);
         toFetch4 = toFetch4Buffer.getWire(-1);
 
-        for (int i = 0; i < 1; i++) {
+        for (int i = 0; i < Impl::MaxThreads; i++) {
             stalls[i] = {false, false, false, false, false, false};
         }
 
@@ -88,25 +89,6 @@ PipelineFetch<Impl>::tick()
         // bool updated_status = false;
         status_change = status_change || updated_status;
     }
-
-    /*if (stalls[0].fetch1)
-        DPRINTF(Fetch, "=|= stalls: fetch1\n");
-
-    if (stalls[0].fetch2)
-        DPRINTF(Fetch, "=|= stalls: fetch2\n");
-
-    if (stalls[0].fetch3)
-        DPRINTF(Fetch, "=|= stalls: fetch3\n");
-
-    if (stalls[0].fetch4)
-        DPRINTF(Fetch, "=|= stalls: fetch4\n");
-
-    if (stalls[0].decode)
-        DPRINTF(Fetch, "=|= stalls: decode\n");
-
-    if (stalls[0].drain)
-        DPRINTF(Fetch, "=|= stalls: drain\n");
-    */
 
     fetch1->tick(status_change);
     DPRINTF(Fetch, "\n");
@@ -171,11 +153,6 @@ PipelineFetch<Impl>::tick()
     toFetch2Buffer.advance();
     toFetch3Buffer.advance();
     toFetch4Buffer.advance();
-
-    // fetch1->decoupledBufferAdvance();
-    // fetch2->decoupledBufferAdvance();
-    // fetch3->decoupledBufferAdvance();
-    // fetch4->decoupledBufferAdvance();
 
     fetch1->advance();
     fetch2->advance();
@@ -250,163 +227,4 @@ PipelineFetch<Impl>::fetchSquash(const TheISA::PCState &newPC, ThreadID tid)
     this->setFetchStatus(this->Squashing, tid);
 }
 
-/*template <class Impl>
-bool
-PipelineFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
-{
-    bool needUpdate = DefaultFetch<Impl>::checkSignalsAndUpdate(tid);
-
-    if (this->checkStall(tid) &&
-        fetch4->fetchStatus[tid] == fetch4->Running) {
-        DPRINTF(Fetch, "[tid:%i] Setting to blocked\n",tid);
-
-        setFetchStatus(this->Blocked, tid);
-
-        return true;
-    }
-
-    return needUpdate;
-}*/
-
-template<class Impl>
-std::string
-BaseFetchStage<Impl>::printStatus(int status)
-{
-  switch (status) {
-    case  0: return std::string("Running");
-    case  1: return std::string("Idle");
-    case  2: return std::string("Squashing");
-    case  3: return std::string("Blocked");
-    case  4: return std::string("Fetching");
-    case  5: return std::string("TrapPending");
-    case  6: return std::string("QuiescePending");
-    case  7: return std::string("ItlbWait");
-    case  8: return std::string("IcacheWaitResponse");
-    case  9: return std::string("IcacheWaitRetry");
-    case 10: return std::string("IcacheAccessComplete");
-    case 11: return std::string("NoGoodAddr");
-    default: return std::string("Wrong Status");
-  }
-}
-
-template<class Impl>
-BaseFetchStage<Impl>::BaseFetchStage(O3CPU *_cpu, const DerivO3CPUParams &params, PipelineFetch<Impl> *upper)
-  : cpu(_cpu),
-    upper(upper)
-{
-  // Get the size of an instruction.
-  instSize = sizeof(TheISA::MachInst);
-
-  for (int i = 0; i < Impl::MaxThreads; i++) {
-      fetchStatus[i] = Idle;
-      pcReg[i] = 0;
-  }
-
-  thisStage = new DecoupledIO();
-  nextStage = nullptr;
-  prevStage = nullptr;
-}
-
-template<class Impl>
-void
-BaseFetchStage<Impl>::connNextStage(BaseFetchStage<Impl> *next)
-{
-    // This need replace by set and get functions
-    this->nextStage = next->thisStage;
-    next->prevStage = this->thisStage;
-}
-
-template<class Impl>
-typename BaseFetchStage<Impl>::FetchStatus
-BaseFetchStage<Impl>::updateFetchStatus()
-{
-    //Check Running
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
-        if (fetchStatus[tid] == Running ||
-            fetchStatus[tid] == Squashing) {
-
-            if (_status == Inactive) {
-                DPRINTF(Activity, "[tid:%i] Activating stage.\n",tid);
-
-                if (fetchStatus[tid] == IcacheAccessComplete) {
-                    DPRINTF(Activity, "[tid:%i] Activating fetch due to cache"
-                            "completion\n",tid);
-                }
-
-                cpu->activateStage(O3CPU::FetchIdx);
-            }
-
-            return Active;
-        }
-    }
-
-    // Stage is switching from active to inactive, notify CPU of it.
-    if (_status == Active) {
-        DPRINTF(Activity, "Deactivating stage.\n");
-
-        cpu->deactivateStage(O3CPU::FetchIdx);
-    }
-
-    return Inactive;
-}
-
-template <class Impl>
-void
-BaseFetchStage<Impl>::tick(bool &status_change)
-{
-    // DPRINTF(Fetch, "Running %s stage. fetchStatus: %s\n", this->name(), printStatus(this->fetchStatus[0]));
-
-    // for (threadFetched = 0; threadFetched < numFetchingThreads;
-    for (threadFetched = 0; threadFetched < 1;
-         threadFetched++) {
-        // Fetch each of the actively fetching threads.
-        fetch(status_change);
-    }
-}
-
-template <class Impl>
-void
-BaseFetchStage<Impl>::advance()
-{
-    thisStage->lastValid(thisStage->valid());
-    thisStage->lastReady(thisStage->ready());
-    thisStage->lastFire(thisStage->fire());
-}
-
-template <class Impl>
-std::string
-BaseFetchStage<Impl>::name() const
-{
-    return cpu->name() + ".BaseFetchStage";
-}
-
-template<class Impl>
-ThreadID
-BaseFetchStage<Impl>::getFetchingThread()
-{
-    if (numThreads > 1) {
-        return InvalidThreadID;
-    } else {
-        list<ThreadID>::iterator thread = activeThreads->begin();
-        if (thread == activeThreads->end()) {
-            return InvalidThreadID;
-        }
-
-        ThreadID tid = *thread;
-
-        if (fetchStatus[tid] == Running ||
-            fetchStatus[tid] == IcacheAccessComplete ||
-            fetchStatus[tid] == Idle) {
-            return tid;
-        } else {
-            return InvalidThreadID;
-        }
-    }
-}
-
-#endif//__CPU_O3_FETCH_PIPE_IMPL_HH__
+#endif //__CPU_O3_PIPELINE_FETCH_IMPL_HH__

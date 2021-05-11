@@ -42,7 +42,7 @@ if 'O3CPU' in env['CPU_MODELS']:
     Source('decode.cc')
     Source('dyn_inst.cc')
     Source('fetch.cc')
-    Source('fetch_pipe.cc')
+    Source('pipeline_fetch.cc')
     Source('free_list.cc')
     Source('fu_pool.cc')
     Source('iew.cc')

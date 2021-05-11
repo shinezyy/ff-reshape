@@ -1,110 +1,10 @@
-#ifndef __CPU_O3_FETCH_PIPE_HH__
-#define __CPU_O3_FETCH_PIPE_HH__
+#ifndef __CPU_O3_BASE_FETCH_STAGE_HH__
+#define __CPU_O3_BASE_FETCH_STAGE_HH__
 
 #include "cpu/o3/decoupledIO.hh"
 #include "cpu/o3/fetch.hh"
+#include "cpu/o3/pipeline_fetch.hh"
 #include "params/DerivO3CPU.hh"
-
-template <class Impl>
-class FetchStage1;
-
-template <class Impl>
-class FetchStage2;
-
-template <class Impl>
-class FetchStage3;
-
-template <class Impl>
-class FetchStage4;
-
-template <class Impl>
-class PipelineFetch : public DefaultFetch<Impl>
-{
-  public:
-    /** Typedefs from Impl. */
-    typedef typename Impl::CPUPol CPUPol;
-    typedef typename Impl::DynInst DynInst;
-    typedef typename Impl::DynInstPtr DynInstPtr;
-    typedef typename Impl::O3CPU O3CPU;
-
-    typedef typename CPUPol::FetchStageStruct FetchStageStruct;
-
-    typedef typename DefaultFetch<Impl>::ThreadStatus ThreadStatus;
-
-    /** PipelineFetch constructor. */
-    PipelineFetch(O3CPU *_cpu, const DerivO3CPUParams &params);
-
-    /** Ticks the fetch stage, processing all inputs signals and fetching
-     * as many instructions as possible.
-     */
-    void tick();
-
-    /** Sets fetchStatus of active threads. */
-    virtual void setFetchStatus(ThreadStatus status, ThreadID tid) override;
-
-    void fetchSquash(const TheISA::PCState &newPC, ThreadID tid);
-
-    /** Checks all input signals and updates the status as necessary.
-     *  @return: Returns if the status has changed due to input signals.
-     */
-    // bool checkSignalsAndUpdate(ThreadID tid);
-
-    // std::list<ThreadID> *getActiveThreads() {
-    //   return this->activeThreads;
-    // }
-
-    /**
-     * Fetches the cache line that contains the fetch PC.  Returns any
-     * fault that happened.  Puts the data into the class variable
-     * fetchBuffer, which may not hold the entire fetched cache line.
-     * @param vaddr The memory address that is being fetched from.
-     * @param ret_fault The fault reference that will be set to the result of
-     * the icache access.
-     * @param tid Thread id.
-     * @param pc The actual PC of the current instruction.
-     * @return Any fault that occured.
-     */
-    // bool fetchCacheLine(Addr vaddr, ThreadID tid, Addr pc);
-    // void finishTranslation(const Fault &fault, const RequestPtr &mem_req);
-
-  public:
-    FetchStage1<Impl> *fetch1;
-    FetchStage2<Impl> *fetch2;
-    FetchStage3<Impl> *fetch3;
-    FetchStage4<Impl> *fetch4;
-
-    bool cacheReading;
-
-    TimeBuffer<FetchStageStruct> toFetch1Buffer;
-    TimeBuffer<FetchStageStruct> toFetch2Buffer;
-    TimeBuffer<FetchStageStruct> toFetch3Buffer;
-    TimeBuffer<FetchStageStruct> toFetch4Buffer;
-
-    typename TimeBuffer<FetchStageStruct>::wire toFetch1;
-    typename TimeBuffer<FetchStageStruct>::wire toFetch2;
-    typename TimeBuffer<FetchStageStruct>::wire toFetch3;
-    typename TimeBuffer<FetchStageStruct>::wire toFetch4;
-
-    typename TimeBuffer<FetchStageStruct>::wire fromFetch1;
-    typename TimeBuffer<FetchStageStruct>::wire fromFetch2;
-    typename TimeBuffer<FetchStageStruct>::wire fromFetch3;
-    typename TimeBuffer<FetchStageStruct>::wire fromFetch4;
-
-    /** Source of possible stalls. */
-    struct Stalls {
-        bool fetch1;
-        bool fetch2;
-        bool fetch3;
-        bool fetch4;
-        bool decode;
-        bool drain;
-    };
-
-    /** Tracks which stages are telling fetch to stall. */
-    Stalls stalls[Impl::MaxThreads];
-
-};
-
 
 template <class Impl>
 class BaseFetchStage
@@ -239,11 +139,6 @@ class BaseFetchStage
 
     PipelineFetch<Impl> *upper;
 
-    // TimeBuffer<DecoupledIO> decoupledBuffer;
-    // typename TimeBuffer<DecoupledIO>::wire thisStage;
-    // typename TimeBuffer<DecoupledIO>::wire nextStage;
-    // typename TimeBuffer<DecoupledIO>::wire prevStage;
-
     DecoupledIO *thisStage;
     DecoupledIO *nextStage;
     DecoupledIO *prevStage;
@@ -338,8 +233,7 @@ class FetchStage4 : public BaseFetchStage<Impl>
         decoder[i] = nullptr;
       }
 
-      // for (ThreadID tid = 0; tid < numThreads; tid++) {
-      for (ThreadID tid = 0; tid < 1; tid++) {
+      for (ThreadID tid = 0; tid < this->upper->numThreads; tid++) {
           decoder[tid] = new TheISA::Decoder(
                   dynamic_cast<TheISA::ISA *>(params.isa[tid]));
       }
@@ -357,4 +251,4 @@ class FetchStage4 : public BaseFetchStage<Impl>
     bool lookupAndUpdateNextPC(const DynInstPtr &inst, TheISA::PCState &pc);
 };
 
-#endif //__CPU_O3_FETCH_PIPE_HH__
+#endif //__CPU_O3_BASE_FETCH_STAGE_HH__

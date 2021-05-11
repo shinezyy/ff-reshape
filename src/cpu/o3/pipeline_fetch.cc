@@ -26,12 +26,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "cpu/o3/base_fetch_stage_impl.hh"
 #include "cpu/o3/fetch1_impl.hh"
 #include "cpu/o3/fetch2_impl.hh"
 #include "cpu/o3/fetch3_impl.hh"
 #include "cpu/o3/fetch4_impl.hh"
 #include "cpu/o3/fetch_impl.hh"
-#include "cpu/o3/fetch_pipe_impl.hh"
 #include "cpu/o3/isa_specific.hh"
+#include "cpu/o3/pipeline_fetch_impl.hh"
 
 template class PipelineFetch<O3CPUImpl>;

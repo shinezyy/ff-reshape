@@ -1,4 +1,5 @@
-#include "cpu/o3/fetch_pipe.hh"
+#include "cpu/o3/base_fetch_stage.hh"
+#include "cpu/o3/pipeline_fetch.hh"
 #include "debug/Fetch3.hh"
 
 // IF3 receive ICache date from IF1, and do predecode

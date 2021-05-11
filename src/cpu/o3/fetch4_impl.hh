@@ -1,4 +1,5 @@
-#include "cpu/o3/fetch_pipe.hh"
+#include "cpu/o3/base_fetch_stage.hh"
+#include "cpu/o3/pipeline_fetch.hh"
 #include "debug/Fetch.hh"
 #include "debug/Fetch4.hh"
 
