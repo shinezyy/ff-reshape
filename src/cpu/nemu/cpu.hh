@@ -15,6 +15,10 @@ class NemuCPU: public BaseCPU
   public:
     NemuCPU(const NemuCPUParams &params);
 
+  protected:
+    EventFunctionWrapper tickEvent;
+
+  public:
     class NemuCpuPort : public RequestPort
     {
       public:
@@ -46,6 +50,8 @@ class NemuCPU: public BaseCPU
     Counter totalInsts() const override;
 
     Counter totalOps() const override;
+
+    void tick();
 };
 
 

@@ -14,7 +14,9 @@ flag_appends = {
 
 path_appends = {
     'CPPPATH': [
-        'cpu/nemu/include',
+    'cpu/nemu/include',
+    'cpu/nemu/lib-include',
+    'cpu/nemu/src/isa/riscv64/include',
     'cpu/nemu/src/engine/interpreter',
     'cpu/nemu/resource',
     ]}
@@ -37,10 +39,19 @@ appends = {**path_appends, **def_appends, **flag_appends}
 
 
 nemu_files = [
-    './src/main.c',
+    './src/cpu/cpu-exec.c',
+    './src/cpu/tcache.c',
+    './src/cpu/difftest/ref.c',
+    './src/cpu/difftest/dut.c',
+    # './src/user/init/riscv64.c',
+    # './src/user/init/x86.c',
+    # './src/user/syscall.c',
+    # './src/user/memory.c',
+    # './src/user/loader.c',
+    './src/nemu-main.c',
     './src/device/vga.c',
     './src/device/alarm.c',
-    './src/device/uartlite.c',
+    './src/device/disk.c',
     './src/device/intr.c',
     './src/device/device.c',
     './src/device/audio.c',
@@ -52,38 +63,39 @@ nemu_files = [
     './src/device/keyboard.c',
     './src/device/timer.c',
     './src/isa/riscv64/logo.c',
+    './src/isa/riscv64/rocc/sdi.c',
     './src/isa/riscv64/init.c',
-    './src/isa/riscv64/exec/exec.c',
-    './src/isa/riscv64/exec/special.c',
     './src/isa/riscv64/difftest/ref.c',
     './src/isa/riscv64/difftest/dut.c',
+    './src/isa/riscv64/system/mmu.c',
+    './src/isa/riscv64/system/intr.c',
+    './src/isa/riscv64/system/priv.c',
     './src/isa/riscv64/reg.c',
-    './src/isa/riscv64/mmu.c',
-    './src/isa/riscv64/intr.c',
+    './src/isa/riscv64/instr/priv/system.c',
+    './src/isa/riscv64/instr/decode.c',
+    './src/isa/riscv64/instr/rva/amo.c',
+    './src/isa/riscv64/instr/fp.c',
     './src/isa/riscv64/clint.c',
-    './src/monitor/cpu-exec.c',
+    './src/utils/state.c',
+    './src/utils/expr.c',
+    './src/utils/iqueue.c',
+    './src/utils/log.c',
+    './src/utils/timer.c',
     './src/monitor/monitor.c',
-    './src/monitor/difftest/ref.c',
-    './src/monitor/difftest/dut.c',
-    './src/monitor/debug/expr.c',
-    './src/monitor/debug/ui.c',
-    './src/monitor/debug/watchpoint.c',
-    './src/monitor/debug/log.c',
+    './src/monitor/ui.c',
+    './src/monitor/watchpoint.c',
     './src/memory/paddr.c',
+    './src/memory/host-tlb.c',
     './src/memory/vaddr.c',
+    './src/engine/interpreter/fp.c',
     './src/engine/interpreter/init.c',
-    './src/checkpoint/profiler.cpp',
-    './src/checkpoint/serializer.cpp',
-    './src/checkpoint/path_manager.cpp',
-    './src/checkpoint/simpoint.cpp',
-    './src/iostream3/zfstream.cpp',
-    './src/base/output.cpp',
+    './src/engine/interpreter/hostcall.c',
     ]
 
 if 'NemuCPU' in env['CPU_MODELS']:
     SimObject('NemuCPU.py')
 
-    Source('cpu.cc')
+    Source('cpu.cc', append=appends, replace=cc_replace)
 
     for f in nemu_files:
         Source(f, append=appends, replace=cc_replace)
