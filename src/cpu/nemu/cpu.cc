@@ -28,7 +28,18 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
         dataPort(name() + ".dcache_port", this),
         instPort(name() + ".icache_port", this)
 {
+    extern void init_monitor(int argc, char *argv[]);
 
+    char *empty[1] = {nullptr};
+    init_monitor(0, empty);
+
+    assert (FullSystem);
+    thread = new SimpleThread(this, 0, params.system, params.mmu,
+                                params.isa[0]);
+
+    thread->setStatus(ThreadContext::Halted);
+    tc = thread->getTC();
+    threadContexts.push_back(tc);
 }
 
 bool NemuCPU::NemuCpuPort::recvTimingResp(PacketPtr pkt)
@@ -44,5 +55,31 @@ void NemuCPU::NemuCpuPort::recvReqRetry()
 void NemuCPU::tick()
 {
     extern void cpu_exec(uint64_t n);
+    // cpu_exec(1024*1024);
     cpu_exec(1);
+    reschedule(tickEvent, curTick() + clockPeriod(), true);
+}
+
+void NemuCPU::init()
+{
+    BaseCPU::init();
+    if (numThreads != 1)
+        fatal("Nemu: Multithreading not supported");
+
+    warn("Initiated NEMU\n");
+
+    tc->initMemProxies(tc);
+}
+
+void NemuCPU::activateContext(ThreadID tid)
+{
+    assert(tid == 0);
+    assert(thread);
+
+    assert(!tickEvent.scheduled());
+
+    baseStats.numCycles +=
+        ticksToCycles(thread->lastActivate - thread->lastSuspend);
+
+    schedule(tickEvent, clockEdge(Cycles(0)));
 }

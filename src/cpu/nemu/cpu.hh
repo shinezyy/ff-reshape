@@ -8,12 +8,19 @@
 #include <queue>
 
 #include "cpu/base.hh"
+#include "cpu/simple_thread.hh"
 #include "params/NemuCPU.hh"
 
 class NemuCPU: public BaseCPU
 {
   public:
     NemuCPU(const NemuCPUParams &params);
+
+    SimpleThread *thread;
+
+    ThreadContext *tc;
+
+    void init() override;
 
   protected:
     EventFunctionWrapper tickEvent;
@@ -52,6 +59,8 @@ class NemuCPU: public BaseCPU
     Counter totalOps() const override;
 
     void tick();
+
+    void activateContext(ThreadID thread_num) override;
 };
 
 
