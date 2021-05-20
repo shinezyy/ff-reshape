@@ -56,7 +56,15 @@ void NemuCPU::tick()
 {
     extern void cpu_exec(uint64_t n);
     // cpu_exec(1024*1024);
-    cpu_exec(1);
+    uint32_t fast_chunk = 1024*1024;
+    uint32_t detail_chunk = 1024;
+    if (commitInstCount > 50*1000*1000) {
+        cpu_exec(fast_chunk);
+        commitInstCount += fast_chunk;
+    } else {
+        cpu_exec(detail_chunk);
+        commitInstCount += detail_chunk;
+    }
     reschedule(tickEvent, curTick() + clockPeriod(), true);
 }
 

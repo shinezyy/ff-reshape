@@ -25,6 +25,8 @@ class NemuCPU: public BaseCPU
   protected:
     EventFunctionWrapper tickEvent;
 
+    uint64_t commitInstCount{};
+
   public:
     class NemuCpuPort : public RequestPort
     {
