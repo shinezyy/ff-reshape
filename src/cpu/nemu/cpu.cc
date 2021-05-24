@@ -54,18 +54,15 @@ void NemuCPU::NemuCpuPort::recvReqRetry()
 
 void NemuCPU::tick()
 {
-    extern void cpu_exec(uint64_t n);
+    extern uint64_t cpu_exec(uint64_t n);
     // cpu_exec(1024*1024);
-    uint32_t fast_chunk = 1024*1024;
-    uint32_t detail_chunk = 1024;
-    if (commitInstCount > 50*1000*1000) {
-        cpu_exec(fast_chunk);
-        commitInstCount += fast_chunk;
-    } else {
-        cpu_exec(detail_chunk);
-        commitInstCount += detail_chunk;
+    uint32_t detail_chunk = 65532;
+    uint32_t icount;
+    icount = cpu_exec(detail_chunk);
+    commitInstCount += icount;
+    if (icount > 0) {
+        reschedule(tickEvent, curTick() + clockPeriod(), true);
     }
-    reschedule(tickEvent, curTick() + clockPeriod(), true);
 }
 
 void NemuCPU::init()

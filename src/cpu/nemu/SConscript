@@ -91,6 +91,7 @@ nemu_files = [
     './src/engine/interpreter/fp.c',
     './src/engine/interpreter/init.c',
     './src/engine/interpreter/hostcall.c',
+    './src/protocal/instr_trace.c',
     ]
 
 if 'NemuCPU' in env['CPU_MODELS']:
