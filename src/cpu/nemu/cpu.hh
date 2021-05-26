@@ -5,10 +5,14 @@
 #ifndef __GEM5_NEMUCPU_HH__
 #define __GEM5_NEMUCPU_HH__
 
+#include <atomic>
+#include <mutex>
 #include <queue>
+#include <thread>
 
 #include "cpu/base.hh"
 #include "cpu/simple_thread.hh"
+#include "debug/NemuCPU.hh"
 #include "params/NemuCPU.hh"
 
 class NemuCPU: public BaseCPU

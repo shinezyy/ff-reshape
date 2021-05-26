@@ -101,3 +101,5 @@ if 'NemuCPU' in env['CPU_MODELS']:
 
     for f in nemu_files:
         Source(f, append=appends, replace=cc_replace)
+
+    DebugFlag('NemuCPU')

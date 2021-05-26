@@ -3,7 +3,23 @@
 //
 
 #include "cpu.hh"
+
 // #include "cpu/nemu/include/nemu_types.h"
+#include "cpu/nemu/include/protocal/instr_trace.h"
+
+std::queue<ExecTraceEntry> *TraceQueue;
+std::mutex TraceQueueLock;
+std::atomic<bool> done;
+std::thread *ExecutionThread;
+
+ExecTraceEntry traceQueuePop() {
+    while (TraceQueue->empty());
+    TraceQueueLock.lock();
+    ExecTraceEntry e = TraceQueue->front();
+    TraceQueue->pop();
+    TraceQueueLock.unlock();
+    return e;
+}
 
 void NemuCPU::wakeup(ThreadID tid)
 {
@@ -28,6 +44,8 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
         dataPort(name() + ".dcache_port", this),
         instPort(name() + ".icache_port", this)
 {
+    TraceQueue = new std::queue<ExecTraceEntry>;
+
     extern void init_monitor(int argc, char *argv[]);
 
     char *empty[1] = {nullptr};
@@ -40,6 +58,8 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
     thread->setStatus(ThreadContext::Halted);
     tc = thread->getTC();
     threadContexts.push_back(tc);
+
+    DPRINTF(NemuCPU, "Created the NemuCPU object\n");
 }
 
 bool NemuCPU::NemuCpuPort::recvTimingResp(PacketPtr pkt)
@@ -52,17 +72,22 @@ void NemuCPU::NemuCpuPort::recvReqRetry()
 
 }
 
+static uint64_t cnt = 0;
+
 void NemuCPU::tick()
 {
-    extern uint64_t cpu_exec(uint64_t n);
-    // cpu_exec(1024*1024);
-    uint32_t detail_chunk = 65532;
-    uint32_t icount;
-    icount = cpu_exec(detail_chunk);
-    commitInstCount += icount;
-    if (icount > 0) {
-        reschedule(tickEvent, curTick() + clockPeriod(), true);
+    if (cnt > 1000000) {
+        DPRINTF(NemuCPU, "Tick\n");
+        cnt = 0;
+    } else {
+        cnt++;
     }
+
+    for (int i = 10000; i > 0 && !TraceQueue->empty(); i--) {
+        traceQueuePop();
+    }
+
+    reschedule(tickEvent, curTick() + clockPeriod(), true);
 }
 
 void NemuCPU::init()
@@ -71,7 +96,7 @@ void NemuCPU::init()
     if (numThreads != 1)
         fatal("Nemu: Multithreading not supported");
 
-    warn("Initiated NEMU\n");
+    DPRINTF(NemuCPU, "Initiated NEMU\n");
 
     tc->initMemProxies(tc);
 }
@@ -83,8 +108,13 @@ void NemuCPU::activateContext(ThreadID tid)
 
     assert(!tickEvent.scheduled());
 
+    DPRINTF(NemuCPU, "Activate NEMU\n");
+
     baseStats.numCycles +=
         ticksToCycles(thread->lastActivate - thread->lastSuspend);
+
+    extern uint64_t cpu_exec(uint64_t n);
+    ExecutionThread = new std::thread(cpu_exec, -1);
 
     schedule(tickEvent, clockEdge(Cycles(0)));
 }
