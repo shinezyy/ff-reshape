@@ -14,6 +14,7 @@
 #include "cpu/simple_thread.hh"
 #include "debug/NemuCPU.hh"
 #include "params/NemuCPU.hh"
+#include "sim/sim_events.hh"
 
 class NemuCPU: public BaseCPU
 {
@@ -28,6 +29,10 @@ class NemuCPU: public BaseCPU
 
   protected:
     EventFunctionWrapper tickEvent;
+
+    int nNEMU{1};
+
+    CountedExitEvent *execCompleteEvent;
 
     uint64_t commitInstCount{};
 

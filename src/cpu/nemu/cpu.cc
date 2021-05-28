@@ -4,22 +4,12 @@
 
 #include "cpu.hh"
 
-// #include "cpu/nemu/include/nemu_types.h"
 #include "cpu/nemu/include/protocal/instr_trace.h"
+#include "cpu/nemu/include/protocal/lockless_queue.h"
 
-std::queue<ExecTraceEntry> *TraceQueue;
-std::mutex TraceQueueLock;
-std::atomic<bool> done;
 std::thread *ExecutionThread;
 
-ExecTraceEntry traceQueuePop() {
-    while (TraceQueue->empty());
-    TraceQueueLock.lock();
-    ExecTraceEntry e = TraceQueue->front();
-    TraceQueue->pop();
-    TraceQueueLock.unlock();
-    return e;
-}
+LocklessConcurrentQueue<ExecTraceEntry> *traceQueue;
 
 void NemuCPU::wakeup(ThreadID tid)
 {
@@ -41,11 +31,10 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
         tickEvent([this] {tick();}, "NemuCPU tick",
         false, Event::CPU_Tick_Pri
         ),
+        execCompleteEvent(nullptr),
         dataPort(name() + ".dcache_port", this),
         instPort(name() + ".icache_port", this)
 {
-    TraceQueue = new std::queue<ExecTraceEntry>;
-
     extern void init_monitor(int argc, char *argv[]);
 
     char *empty[1] = {nullptr};
@@ -83,8 +72,14 @@ void NemuCPU::tick()
         cnt++;
     }
 
-    for (int i = 10000; i > 0 && !TraceQueue->empty(); i--) {
-        traceQueuePop();
+    for (int i = 10000; i > 0; i--) {
+        ExecTraceEntry entry = traceQueue->pop();
+        if (entry.type == ProtoInstType::EndOfStream) {
+            schedule(*execCompleteEvent, curTick());
+            break;
+        } else {
+
+        }
     }
 
     reschedule(tickEvent, curTick() + clockPeriod(), true);
@@ -99,6 +94,8 @@ void NemuCPU::init()
     DPRINTF(NemuCPU, "Initiated NEMU\n");
 
     tc->initMemProxies(tc);
+    traceQueue = new LocklessConcurrentQueue<ExecTraceEntry>;
+    execCompleteEvent = new CountedExitEvent("end of all NEMU instances.", nNEMU);
 }
 
 void NemuCPU::activateContext(ThreadID tid)
