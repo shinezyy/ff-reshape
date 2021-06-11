@@ -36,9 +36,9 @@ def modifyO3CPUConfig(options, cpu):
         cpu.branchPred.outcomePath = options.outcome_path
         cpu.branchPred.checkAddr = options.check_outcome_addr is not None
     elif options.use_bp is None:
-        print('Using TAGE_SC_L_64KB BP')
+        print('Using XSBP')
         # cpu.branchPred = TAGE_SC_L_64KB()
-        cpu.branchPred = LTAGE()
+        cpu.branchPred = XSBP()
     else:
         print('Unknow BP:', options.use_bp)
         assert False
@@ -132,6 +132,10 @@ def modifyO3CPUConfig(options, cpu):
 
     elif options.cpu_type == 'DerivO3CPU':
 
+        cpu.fetchWidth = 16
+        cpu.fetchQueueSize = 48
+        cpu.fetchBufferSize = 32
+        print(options.o3_core_width)
         if options.o3_core_width is not None:
 
             scale = options.o3_core_width / 4
@@ -149,3 +153,5 @@ def modifyO3CPUConfig(options, cpu):
 
             for i in range(0, len(cpu.fuPool.FUList)):
                 cpu.fuPool.FUList[i].count *= scale
+
+    print('Done modifying config')

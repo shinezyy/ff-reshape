@@ -176,7 +176,7 @@ class DerivFFCPU(BaseCPU):
 
     #branchPred = Param.BranchPredictor(TournamentBP(numThreads =
     #                                                   Parent.numThreads),
-    branchPred = Param.BranchPredictor(LTAGE(numThreads =
+    branchPred = Param.BranchPredictor(XSBP(numThreads =
                                                        Parent.numThreads),
                                        "Branch Predictor")
 

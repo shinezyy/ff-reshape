@@ -31,16 +31,7 @@ Import('*')
 if env['TARGET_ISA'] == 'null':
     Return()
 
-SimObject('BranchPredictor.py')
-SimObject('MemDepPredictor.py')
+SimObject('DirectTargetPredictor.py')
 
-Source('bpred_unit.cc')
-Source('ras.cc')
-
-
-Source('mem_dep_pred.cc')
-
-Source('xsbp.cc')
-
-DebugFlag('FreeList')
-DebugFlag('Branch')
+Source('direct_target_pred.cc')
+Source('btb.cc')

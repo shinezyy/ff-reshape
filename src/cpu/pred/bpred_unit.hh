@@ -48,11 +48,12 @@
 
 #include "base/statistics.hh"
 #include "base/types.hh"
-#include "cpu/pred/btb.hh"
-#include "cpu/pred/indirect.hh"
+#include "cpu/inst_seq.hh"
+#include "cpu/pred/dir/direction_pred.hh"
+#include "cpu/pred/itgt/indirect.hh"
 #include "cpu/pred/loop_info.hh"
 #include "cpu/pred/ras.hh"
-#include "cpu/inst_seq.hh"
+#include "cpu/pred/tgt/direct_target_pred.hh"
 #include "cpu/static_inst.hh"
 #include "params/BranchPredictor.hh"
 #include "sim/probe/pmu.hh"
@@ -87,9 +88,6 @@ class BPredUnit : public SimObject
     bool predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                  TheISA::PCState &pc, ThreadID tid);
 
-    // @todo: Rename this function.
-    virtual void uncondBranch(ThreadID tid, Addr pc, void * &bp_history) = 0;
-
     /**
      * Tells the branch predictor to commit any updates until the given
      * sequence number.
@@ -119,93 +117,11 @@ class BPredUnit : public SimObject
                 const TheISA::PCState &corr_target,
                 bool actually_taken, ThreadID tid);
 
-    /**
-     * @param bp_history Pointer to the history object.  The predictor
-     * will need to update any state and delete the object.
-     */
-    virtual void squash(ThreadID tid, void *bp_history) = 0;
-
-    /**
-     * Looks up a given PC in the BP to see if it is taken or not taken.
-     * @param inst_PC The PC to look up.
-     * @param bp_history Pointer that will be set to an object that
-     * has the branch predictor state associated with the lookup.
-     * @return Whether the branch is taken or not taken.
-     */
-    virtual bool lookup(ThreadID tid, Addr instPC, void * &bp_history) = 0;
-
-     /**
-     * If a branch is not taken, because the BTB address is invalid or missing,
-     * this function sets the appropriate counter in the global and local
-     * predictors to not taken.
-     * @param inst_PC The PC to look up the local predictor.
-     * @param bp_history Pointer that will be set to an object that
-     * has the branch predictor state associated with the lookup.
-     */
-    virtual void btbUpdate(ThreadID tid, Addr instPC, void * &bp_history) = 0;
-
-    /**
-     * Looks up a given PC in the BTB to see if a matching entry exists.
-     * @param inst_PC The PC to look up.
-     * @return Whether the BTB contains the given PC.
-     */
-    bool BTBValid(Addr instPC)
-    { return BTB.valid(instPC, 0); }
-
-    /**
-     * Looks up a given PC in the BTB to get the predicted target.
-     * @param inst_PC The PC to look up.
-     * @return The address of the target of the branch.
-     */
-    TheISA::PCState BTBLookup(Addr instPC)
-    { return BTB.lookup(instPC, 0); }
-
-    /**
-     * Updates the BP with taken/not taken information.
-     * @param inst_PC The branch's PC that will be updated.
-     * @param taken Whether the branch was taken or not taken.
-     * @param bp_history Pointer to the branch predictor state that is
-     * associated with the branch lookup that is being updated.
-     * @param squashed Set to true when this function is called during a
-     * squash operation.
-     * @param inst Static instruction information
-     * @param corrTarget The resolved target of the branch (only needed
-     * for squashed branches)
-     * @todo Make this update flexible enough to handle a global predictor.
-     */
-    virtual void update(ThreadID tid, Addr instPC, bool taken,
-                   void *bp_history, bool squashed,
-                   const StaticInstPtr &inst, Addr corrTarget) = 0;
-    /**
-     * Updates the BTB with the target of a branch.
-     * @param inst_PC The branch's PC that will be updated.
-     * @param target_PC The branch's target that will be added to the BTB.
-     */
-    void BTBUpdate(Addr instPC, const TheISA::PCState &target)
-    { BTB.update(instPC, target, 0); }
-
-
-    virtual unsigned getGHR(ThreadID tid, void* bp_history) const { return 0; }
-
     virtual Addr getLastCallsite(ThreadID tid);
 
-
-    virtual boost::dynamic_bitset<> getCurrentGHR(ThreadID tid) const {
-        panic("Not implemented\n");
-    };
+    boost::dynamic_bitset<> getCurrentGHR(ThreadID tid);
 
     void dump();
-
-    virtual bool isOracle() {
-        return false;
-    }
-
-    virtual Addr getOracleAddr() {
-        return 0;
-    }
-    virtual bool getLastDirection() {
-        return false;
-    }
 
     virtual bool canPredictLoop() {
         return false;
@@ -297,14 +213,23 @@ class BPredUnit : public SimObject
      */
     std::vector<History> predHist;
 
+    /** The branch direction predictor */
+    DirectionPredictor * dirPred;
+
+    /** The direct target predictor, usually a BTB */
+    // DirectTargetPredictor * tPred;
+
     /** The BTB. */
-    DefaultBTB BTB;
+    DirectTargetPredictor * tgtPred;
 
     /** The per-thread return address stack. */
     std::vector<ReturnAddrStack> RAS;
 
     /** The indirect target predictor. */
-    IndirectPredictor * iPred;
+    IndirectPredictor * itPred;
+
+    /** Whether this predictor only use pc to predict. */
+    bool useInstInfo;
 
     struct BPredUnitStats : public Stats::Group {
         BPredUnitStats(Stats::Group *parent);
