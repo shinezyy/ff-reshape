@@ -52,6 +52,7 @@
 #include "debug/CachePort.hh"
 #include "debug/CacheRepl.hh"
 #include "debug/CacheVerbose.hh"
+#include "debug/NemuCPU.hh"
 #include "mem/cache/compressors/base.hh"
 #include "mem/cache/mshr.hh"
 #include "mem/cache/prefetch/base.hh"
@@ -1002,7 +1003,11 @@ BaseCache::satisfyRequest(PacketPtr pkt, CacheBlk *blk, bool, bool)
     // Read requestor(s) to have buffered the ReadEx snoop and to
     // invalidate their blocks after receiving them.
     // assert(!pkt->needsWritable() || blk->isSet(CacheBlk::WritableBit));
-    assert(pkt->getOffset(blkSize) + pkt->getSize() <= blkSize);
+    if (pkt->getOffset(blkSize) + pkt->getSize() > blkSize) {
+        DPRINTF(NemuCPU, "offset: %lu, getsize: %lu, blkSize: %lu\n",
+                pkt->getOffset(blkSize), pkt->getSize(), blkSize);
+        assert(pkt->getOffset(blkSize) + pkt->getSize() <= blkSize);
+    }
 
     // Check RMW operations first since both isRead() and
     // isWrite() will be true for them

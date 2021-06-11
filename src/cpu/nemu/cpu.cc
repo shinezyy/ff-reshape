@@ -1,9 +1,9 @@
 //
 // Created by zyy on 2021/5/7.
 //
-
+#include "arch/types.hh"
+#include "config/the_isa.hh"
 #include "cpu.hh"
-
 #include "cpu/nemu/include/protocal/lockless_queue.h"
 
 std::thread *ExecutionThread;
@@ -49,6 +49,11 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
 
     DPRINTF(NemuCPU, "Created the NemuCPU object\n");
     lastEntryType = -1;
+
+    ifetchReq = std::make_shared<Request>();
+    dataReadReq = std::make_shared<Request>();
+    dataWriteReq = std::make_shared<Request>();
+    dataAmoReq = std::make_shared<Request>();
 }
 
 static uint64_t cnt = 0;
@@ -63,18 +68,22 @@ bool NemuCPU::dispatch(const ExecTraceEntry &entry)
     }
 
     ExecTraceEntry tmpEntry = lastEntry;
+    int tmp_type = lastEntryType;
 
-    switch (lastEntryType)
+    lastEntryType = entry.type;
+    lastEntry = entry;
+
+    switch (tmp_type)
     {
     case ProtoInstType::MemRead:
         // process fetch + load
         processFetch(tmpEntry.fetchAddr);
-        processLoad(tmpEntry.memAddr);
+        processLoad(tmpEntry.memAddr, tmpEntry.fetchAddr.v);
         break;
     case ProtoInstType::MemWrite:
         // process fetch + write
         processFetch(tmpEntry.fetchAddr);
-        processStore(tmpEntry.memAddr);
+        processStore(tmpEntry.memAddr, tmpEntry.fetchAddr.v);
         break;
     case ProtoInstType::EndOfStream:
         return true;
@@ -154,7 +163,18 @@ void NemuCPU::setupFetchRequest(const RequestPtr &req)
 
 void NemuCPU::processFetch(const VPAddress &addr_pair)
 {
-    // TODO: impl
+    if (__glibc_unlikely(
+        addr_pair.p < 0x80000000 || addr_pair.p >= 0x280000000)) {
+        return;
+    }
+    // DPRINTF(NemuCPU, "VA: 0x%016lx, PA: 0x%016lx\n",
+    //         addr_pair.v, addr_pair.p);
+    Addr vaddr = addr_pair.v & ((~0UL) << 2);
+    Addr paddr = addr_pair.p & ((~0UL) << 2);
+    DPRINTF(NemuCPU, "Fetch VA: 0x%016lx, PA: 0x%016lx\n", vaddr, paddr);
+    ifetchReq->setVirt(vaddr, sizeof(TheISA::MachInst),
+                       Request::INST_FETCH, instRequestorId(), addr_pair.v);
+    ifetchReq->setPaddr(paddr);
     Packet pkt = Packet(ifetchReq, MemCmd::ReadReq);
 
     pkt.dataStatic(&dummyInst);
@@ -163,26 +183,44 @@ void NemuCPU::processFetch(const VPAddress &addr_pair)
     assert(!pkt.isError());
 }
 
-void NemuCPU::processLoad(const VPAddress &addr_pair)
+void NemuCPU::processLoad(const VPAddress &addr_pair, Addr pc)
 {
-    // TODO: impl
-
+    if (__glibc_unlikely(
+        addr_pair.p < 0x80000000 || addr_pair.p <= 0x280000000)) {
+        return;
+    }
     const RequestPtr &req = dataReadReq;
     req->taskId(taskId());
 
-    Packet pkt(req, Packet::makeReadCmd(req));
-    pkt.dataStatic(dummyData);
-    sendPacket(dcachePort, &pkt);
+    Addr vaddr = addr_pair.v & ((~0UL) << 3);
+    Addr paddr = addr_pair.p & ((~0UL) << 3);
+    DPRINTF(NemuCPU, "Read  VA: 0x%016lx, PA: 0x%016lx\n", vaddr, paddr);
+    req->setVirt(vaddr, 8, 0, dataRequestorId(), pc);
+    req->setPaddr(paddr);
+
+    PacketPtr pkt = Packet::createRead(req);
+    pkt->dataStatic(dummyData);
+    sendPacket(dcachePort, pkt);
 }
 
-void NemuCPU::processStore(const VPAddress &addr_pair)
+void NemuCPU::processStore(const VPAddress &addr_pair, Addr pc)
 {
-    // TODO: impl
+    if (__glibc_unlikely(
+        addr_pair.p < 0x80000000 || addr_pair.p <= 0x280000000)) {
+        return;
+    }
     const RequestPtr &req = dataWriteReq;
     req->taskId(taskId());
-    Packet pkt(req, Packet::makeWriteCmd(req));
-    pkt.dataStatic(dummyData);
-    sendPacket(dcachePort, &pkt);
+
+    Addr vaddr = addr_pair.v & ((~0UL) << 3);
+    Addr paddr = addr_pair.p & ((~0UL) << 3);
+    DPRINTF(NemuCPU, "Write VA: 0x%016lx, PA: 0x%016lx\n", vaddr, paddr);
+    req->setVirt(vaddr, 8, 0, dataRequestorId(), pc);
+    req->setPaddr(paddr);
+
+    PacketPtr pkt = Packet::createWrite(req);
+    pkt->dataStatic(dummyData);
+    sendPacket(dcachePort, pkt);
 }
 
 void NemuCPU::sendPacket(RequestPort &port, const PacketPtr &pkt)
@@ -192,10 +230,16 @@ void NemuCPU::sendPacket(RequestPort &port, const PacketPtr &pkt)
 
 Tick NemuCPU::AtomicCPUDPort::recvAtomicSnoop(PacketPtr pkt)
 {
-    panic("Snoop is not supported\n");
+    return 0;
+    // do nothing
 }
 
 void NemuCPU::AtomicCPUDPort::recvFunctionalSnoop(PacketPtr pkt)
 {
-    panic("Snoop is not supported\n");
+    // do nothing
+}
+
+bool NemuCPU::inSameBlcok(Addr blk_addr, Addr addr)
+{
+    return (blk_addr - addr) <= 64;
 }

@@ -80,9 +80,9 @@ class NemuCPU: public BaseCPU
 
    void processFetch(const VPAddress &addr_pair);
 
-   void processLoad(const VPAddress &addr_pair);
+   void processLoad(const VPAddress &addr_pair, Addr pc);
 
-   void processStore(const VPAddress &addr_pair);
+   void processStore(const VPAddress &addr_pair, Addr pc);
 
    void sendPacket(RequestPort &port, const PacketPtr &pkt);
 
@@ -150,6 +150,8 @@ class NemuCPU: public BaseCPU
     TheISA::MachInst dummyInst;
 
     uint8_t dummyData[64];
+
+    bool inSameBlcok(Addr blk_addr, Addr addr);
 };
 
 
