@@ -67,6 +67,27 @@ PipelineFetch<Impl>::PipelineFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
 
     }
 
+template<class Impl>
+std::string
+PipelineFetch<Impl>::printStatus(int status)
+{
+  switch (status) {
+    case  0: return std::string("Running");
+    case  1: return std::string("Idle");
+    case  2: return std::string("Squashing");
+    case  3: return std::string("Blocked");
+    case  4: return std::string("Fetching");
+    case  5: return std::string("TrapPending");
+    case  6: return std::string("QuiescePending");
+    case  7: return std::string("ItlbWait");
+    case  8: return std::string("IcacheWaitResponse");
+    case  9: return std::string("IcacheWaitRetry");
+    case 10: return std::string("IcacheAccessComplete");
+    case 11: return std::string("NoGoodAddr");
+    default: return std::string("Wrong Status");
+  }
+}
+
 template <class Impl>
 void
 PipelineFetch<Impl>::tick()
@@ -79,6 +100,7 @@ PipelineFetch<Impl>::tick()
 
     DPRINTF(Fetch, "********************************************************\n");
     DPRINTF(Fetch, "fetchBufferValid: %d\n", this->fetchBufferValid);
+    DPRINTF(Fetch, "fetchStatus: %s\n", this->printStatus(this->fetchStatus[0]));
 
     while (threads != end) {
         [[maybe_unused]] ThreadID tid = *threads++;
@@ -90,14 +112,15 @@ PipelineFetch<Impl>::tick()
         status_change = status_change || updated_status;
     }
 
+    DPRINTF(Fetch, "ticking fetch1\n");
     fetch1->tick(status_change);
-    DPRINTF(Fetch, "\n");
+    DPRINTF(Fetch, "fetch1 ticked, ticking fetch2\n");
     fetch2->tick(status_change);
-    DPRINTF(Fetch, "\n");
+    DPRINTF(Fetch, "fetch2 ticked, ticking fetch3\n");
     fetch3->tick(status_change);
-    DPRINTF(Fetch, "\n");
+    DPRINTF(Fetch, "fetch3 ticked, ticking fetch4\n");
     fetch4->tick(status_change);
-    DPRINTF(Fetch, "\n");
+    DPRINTF(Fetch, "fetch4 ticked\n");
 
     if (status_change) {
         // Change the fetch stage status if there was a status change.
@@ -164,7 +187,7 @@ template<class Impl>
 void
 PipelineFetch<Impl>::setFetchStatus(ThreadStatus status, ThreadID tid)
 {
-    DPRINTF(Fetch, "setFetchStatus is called: %d\n", status);
+    DPRINTF(Fetch, "setFetchStatus is called: %s\n", printStatus(status));
 
     this->fetchStatus[tid] = status;
 
@@ -224,7 +247,17 @@ PipelineFetch<Impl>::fetchSquash(const TheISA::PCState &newPC, ThreadID tid)
         this->retryTid = InvalidThreadID;
     }
 
-    this->setFetchStatus(this->Squashing, tid);
+    fetch1->setFetchStatus(static_cast<typename BaseFetchStage<Impl>::ThreadStatus>(this->Squashing), tid);
+    fetch2->setFetchStatus(static_cast<typename BaseFetchStage<Impl>::ThreadStatus>(this->Squashing), tid);
+    fetch3->setFetchStatus(static_cast<typename BaseFetchStage<Impl>::ThreadStatus>(this->Squashing), tid);
+    this->fetchStatus[tid] = this->Running;
+}
+
+template <class Impl>
+std::string
+PipelineFetch<Impl>::name() const
+{
+    return DefaultFetch<Impl>::cpu->name() + ".PipelineFetch";
 }
 
 #endif //__CPU_O3_PIPELINE_FETCH_IMPL_HH__

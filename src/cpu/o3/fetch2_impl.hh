@@ -70,6 +70,7 @@ FetchStage2<Impl>::fetch(bool &status_change)
 
 
     if (thisStage->fire()) {
+        status_change = true;
         this->upper->fromFetch2->pc = thisPC;
         DPRINTF(Fetch2, "[tid:%i] Sending if2 pc:%x to if3\n", tid, thisPC);
         this->wroteToTimeBuffer = true;
@@ -83,5 +84,5 @@ template<class Impl>
 std::string
 FetchStage2<Impl>::name() const
 {
-    return std::string(".Fetch2");
+    return BaseFetchStage<Impl>::cpu->name() + ".Fetch2";
 }

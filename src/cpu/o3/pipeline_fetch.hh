@@ -36,7 +36,12 @@ class PipelineFetch : public DefaultFetch<Impl>
 
     void fetchSquash(const TheISA::PCState &newPC, ThreadID tid);
 
+    std::string printStatus(int status);
+
   public:
+    /** Returns the name of fetch. */
+    virtual std::string name() const;
+
     FetchStage1<Impl> *fetch1;
     FetchStage2<Impl> *fetch2;
     FetchStage3<Impl> *fetch3;

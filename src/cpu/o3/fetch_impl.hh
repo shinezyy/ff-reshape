@@ -1145,6 +1145,10 @@ DefaultFetch<Impl>::buildInst(ThreadID tid, StaticInstPtr staticInst,
     assert(fetchQueue[tid].size() <= fetchQueueSize);
     DPRINTF(Fetch, "[tid:%i] Fetch queue entry created (%i/%i).\n",
             tid, fetchQueue[tid].size(), fetchQueueSize);
+    DPRINTF(Fetch, "[tid:%i] [sn:%llu] Sending instruction %08x to fetch queue "
+                    "from fetch queue. Fetch queue size: %i.\n",
+                    tid, instruction->seqNum, instruction->staticInst->machInst,
+                    fetchQueue[tid].size());
     //toDecode->insts[toDecode->size++] = instruction;
 
     // Keep track of if we can take an interrupt at this boundary

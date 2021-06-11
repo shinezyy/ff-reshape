@@ -10,7 +10,7 @@ void
 FetchStage1<Impl>::fetch(bool &status_change)
 {
     /** Typedefs from ISA. */
-    typedef TheISA::MachInst MachInst;
+    // typedef TheISA::MachInst MachInst;
 
     DecoupledIO *thisStage = this->thisStage;
     DecoupledIO *nextStage = this->nextStage;
@@ -53,7 +53,7 @@ FetchStage1<Impl>::fetch(bool &status_change)
     Addr fetchBufferBlockPC = this->upper->bufferAlignPC(fetchAddr, this->upper->fetchBufferMask);
 
     // TheISA::PCState nextPC = thisPC;
-    TheISA::PCState nextPC = thisPC.instAddr() + this->upper->fetchWidth * sizeof(MachInst);
+    TheISA::PCState nextPC = thisPC.instAddr() + this->upper->fetchBufferSize;
     Addr nextPCBlockPC = this->upper->bufferAlignPC(nextPC.instAddr(), this->upper->fetchBufferMask);
 
     if (fetchBufferBlockPC != nextPCBlockPC ) {
@@ -67,8 +67,8 @@ FetchStage1<Impl>::fetch(bool &status_change)
     }
 
     thisStage->valid (
-        this->upper->fetchStatus[tid] == this->upper->IcacheAccessComplete
-        || this->upper->fetchStatus[tid] == this->upper->Running);
+        /* this->upper->fetchStatus[tid] == this->upper->IcacheAccessComplete
+        ||  */this->upper->fetchStatus[tid] == this->upper->Running);
     thisStage->fire(thisStage->valid() && nextStage->ready());
 
     DPRINTF(Fetch1, "fetch1: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
@@ -90,6 +90,7 @@ FetchStage1<Impl>::fetch(bool &status_change)
         DPRINTF(Fetch, "[tid:%i] Icache miss is complete.\n", tid);
 
         this->fetchStatus[tid] = this->Running;
+        this->upper->fetchStatus[tid] = this->upper->Running;
         status_change = true;
 
     } else if (this->fetchStatus[tid] == this->Running) {
@@ -98,6 +99,7 @@ FetchStage1<Impl>::fetch(bool &status_change)
 
         // Send a request to ICache
         if (thisStage->fire()) {
+            status_change = true;
             DPRINTF(Fetch1, "[tid:%i] Attempting to translate and read "
                     "instruction, starting at PC %s.\n", tid, thisPC);
 
@@ -118,5 +120,5 @@ template<class Impl>
 std::string
 FetchStage1<Impl>::name() const
 {
-    return std::string(".Fetch1");
+    return BaseFetchStage<Impl>::cpu->name() + ".Fetch1";
 }

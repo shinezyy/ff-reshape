@@ -131,10 +131,11 @@ FetchStage3<Impl>::fetch(bool &status_change)
     // doPredecode();
 
     if (thisStage->fire()) {
+        status_change = true;
         this->upper->fromFetch3->pc = thisPC;
         this->upper->fromFetch3->cacheData = cacheData;
         DPRINTF(Fetch3, "[tid:%i] Sending if3 pc:%x to if4\n", tid, thisPC);
-        DPRINTF(Fetch3, "cacheData: %x\n", cacheData);
+        // DPRINTF(Fetch3, "cacheData: %x\n", cacheData);
         this->wroteToTimeBuffer = true;
         hasData = false;
     } else {
@@ -148,5 +149,5 @@ template<class Impl>
 std::string
 FetchStage3<Impl>::name() const
 {
-    return std::string(".Fetch3");
+    return BaseFetchStage<Impl>::cpu->name() + ".Fetch3";
 }

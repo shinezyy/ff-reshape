@@ -181,6 +181,8 @@ class FetchStage4 : public BaseFetchStage<Impl>
 
     TheISA::MachInst *cacheInsts;
 
+    bool hasLastPrev;
+
   public:
     typedef typename Impl::O3CPU O3CPU;
 

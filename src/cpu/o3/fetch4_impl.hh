@@ -41,6 +41,7 @@ FetchStage4<Impl>::fetch(bool &status_change)
         thisStage->reset();
         fetchOffset[tid] = 0;
         cacheInsts = nullptr;
+        hasLastPrev = false;
         DPRINTF(Fetch4, "fetch4: Squashing\n");
         return;
     }
@@ -54,8 +55,12 @@ FetchStage4<Impl>::fetch(bool &status_change)
         if (prevStage->lastFire()) {
             DPRINTF(Fetch4, "Set if4_valid is true\n");
             thisPC = this->upper->toFetch4->pc;
-            this->pcReg[tid] = thisPC;
+            // half RVI logic
+            if (hasLastPrev) {
+                thisPC.set(thisPC.instAddr() - 2);
+            }
             thisStage->valid(true);
+            this->pcReg[tid] = thisPC;
             cacheInsts = reinterpret_cast<TheISA::MachInst *>(this->upper->toFetch4->cacheData);
             DPRINTF(Fetch4, "cacheInsts: %x\n", cacheInsts);
         } else {
@@ -66,14 +71,20 @@ FetchStage4<Impl>::fetch(bool &status_change)
         }
     }
 
-    thisStage->ready(!this->upper->stalls[tid].decode || !thisStage->valid());
-    thisStage->fire(thisStage->valid() && !this->upper->stalls[tid].decode);
-    lastDecodeStall = this->upper->stalls[tid].decode;
+    bool fetchQueueAllowIn =
+        this->upper->fetchQueueSize - this->upper->fetchQueue[tid].size() >= this->upper->fetchWidth;
+
+    bool decodeStall = this->upper->stalls[tid].decode;
+
+    bool nextReady = fetchQueueAllowIn && !decodeStall;
+
+    thisStage->fire(thisStage->valid() && nextReady);
+    thisStage->ready(thisStage->fire() || !thisStage->valid());
 
 
     DPRINTF(Fetch4, "fetch4: fetchStatus=%s\n", this->printStatus(this->fetchStatus[tid]));
     DPRINTF(Fetch4, "if4 v:%d, decode r:%d, if4 fire:%d\n",
-            thisStage->valid(), !this->upper->stalls[tid].decode, thisStage->fire());
+            thisStage->valid(), !decodeStall || !fetchQueueAllowIn, thisStage->fire());
 
     DPRINTF(Fetch4, "fetch4: thisPC = %08lx\n", thisPC.pc());
 
@@ -83,7 +94,8 @@ FetchStage4<Impl>::fetch(bool &status_change)
     //                   decode and predict                    //
     //---------------------------------------------------------//
 
-    if (!thisStage->fire()) {
+    bool needSkip = !thisStage->valid() || decodeStall || !fetchQueueAllowIn;
+    if (needSkip) {
         DPRINTF(Fetch4, "[tid:%i] *Stall* if4 pc:%x to decode\n", tid, thisPC);
         return;
     }
@@ -95,9 +107,10 @@ FetchStage4<Impl>::fetch(bool &status_change)
     unsigned numInsts = fetchBufferSize / instSize;
     unsigned blkOffset = (fetchAddr - fetchBufferBlockPC) / this->upper->instSize;
 
-
     // THis run once when system wtartup
     if (cacheInsts == nullptr) { return; }
+
+    bool canDelete = false;
 
     DPRINTF(Fetch4, "==========\n");
     for (int i = 0; i < numInsts; i++) {
@@ -115,11 +128,14 @@ FetchStage4<Impl>::fetch(bool &status_change)
            && this->upper->fetchQueue[tid].size() < this->upper->fetchQueueSize
            && !predictedBranch && !quiesce)
     {
-        fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
+        // fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
 
-        fetchBufferBlockPC = this->upper->bufferAlignPC(fetchAddr, this->upper->fetchBufferMask);
+        // fetchBufferBlockPC = this->upper->bufferAlignPC(fetchAddr, this->upper->fetchBufferMask);
 
-        if (blkOffset >= numInsts) { break; }
+        if (blkOffset >= numInsts) {
+            canDelete = true;
+            break;
+        }
 
         TheISA::MachInst inst = cacheInsts[blkOffset];
         DPRINTF(Fetch4, "blkOffset: %d\n", blkOffset);
@@ -127,18 +143,24 @@ FetchStage4<Impl>::fetch(bool &status_change)
 
         decoder[tid]->moreBytes(thisPC, fetchAddr, inst);
 
+        // send one more byte to decoder in the
+        // next iteration (if not out of buffer)
         if (decoder[tid]->needMoreBytes()) {
             blkOffset++;
-            fetchAddr += instSize;
+            // fetchAddr += instSize;
             pcOffset += instSize;
         }
 
         do {
             if (decoder[tid]->instReady()) {
+                hasLastPrev = false;
                 staticInst = decoder[tid]->decode(thisPC);
-
                 pcOffset = 0;
             } else {
+                if (blkOffset == numInsts &&
+                    decoder[tid]->needMoreBytes()) {
+                    hasLastPrev = true;
+                }
                 break;
             }
 
@@ -162,6 +184,7 @@ FetchStage4<Impl>::fetch(bool &status_change)
                         nextPC.pc(),
                         nextPC.npc());
                 this->upper->fetchSquash(nextPC, tid);
+                canDelete = true;
             }
 
             thisPC = nextPC;
@@ -180,13 +203,19 @@ FetchStage4<Impl>::fetch(bool &status_change)
                 this->upper->fetchQueue[tid].size() < fetchQueueSize);
     } // outer loop end
 
+    this->pcReg[tid] = thisPC;
+    DPRINTF(Fetch4, "writing thisPC %x to pcReg\n", thisPC);
+
     fetchOffset[tid] = pcOffset;
 
     if (numInst > 0) {
         this->wroteToTimeBuffer = true;
     }
 
-    delete cacheInsts;
+    if (canDelete) {
+        delete cacheInsts;
+    }
+
 
     //---------------------------------------------------------//
     //                   decode and predict                    //
@@ -196,11 +225,8 @@ FetchStage4<Impl>::fetch(bool &status_change)
 
     if (thisStage->fire()) {
         DPRINTF(Fetch4, "[tid:%i] Sending if4 pc:%x to decode\n", tid, thisPC);
-        this->wroteToTimeBuffer = true;
-        this->upper->stalls[tid].fetch4 = false;
     } else {
         DPRINTF(Fetch4, "[tid:%i] *Stall* if4 pc:%x to decode\n", tid, thisPC);
-        this->upper->stalls[tid].fetch4 = true;
     }
 
 }
@@ -264,5 +290,5 @@ template<class Impl>
 std::string
 FetchStage4<Impl>::name() const
 {
-    return std::string(".Fetch4");
+    return BaseFetchStage<Impl>::cpu->name() + ".Fetch4";
 }
