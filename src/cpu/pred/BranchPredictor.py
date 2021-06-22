@@ -48,7 +48,7 @@ class BranchPredictor(SimObject):
     # indirectBranchPred = Param.IndirectPredictor(SimpleIndirectPredictor(),
     #   "Indirect branch predictor, set to NULL to disable indirect predictions")
 
-    directionPred = Param.DirectionPredictor(NULL, "Conditional branch predictor")
+    directionPred = Param.DirectionPredictor(LTAGE(), "Conditional branch predictor")
     directTargetPred = Param.DirectTargetPredictor(DefaultBTB(), "Direct target predictor")
     indirectTargetPred = Param.IndirectPredictor(SimpleIndirectPredictor(), "Indirect target predictor")
 
@@ -118,5 +118,5 @@ class XSBP(BranchPredictor):
     type = 'XSBP'
     cxx_class = 'XSBP'
     cxx_header = "cpu/pred/xsbp.hh"
-    directionPred = Param.DirectionPredictor(LTAGE(), "")
+    # directionPred = LTAGE()
     # indirectTargetPred = Param.IndirectPredictor(NULL, "")
