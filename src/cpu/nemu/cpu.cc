@@ -31,8 +31,9 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
         false, Event::CPU_Tick_Pri
         ),
         execCompleteEvent(nullptr),
-        icachePort(name() + ".dcache_port", this),
-        dcachePort(name() + ".icache_port", this)
+        icachePort(name() + ".icache_port", this),
+        dcachePort(name() + ".dcache_port", this),
+        maxInsts(params.max_insts_any_thread)
 {
     extern void init_monitor(int argc, char *argv[]);
 
@@ -92,6 +93,12 @@ bool NemuCPU::dispatch(const ExecTraceEntry &entry)
         processFetch(tmpEntry.fetchAddr);
         break;
     }
+    instCount++;
+
+    if (__glibc_unlikely(instCount >= maxInsts)) {
+        return true;
+    }
+
     return false;
 }
 
@@ -108,7 +115,8 @@ void NemuCPU::tick()
         ExecTraceEntry entry = traceQueue->pop();
         // DPRINTF(NemuCPU, "fetchVaddr: 0x%#lx\n", entry.fetchAddr.v);
         DPRINTF(NemuCPU,
-                "T = %d, FV = 0x%016X, FP = 0x%016X, MV = 0x%016X, MP = 0x%016X\n",
+                "ID = %llu, T = %d, FV = 0x%016X, FP = 0x%016X, MV = 0x%016X, MP = 0x%016X\n",
+                entry.id,
                 entry.type,
                 entry.fetchAddr.v,
                 entry.fetchAddr.p,
@@ -186,7 +194,7 @@ void NemuCPU::processFetch(const VPAddress &addr_pair)
 void NemuCPU::processLoad(const VPAddress &addr_pair, Addr pc)
 {
     if (__glibc_unlikely(
-        addr_pair.p < 0x80000000 || addr_pair.p <= 0x280000000)) {
+        addr_pair.p < 0x80000000 || addr_pair.p >= 0x280000000)) {
         return;
     }
     const RequestPtr &req = dataReadReq;
@@ -198,15 +206,15 @@ void NemuCPU::processLoad(const VPAddress &addr_pair, Addr pc)
     req->setVirt(vaddr, 8, 0, dataRequestorId(), pc);
     req->setPaddr(paddr);
 
-    PacketPtr pkt = Packet::createRead(req);
-    pkt->dataStatic(dummyData);
-    sendPacket(dcachePort, pkt);
+    Packet pkt(req, Packet::makeReadCmd(req));
+    pkt.dataStatic(dummyData);
+    sendPacket(dcachePort, &pkt);
 }
 
 void NemuCPU::processStore(const VPAddress &addr_pair, Addr pc)
 {
     if (__glibc_unlikely(
-        addr_pair.p < 0x80000000 || addr_pair.p <= 0x280000000)) {
+        addr_pair.p < 0x80000000 || addr_pair.p >= 0x280000000)) {
         return;
     }
     const RequestPtr &req = dataWriteReq;
@@ -218,9 +226,9 @@ void NemuCPU::processStore(const VPAddress &addr_pair, Addr pc)
     req->setVirt(vaddr, 8, 0, dataRequestorId(), pc);
     req->setPaddr(paddr);
 
-    PacketPtr pkt = Packet::createWrite(req);
-    pkt->dataStatic(dummyData);
-    sendPacket(dcachePort, pkt);
+    Packet pkt(req, Packet::makeWriteCmd(req));
+    pkt.dataStatic(dummyData);
+    sendPacket(dcachePort, &pkt);
 }
 
 void NemuCPU::sendPacket(RequestPort &port, const PacketPtr &pkt)

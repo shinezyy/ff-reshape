@@ -152,6 +152,10 @@ class NemuCPU: public BaseCPU
     uint8_t dummyData[64];
 
     bool inSameBlcok(Addr blk_addr, Addr addr);
+
+    uint64_t instCount{};
+
+    const uint64_t maxInsts;
 };
 
 
