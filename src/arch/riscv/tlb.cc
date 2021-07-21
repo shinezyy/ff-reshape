@@ -354,6 +354,10 @@ TLB::translate(const RequestPtr &req, ThreadContext *tc,
             DPRINTF(TLB, "Has translation fault: %i\n", fault != NoFault);
         }
 
+        if (req->getPaddr() < 0x80000000UL)
+        {
+            req->setFlags(Request::UNCACHEABLE);
+        }
         // according to the RISC-V tests, negative physical addresses trigger
         // an illegal address exception.
         // TODO where is that written in the manual?

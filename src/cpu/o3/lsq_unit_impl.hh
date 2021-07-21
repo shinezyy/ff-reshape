@@ -880,10 +880,6 @@ LSQUnit<Impl>::writebackStores()
                 req->request()->getPaddr(), (int)*(inst->memData),
                 inst->seqNum);
 
-        if (req->request()->getPaddr() < 0x80000000UL) {
-            req->request()->setFlags(Request::UNCACHEABLE);
-        }
-
         // @todo: Remove this SC hack once the memory system handles it.
         if (inst->isStoreConditional()) {
             // Disable recording the result temporarily.  Writing to
