@@ -39,8 +39,10 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from m5.objects.BaseISA import BaseISA
+from m5.params import *
 
 class RiscvISA(BaseISA):
     type = 'RiscvISA'
     cxx_class = 'RiscvISA::ISA'
     cxx_header = "arch/riscv/isa.hh"
+    nohype = Param.Bool(False, "Use nohype")

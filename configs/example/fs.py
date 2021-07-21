@@ -84,8 +84,8 @@ def build_test_system(np):
     elif buildEnv['TARGET_ISA'] == "sparc":
         test_sys = makeSparcSystem(test_mem_mode, bm[0], cmdline=cmdline)
     elif buildEnv['TARGET_ISA'] == "riscv":
-        test_sys = makeBareMetalRiscvSystem(test_mem_mode, bm[0],
-                                            cmdline=cmdline)
+        test_sys = makeBareMetalRiscvSystem(
+            test_mem_mode, np, bm[0], cmdline=cmdline, nohype=options.nohype)
     elif buildEnv['TARGET_ISA'] == "x86":
         test_sys = makeLinuxX86System(test_mem_mode, np, bm[0], options.ruby,
                                       cmdline=cmdline)
@@ -228,6 +228,20 @@ def build_test_system(np):
 
         MemConfig.config_mem(options, test_sys)
 
+        if options.nohype:
+            io_stride_size = 0x20000
+            mem_stride_size = AddrRange(start=0x80000000, size=bm[0].mem()).size()//np
+            for cpu in test_sys.cpu:
+                cpu.mmu.itb.nohype_mem_stride = mem_stride_size
+                cpu.mmu.itb.nohype_io_stride = io_stride_size
+                cpu.mmu.itb.walker.nohype_mem_stride = mem_stride_size
+                cpu.mmu.dtb.nohype_mem_stride = mem_stride_size
+                cpu.mmu.dtb.nohype_io_stride = io_stride_size
+                cpu.mmu.dtb.walker.nohype_mem_stride = mem_stride_size
+                for isa in cpu.isa:
+                    isa.nohype = True
+            test_sys.nohype_num = np
+
     return test_sys
 
 def build_drive_system(np):
@@ -331,6 +345,9 @@ else:
                         mem=options.mem_size, os_type=options.os_type)]
 
 np = options.num_cpus
+
+if options.nohype:
+    assert(buildEnv['TARGET_ISA'] == "riscv")
 
 test_sys = build_test_system(np)
 

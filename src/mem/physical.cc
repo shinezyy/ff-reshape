@@ -80,13 +80,15 @@ PhysicalMemory::PhysicalMemory(const string& _name,
                                const std::string& shared_backstore,
                                bool restore_from_gcpt,
                                const std::string& gcpt_restorer_path,
-                               const std::string& gcpt_path
+                               const std::string& gcpt_path,
+                               int nohype_num
                                ) :
     _name(_name), size(0), mmapUsingNoReserve(mmap_using_noreserve),
     sharedBackstore(shared_backstore),
     restoreFromGCpt(restore_from_gcpt),
     gCptRestorerPath(gcpt_restorer_path),
-    gCptPath(gcpt_path)
+    gCptPath(gcpt_path),
+    nohypeNum(nohype_num)
 {
     if (mmap_using_noreserve)
         warn("Not reserving swap space. May cause SIGSEGV on actual usage\n");
@@ -461,6 +463,7 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
 
     pmemStart = pmem;
     pmemSize = range.size();
+    Addr partSize = pmemSize/nohypeNum;
 
     if (range_size != 0) {
         DPRINTF(Checkpoint, "Unserializing physical memory %s with size %d\n",
@@ -471,46 +474,51 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
                     range_size, range.size());
     }
 
-    uint64_t curr_size = 0;
-    long* temp_page = new long[chunk_size];
-    long* pmem_current;
-    uint32_t bytes_read;
-    while (curr_size < range.size()) {
-        bytes_read = gzread(compressed_mem, temp_page, chunk_size);
-        if (bytes_read == 0)
-            break;
+    for (size_t i = 0; i < nohypeNum; i++)
+    {
+        uint8_t* pmem_part_start = pmem + i * partSize;
+        uint64_t curr_size = 0;
+        long* temp_page = new long[chunk_size];
+        long* pmem_current;
+        uint32_t bytes_read;
+        while (curr_size < partSize) {
+            bytes_read = gzread(compressed_mem, temp_page, chunk_size);
+            if (bytes_read == 0)
+                break;
 
-        assert(bytes_read % sizeof(long) == 0);
+            assert(bytes_read % sizeof(long) == 0);
 
-        for (uint32_t x = 0; x < bytes_read / sizeof(long); x++) {
-            // Only copy bytes that are non-zero, so we don't give
-            // the VM system hell
-            if (*(temp_page + x) != 0) {
-                pmem_current = (long*)(pmem + curr_size + x * sizeof(long));
-                *pmem_current = *(temp_page + x);
+            for (uint32_t x = 0; x < bytes_read / sizeof(long); x++) {
+                // Only copy bytes that are non-zero, so we don't give
+                // the VM system hell
+                if (*(temp_page + x) != 0) {
+                    pmem_current = (long*)(pmem_part_start + curr_size + x * sizeof(long));
+                    *pmem_current = *(temp_page + x);
+                }
             }
-        }
-        curr_size += bytes_read;
-    }
-
-    delete[] temp_page;
-
-    if (restoreFromGCpt && !gCptRestorerPath.empty()) {
-        warn("Overriding Gcpt restorer\n");
-
-        FILE *fp = fopen(gCptRestorerPath.c_str(), "rb");
-        if (!fp) {
-            panic("Can not open '%s'", gCptRestorerPath);
+            curr_size += bytes_read;
         }
 
-        // fseek(fp, 0, SEEK_END);
-        // long restorer_size = ftell(fp);
-        // assert( < 0x400);
+        gzrewind(compressed_mem);
+        delete[] temp_page;
 
-        uint32_t restorer_size = 0x400;
-        fseek(fp, 0, SEEK_SET);
-        assert(restorer_size == fread(pmem, 1, restorer_size, fp));
-        fclose(fp);
+        if (restoreFromGCpt && !gCptRestorerPath.empty()) {
+            warn("Overriding Gcpt restorer\n");
+
+            FILE *fp = fopen(gCptRestorerPath.c_str(), "rb");
+            if (!fp) {
+                panic("Can not open '%s'", gCptRestorerPath);
+            }
+
+            // fseek(fp, 0, SEEK_END);
+            // long restorer_size = ftell(fp);
+            // assert( < 0x400);
+
+            uint32_t restorer_size = 0x400;
+            fseek(fp, 0, SEEK_SET);
+            assert(restorer_size == fread(pmem_part_start, 1, restorer_size, fp));
+            fclose(fp);
+        }
     }
 
     if (gzclose(compressed_mem))

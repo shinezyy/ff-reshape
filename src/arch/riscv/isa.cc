@@ -176,7 +176,7 @@ M5_VAR_USED const std::array<const char *, NumMiscRegs> MiscRegNames = {{
     [MISCREG_FRM]           = "FRM",
 }};
 
-ISA::ISA(const Params &p) : BaseISA(p)
+ISA::ISA(const Params &p) : BaseISA(p), nohype(p.nohype)
 {
     miscRegFile.resize(NumMiscRegs);
     clear();
@@ -247,7 +247,10 @@ ISA::readMiscReg(int misc_reg)
 {
     switch (misc_reg) {
       case MISCREG_HARTID:
-        return tc->contextId();
+        if (nohype)
+            return 0;
+        else
+            return tc->contextId();
       case MISCREG_CYCLE:
         if (hpmCounterEnabled(MISCREG_CYCLE)) {
             DPRINTF(RiscvMisc, "Cycle counter at: %llu.\n",

@@ -74,6 +74,8 @@ class BasicPioDevice(PioDevice):
     abstract = True
     pio_addr = Param.Addr("Device Address")
     pio_latency = Param.Latency('100ns', "Programmed IO latency")
+    def set_addr_with_stride(self, addr, index, stride):
+        self.pio_addr = addr + index * stride
 
 class DmaDevice(PioDevice):
     type = 'DmaDevice'

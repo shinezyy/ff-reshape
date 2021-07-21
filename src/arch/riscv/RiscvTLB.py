@@ -41,11 +41,14 @@ class RiscvPagetableWalker(ClockedObject):
     system = Param.System(Parent.any, "system object")
     num_squash_per_cycle = Param.Unsigned(32,
             "Number of outstanding walks that can be squashed per cycle")
+    nohype_mem_stride = Param.Addr(0, "PTW nohype mem stride")
 
 class RiscvTLB(BaseTLB):
     type = 'RiscvTLB'
     cxx_class = 'RiscvISA::TLB'
     cxx_header = 'arch/riscv/tlb.hh'
     size = Param.Int(256, "TLB size")
+    nohype_mem_stride = Param.Addr(0, "TLB nohype mem stride")
+    nohype_io_stride = Param.Addr(0, "TLB nohype io stride")
     walker = Param.RiscvPagetableWalker(\
             RiscvPagetableWalker(), "page table walker")

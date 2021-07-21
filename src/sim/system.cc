@@ -221,7 +221,8 @@ System::System(const Params &p)
               p.shared_backstore,
               p.restore_from_gcpt,
               p.gcpt_restorer_file,
-              p.gcpt_file
+              p.gcpt_file,
+              p.nohype_num
               ),
       memoryMode(p.mem_mode),
       _cacheLineSize(p.cache_line_size),

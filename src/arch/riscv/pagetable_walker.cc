@@ -396,6 +396,11 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         endWalk();
     }
     else {
+        if (walker->nohypeMemStride != 0)
+        {
+            nextRead += tc->contextId() * walker->nohypeMemStride;
+        }
+
         //If we didn't return, we're setting up another read.
         RequestPtr request = std::make_shared<Request>(
             nextRead, oldRead->getSize(), flags, walker->requestorId);
@@ -427,6 +432,11 @@ Walker::WalkerState::setupWalk(Addr vaddr)
     Addr shift = PageShift + LEVEL_BITS * 2;
     Addr idx = (vaddr >> shift) & LEVEL_MASK;
     Addr topAddr = (satp.ppn << PageShift) + (idx * sizeof(PTESv39));
+    if (walker -> nohypeMemStride != 0)
+    {
+        topAddr += tc->contextId() * walker -> nohypeMemStride;
+    }
+
     level = 2;
 
     DPRINTF(PageTableWalker, "Performing table walk for address %#x\n", vaddr);

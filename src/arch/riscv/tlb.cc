@@ -67,7 +67,8 @@ buildKey(Addr vpn, uint16_t asid)
 }
 
 TLB::TLB(const Params &p)
-    : BaseTLB(p), size(p.size), tlb(size), lruSeq(0), stats(this)
+    : BaseTLB(p), size(p.size), tlb(size), lruSeq(0), stats(this),
+    nohypeMemStride(p.nohype_mem_stride),nohypeIoStride(p.nohype_io_stride)
 {
     for (size_t x = 0; x < size; x++) {
         tlb[x].trieHandle = NULL;
@@ -357,6 +358,17 @@ TLB::translate(const RequestPtr &req, ThreadContext *tc,
         if (req->getPaddr() < 0x80000000UL)
         {
             req->setFlags(Request::UNCACHEABLE);
+            if (nohypeIoStride != 0)
+            {
+                req->setPaddr(req->getPaddr() + tc->contextId() * nohypeIoStride);
+            }
+        }
+        else
+        {
+            if (nohypeMemStride != 0)
+            {
+                req->setPaddr(req->getPaddr() + tc->contextId() * nohypeMemStride);
+            }
         }
         // according to the RISC-V tests, negative physical addresses trigger
         // an illegal address exception.
@@ -377,6 +389,8 @@ TLB::translate(const RequestPtr &req, ThreadContext *tc,
 
         return fault;
     } else {
+        //!nohype should be used in FullSystem mode!
+        assert(nohypeMemStride == 0);
         // In the O3 CPU model, sometimes a memory access will be speculatively
         // executed along a branch that will end up not being taken where the
         // address is invalid.  In that case, return a fault rather than trying

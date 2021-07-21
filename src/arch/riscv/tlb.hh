@@ -122,6 +122,9 @@ class TLB : public BaseTLB
     void evictLRU();
     void remove(size_t idx);
 
+    Addr nohypeMemStride;
+    Addr nohypeIoStride;
+
     Fault translate(const RequestPtr &req, ThreadContext *tc,
                     Translation *translation, Mode mode, bool &delayed);
     Fault doTranslate(const RequestPtr &req, ThreadContext *tc,

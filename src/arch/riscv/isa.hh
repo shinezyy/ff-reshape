@@ -101,6 +101,8 @@ class ISA : public BaseISA
     const Params &params() const;
 
     ISA(const Params &p);
+  private:
+    bool nohype;
 };
 
 } // namespace RiscvISA

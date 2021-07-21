@@ -540,3 +540,6 @@ def addFSOptions(parser):
     parser.add_option("--gcpt-restorer", action="store",
                       default=None, type="string",
                       help="The path of generic risc-v checkpoint restorer")
+
+    parser.add_option("--nohype", action="store_true", default=False,
+                      help="use nohype mode for risc-v system")

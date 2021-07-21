@@ -619,7 +619,7 @@ def makeLinuxX86System(mem_mode, numCPUs=1, mdesc=None, Ruby=False,
     self.workload.command_line = fillInCmdline(mdesc, cmdline)
     return self
 
-def makeBareMetalRiscvSystem(mem_mode, mdesc=None, cmdline=None):
+def makeBareMetalRiscvSystem(mem_mode, numCPUs=1, mdesc=None, cmdline=None, nohype=False, io_stride_size=0x20000):
     self = System()
     if not mdesc:
         # generic system
@@ -638,18 +638,34 @@ def makeBareMetalRiscvSystem(mem_mode, mdesc=None, cmdline=None):
     self.bridge.slave = self.membus.master
     # Sv39 has 56 bit physical addresses; use the upper 8 bit for the IO space
     IO_address_space_base = 0x00FF000000000000
-    self.bridge.ranges = [
+    if nohype:
+        self.bridge.ranges = [AddrRange(io_stride_size * i + 0x38000000, io_stride_size * i + 0x38010000 - 1)
+            for i in range(0, numCPUs)] + [AddrRange(io_stride_size * i + 0x40600000,
+            io_stride_size * i + 0x4060000d - 1) for i in range(0, numCPUs)
+            ] + [AddrRange(IO_address_space_base, Addr.max)]
+    else:
+        self.bridge.ranges = [
             AddrRange(0x38000000, 0x38010000 - 1),
             AddrRange(0x40600000, 0x4060000d - 1),
             AddrRange(IO_address_space_base, Addr.max),]
 
     self.system_port = self.membus.slave
 
-    self.lint = Lint()
-    self.lint.pio = self.iobus.master
+    if nohype:
+        self.lints = [Lint() for _ in range(0, numCPUs)]
+        for i, x in enumerate(self.lints):
+            x.set_addr_with_stride(x.pio_addr, i, io_stride_size)
+            x.pio = self.iobus.master
+        self.uartlites = [UartLite() for _ in range(0, numCPUs)]
+        for i, x in enumerate(self.uartlites):
+            x.set_addr_with_stride(x.pio_addr, i, io_stride_size)
+            x.pio = self.iobus.master
+    else:
+        self.lint = Lint()
+        self.lint.pio = self.iobus.master
 
-    self.uartlite = UartLite()
-    self.uartlite.pio = self.iobus.master
+        self.uartlite = UartLite()
+        self.uartlite.pio = self.iobus.master
 
     return self
 

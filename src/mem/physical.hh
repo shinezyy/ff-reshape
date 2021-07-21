@@ -170,7 +170,8 @@ class PhysicalMemory : public Serializable
                    const std::string& shared_backstore,
                    bool restore_from_gcpt,
                    const std::string& gcpt_restorer_path,
-                   const std::string& gcpt_path);
+                   const std::string& gcpt_path,
+                   int nohype_num);
 
     /**
      * Unmap all the backing store we have used.
@@ -285,6 +286,8 @@ class PhysicalMemory : public Serializable
     std::string gCptRestorerPath;
 
     std::string gCptPath;
+
+    int nohypeNum;
 
   public:
     bool tryRestoreFromGCpt();
