@@ -1,0 +1,3 @@
+[submodule "ext/nemu_fast"]
+	path = ext/nemu_fast
+	url = git@github.com:shinezyy/nemu-fast.git
