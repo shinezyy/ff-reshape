@@ -10,6 +10,8 @@ std::thread *ExecutionThread;
 
 LocklessConcurrentQueue<ExecTraceEntry> *traceQueue;
 
+std::atomic_bool nemuStop;
+
 void NemuCPU::wakeup(ThreadID tid)
 {
 
@@ -95,8 +97,10 @@ bool NemuCPU::dispatch(const ExecTraceEntry &entry)
     }
     instCount++;
 
-    if (__glibc_unlikely(instCount >= maxInsts)) {
-        return true;
+    if (__glibc_unlikely(instCount >= maxInsts && cpuState == CPUState::Running)) {
+        warn("GEM5 reach max insts, notify NEMU to stop\n");
+        nemuStop.store(true);
+        cpuState = CPUState::Stopping;
     }
 
     return false;
@@ -115,7 +119,7 @@ void NemuCPU::tick()
         ExecTraceEntry entry = traceQueue->pop();
         // DPRINTF(NemuCPU, "fetchVaddr: 0x%#lx\n", entry.fetchAddr.v);
         DPRINTF(NemuCPU,
-                "ID = %llu, T = %d, FV = 0x%016X, FP = 0x%016X, MV = 0x%016X, MP = 0x%016X\n",
+                "ID = %llu, T = %d, FV = 0x%016lx, FP = 0x%016lx, MV = 0x%016lx, MP = 0x%016lx\n",
                 entry.id,
                 entry.type,
                 entry.fetchAddr.v,
@@ -124,11 +128,14 @@ void NemuCPU::tick()
                 entry.memAddr.p);
         bool eos = dispatch(entry);
         if (__glibc_unlikely(eos)) {
+            assert(cpuState == CPUState::Stopping);
+            warn("GEM5 received EOS from NEMU\n");
+            cpuState = Stopped;
             schedule(*execCompleteEvent, curTick());
             break;
         }
     }
-    reschedule(tickEvent, curTick() + clockPeriod(), true);
+    reschedule(tickEvent, curTick() + clockPeriod() * 10000, true);
 }
 
 void NemuCPU::init()
@@ -143,6 +150,8 @@ void NemuCPU::init()
     traceQueue = new LocklessConcurrentQueue<ExecTraceEntry>;
     execCompleteEvent = new CountedExitEvent("end of all NEMU instances.", nNEMU);
     lastEntryType = -1;
+    nemuStop.store(false);
+    cpuState = CPUState::Running;
 }
 
 void NemuCPU::activateContext(ThreadID tid)

@@ -92,6 +92,9 @@ nemu_files = [
     './src/engine/interpreter/init.c',
     './src/engine/interpreter/hostcall.c',
     './src/protocal/instr_trace.c',
+    './src/checkpoint/serializer.cpp',
+    './src/checkpoint/path_manager.cpp',
+    './src/sim/simulation.cpp',
     ]
 
 if 'NemuCPU' in env['CPU_MODELS']:
@@ -103,3 +106,4 @@ if 'NemuCPU' in env['CPU_MODELS']:
         Source(f, append=appends, replace=cc_replace)
 
     DebugFlag('NemuCPU')
+

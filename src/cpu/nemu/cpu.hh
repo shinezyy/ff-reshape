@@ -156,6 +156,13 @@ class NemuCPU: public BaseCPU
     uint64_t instCount{};
 
     const uint64_t maxInsts;
+
+    enum CPUState {
+      Invalid = 0,
+      Running,
+      Stopping,
+      Stopped
+    } cpuState;
 };
 
 
