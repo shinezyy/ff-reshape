@@ -53,6 +53,8 @@
 
 #include "base/logging.hh"
 #include "base/types.hh"
+#include "enums/BankSerializeFormat.hh"
+#include "enums/WaySerializeFormat.hh"
 #include "mem/cache/base.hh"
 #include "mem/cache/cache_blk.hh"
 #include "mem/cache/replacement_policies/base.hh"
@@ -61,6 +63,31 @@
 #include "mem/cache/tags/indexing_policies/base.hh"
 #include "mem/packet.hh"
 #include "params/BaseSetAssoc.hh"
+
+struct PhyPosition
+{
+    unsigned way;
+    unsigned bank;
+    unsigned block;
+    bool operator==(const PhyPosition &other) const
+    {
+        return way == other.way && bank == other.bank && block == other.block;
+    }
+};
+namespace std
+{
+    template <>
+    struct hash<PhyPosition>
+    {
+        std::size_t operator()(const PhyPosition &k) const
+        {
+            using std::hash;
+            return (hash<unsigned>()(k.way) << 4) ^
+                (hash<unsigned>()(k.bank) << 2) ^
+                (hash<unsigned>()(k.block));
+        }
+    };
+}
 
 /**
  * A basic cache tag store.
@@ -245,6 +272,69 @@ class BaseSetAssoc : public BaseTags
         }
         return false;
     }
+  public:
+
+  private:
+    Enums::WaySerializeFormat dataWaySrlFmt{Enums::WaySerializeFormat::wayway};
+    Enums::WaySerializeFormat tagWaySrlFmt{Enums::WaySerializeFormat::wayway};
+    Enums::BankSerializeFormat dataBankSrlFmt{Enums::BankSerializeFormat::Senk};
+    Enums::BankSerializeFormat tagBankSrlFmt{Enums::BankSerializeFormat::Senk};
+
+    unsigned numDataBanks{1};
+    unsigned numTagBanks{1};
+
+    unsigned numDataSRAMBlocks{1};
+    unsigned numTagSRAMBlocks{1};
+
+  public:
+    void dumpTags();
+
+    void dumpData();
+
+    void dumpStates() override;
+
+    const unsigned cacheLevel;
+
+    const std::string cacheName;
+
+    std::pair<Addr, CacheBlk*> getPhyAddr(
+        int way_fmt, int bank_fmt, unsigned bank_id, unsigned way_id, unsigned set_id, unsigned block_id);;
+
+
+  public:
+    typedef typename std::unordered_map<PhyPosition, FILE *> FDMap;
+
+  private:
+    FDMap tagFDMap;
+    FDMap trivialTagFDMap;
+    FDMap dataFDMap;
+    FDMap dataDebugFDMap;
+
+    std::unordered_set<FILE *> dumpFiles;
+
+    FDMap createFDMap(std::string prefix, int way_srl_fmt, int bank_srl_fmt,
+            unsigned num_banks, unsigned num_sram_blocks);
+
+    FILE *getTagFD(unsigned bank_id, unsigned way_id, unsigned block_id) {
+        return tagFDMap[{way_id, bank_id, block_id}];
+    }
+
+    FILE *getTrivialTagFD(unsigned bank_id, unsigned way_id, unsigned block_id) {
+        return trivialTagFDMap[{way_id, bank_id, block_id}];
+    }
+
+    FILE *getDataFD(unsigned bank_id, unsigned way_id, unsigned block_id) {
+        return dataFDMap[{way_id, bank_id, block_id}];
+    }
+    FILE *getDataDebugFD(unsigned bank_id, unsigned way_id, unsigned block_id) {
+        return dataDebugFDMap[{way_id, bank_id, block_id}];
+    }
+
+    const unsigned beatSize;
+
+    ReplaceableEntry *getWay(unsigned way, const std::vector<ReplaceableEntry *> &set_entries) const;
 };
+
+const uint8_t *get_nemu_pmem();
 
 #endif //__MEM_CACHE_TAGS_BASE_SET_ASSOC_HH__

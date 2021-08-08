@@ -148,6 +148,22 @@ class BaseCache(ClockedObject):
     # data cache.
     write_allocator = Param.WriteAllocator(NULL, "Write allocator")
 
+    cache_level = Param.Int(0, "Cache level")
+
+    num_data_banks = Param.Int(1, "The number of data banks to dump caches")
+    num_tag_banks = Param.Int(1, "The number of tag banks to dump caches")
+    num_data_sram_blocks = Param.Int(1, 'num_data_sram_blocks')
+
+    data_way_srl_fmt = Param.WaySerializeFormat('wayway', 'How ways are stacked')
+    tag_way_srl_fmt = Param.WaySerializeFormat('wayway', 'How ways are stacked')
+    data_bank_srl_fmt = Param.BankSerializeFormat('Senk', 'How banks are split')
+    tag_bank_srl_fmt = Param.BankSerializeFormat('Senk', 'How banks are split')
+
+    cache_name = Param.String("cache", "Cache name")
+
+    beatSize = Param.MemorySize("64B", 'beatSize')
+
+
 class Cache(BaseCache):
     type = 'Cache'
     cxx_header = 'mem/cache/cache.hh'

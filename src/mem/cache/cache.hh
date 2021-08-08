@@ -166,6 +166,12 @@ class Cache : public BaseCache
      * @return True if the port is waiting for a retry
      */
     bool sendMSHRQueuePacket(MSHR* mshr) override;
+
+    void forceWritebackAtomic(std::list<PacketPtr> &wb_pkts);
+
+    void forceClusivity();
+
+    void dumpStates();
 };
 
 #endif // __MEM_CACHE_CACHE_HH__

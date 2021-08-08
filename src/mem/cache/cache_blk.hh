@@ -446,6 +446,9 @@ class CacheBlk : public TaggedEntry
         }
     }
 
+    void clearTip() {_isTip = false;}
+    bool getTip() {return _isTip;}
+
   protected:
     /** The current coherence status of this block. @sa CoherenceBits */
     unsigned coherence;
@@ -485,6 +488,8 @@ class CacheBlk : public TaggedEntry
 
     /** Whether this block is an unaccessed hardware prefetch. */
     bool _prefetched;
+
+    bool _isTip{true};
 };
 
 /**

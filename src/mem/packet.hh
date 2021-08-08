@@ -323,7 +323,9 @@ class Packet : public Printable
 
         // Signal block present to squash prefetch and cache evict packets
         // through express snoop flag
-        BLOCK_CACHED          = 0x00010000
+        BLOCK_CACHED          = 0x00010000,
+
+        INNER_PRESENT         = 0x00020000
     };
 
     Flags flags;
@@ -719,6 +721,10 @@ class Packet : public Printable
     void setBlockCached()          { flags.set(BLOCK_CACHED); }
     bool isBlockCached() const     { return flags.isSet(BLOCK_CACHED); }
     void clearBlockCached()        { flags.clear(BLOCK_CACHED); }
+
+    void setInnerPresent()          { flags.set(INNER_PRESENT); }
+    bool isInnerPresent() const     { return flags.isSet(INNER_PRESENT); }
+    void clearInnerPresent()        { flags.clear(INNER_PRESENT); }
 
     /**
      * QoS Value getter

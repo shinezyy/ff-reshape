@@ -69,6 +69,7 @@ Cache::Cache(const CacheParams &p)
 {
     assert(p.tags);
     assert(p.replacement_policy);
+    registerExitCallback([this]() {dumpStates();});
 }
 
 void
@@ -1430,4 +1431,45 @@ Cache::sendMSHRQueuePacket(MSHR* mshr)
     }
 
     return BaseCache::sendMSHRQueuePacket(mshr);
+}
+
+void
+Cache::forceWritebackAtomic(std::list<PacketPtr> &wb_pkts)
+{
+    for (auto pkt: wb_pkts) {
+        memSidePort.sendAtomic(pkt);
+    }
+    for (auto pkt: wb_pkts) {
+        delete pkt;
+    }
+}
+
+void
+Cache::forceClusivity()
+{
+    // Writeback all blocks either clean or dirty
+    //  For set in sets
+    //      for blk in set
+    //          if blk is clean
+    //              pkt = clean else pkt = dirty
+    //          writeback(set, pkt)
+    std::list<PacketPtr> wb_pkts;
+    auto writeback_visitor = [this, &wb_pkts](CacheBlk &blk) {
+        if (blk.isValid()) {
+            auto pkt = BaseCache::writebackBlk(&blk);
+            pkt->setInnerPresent();
+            pkt->setHasSharers();
+            wb_pkts.push_back(pkt);
+        }
+    };
+    tags->forEachBlk(writeback_visitor);
+    forceWritebackAtomic(wb_pkts);
+}
+
+void
+Cache::dumpStates()
+{
+    if (isReadOnly) return;
+    forceClusivity();
+    tags->dumpStates();
 }

@@ -38,6 +38,12 @@ from m5.proxy import *
 from m5.objects.ClockedObject import ClockedObject
 from m5.objects.IndexingPolicies import *
 
+class WaySerializeFormat(Enum):
+    vals = ['wayway', 'wwaayy', 'splitway']
+
+class BankSerializeFormat(Enum):
+    vals = ['Senk', 'Baet']
+
 class BaseTags(ClockedObject):
     type = 'BaseTags'
     abstract = True
@@ -70,6 +76,23 @@ class BaseTags(ClockedObject):
     # Set the indexing entry size as the block size
     entry_size = Param.Int(Parent.cache_line_size,
                            "Indexing entry size in bytes")
+
+    cache_level = Param.Int(Parent.cache_level, "Cache level")
+
+    cache_name = Param.String(Parent.cache_name, "Cache name")
+
+    num_data_banks = Param.Int(Parent.num_data_banks, "The number of data banks to dump caches")
+    num_tag_banks = Param.Int(Parent.num_tag_banks, "The number of tag banks to dump caches")
+    num_data_sram_blocks = Param.Int(Parent.num_data_sram_blocks, 'num_data_sram_blocks')
+
+    data_way_srl_fmt = Param.WaySerializeFormat(Parent.data_way_srl_fmt , 'How ways are stacked')
+    tag_way_srl_fmt = Param.WaySerializeFormat(Parent.tag_way_srl_fmt , 'How ways are stacked')
+
+    data_bank_srl_fmt = Param.BankSerializeFormat(Parent.data_bank_srl_fmt , 'How banks are split')
+    tag_bank_srl_fmt = Param.BankSerializeFormat(Parent.tag_bank_srl_fmt , 'How banks are split')
+
+    beatSize = Param.MemorySize(Parent.beatSize, 'beatSize')
+
 
 class BaseSetAssoc(BaseTags):
     type = 'BaseSetAssoc'

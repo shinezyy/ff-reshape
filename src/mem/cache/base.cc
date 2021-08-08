@@ -1272,6 +1272,9 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         if (!pkt->hasSharers()) {
             blk->setCoherenceBits(CacheBlk::WritableBit);
         }
+        if (pkt->isInnerPresent()) {
+            blk->clearTip();
+        }
         // nothing else to do; writeback doesn't expect response
         assert(!pkt->needsResponse());
 
