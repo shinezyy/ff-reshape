@@ -64,34 +64,65 @@ class L1_ICache(L1Cache):
     # Writeback clean lines as well
     writeback_clean = True
 
+    cache_name = "icache"
+    cache_level = 1
+
 class L1_DCache(L1Cache):
     write_buffers = 16
     data_latency = 4
 
+    cache_level = 1
+    assoc = 8
+    num_data_banks = 1
+    num_tag_banks = 1
+
+    num_data_sram_blocks = 4
+    data_way_srl_fmt = "splitway"
+    tag_way_srl_fmt = "splitway"
+    cache_name = "dcache"
+
 class L2Cache(Cache):
     writeback_clean = True
-    assoc = 16
+    assoc = 8
     tag_latency = 12
     data_latency = 12
     response_latency = 5
     mshrs = 32
     tgts_per_mshr = 8
     write_buffers = 8
-    size = '1MB'
-    clusivity='mostly_excl'
+    size = '256kB'
+    clusivity='mostly_incl'
 
-    prefetcher = BOPPrefetcher()
+    cache_level = 2
+    num_data_banks = 4
+    num_tag_banks = 1
+
+    num_data_sram_blocks = 1
+    tag_way_srl_fmt = "splitway"
+    data_way_srl_fmt = "wayway"
+    beatSize='32B'
 
 class L3Cache(Cache):
-    assoc = 16
+    writeback_clean = True
+    assoc = 8
     tag_latency = 20
     data_latency = 20
     response_latency = 20
-    mshrs = 20
+    mshrs = 32
     tgts_per_mshr = 12
     write_buffers = 8
-    size = '16MB'
-    clusivity='mostly_excl'
+    size = '2MB'
+    clusivity='mostly_incl'
+
+    cache_level = 3
+    num_data_banks = 16
+    num_tag_banks = 4
+
+    num_data_sram_blocks = 1
+    tag_way_srl_fmt = "splitway"
+    data_way_srl_fmt = "wayway"
+    beatSize='32B'
+    # prefetcher = BOPPrefetcher()
 
 
 class IOCache(Cache):

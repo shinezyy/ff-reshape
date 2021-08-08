@@ -42,6 +42,7 @@ from __future__ import absolute_import
 
 import six
 import sys
+import sh
 from os import getcwd
 from os.path import join as joinpath
 
@@ -714,6 +715,17 @@ def run(options, root, testsys, cpu_class):
             print("Simulation ends instruction count:%d" %
                     (testsys.switch_cpus_1[0].max_insts_any_thread))
             m5.switchCpus(testsys, switch_cpu_list1)
+
+    # NEMU serialize regs to memory
+
+    # start of memory <- gcpt restorer
+
+    # flush memory?
+
+    # pmem file name <- nemu mmapped file name
+
+    # should have generate cache dumps and mmaped files
+    # sh.Command(['./emu', '-i', options.generic_rv_cpt])
 
     # If we're taking and restoring checkpoints, use checkpoint_dir
     # option only for finding the checkpoints to restore from.  This

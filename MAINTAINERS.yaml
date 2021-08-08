@@ -208,6 +208,9 @@ mem-cache:
     - Nikos Nikoleris <nikos.nikoleris@arm.com>
     - Daniel Carvalho <odanrc@yahoo.com.br>
 
+mem-cache-warmup:
+  status: orphaned
+
 mem-dram:
   status: maintained
   maintainers:

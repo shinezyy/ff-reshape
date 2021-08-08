@@ -61,10 +61,12 @@ def _get_cache_opts(level, options):
     size_attr = '{}_size'.format(level)
     if hasattr(options, size_attr):
         opts['size'] = getattr(options, size_attr)
+        print("Set size for {} to {}".format(level, opts['size']))
 
     assoc_attr = '{}_assoc'.format(level)
     if hasattr(options, assoc_attr):
         opts['assoc'] = getattr(options, assoc_attr)
+        print("Set assoc for {} to {}".format(level, opts['assoc']))
 
     prefetcher_attr = '{}_hwp_type'.format(level)
     if hasattr(options, prefetcher_attr):
@@ -128,7 +130,8 @@ def config_cache(options, system):
         system.l2.cpu_side = system.tol2bus.master
 
         if options.l3_cache:
-            system.l3 = L3Cache(clk_domain=system.cpu_clk_domain)
+            system.l3 = L3Cache(clk_domain=system.cpu_clk_domain,
+                                   **_get_cache_opts('l3', options))
 
             system.tol3bus = L2XBar(clk_domain = system.cpu_clk_domain,
                     width=64)

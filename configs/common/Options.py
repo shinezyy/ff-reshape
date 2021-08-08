@@ -127,14 +127,14 @@ def addNoISAOptions(parser):
     parser.add_option("--num-dirs", type="int", default=1)
     parser.add_option("--num-l2caches", type="int", default=1)
     parser.add_option("--num-l3caches", type="int", default=1)
-    parser.add_option("--l1d_size", type="string", default="64kB")
+    parser.add_option("--l1d_size", type="string", default="32kB")
     parser.add_option("--l1i_size", type="string", default="32kB")
-    parser.add_option("--l2_size", type="string", default="2MB")
-    parser.add_option("--l3_size", type="string", default="16MB")
-    parser.add_option("--l1d_assoc", type="int", default=2)
-    parser.add_option("--l1i_assoc", type="int", default=2)
+    parser.add_option("--l2_size", type="string", default="256kB")
+    parser.add_option("--l3_size", type="string", default="2MB")
+    parser.add_option("--l1d_assoc", type="int", default=8)
+    parser.add_option("--l1i_assoc", type="int", default=4)
     parser.add_option("--l2_assoc", type="int", default=8)
-    parser.add_option("--l3_assoc", type="int", default=16)
+    parser.add_option("--l3_assoc", type="int", default=8)
     parser.add_option("--cacheline_size", type="int", default=64)
 
     # Enable Ruby
@@ -312,7 +312,7 @@ def addCommonOptions(parser):
 
     # Run duration options
     parser.add_option("-I", "--maxinsts", action="store", type="int",
-                      default=None, help="""Total number of instructions to
+                      default=int(2**63-1), help="""Total number of instructions to
                                             simulate (default: run forever)""")
     parser.add_option("--work-item-id", action="store", type="int",
                       help="the specific work id for exit & checkpointing")
