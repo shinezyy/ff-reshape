@@ -163,6 +163,9 @@ class NemuCPU: public BaseCPU
       Stopping,
       Stopped
     } cpuState;
+
+  private:
+    void setBootLoaderPath(const NemuCPUParams &params);
 };
 
 

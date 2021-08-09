@@ -33,3 +33,5 @@ class NemuCPU(BaseCPU):
     def addCheckerCpu(self):
         print("Checker not yet supported by NemuCPU")
         exit(1)
+
+    gcpt_file = Param.String(Parent.gcpt_file, "Generic Checkpoint image file or BBL")

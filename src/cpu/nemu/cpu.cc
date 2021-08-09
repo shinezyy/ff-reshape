@@ -37,6 +37,7 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
         dcachePort(name() + ".dcache_port", this),
         maxInsts(params.max_insts_any_thread)
 {
+    setBootLoaderPath(params);
     extern void init_monitor(int argc, char *argv[]);
 
     char *empty[1] = {nullptr};
@@ -57,6 +58,7 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
     dataReadReq = std::make_shared<Request>();
     dataWriteReq = std::make_shared<Request>();
     dataAmoReq = std::make_shared<Request>();
+
 }
 
 static uint64_t cnt = 0;
@@ -259,4 +261,10 @@ void NemuCPU::AtomicCPUDPort::recvFunctionalSnoop(PacketPtr pkt)
 bool NemuCPU::inSameBlcok(Addr blk_addr, Addr addr)
 {
     return (blk_addr - addr) <= 64;
+}
+
+void NemuCPU::setBootLoaderPath(const NemuCPUParams &params)
+{
+    extern const char *img_file;
+    img_file = params.gcpt_file.c_str();
 }
