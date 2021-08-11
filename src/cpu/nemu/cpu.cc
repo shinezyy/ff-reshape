@@ -130,7 +130,7 @@ void NemuCPU::tick()
                 entry.memAddr.p);
         bool eos = dispatch(entry);
         if (__glibc_unlikely(eos)) {
-            assert(cpuState == CPUState::Stopping);
+            // assert(cpuState == CPUState::Stopping);
             warn("GEM5 received EOS from NEMU\n");
             cpuState = Stopped;
             schedule(*execCompleteEvent, curTick());
@@ -169,7 +169,7 @@ void NemuCPU::activateContext(ThreadID tid)
         ticksToCycles(thread->lastActivate - thread->lastSuspend);
 
     extern uint64_t cpu_exec(uint64_t n);
-    ExecutionThread = new std::thread(cpu_exec, -1);
+    ExecutionThread = new std::thread(cpu_exec, maxInsts);
 
     schedule(tickEvent, clockEdge(Cycles(0)));
 }
