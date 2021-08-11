@@ -336,7 +336,10 @@ test_sys = build_test_system(np)
 
 if options.generic_rv_cpt is not None:
     assert(buildEnv['TARGET_ISA'] == "riscv")
-    test_sys.restore_from_gcpt = True
+    if options.cpu_type == 'NemuCPU':
+        test_sys.restore_from_gcpt = False
+    else:
+        test_sys.restore_from_gcpt = True
     test_sys.gcpt_file = options.generic_rv_cpt
     # assert(options.gcpt_restorer is not None)
     if options.gcpt_restorer is None:
