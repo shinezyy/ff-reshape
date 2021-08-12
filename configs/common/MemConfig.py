@@ -229,6 +229,7 @@ def config_mem(options, system):
                                              static_frontend_latency = '4ns')
                 elif opt_mem_type == "SimpleMemory":
                     mem_ctrl = m5.objects.SimpleMemory()
+                    mem_ctrl.range = r
                 elif opt_mem_type == "QoSMemSinkInterface":
                     mem_ctrl = m5.objects.QoSMemSinkCtrl()
                 else:
