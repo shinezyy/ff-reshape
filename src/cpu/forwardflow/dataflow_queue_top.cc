@@ -819,9 +819,11 @@ bool DQTop<Impl>::writebackLoad(const DynInstPtr &inst)
 
         completeMemInst(inst);
     } else {
+#if TRACING_ON
         auto &p = inst->dqPosition;
         DPRINTF(DQWake, "Mark itself[%llu]" ptrfmt "ready\n",
                 inst->seqNum, extptr(p));
+#endif
         completeMemInst(inst);
     }
     inst->opReady[0] = true;

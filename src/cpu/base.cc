@@ -103,12 +103,14 @@ CPUProgressEvent::process()
     }
 
 #ifndef NDEBUG
+#if TRACING_ON
     double ipc = double(temp - lastNumInst) / (_interval / cpu->clockPeriod());
 
     DPRINTFN("%s progress event, total committed:%i, progress insts committed: "
              "%lli, IPC: %0.8d\n", cpu->name(), temp, temp - lastNumInst,
              ipc);
     ipc = 0.0;
+#endif
 #else
     cprintf("%lli: %s progress event, total committed:%i, progress insts "
             "committed: %lli\n", curTick(), cpu->name(), temp,

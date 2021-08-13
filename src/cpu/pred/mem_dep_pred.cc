@@ -842,11 +842,13 @@ void SimpleSSBF::dump()
 
 void MisPredTable::dump() const
 {
+#if TRACING_ON
     DPRINTFR(NoSQPred, "Mis pred table dump:\n");
     for (const auto &e: misPredRank) {
         DPRINTFR(NoSQPred, "PC: 0x%x, count: %lu, fp: %lu, fn: %lu\n",
                  e.pc, e.count, e.fpCount, e.fnCount);
     }
+#endif
 }
 
 void MisPredTable::record(Addr pc, bool fn)

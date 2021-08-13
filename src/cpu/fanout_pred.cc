@@ -52,7 +52,9 @@ void FanoutPred::update(uint64_t pc, unsigned reg_idx, unsigned fanout,
         }
     }
 
+#if TRACING_ON
     const auto &ghr = fp_feat->globalBranchHist;
+#endif
     auto index = hash(pc, reg_idx, fp_feat);
     auto &entry = table.at(index);
 

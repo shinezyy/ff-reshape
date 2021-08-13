@@ -136,12 +136,14 @@ void ZPerceptron::update(ThreadID tid, Addr branch_addr, bool taken,
 }
 
 void ZPerceptron::dumpParameters() const{
+#if TRACING_ON
     int count = 0;
     for (const auto &n: table) {
         DPRINTFR(PrcpDump, "%d,", count++);
         n.dump();
         DPRINTFR(PrcpDump, "\n");
     }
+#endif
 }
 
 void ZPerceptron::tryDump() {
@@ -209,9 +211,11 @@ int ZPerceptron::Neuron::b2s(bool taken) {
 }
 
 void ZPerceptron::Neuron::dump() const{
+#if TRACING_ON
     for (const auto &w: weights) {
         DPRINTFR(PrcpDump, "%d,", w.read());
     }
+#endif
 }
 
 

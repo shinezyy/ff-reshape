@@ -909,21 +909,25 @@ void DataflowQueueBank<Impl>::squashReady(const BasePointer &squash_ptr)
 template<class Impl>
 void DataflowQueueBank<Impl>::dumpOutPointers() const
 {
+#if TRACING_ON
     unsigned op = 0;
     for (const auto &ptr: outputPointers) {
         DPRINTF(DQ, "outputPointers[%i]: (%i) (%i %i) (%i)\n",
                 op++, ptr.valid, ptr.bank, ptr.index, ptr.op);
     }
+#endif
 }
 
 template<class Impl>
 void DataflowQueueBank<Impl>::dumpInputPointers() const
 {
+#if TRACING_ON
     unsigned op = 0;
     for (const auto &ptr: inputPointers) {
         DPRINTF(DQ, "inputPointers[%i]: (%i) (%i %i) (%i)\n",
                 op++, ptr.valid, ptr.bank, ptr.index, ptr.op);
     }
+#endif
 }
 
 template<class Impl>

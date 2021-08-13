@@ -717,6 +717,7 @@ Device::rxKick()
                 bool busy = Regs::get_RxDone_Busy(vn->RxDone);
                 if (vn->rxIndex != end) {
 #ifndef NDEBUG
+#if TRACING_ON
                     bool dirty = vn->rxPacketOffset > 0;
                     const char *status;
 
@@ -734,6 +735,7 @@ Device::rxKick()
                             i, status, vn->rxUnique,
                             rxFifo.countPacketsBefore(vn->rxIndex),
                             vn->rxIndex->slack);
+#endif
 #endif
                 } else if (busy) {
                     DPRINTF(EthernetSM, "vnic %d unmapped (rxunique %d)\n",

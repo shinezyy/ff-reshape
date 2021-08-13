@@ -1206,10 +1206,12 @@ DataflowQueues<Impl>::mergeExtraWKPointers()
     DPRINTF(DQWake, "Before cycle-end push, numPendingWakeups = %u\n", numPendingWakeups);
     for (unsigned i = 0; i < nOps*nBanks; i++) {
         while (!tempWakeQueues[i].empty()) {
+#if TRACING_ON
             const auto &dest = tempWakeQueues[i].front();
             DPRINTF(DQWake || Debug::RSProbe2,
                     "Got temped wakeup pointer to (%d %d) (%d), pushed to wakeQueue[%i]\n",
                     dest.bank, dest.index, dest.op, i);
+#endif
             pushToWakeQueue(i, tempWakeQueues[i].front());
             tempWakeQueues[i].pop_front();
             numPendingWakeups++;
@@ -1471,6 +1473,7 @@ DataflowQueues<Impl>::shuffleNeighbors()
             std::end(fuPointer[OpGroups::MultDiv]), gen);
     std::shuffle(std::begin(fuPointer[OpGroups::FPAdd]),
             std::end(fuPointer[OpGroups::FPAdd]), gen);
+#if TRACING_ON
     DPRINTF(FUW || ObExec, "shuffled pointers:\n");
     for (const auto x:fuPointer[OpGroups::MultDiv]) {
         DPRINTFR(FUW || ObExec, "%i ", x);
@@ -1480,6 +1483,7 @@ DataflowQueues<Impl>::shuffleNeighbors()
         DPRINTFR(FUW || ObExec, "%i ", x);
     }
     DPRINTFR(FUW || ObExec, "\n");
+#endif
 }
 
 template<class Impl>
