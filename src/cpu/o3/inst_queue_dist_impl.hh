@@ -1114,7 +1114,9 @@ template <class Impl>
 void
 InstructionQueueDist<Impl>::addReadyMemInst(const DynInstPtr &ready_inst)
 {
+#if TRACING_ON
     OpClass op_class = ready_inst->opClass();
+#endif
     int fu_idx = ready_inst->getFuIdx();
 
     readyInsts[fu_idx].push(ready_inst);
@@ -1493,7 +1495,9 @@ InstructionQueueDist<Impl>::addIfReady(const DynInstPtr &inst)
             return;
         }
 
+#if TRACING_ON
         OpClass op_class = inst->opClass();
+#endif
         int fu_idx = inst->getFuIdx();
 
         DPRINTF(IQ, "Instruction is ready to issue, putting it onto "

@@ -267,10 +267,12 @@ std::pair<bool, std::list<PointerPair>>  ArchState<Impl>::recordAndUpdateMap(con
             }
             renameMap[dest_reg] = inst->dqPosition;
 
+#if TRACING_ON
             auto &m = renameMap[dest_reg];
             DPRINTF(Rename||Debug::RSProbe1,
                     "Inst[%lu] defines reg[%s %d]" ptrfmt "\n",
                     inst->seqNum, dest_reg.className(), dest_reg.index(), extptr(m));
+#endif
         }
     } else {
         inst->hasOp[0] = false;
@@ -618,6 +620,7 @@ void ArchState<Impl>::squashAll()
 template<class Impl>
 void ArchState<Impl>::dumpMaps()
 {
+#if TRACING_ON
     DPRINTF(Rename, "Commint Scoreboard:\n");
     for (const auto &pair: scoreboard) {
         SBIndex class_index = pair.first;
@@ -644,6 +647,7 @@ void ArchState<Impl>::dumpMaps()
                  pair.first.className(), pair.first.index(),
                  pair.second.bank, pair.second.index, pair.second.op);
     }
+#endif
 }
 
 template<class Impl>

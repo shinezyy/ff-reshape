@@ -197,7 +197,9 @@ VirtIO9PBase::dumpMsg(const P9MsgHeader &header, const uint8_t *data, size_t siz
 
     const P9MsgInfoMap::const_iterator it_msg(p9_msg_info.find(header.type));
     if (it_msg != p9_msg_info.cend()) {
+#if TRACING_ON
         const P9MsgInfo &info(it_msg->second);
+#endif
         DPRINTF(VIO9P, "P9Msg[len = %i, type = %s (%i), tag = %i]\n",
                 header.len, info.name, header.type, header.tag);
     } else {

@@ -992,7 +992,7 @@ IGbE::DescCache<T>::fetchComplete()
     }
 
 
-#ifndef NDEBUG
+#if TRACING_ON
     int oldCp = cachePnt;
 #endif
 
@@ -1016,7 +1016,7 @@ IGbE::DescCache<T>::wbComplete()
 {
 
     long  curHead = descHead();
-#ifndef NDEBUG
+#if TRACING_ON
     long oldHead = curHead;
 #endif
 

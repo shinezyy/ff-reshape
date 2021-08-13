@@ -1400,7 +1400,9 @@ void FFDIEWC<Impl>::handleSquash() {
             }
 
             youngestSeqNum = squashed_inst;
+#if TRACING_ON
             auto p = fromLastCycle->diewc2diewc.squashedPointer;
+#endif
             DPRINTF(FFSquash, "Olddest inst ptr to squash: (%i %i)\n", p.bank, p.index);
             dq.squash(fromLastCycle->diewc2diewc.squashedPointer, false, false);
             dqSquashing = true;

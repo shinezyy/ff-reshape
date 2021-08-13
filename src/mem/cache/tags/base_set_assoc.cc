@@ -244,7 +244,6 @@ BaseSetAssoc::dumpStates()
             } else {
                 dir_payload |= dir_client;
             }
-            auto tag_payload = blk->getTag() | (dir_payload << tag_bits);
 
             unsigned data_phy_bank;
             // std::cerr << "L" << cacheLevel << " cache\n";
@@ -259,68 +258,56 @@ BaseSetAssoc::dumpStates()
                 // data_phy_bank = outer_bits << 1 | inner_bit_high;
                 data_phy_bank = outer_bits | (inner_bit_high << 3);
             }
-            if (blk->isValid()) {
-                // big endian for readmemh:
-                // dump tag
-                for (int shamt = (hex_len - 1) * 4; shamt >= 0; shamt -= 4) {
-                    fprintf(tfd, "%lx", (tag_payload >> shamt) & hex_mask);
-                }
-                fprintf(tfd, "%c", '\n');
-                fprintf(trivial_tfd, "%016lx\n", 0L);
-                // dump data
-                if (numDataSRAMBlocks > 1) {
-                    for (unsigned bl = 0; bl < numDataSRAMBlocks; bl++) {
-                        Addr phy_blk_addr = ((blk->getTag() * num_sets) + logic_set) * blkSize + bl * phy_blk_size;
-                        // std::cerr << "Phy addr:" << std::hex << phy_blk_addr << ", tag: " << blk->getTag()
-                        // << ", set: " << logic_set << ", offset: " << bl*phy_blk_size << ";  bank: " << data_phy_bank
-                        // << ", way: " << blk->getWay() << std::endl;
-                        auto dfd = getDataFD(data_phy_bank, way, bl);
-                        for (unsigned i = 0; i < phy_blk_size; i += 8) {
-                            unsigned offset = phy_blk_size - 8 - i;
-                            fprintf(dfd, "%016lx", *((uint64_t *)&real_mem[phy_blk_addr + offset - 0x80000000]));
-                        }
-                        fprintf(dfd, "%c", '\n');
-                    }
-                } else {
-                    for (unsigned beat = 0; beat < num_beats; beat++) {
-                        unsigned data_phy_bank_x;
-                        if (cacheLevel == 1) {
-                            data_phy_bank_x = data_phy_bank * num_beats + beat;
-                        } else if (cacheLevel == 2){
-                            data_phy_bank_x = data_phy_bank | beat;
-                        } else {
-                            assert(cacheLevel == 3);
-                            data_phy_bank_x = data_phy_bank | (beat << 2);
-                        }
-                        // std::cerr << "Bank: " << data_phy_bank_x << std::endl;
-                        auto dfd = getDataFD(data_phy_bank_x, way, 0);
-                        Addr beat_addr = ((blk->getTag() * num_sets) + logic_set) * blkSize + beat * beatSize;
-                        for (unsigned i = 0; i < beatSize; i += 8) {
-                            unsigned offset = beatSize - 8 - i;
-                            fprintf(dfd, "%016lx", *((uint64_t *)&real_mem[beat_addr + offset - 0x80000000]));
-                        }
-                        fprintf(dfd, "%c", '\n');
 
-                        auto ddfd = getDataDebugFD(data_phy_bank_x, way, 0);
-                        fprintf(ddfd, "%016lx, way: %u, logic set: %u, beat: %u\n", beat_addr, way, logic_set, beat);
-                    }
-                }
+            auto tag_payload = blk->isValid() ? blk->getTag() | (dir_payload << tag_bits) : 0;
 
-            } else {
-                // dump dummy tag
-                for (int shamt = (hex_len - 1) * 4; shamt >= 0; shamt -= 4) {
-                    fprintf(tfd, "%lx", 0L);
-                }
-                fprintf(tfd, "%c", '\n');
-                fprintf(trivial_tfd, "%016lx\n", 0L);
-
-                // dump dummy data
+            // big endian for readmemh:
+            // dump tag
+            for (int shamt = (hex_len - 1) * 4; shamt >= 0; shamt -= 4) {
+                fprintf(tfd, "%lx", (tag_payload >> shamt) & hex_mask);
+            }
+            fprintf(tfd, "%c", '\n');
+            fprintf(trivial_tfd, "%016lx\n", 0L);
+            // dump data
+            if (numDataSRAMBlocks > 1) {
                 for (unsigned bl = 0; bl < numDataSRAMBlocks; bl++) {
+                    Addr phy_blk_addr = ((blk->getTag() * num_sets) + logic_set) * blkSize + bl * phy_blk_size;
+                    // std::cerr << "Phy addr:" << std::hex << phy_blk_addr << ", tag: " << blk->getTag()
+                    // << ", set: " << logic_set << ", offset: " << bl*phy_blk_size << ";  bank: " << data_phy_bank
+                    // << ", way: " << blk->getWay() << std::endl;
                     auto dfd = getDataFD(data_phy_bank, way, bl);
-                    for (int i = phy_blk_size - 8; i >= 0; i -= 8) {
-                        fprintf(dfd, "%016lx", 0UL);
+                    for (unsigned i = 0; i < phy_blk_size; i += 8) {
+                        unsigned offset = phy_blk_size - 8 - i;
+                        uint64_t data_payload = blk->isValid() ?
+                            *((uint64_t *)&real_mem[phy_blk_addr + offset - 0x80000000]): 0;
+                        fprintf(dfd, "%016lx", data_payload);
                     }
                     fprintf(dfd, "%c", '\n');
+                }
+            } else {
+                for (unsigned beat = 0; beat < num_beats; beat++) {
+                    unsigned data_phy_bank_x;
+                    if (cacheLevel == 1) {
+                        data_phy_bank_x = data_phy_bank * num_beats + beat;
+                    } else if (cacheLevel == 2){
+                        data_phy_bank_x = data_phy_bank | beat;
+                    } else {
+                        assert(cacheLevel == 3);
+                        data_phy_bank_x = data_phy_bank | (beat << 2);
+                    }
+                    // std::cerr << "Bank: " << data_phy_bank_x << std::endl;
+                    auto dfd = getDataFD(data_phy_bank_x, way, 0);
+                    Addr beat_addr = ((blk->getTag() * num_sets) + logic_set) * blkSize + beat * beatSize;
+                    for (unsigned i = 0; i < beatSize; i += 8) {
+                        unsigned offset = beatSize - 8 - i;
+                        uint64_t data_payload = blk->isValid() ?
+                            *((uint64_t *)&real_mem[beat_addr + offset - 0x80000000]) : 0;
+                        fprintf(dfd, "%016lx", data_payload);
+                    }
+                    fprintf(dfd, "%c", '\n');
+
+                    auto ddfd = getDataDebugFD(data_phy_bank_x, way, 0);
+                    fprintf(ddfd, "%016lx, way: %u, logic set: %u, beat: %u\n", beat_addr, way, logic_set, beat);
                 }
             }
         }

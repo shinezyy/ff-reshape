@@ -296,6 +296,7 @@ enum GdbBreakpointType {
 };
 
 #ifndef NDEBUG
+#if TRACING_ON
 const char *
 break_type(char c)
 {
@@ -308,6 +309,7 @@ break_type(char c)
       default: return "unknown breakpoint/watchpoint";
     }
 }
+#endif
 #endif
 
 std::map<Addr, HardBreakpoint *> hardBreakMap;

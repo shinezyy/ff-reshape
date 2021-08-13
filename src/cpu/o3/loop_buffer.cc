@@ -39,10 +39,12 @@ LoopBuffer::processNewControl(Addr branch_pc, Addr target)
     rank.emplace_back(table.find(target));
 
     DPRINTF(LoopBufferStack, "Inserted PC: 0x%x\n", target);
+#if TRACING_ON
     for (const auto &ele: rank) {
         DPRINTFR(LoopBufferStack, "PC: 0x%x, used: %u\n",
                 ele->first, ele->second.used);
     }
+#endif
 
     if (table.size() > numEntries) {
         auto evicted = random_mt.random<unsigned>(1, 1 + evictRange);

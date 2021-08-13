@@ -125,9 +125,9 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
 
   public:
+    Tick fetchTick;      // instruction fetch is completed.
 #if TRACING_ON
     /** Tick records used for the pipeline activity viewer. */
-    Tick fetchTick;      // instruction fetch is completed.
     int32_t decodeTick;  // instruction enters decode phase
     int32_t renameTick;  // instruction enters rename phase
     int32_t dispatchTick;

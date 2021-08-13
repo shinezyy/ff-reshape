@@ -1456,14 +1456,14 @@ if 'opt' in needed_envs:
 if 'fast' in needed_envs:
     makeEnv(env, 'fast', '.fo', strip = True,
             CCFLAGS = Split(ccflags['fast']),
-            CPPDEFINES = ['NDEBUG', 'TRACING_ON=0'],
+            CPPDEFINES = ['TRACING_ON=0'],
             LINKFLAGS = Split(ldflags['fast']))
 
 # Profiled binary using gprof
 if 'prof' in needed_envs:
     makeEnv(env, 'prof', '.po',
             CCFLAGS = Split(ccflags['prof']),
-            CPPDEFINES = ['NDEBUG', 'TRACING_ON=0'],
+            CPPDEFINES = ['TRACING_ON=0'],
             LINKFLAGS = Split(ldflags['prof']))
 
 # Profiled binary using google-pprof

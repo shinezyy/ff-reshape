@@ -182,7 +182,7 @@ class SimpleMemory : public AbstractMemory
     void init() override;
 
   protected:
-    Tick recvAtomic(PacketPtr pkt);
+    virtual Tick recvAtomic(PacketPtr pkt);
     Tick recvAtomicBackdoor(PacketPtr pkt, MemBackdoorPtr &_backdoor);
     void recvFunctional(PacketPtr pkt);
     bool recvTimingReq(PacketPtr pkt);

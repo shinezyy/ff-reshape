@@ -84,12 +84,16 @@ template<class T>
 void
 CrossBar<T>::checkSanity() const
 {
+#if TRACING_ON
     for (auto &i: prioList) {
         DPRINTFR(CrossBar, "i: %i, address: %p\n", i, &i);
     }
+#endif
+#ifndef NDEBUG
     for (uint32_t i: prioList) {
         assert(i < size);
     }
+#endif
 }
 
 }

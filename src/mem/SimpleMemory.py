@@ -49,3 +49,7 @@ class SimpleMemory(AbstractMemory):
     # representative of a x64 DDR3-1600 channel.
     bandwidth = Param.MemoryBandwidth('12.8GB/s',
                                       "Combined read and write bandwidth")
+
+class DummyMemory(SimpleMemory):
+    type = 'DummyMemory'
+    cxx_header = "mem/dummy_mem.hh"
