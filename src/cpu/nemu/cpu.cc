@@ -63,8 +63,6 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
 
 }
 
-static uint64_t cnt = 0;
-
 bool NemuCPU::dispatch(const ExecTraceEntry &entry)
 {
     // manually pipeline jump address calculation and following instructions
@@ -119,17 +117,9 @@ bool NemuCPU::dispatch(const ExecTraceEntry &entry)
 
 void NemuCPU::tick()
 {
-    unsigned chunk = 100 * 1000;
-    if (cnt > chunk) {
-        DPRINTF(NemuCPU, "Tick\n");
-        cnt = 0;
-    } else {
-        cnt++;
-    }
-
     bool eos = false;
 
-    for (int i = chunk; i > 0; i--) {
+    for (;;) {
         ExecTraceEntry entry = traceQueue->pop();
         // DPRINTF(NemuCPU, "fetchVaddr: 0x%#lx\n", entry.fetchAddr.v);
         DPRINTF(NemuCPU,
@@ -154,7 +144,6 @@ void NemuCPU::tick()
         cpuState = Stopped;
         schedule(*execCompleteEvent, curTick());
     }
-    reschedule(tickEvent, curTick() + clockPeriod() * chunk, true);
 }
 
 void NemuCPU::init()
@@ -308,15 +297,17 @@ NemuCPU::insertMemTrace(const ExecTraceEntry &entry)
 void
 NemuCPU::sendMemAccToCaches()
 {
-    for (auto &set: sets) {
-        while (!set.empty()) {
-            auto &entry = set.back();
-            if (entry.type == ProtoInstType::MemRead) {
-                processLoad(entry.memAddr, entry.fetchAddr.v);
-            } else {
-                processStore(entry.memAddr, entry.fetchAddr.v);
+    for (unsigned a = 0; a < assoc; a++) {
+        for (auto &set: sets) {
+            if (!set.empty()) {
+                auto &entry = set.back();
+                if (entry.type == ProtoInstType::MemRead) {
+                    processLoad(entry.memAddr, entry.fetchAddr.v);
+                } else {
+                    processStore(entry.memAddr, entry.fetchAddr.v);
+                }
+                set.pop_back();
             }
-            set.pop_back();
         }
     }
 }
