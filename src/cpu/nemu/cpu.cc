@@ -35,7 +35,9 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
         execCompleteEvent(nullptr),
         icachePort(name() + ".icache_port", this),
         dcachePort(name() + ".dcache_port", this),
-        maxInsts(params.max_insts_any_thread)
+        maxInsts(params.max_insts_any_thread),
+        setMask(numSets - 1),
+        sets(numSets, MRUList{})
 {
     setBootLoaderPath(params);
     extern void init_monitor(int argc, char *argv[]);
@@ -81,6 +83,12 @@ bool NemuCPU::dispatch(const ExecTraceEntry &entry)
     switch (tmp_type)
     {
     case ProtoInstType::MemRead:
+        __attribute__ ((fallthrough));
+    case ProtoInstType::MemWrite:
+        insertMemTrace(tmpEntry);
+        break;
+        /*
+    case ProtoInstType::MemRead:
         // process fetch + load
         processFetch(tmpEntry.fetchAddr);
         processLoad(tmpEntry.memAddr, tmpEntry.fetchAddr.v);
@@ -90,11 +98,12 @@ bool NemuCPU::dispatch(const ExecTraceEntry &entry)
         processFetch(tmpEntry.fetchAddr);
         processStore(tmpEntry.memAddr, tmpEntry.fetchAddr.v);
         break;
+        */
     case ProtoInstType::EndOfStream:
         return true;
     default:
         // process fetch
-        processFetch(tmpEntry.fetchAddr);
+        // processFetch(tmpEntry.fetchAddr);
         break;
     }
     instCount++;
@@ -110,14 +119,17 @@ bool NemuCPU::dispatch(const ExecTraceEntry &entry)
 
 void NemuCPU::tick()
 {
-    if (cnt > 1000000) {
+    unsigned chunk = 100 * 1000;
+    if (cnt > chunk) {
         DPRINTF(NemuCPU, "Tick\n");
         cnt = 0;
     } else {
         cnt++;
     }
 
-    for (int i = 10000; i > 0; i--) {
+    bool eos = false;
+
+    for (int i = chunk; i > 0; i--) {
         ExecTraceEntry entry = traceQueue->pop();
         // DPRINTF(NemuCPU, "fetchVaddr: 0x%#lx\n", entry.fetchAddr.v);
         DPRINTF(NemuCPU,
@@ -128,16 +140,21 @@ void NemuCPU::tick()
                 entry.fetchAddr.p,
                 entry.memAddr.v,
                 entry.memAddr.p);
-        bool eos = dispatch(entry);
+        eos = dispatch(entry);
         if (__glibc_unlikely(eos)) {
-            assert(cpuState == CPUState::Stopping);
-            warn("GEM5 received EOS from NEMU\n");
-            cpuState = Stopped;
-            schedule(*execCompleteEvent, curTick());
             break;
         }
     }
-    reschedule(tickEvent, curTick() + clockPeriod() * 10000, true);
+
+    sendMemAccToCaches();
+
+    if (__glibc_unlikely(eos)) {
+        assert(cpuState == CPUState::Stopping);
+        warn("GEM5 received EOS from NEMU\n");
+        cpuState = Stopped;
+        schedule(*execCompleteEvent, curTick());
+    }
+    reschedule(tickEvent, curTick() + clockPeriod() * chunk, true);
 }
 
 void NemuCPU::init()
@@ -268,3 +285,39 @@ void NemuCPU::setBootLoaderPath(const NemuCPUParams &params)
     extern const char *img_file;
     img_file = params.gcpt_file.c_str();
 }
+
+Addr
+NemuCPU::extractSet(Addr addr)
+{
+    addr = (addr >> 6) & setMask;
+    return addr;
+}
+
+void
+NemuCPU::insertMemTrace(const ExecTraceEntry &entry)
+{
+    MRUList &set = sets.at(extractSet(entry.memAddr.p));
+    std::pair<MRUIter, bool> p = set.push_front(entry);
+    if (!p.second) { // duplication found
+        set.relocate(set.begin(), p.first);
+    } else if (set.size() > assoc){
+        set.pop_back();
+    }
+}
+
+void
+NemuCPU::sendMemAccToCaches()
+{
+    for (auto &set: sets) {
+        while (!set.empty()) {
+            auto &entry = set.back();
+            if (entry.type == ProtoInstType::MemRead) {
+                processLoad(entry.memAddr, entry.fetchAddr.v);
+            } else {
+                processStore(entry.memAddr, entry.fetchAddr.v);
+            }
+            set.pop_back();
+        }
+    }
+}
+

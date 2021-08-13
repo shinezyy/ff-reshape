@@ -5,10 +5,17 @@
 #ifndef __GEM5_NEMUCPU_HH__
 #define __GEM5_NEMUCPU_HH__
 
+#include <algorithm>
 #include <atomic>
+#include <iterator>
 #include <mutex>
 #include <queue>
 #include <thread>
+
+#include <boost/multi_index/identity.hpp>
+#include <boost/multi_index/ordered_index.hpp>
+#include <boost/multi_index/sequenced_index.hpp>
+#include <boost/multi_index_container.hpp>
 
 #include "cpu/base.hh"
 #include "cpu/nemu/include/protocal/instr_trace.h"
@@ -166,6 +173,39 @@ class NemuCPU: public BaseCPU
 
   private:
     void setBootLoaderPath(const NemuCPUParams &params);
+
+  public:
+
+    struct EntryPAddr {
+        typedef ProtoAddr result_type;
+        result_type operator() (const ExecTraceEntry &e) const
+        {
+            return e.memAddr.p;
+        }
+    };
+
+    typedef typename boost::multi_index::multi_index_container<
+        ExecTraceEntry,
+        boost::multi_index::indexed_by<
+            boost::multi_index::sequenced<>,
+            boost::multi_index::ordered_unique<EntryPAddr>
+            >
+        > MRUList;
+
+    typedef typename MRUList::iterator MRUIter;
+
+
+
+  private:
+    const unsigned assoc{8}; // 8 way
+    const unsigned cacheBlockSize{64}; // 64 Byte
+    const unsigned maxCacheSize{8*(1 << 20)}; // 32 MB
+    const unsigned numSets{maxCacheSize/cacheBlockSize/assoc}; // 32 MB
+    const unsigned setMask; // 32 MB
+    std::vector<MRUList> sets;
+    Addr extractSet(Addr addr);
+    void insertMemTrace(const ExecTraceEntry &entry);
+    void sendMemAccToCaches();
 };
 
 
