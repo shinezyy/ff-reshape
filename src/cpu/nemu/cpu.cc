@@ -37,7 +37,6 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
         icachePort(name() + ".icache_port", this),
         dcachePort(name() + ".dcache_port", this),
         maxInsts(params.max_insts_any_thread),
-        setMask(numSets - 1),
         sets(numSets, MRUList{})
 {
     setBootLoaderPath(params);
@@ -108,19 +107,12 @@ bool NemuCPU::dispatch(const ExecTraceEntry &entry)
     }
     instCount++;
 
-    if (__glibc_unlikely(instCount >= maxInsts && cpuState == CPUState::Running)) {
-        warn("GEM5 reach max insts, notify NEMU to stop\n");
-        nemuStop.store(true);
-        cpuState = CPUState::Stopping;
-    }
-
     return false;
 }
 
-void NemuCPU::tick()
+void
+NemuCPU::receiveTraces()
 {
-    bool eos = false;
-
     for (;;) {
         ExecTraceEntry entry = traceQueue->pop();
         // DPRINTF(NemuCPU, "fetchVaddr: 0x%#lx\n", entry.fetchAddr.v);
@@ -132,19 +124,27 @@ void NemuCPU::tick()
                 entry.fetchAddr.p,
                 entry.memAddr.v,
                 entry.memAddr.p);
-        eos = dispatch(entry);
-        if (__glibc_unlikely(eos)) {
+        nemuEos = dispatch(entry);
+        if (__glibc_unlikely(nemuEos)) {
+            warn("GEM5 received EOS from NEMU\n");
             break;
         }
     }
+}
 
-    sendMemAccToCaches();
+void NemuCPU::tick()
+{
+    if (!nemuEos) {
+        receiveTraces();
+    } else {
+        sendMemAccToCaches(assoc / 2);
+    }
 
-    if (__glibc_unlikely(eos)) {
-        // assert(cpuState == CPUState::Stopping);
-        warn("GEM5 received EOS from NEMU\n");
+    if (__glibc_unlikely(nemuEos && finishedMem)) {
         cpuState = Stopped;
         schedule(*execCompleteEvent, curTick());
+    } else {
+        reschedule(tickEvent, curTick() + clockPeriod(), true);
     }
 }
 
@@ -285,41 +285,70 @@ NemuCPU::extractSet(Addr addr)
 }
 
 void
-NemuCPU::insertMemTrace(const ExecTraceEntry &entry)
+NemuCPU::mruInsert(MRUList &li, const ExecTraceEntry &entry, size_t limit, unsigned set_id)
 {
-    unsigned set_id = extractSet(entry.memAddr.p);
-    MRUList &set = sets.at(set_id);
-    std::pair<MRUIter, bool> p = set.push_front(entry);
     DPRINTF(MRUFilter, "Set[%u] Inserting 0x%lx\n", set_id, entry.memAddr.p);
+    std::pair<MRUIter, bool> p = li.push_front(entry);
     if (!p.second) { // duplication found
-        set.relocate(set.begin(), p.first);
+        li.relocate(li.begin(), p.first);
         DPRINTF(MRUFilter, "Set[%u] Put 0x%lx to MRU, size: %lu\n",
-                set_id, entry.memAddr.p, set.size());
-    } else if (set.size() > assoc){
-        DPRINTF(MRUFilter, "Set[%u] Evict 0x%lx\n", set_id, set.back().memAddr.p);
-        set.pop_back();
-        DPRINTF(MRUFilter, "Set[%u] Afater eviction, set now:\n", set_id);
-        for (const auto &item: set) {
-            DPRINTF(MRUFilter, "- 0x%lx\n", item.memAddr.p);
+                set_id, entry.memAddr.p, li.size());
+    } else if (li.size() > limit){
+        DPRINTF(MRUFilter, "Set[%u] Evict 0x%lx\n", set_id, li.back().memAddr.p);
+        li.pop_back();
+
+        DPRINTF(MRUFilter, "Set[%u] Afater eviction, LRU now:\n", set_id);
+        auto count = 0;
+        for (auto item = li.rbegin(); item != li.rend(); ++item) {
+            DPRINTF(MRUFilter, "- 0x%lx\n", item->memAddr.p);
+            count++;
+            if (count >= 8) {
+                break;
+            }
         }
     }
 }
 
 void
-NemuCPU::sendMemAccToCaches()
+NemuCPU::insertMemTrace(const ExecTraceEntry &entry)
 {
+    mruInsert(mru, entry, numBlocks * 2, 0);
+#if 0
+    unsigned set_id = extractSet(entry.memAddr.p);
+    MRUList &set = sets.at(set_id);
+#endif
+}
+
+void
+NemuCPU::mruMemAccess(MRUList &li, unsigned num)
+{
+    unsigned count = 0;
+    while (!li.empty() && count < num) {
+        auto &entry = li.back();
+        if (entry.type == ProtoInstType::MemRead) {
+            processLoad(entry.memAddr, entry.fetchAddr.v);
+        } else {
+            processStore(entry.memAddr, entry.fetchAddr.v);
+        }
+        li.pop_back();
+        count++;
+    }
+    if (li.empty()) {
+        finishedMem = true;
+    }
+}
+
+void
+NemuCPU::sendMemAccToCaches(unsigned count)
+{
+    mruMemAccess(mru, count);
+#if 0
     for (unsigned a = 0; a < assoc; a++) {
         for (auto &set: sets) {
             if (!set.empty()) {
-                auto &entry = set.back();
-                if (entry.type == ProtoInstType::MemRead) {
-                    processLoad(entry.memAddr, entry.fetchAddr.v);
-                } else {
-                    processStore(entry.memAddr, entry.fetchAddr.v);
-                }
-                set.pop_back();
             }
         }
     }
+#endif
 }
 

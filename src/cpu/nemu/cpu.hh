@@ -200,12 +200,22 @@ class NemuCPU: public BaseCPU
     const unsigned assoc{8}; // 8 way
     const unsigned cacheBlockSize{64}; // 64 Byte
     const unsigned maxCacheSize{4*(1 << 20)};
+    const unsigned numBlocks{maxCacheSize/cacheBlockSize};
     const unsigned numSets{maxCacheSize/cacheBlockSize/assoc};
-    const unsigned setMask; // 32 MB
+    const unsigned setMask{numSets - 1}; // 32 MB
     std::vector<MRUList> sets;
+    MRUList mru;
     Addr extractSet(Addr addr);
     void insertMemTrace(const ExecTraceEntry &entry);
-    void sendMemAccToCaches();
+    void sendMemAccToCaches(unsigned count);
+
+    void mruInsert(MRUList &li, const ExecTraceEntry &e, size_t limit, unsigned set_id = 0);
+    void mruMemAccess(MRUList &li, unsigned num);
+
+    void receiveTraces();
+
+    bool nemuEos{false}; // NEMU End of Stream
+    bool finishedMem{false}; // memory acc finished
 };
 
 
