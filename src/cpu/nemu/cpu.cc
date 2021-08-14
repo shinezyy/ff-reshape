@@ -5,6 +5,7 @@
 #include "config/the_isa.hh"
 #include "cpu.hh"
 #include "cpu/nemu/include/protocal/lockless_queue.h"
+#include "debug/MRUFilter.hh"
 
 std::thread *ExecutionThread;
 
@@ -84,6 +85,7 @@ bool NemuCPU::dispatch(const ExecTraceEntry &entry)
         __attribute__ ((fallthrough));
     case ProtoInstType::MemWrite:
         insertMemTrace(tmpEntry);
+        // processFetch(tmpEntry.fetchAddr);
         break;
         /*
     case ProtoInstType::MemRead:
@@ -285,12 +287,21 @@ NemuCPU::extractSet(Addr addr)
 void
 NemuCPU::insertMemTrace(const ExecTraceEntry &entry)
 {
-    MRUList &set = sets.at(extractSet(entry.memAddr.p));
+    unsigned set_id = extractSet(entry.memAddr.p);
+    MRUList &set = sets.at(set_id);
     std::pair<MRUIter, bool> p = set.push_front(entry);
+    DPRINTF(MRUFilter, "Set[%u] Inserting 0x%lx\n", set_id, entry.memAddr.p);
     if (!p.second) { // duplication found
         set.relocate(set.begin(), p.first);
+        DPRINTF(MRUFilter, "Set[%u] Put 0x%lx to MRU, size: %lu\n",
+                set_id, entry.memAddr.p, set.size());
     } else if (set.size() > assoc){
+        DPRINTF(MRUFilter, "Set[%u] Evict 0x%lx\n", set_id, set.back().memAddr.p);
         set.pop_back();
+        DPRINTF(MRUFilter, "Set[%u] Afater eviction, set now:\n", set_id);
+        for (const auto &item: set) {
+            DPRINTF(MRUFilter, "- 0x%lx\n", item.memAddr.p);
+        }
     }
 }
 

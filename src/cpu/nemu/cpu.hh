@@ -12,8 +12,8 @@
 #include <queue>
 #include <thread>
 
+#include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
-#include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 
@@ -188,7 +188,7 @@ class NemuCPU: public BaseCPU
         ExecTraceEntry,
         boost::multi_index::indexed_by<
             boost::multi_index::sequenced<>,
-            boost::multi_index::ordered_unique<EntryPAddr>
+            boost::multi_index::hashed_unique<EntryPAddr>
             >
         > MRUList;
 
@@ -199,8 +199,8 @@ class NemuCPU: public BaseCPU
   private:
     const unsigned assoc{8}; // 8 way
     const unsigned cacheBlockSize{64}; // 64 Byte
-    const unsigned maxCacheSize{8*(1 << 20)}; // 32 MB
-    const unsigned numSets{maxCacheSize/cacheBlockSize/assoc}; // 32 MB
+    const unsigned maxCacheSize{4*(1 << 20)};
+    const unsigned numSets{maxCacheSize/cacheBlockSize/assoc};
     const unsigned setMask; // 32 MB
     std::vector<MRUList> sets;
     Addr extractSet(Addr addr);

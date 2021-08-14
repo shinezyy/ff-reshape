@@ -106,4 +106,5 @@ if 'NemuCPU' in env['CPU_MODELS']:
         Source(f, append=appends, replace=cc_replace)
 
     DebugFlag('NemuCPU')
+    DebugFlag('MRUFilter')
 
