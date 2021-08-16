@@ -172,7 +172,7 @@ class NemuCPU: public BaseCPU
     } cpuState;
 
   private:
-    void setBootLoaderPath(const NemuCPUParams &params);
+    void setNEMUIOPath(const NemuCPUParams &params);
 
   public:
 

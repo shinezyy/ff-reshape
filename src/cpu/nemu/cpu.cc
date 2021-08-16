@@ -39,7 +39,7 @@ NemuCPU::NemuCPU(const NemuCPUParams &params) :
         maxInsts(params.max_insts_any_thread),
         sets(numSets, MRUList{})
 {
-    setBootLoaderPath(params);
+    setNEMUIOPath(params);
     extern void init_monitor(int argc, char *argv[]);
 
     char *empty[1] = {nullptr};
@@ -271,10 +271,13 @@ bool NemuCPU::inSameBlcok(Addr blk_addr, Addr addr)
     return (blk_addr - addr) <= 64;
 }
 
-void NemuCPU::setBootLoaderPath(const NemuCPUParams &params)
+void NemuCPU::setNEMUIOPath(const NemuCPUParams &params)
 {
     extern const char *img_file;
     img_file = params.gcpt_file.c_str();
+
+    extern const char *backed_store_file;
+    backed_store_file = params.nemu_backed_store.c_str();
 }
 
 Addr

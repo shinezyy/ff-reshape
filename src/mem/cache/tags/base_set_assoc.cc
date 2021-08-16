@@ -45,6 +45,7 @@
 
 #include "mem/cache/tags/base_set_assoc.hh"
 
+#include <filesystem>
 #include <sstream>
 #include <string>
 
@@ -175,11 +176,20 @@ BaseSetAssoc::getPhyAddr(int way_fmt, int bank_fmt, unsigned bank_id,
     panic("Unexpected way");
 }
 
+namespace fs = std::filesystem;
+
 void
 BaseSetAssoc::dumpStates()
 {
     if (cacheLevel < 1) {
         return;
+    }
+
+    if (!fs::exists("non-trivial-caches")) {
+        fs::create_directory("non-trivial-caches");
+    }
+    if (!fs::exists("trivial-caches")) {
+        fs::create_directory("trivial-caches");
     }
 
     char prefix[128];

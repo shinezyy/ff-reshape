@@ -34,4 +34,5 @@ class NemuCPU(BaseCPU):
         print("Checker not yet supported by NemuCPU")
         exit(1)
 
-    gcpt_file = Param.String(Parent.gcpt_file, "Generic Checkpoint image file or BBL")
+    gcpt_file = Param.String(Parent.gcpt_file, "Input Generic Checkpoint image file or BBL")
+    nemu_backed_store = Param.String("./backed_mem_for_cpt", "Output GCPT path")
