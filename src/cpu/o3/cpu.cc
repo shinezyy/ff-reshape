@@ -363,12 +363,6 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
     for (ThreadID tid = 0; tid < this->numThreads; tid++)
         this->thread[tid]->setFuncExeInst(0);
 
-    init_difftest();
-
-    diff.nemu_reg = nemu_reg;
-    diff.wpc = diff_wpc;
-    diff.wdata = diff_wdata;
-    diff.wdst = diff_wdst;
 }
 
 template <class Impl>
@@ -1843,6 +1837,7 @@ void
 FullO3CPU<Impl>::htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
      HtmFailureFaultCause cause)
 {
+    panic("suppose there is no htm!\n");
     const Addr addr = 0x0ul;
     const int size = 8;
     const Request::Flags flags =
