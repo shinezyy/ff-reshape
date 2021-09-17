@@ -365,6 +365,24 @@ class BaseCPU : public ClockedObject
     void flushTLBs();
 
     /**
+     * Suspend all thread contexts on this CPU
+     *
+     * This method is used to stall all TC on this CPU when we want
+     * to simulate some fragments periodly and resume running later.
+     * It is exported to the Python world to make it easier to
+     * construct benchmarks.
+     */
+    void suspendAllContexts();
+
+    /**
+     * activate all thread context on this CPU
+     *
+     * This method is used to wake up all TC on this CPU which are
+     * stalled in suspendAllContexts()
+     */
+    void activateAllContexts();
+
+    /**
      * Determine if the CPU is switched out.
      *
      * @return True if the CPU is switched out, false otherwise.

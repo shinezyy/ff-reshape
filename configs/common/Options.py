@@ -543,3 +543,6 @@ def addFSOptions(parser):
 
     parser.add_option("--nohype", action="store_true", default=False,
                       help="use nohype mode for risc-v system")
+
+    parser.add_option("--job-benchmark", action="store_true", default=False,
+                      help="use small jobs benchmark")

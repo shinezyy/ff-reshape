@@ -39,6 +39,7 @@
 
 from __future__ import print_function
 from __future__ import absolute_import
+from common.SmallJobs import *
 
 import six
 import sys
@@ -416,6 +417,67 @@ def restoreSimpointCheckpoint():
     print('Exiting @ tick %i because %s' % (m5.curTick(), exit_cause))
     sys.exit(exit_event.getCode())
 
+
+def repeatJobs(testsys, maxtick):
+    init_clk = 10000
+    exit_event = m5.simulate(init_clk)
+    exit_cause = exit_event.getCause()
+    if exit_cause != "simulate() limit reached":
+        return exit_event
+
+    print("starting jobs loop")
+    job_eq = EventQueue()
+
+    # init jobs, every job cycle means 10000 clock cycles
+    sch_job1 = SmallJob(0, "SCH_job1", job_eq, testsys)
+    dp_job3 = SmallJob(1, "DP_job3", job_eq, testsys)
+    usr_job3 = SmallJob(2, "USR_job3", job_eq, testsys)
+    usr_job4 = SmallJob(3, "USR_job4", job_eq, testsys)
+    usr_job2 = SmallJob(4, "USR_job2", job_eq, testsys)
+
+    # init actions
+    usr_job3.set_wakeup_action([
+        SmallActionMeta(usr_job3, ActOp.stop, 10),
+        SmallActionMeta(sch_job1, ActOp.wakeup, 10),
+        SmallActionMeta(usr_job3, ActOp.wakeup, 100),  # next TTI start
+    ])
+    sch_job1.set_wakeup_action([
+        SmallActionMeta(sch_job1, ActOp.stop, 50),
+        SmallActionMeta(dp_job3, ActOp.wakeup, 50),
+        SmallActionMeta(usr_job4, ActOp.wakeup, 50),
+    ])
+    dp_job3.set_wakeup_action([
+        SmallActionMeta(dp_job3, ActOp.stop, 30),
+        SmallActionMeta(usr_job2, ActOp.wakeup, 30),
+    ])
+    usr_job4.set_wakeup_action([
+        SmallActionMeta(usr_job4, ActOp.stop, 10),
+    ])
+    usr_job2.set_wakeup_action([
+        SmallActionMeta(usr_job2, ActOp.stop, 10),
+    ])
+
+    # init event
+    job_clk = 0
+    job_eq.add_event(SmallEvent(0, usr_job3, ActOp.wakeup), 0)
+
+    while True:  # loop for clk
+        while (job_eq.peek_cycle() <= job_clk):  # loop for event in the same cycle
+            eve = job_eq.pop_event()
+            eve.schedule_out(job_clk)
+        next_event_cycle = job_eq.peek_cycle()
+
+        if maxtick <= init_clk + next_event_cycle * 10000:
+            exit_event = m5.simulate(maxtick - m5.curTick())
+            return exit_event
+
+        exit_event = m5.simulate((next_event_cycle - job_clk)*10000)
+        exit_cause = exit_event.getCause()
+        if exit_cause != "simulate() limit reached":
+            return exit_event
+
+        job_clk = next_event_cycle
+
 def repeatSwitch(testsys, repeat_switch_cpu_list, maxtick, switch_freq):
     print("starting switch loop")
     while True:
@@ -752,6 +814,8 @@ def run(options, root, testsys, cpu_class):
         if options.repeat_switch and maxtick > options.repeat_switch:
             exit_event = repeatSwitch(testsys, repeat_switch_cpu_list,
                                       maxtick, options.repeat_switch)
+        elif options.job_benchmark:
+            exit_event = repeatJobs(testsys, maxtick)
         else:
             exit_event = benchCheckpoints(options, maxtick, cptdir)
 

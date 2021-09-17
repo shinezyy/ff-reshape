@@ -100,6 +100,8 @@ class BaseCPU(ClockedObject):
         PyBindMethod("totalInsts"),
         PyBindMethod("scheduleInstStop"),
         PyBindMethod("getCurrentInstCount"),
+        PyBindMethod("suspendAllContexts"),
+        PyBindMethod("activateAllContexts"),
     ]
 
     @classmethod

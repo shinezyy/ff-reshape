@@ -627,6 +627,22 @@ BaseCPU::flushTLBs()
 }
 
 void
+BaseCPU::suspendAllContexts()
+{
+    for (auto tc : threadContexts) {
+        tc->suspend();
+    }
+}
+
+void
+BaseCPU::activateAllContexts()
+{
+    for (auto tc : threadContexts) {
+        tc->activate();
+    }
+}
+
+void
 BaseCPU::serialize(CheckpointOut &cp) const
 {
     SERIALIZE_SCALAR(instCnt);
