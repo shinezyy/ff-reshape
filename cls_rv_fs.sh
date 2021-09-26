@@ -1,0 +1,3 @@
+./build/RISCV/gem5.opt \
+	configs/example/fs.py \
+	--nohype --job-benchmark --enable-loop-buffer --l2cache --l3_cache --caches --branch-trace-file=useless_branch.protobuf.gz --mem-type=DDR4_2400_16x4 --cacheline_size=64 --l1i_size=32kB --l1i_assoc=8 --l1d_size=32kB --l1d_assoc=8 --l2_size=4MB --l2_assoc=8 --cpu-type=DerivO3CPU --num-ROB=192 --num-PhysReg=192 --num-IQ=192 --num-LQ=72 --num-SQ=48 --mem-size=40GB --num-cpus=5 --generic-rv-cpt=/home/zcq/lvna/5g/research-data/checkpoints_profiles/nemu_take_simpoint_cpt_06/gamess_gradient_1319250000000_0.134337/0/_7250001000_.gz --gcpt-restorer=/home/zcq/lvna/5g/research-data/gcpt.bin --maxinsts=300000 --gcpt-warmup=5000

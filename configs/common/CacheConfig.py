@@ -48,6 +48,38 @@ from m5.objects import *
 from common.Caches import *
 from common import ObjectList
 
+# cls: define new L3XBar
+class L3XBar(CoherentXBar):
+    # 256-bit crossbar by default
+    width = 32
+
+    # Assume that most of this is covered by the cache latencies, with
+    # no more than a single pipeline stage for any packet.
+    frontend_latency = 1
+    forward_latency = 0
+    response_latency = 1
+    snoop_response_latency = 1
+
+    # Use a snoop-filter by default, and set the latency to zero as
+    # the lookup is assumed to overlap with the frontend latency of
+    # the crossbar
+    snoop_filter = SnoopFilter(lookup_latency = 0)
+
+    # This specialisation of the coherent crossbar is to be considered
+    # the point of unification, it connects the dcache and the icache
+    # to the first level of unified cache.
+    point_of_unification = True
+
+# cls: add l3_cache hierarchy
+def addThreeLevelCacheHierarchy(self, ic, dc, l3c, iwc=None, dwc=None,
+                                xbar=None):
+    self.addPrivateSplitL1Caches(ic, dc, iwc, dwc)
+    self.toL3Bus = xbar if xbar else L3XBar()
+    self.connectCachedPorts(self.toL3Bus)
+    self.l3cache = l3c
+    self.toL3Bus.master = self.l3cache.cpu_side
+    self._cached_ports = ['l3cache.mem_side']
+
 def _get_hwp(hwp_option):
     if hwp_option == None:
         return NULL
@@ -102,7 +134,7 @@ def config_cache(options, system):
             core.HPI_DCache, core.HPI_ICache, core.HPI_L2, core.HPI_WalkCache
     else:
         dcache_class, icache_class, l2_cache_class, walk_cache_class = \
-            L1_DCache, L1_ICache, L2Cache, None
+            L1_DCache, L1_ICache, L2Cache, L3Cache #None
 
         if buildEnv['TARGET_ISA'] in ['x86', 'riscv']:
             walk_cache_class = PageTableWalkerCache
@@ -117,32 +149,20 @@ def config_cache(options, system):
     if options.l2cache and options.elastic_trace_en:
         fatal("When elastic trace is enabled, do not configure L2 caches.")
 
-    if options.l2cache:
-        # Provide a clock for the L2 and the L1-to-L2 bus here as they
-        # are not connected using addTwoLevelCacheHierarchy. Use the
-        # same clock as the CPUs.
-        system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
-                                   **_get_cache_opts('l2', options))
+    # cls: change config for private l2cache and shared l3cache
+    if options.l3_cache:
+        system.l3 = walk_cache_class(clk_domain=system.cpu_clk_domain,
+                                     **_get_cache_opts('l3', options))
 
-        system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
-        system.l2.cpu_side = system.tol2bus.master
-
-        if options.l3_cache:
-            system.l3 = L3Cache(clk_domain=system.cpu_clk_domain)
-
-            system.tol3bus = L2XBar(clk_domain = system.cpu_clk_domain,
-                    width=64)
-
-            system.l3.cpu_side = system.tol3bus.master
-            system.l3.mem_side = system.membus.slave
-
-            system.l2.mem_side = system.tol3bus.slave
-        else:
-            system.l2.mem_side = system.membus.slave
+        system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)
+        system.l3.cpu_side = system.tol3bus.master
+        system.l3.mem_side = system.membus.slave
 
     if options.memchecker:
         system.memchecker = MemChecker()
 
+    system.l2 = [ l2_cache_class(clk_domain=system.cpu_clk_domain, **_get_cache_opts('l2', options))
+                      for idx in range(options.num_cpus) ]
     for i in range(options.num_cpus):
         if options.caches:
             icache = icache_class(**_get_cache_opts('l1i', options))
@@ -201,8 +221,13 @@ def config_cache(options, system):
                         ExternalCache("cpu%d.dcache" % i))
 
         system.cpu[i].createInterruptController()
+
+        # cls: change config for private l2cache and shared l3cache
+        system.cpu[i].tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
         if options.l2cache:
-            system.cpu[i].connectAllPorts(system.tol2bus, system.membus)
+            system.l2[i].cpu_side = system.cpu[i].tol2bus.master
+            system.l2[i].mem_side = system.tol3bus.slave
+            system.cpu[i].connectAllPorts(system.cpu[i].tol2bus, system.membus)
         elif options.external_memory_system:
             system.cpu[i].connectUncachedPorts(system.membus)
         else:
