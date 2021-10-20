@@ -52,6 +52,7 @@
 #include "base/types.hh"
 #include "mem/cache/base.hh"
 #include "mem/packet.hh"
+#include "mem/token_bucket.hh"
 
 class CacheBlk;
 struct CacheParams;
@@ -74,6 +75,12 @@ class Cache : public BaseCache
      * generated and which ones were merely forwarded.
      */
     std::unordered_set<RequestPtr> outstandingSnoop;
+
+    /* Luoshan: Add tokenbucket here */
+    int num_core;
+    Token_Bucket *buckets[num_core];
+    /* Luoshan: Add a cross queue for pkt from multi-buckets to cache */
+    cross_queue_t cross_queue;
 
   protected:
     /**
@@ -152,6 +159,9 @@ class Cache : public BaseCache
      * found, set the BLOCK_CACHED flag in pkt.
      */
     bool isCachedAbove(PacketPtr pkt, bool is_timing = true);
+
+    /* Luoshan: Alloc Req to corresponding tb */
+    bool allocReq2Bucket(PacketPtr pkt, Token_Bucket *buckets, int num_core);
 
   public:
     /** Instantiates a basic cache object. */

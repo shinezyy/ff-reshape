@@ -61,6 +61,7 @@
 #include "mem/cache/tags/base.hh"
 #include "mem/cache/write_queue_entry.hh"
 #include "mem/request.hh"
+#include "mem/token_bucket.hh"
 #include "params/Cache.hh"
 
 Cache::Cache(const CacheParams &p)
@@ -69,6 +70,11 @@ Cache::Cache(const CacheParams &p)
 {
     assert(p.tags);
     assert(p.replacement_policy);
+    /* Luoshan: initialize token buckets */
+    int init_size = 60, init_freq = 10000000, init_inc = 2;
+    for (int i = 0; i < num_core; i++){
+        buckets[i] = new Token_Bucket(init_size, init_freq, init_inc, p.cache_level==1, &cross_queue);
+    }
 }
 
 void
@@ -467,7 +473,25 @@ Cache::recvTimingReq(PacketPtr pkt)
         return;
     }
 
-    BaseCache::recvTimingReq(pkt);
+    /* Luoshan: Add Tokenbucket port */
+    allocReq2Bucket(PacketPtr pkt, buckets, num_core);
+    /* fetch one packet from tokenbuckets */
+    OrderedReq *earliest_req = nullptr;
+    int index;
+    for (int i = 0; i < num_core; i++){
+        OrderedReq *req = buckets[i]->get_waitq_front();
+        if (req){
+            if (earliest_req==nullptr || req->time_arrive < earliest_req->time_arrive)
+            {
+                earliest_req = req;
+                index = i;
+            }
+        }
+    }
+    if (earliest_req) {
+        buckets[index]->dequeue_request();
+        BaseCache::recvTimingReq(earliest_req->pkt);
+    }
 }
 
 PacketPtr
@@ -1351,6 +1375,21 @@ Cache::isCachedAbove(PacketPtr pkt, bool is_timing)
     } else {
         cpuSidePort.sendAtomicSnoop(pkt);
         return pkt->isBlockCached();
+    }
+}
+
+/* Luoshan:  */
+bool
+Cache::allocReq2Bucket(PacketPtr pkt, Token_Bucket *buckets, int num_core)
+{
+    if (pkt->isRequest()){
+        RequestPtr req = pkt->req;
+        int index = req->_contextId % num_core;
+        OrderedReq *ordered_req = new OrderedReq(pkt, curTick());
+        buckets[index]->enqueue_request(ordered_req,false);
+        return true;
+    }else{
+        return false;
     }
 }
 
