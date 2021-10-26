@@ -63,10 +63,14 @@ class L1_ICache(L1Cache):
     is_read_only = True
     # Writeback clean lines as well
     writeback_clean = True
+    # Luoshan: add params
+    cache_level = 1
 
 class L1_DCache(L1Cache):
     write_buffers = 16
     data_latency = 4
+    # Luoshan: add params
+    cache_level = 1
 
 class L2Cache(Cache):
     writeback_clean = True
@@ -81,6 +85,8 @@ class L2Cache(Cache):
     clusivity='mostly_excl'
 
     prefetcher = BOPPrefetcher()
+    # Luoshan: add params
+    cache_level = 2
 
 class L3Cache(Cache):
     assoc = 16
@@ -92,6 +98,8 @@ class L3Cache(Cache):
     write_buffers = 8
     size = '16MB'
     clusivity='mostly_excl'
+    # Luoshan: add params
+    cache_level = 3
 
 
 class IOCache(Cache):

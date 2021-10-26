@@ -1,12 +1,20 @@
-#include "token_bucket.h"
+#include <cstdlib>
+#include <cstring>
 
-Token_Bucket::Token_Bucket(int size, int freq, int inc, bool bypass, cross_queue_t* cross_queuePtr)
-    : size(size), freq(freq), inc(inc), bypass(bypass), tokens(inc),
-      cross_queuePtr(cross_queuePtr),
-      updateTokenEvent([this]{ update_tokens(); }, name())
+#include "sim/eventq.hh"
+#include "token_bucket.hh"
+
+using namespace std;
+
+Token_Bucket::Token_Bucket(EventManager *_em, int _size, int _freq, int _inc, bool _bypass=true,
+    cross_queue_t* cross_queuePtr=nullptr, Cache *parent_cache=nullptr)
+    : size(_size), freq(_freq), inc(_inc), bypass(_bypass), tokens(_inc),
+      em(_em),
+      updateTokenEvent([this]{ update_tokens(); }, "update_token"),
+      cross_queuePtr(cross_queuePtr), parent_cache(parent_cache)
 {
     assert(size >= inc && "inc should not be greater than size");
-    schedule(updateTokenEvent, curTick()+freq);
+    em->schedule(updateTokenEvent, curTick()+freq);
 }
 
 // when cycle == freq, add tokens
@@ -14,13 +22,19 @@ void Token_Bucket::update_tokens(){
     if (!bypass){
         tokens = std::min(size, tokens + inc);
     }
-    OrderedReq* req = dequeue_request();
-    if (req)
-    {
-        cross_queuePtr->push(req->pkt);
-        //BaseCache::recvTimingReq(new_pkt);???
+    if (tokens > 0) {
+        OrderedReq* req = dequeue_request();
+        if (req){
+            //fprintf(stderr,"enqueue cus new token\n");
+            cross_queuePtr->push(req->pkt);
+        }
+        if (!cross_queuePtr->empty()){
+            PacketPtr cross_pkt = cross_queuePtr->front();
+            parent_cache->sendOrderedReq(cross_pkt);
+            cross_queuePtr->pop();
+        }
     }
-    reschedule(updateTokenEvent, curTick()+freq, true);
+    em->reschedule(updateTokenEvent, curTick()+freq, true);
 }
 
 // fetch one req from waiting queue

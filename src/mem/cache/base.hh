@@ -973,6 +973,9 @@ class BaseCache : public ClockedObject
      * Normally this is all possible memory addresses. */
     const AddrRangeList addrRanges;
 
+    /* Luoshan: Set new param */
+    const int cache_level;
+
   public:
     /** System we are currently operating in. */
     System *system;

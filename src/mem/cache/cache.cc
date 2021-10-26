@@ -60,6 +60,7 @@
 #include "mem/cache/mshr.hh"
 #include "mem/cache/tags/base.hh"
 #include "mem/cache/write_queue_entry.hh"
+#include "mem/packet.hh"
 #include "mem/request.hh"
 #include "mem/token_bucket.hh"
 #include "params/Cache.hh"
@@ -73,7 +74,9 @@ Cache::Cache(const CacheParams &p)
     /* Luoshan: initialize token buckets */
     int init_size = 60, init_freq = 10000000, init_inc = 2;
     for (int i = 0; i < num_core; i++){
-        buckets[i] = new Token_Bucket(init_size, init_freq, init_inc, p.cache_level==1, &cross_queue);
+        //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, p.cache_level!=3, &cross_queue, this);
+        buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, true, &cross_queue, this);
+        //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, false, &cross_queue, this);
     }
 }
 
@@ -473,25 +476,43 @@ Cache::recvTimingReq(PacketPtr pkt)
         return;
     }
 
-    /* Luoshan: Add Tokenbucket port */
-    allocReq2Bucket(PacketPtr pkt, buckets, num_core);
-    /* fetch one packet from tokenbuckets */
-    OrderedReq *earliest_req = nullptr;
-    int index;
-    for (int i = 0; i < num_core; i++){
-        OrderedReq *req = buckets[i]->get_waitq_front();
-        if (req){
-            if (earliest_req==nullptr || req->time_arrive < earliest_req->time_arrive)
-            {
-                earliest_req = req;
-                index = i;
+    if (pkt->isRequest()){
+        /* Luoshan: Add Tokenbucket port */
+        allocReq2Bucket(pkt, buckets, num_core);
+        /* fetch one packet from tokenbuckets */
+        OrderedReq *earliest_req = nullptr;
+        int index;
+        for (int i = 0; i < num_core; i++){
+            OrderedReq *req = buckets[i]->get_waitq_front();
+            int token = buckets[i]->get_tokens();
+            if (req && token>0){
+                if (earliest_req==nullptr || req->time_arrive < earliest_req->time_arrive)
+                {
+                    earliest_req = req;
+                    index = i;
+                }
             }
         }
+        if (earliest_req) {
+            buckets[index]->dequeue_request();
+            cross_queue.push(earliest_req->pkt);
+        }else{
+            //fprintf(stderr,"use tokens out, bucket %d\n",bucket_num);
+        }
+        if (!cross_queue.empty()){
+            PacketPtr cross_pkt = cross_queue.front();
+            BaseCache::recvTimingReq(cross_pkt);
+            cross_queue.pop();
+        }
+    }else{
+        BaseCache::recvTimingReq(pkt);
     }
-    if (earliest_req) {
-        buckets[index]->dequeue_request();
-        BaseCache::recvTimingReq(earliest_req->pkt);
-    }
+}
+
+void
+Cache::sendOrderedReq(PacketPtr pkt)
+{ // Luoshan: for BaseCache::recvTimingReq
+    BaseCache::recvTimingReq(pkt);
 }
 
 PacketPtr
@@ -1379,17 +1400,21 @@ Cache::isCachedAbove(PacketPtr pkt, bool is_timing)
 }
 
 /* Luoshan:  */
-bool
-Cache::allocReq2Bucket(PacketPtr pkt, Token_Bucket *buckets, int num_core)
+int
+Cache::allocReq2Bucket(PacketPtr pkt, Token_Bucket **buckets, int num_core)
 {
     if (pkt->isRequest()){
         RequestPtr req = pkt->req;
-        int index = req->_contextId % num_core;
+        int index;
+        if (req->hasContextId())
+            index = req->contextId() % num_core;
+        else
+            index = 0;
         OrderedReq *ordered_req = new OrderedReq(pkt, curTick());
         buckets[index]->enqueue_request(ordered_req,false);
-        return true;
+        return index;
     }else{
-        return false;
+        return -1;
     }
 }
 

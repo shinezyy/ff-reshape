@@ -134,7 +134,7 @@ def config_cache(options, system):
             core.HPI_DCache, core.HPI_ICache, core.HPI_L2, core.HPI_WalkCache
     else:
         dcache_class, icache_class, l2_cache_class, walk_cache_class = \
-            L1_DCache, L1_ICache, L2Cache, L3Cache #None
+            L1_DCache, L1_ICache, L2Cache, None
 
         if buildEnv['TARGET_ISA'] in ['x86', 'riscv']:
             walk_cache_class = PageTableWalkerCache
@@ -151,7 +151,7 @@ def config_cache(options, system):
 
     # cls: change config for private l2cache and shared l3cache
     if options.l3_cache:
-        system.l3 = walk_cache_class(clk_domain=system.cpu_clk_domain,
+        system.l3 = L3Cache(clk_domain=system.cpu_clk_domain,
                                      **_get_cache_opts('l3', options))
 
         system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)

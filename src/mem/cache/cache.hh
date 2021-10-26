@@ -47,16 +47,18 @@
 #define __MEM_CACHE_CACHE_HH__
 
 #include <cstdint>
+#include <queue>
 #include <unordered_set>
 
 #include "base/types.hh"
 #include "mem/cache/base.hh"
 #include "mem/packet.hh"
-#include "mem/token_bucket.hh"
 
 class CacheBlk;
 struct CacheParams;
 class MSHR;
+class Token_Bucket;
+typedef std::queue<PacketPtr> cross_queue_t;
 
 /**
  * A coherent cache that can be arranged in flexible topologies.
@@ -77,7 +79,7 @@ class Cache : public BaseCache
     std::unordered_set<RequestPtr> outstandingSnoop;
 
     /* Luoshan: Add tokenbucket here */
-    int num_core;
+    static const int num_core = 5;
     Token_Bucket *buckets[num_core];
     /* Luoshan: Add a cross queue for pkt from multi-buckets to cache */
     cross_queue_t cross_queue;
@@ -161,7 +163,7 @@ class Cache : public BaseCache
     bool isCachedAbove(PacketPtr pkt, bool is_timing = true);
 
     /* Luoshan: Alloc Req to corresponding tb */
-    bool allocReq2Bucket(PacketPtr pkt, Token_Bucket *buckets, int num_core);
+    int allocReq2Bucket(PacketPtr pkt, Token_Bucket **buckets, int num_core);
 
   public:
     /** Instantiates a basic cache object. */
@@ -176,6 +178,7 @@ class Cache : public BaseCache
      * @return True if the port is waiting for a retry
      */
     bool sendMSHRQueuePacket(MSHR* mshr) override;
+    void sendOrderedReq(PacketPtr pkt);
 };
 
 #endif // __MEM_CACHE_CACHE_HH__

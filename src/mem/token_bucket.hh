@@ -1,9 +1,13 @@
 #ifndef __TOKEN_BUCKET_H_
 #define __TOKEN_BUCKET_H_
 
+#include <cstdint>
+#include <queue>
+
 #include "mem/packet.hh"
 
 //event? schedule?
+#include "mem/cache/cache.hh"
 #include "sim/eventq.hh"
 
 class OrderedReq {
@@ -17,8 +21,6 @@ public:
     { };
 };
 
-typedef std::queue<PacketPtr> cross_queue_t;
-
 class Token_Bucket
 {
   private:
@@ -29,13 +31,16 @@ class Token_Bucket
 
     std::queue<OrderedReq *> waiting_queue;  // reqs not yet sent to mem_ctrl
 
-    void update_tokens();   // update tokens when curTick%freq==0
-    EventFunctionWrapper updateTokenEvent;   // event be scheduled every freq-cycles
+    EventManager *em;                        // The manager which is used for the event queue
+    void update_tokens();                    // Used to schedule updating tokens when curTick%freq==0
+    EventFunctionWrapper updateTokenEvent;   // Event used to call update_tokens
 
     cross_queue_t* cross_queuePtr;           // point to the cross_queue in cache
+    Cache *parent_cache;                     // point to cache it belongs to
 
   public:
-    Token_Bucket(int size, int freq, int inc, bool bypass, cross_queue_t *cross_queuePtr);
+    Token_Bucket(EventManager *_em, int size, int freq, int inc, bool bypass,\
+    cross_queue_t *cross_queuePtr, Cache *parent_cache);
 
     inline int get_size() { return size; }
     inline void set_size(int s) { size = s; }

@@ -107,6 +107,7 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       noTargetMSHR(nullptr),
       missCount(p.max_miss_count),
       addrRanges(p.addr_ranges.begin(), p.addr_ranges.end()),
+      cache_level(p.cache_level),        //Luoshan
       system(p.system),
       stats(*this)
 {
@@ -1138,7 +1139,6 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
 {
     // sanity check
     assert(pkt->isRequest());
-
     chatty_assert(!(isReadOnly && pkt->isWrite()),
                   "Should never see a write in a read-only cache %s\n",
                   name());
