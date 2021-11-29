@@ -280,6 +280,28 @@ class BaseTags : public ClockedObject
                                  std::vector<CacheBlk*>& evict_blks) = 0;
 
     /**
+     * Find replacement victim based on address. If the address requires
+     * blocks to be evicted, their locations are listed for eviction. If a
+     * conventional cache is being used, the list only contains the victim.
+     * However, if using sector or compressed caches, the victim is one of
+     * the blocks to be evicted, but its location is the only one that will
+     * be assigned to the newly allocated block associated to this address.
+     * Use waymask to restrict where the victims come from
+     * @sa insertBlock
+     *
+     * @param addr Address to find a victim for.
+     * @param is_secure True if the target memory space is secure.
+     * @param size Size, in bits, of new block to allocate.
+     * @param evict_blks Cache blocks to be evicted.
+     * @param 'waymask' waymask to restrict victims
+     * @return Cache block to be replaced.
+     */
+    virtual CacheBlk* findVictim(Addr addr, const bool is_secure,
+                                 const std::size_t size,
+                                 std::vector<CacheBlk*>& evict_blks,
+                                 uint64_t waymask) = 0;
+
+    /**
      * Access block and update replacement data. May not succeed, in which case
      * nullptr is returned. This has all the implications of a cache access and
      * should only be used as such. Returns the tag lookup latency as a side

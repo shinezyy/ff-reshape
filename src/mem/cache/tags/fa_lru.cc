@@ -197,6 +197,13 @@ FALRU::findVictim(Addr addr, const bool is_secure, const std::size_t size,
     return victim;
 }
 
+CacheBlk*
+FALRU::findVictim(Addr addr, const bool is_secure, const std::size_t size,
+                       std::vector<CacheBlk*>& evict_blks, uint64_t waymask)
+{
+    return findVictim(addr,is_secure,size,evict_blks);
+}
+
 void
 FALRU::insertBlock(const PacketPtr pkt, CacheBlk *blk)
 {

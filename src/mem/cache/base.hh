@@ -379,6 +379,9 @@ class BaseCache : public ClockedObject
      */
     WriteAllocator * const writeAllocator;
 
+    /** PARD: waymasks */
+    std::vector<uint64_t> waymasks;
+
     /**
      * Temporary cache block for occasional transitory use.  We use
      * the tempBlock to fill when allocation fails (e.g., when there
@@ -1348,6 +1351,10 @@ class BaseCache : public ClockedObject
      */
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
+
+    void setWaymask(int idx, uint64_t mask){
+        waymasks[idx] = mask;
+    }
 };
 
 /**

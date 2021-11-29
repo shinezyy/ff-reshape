@@ -105,6 +105,11 @@ class CompressedTags : public SectorTags
                          const std::size_t compressed_size,
                          std::vector<CacheBlk*>& evict_blks) override;
 
+    CacheBlk* findVictim(Addr addr, const bool is_secure,
+                                 const std::size_t size,
+                                 std::vector<CacheBlk*>& evict_blks,
+                                 uint64_t waymask) override;
+
     /**
      * Visit each sub-block in the tags and apply a visitor.
      *

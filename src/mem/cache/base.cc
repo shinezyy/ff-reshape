@@ -84,6 +84,7 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       compressor(p.compressor),
       prefetcher(p.prefetcher),
       writeAllocator(p.write_allocator),
+      waymasks(p.waymasks),
       writebackClean(p.writeback_clean),
       tempBlockWriteback(nullptr),
       writebackTempBlockAtomicEvent([this]{ writebackTempBlockAtomic(); },
@@ -1540,8 +1541,17 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
 
     // Find replacement victim
     std::vector<CacheBlk*> evict_blks;
-    CacheBlk *victim = tags->findVictim(addr, is_secure, blk_size_bits,
+    CacheBlk *victim;
+    if (pkt->req->taskId()<ContextSwitchTaskId::MaxNormalTaskId)
+    {
+        victim = tags->findVictim(addr, is_secure, blk_size_bits,
+                                        evict_blks,waymasks[pkt->req->taskId()]);
+    }
+    else
+    {
+        victim = tags->findVictim(addr, is_secure, blk_size_bits,
                                         evict_blks);
+    }
 
     // It is valid to return nullptr if there is no victim
     if (!victim)

@@ -219,6 +219,11 @@ class FALRU : public BaseTags
                          const std::size_t size,
                          std::vector<CacheBlk*>& evict_blks) override;
 
+    CacheBlk* findVictim(Addr addr, const bool is_secure,
+                                 const std::size_t size,
+                                 std::vector<CacheBlk*>& evict_blks,
+                                 uint64_t waymask) override;
+
     /**
      * Insert the new block into the cache and update replacement data.
      *

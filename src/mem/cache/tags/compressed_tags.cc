@@ -160,6 +160,13 @@ CompressedTags::findVictim(Addr addr, const bool is_secure,
     return victim;
 }
 
+CacheBlk*
+CompressedTags::findVictim(Addr addr, const bool is_secure, const std::size_t size,
+                       std::vector<CacheBlk*>& evict_blks, uint64_t waymask)
+{
+    return findVictim(addr,is_secure,size,evict_blks);
+}
+
 void
 CompressedTags::forEachBlk(std::function<void(CacheBlk &)> visitor)
 {

@@ -148,6 +148,13 @@ class BaseCache(ClockedObject):
     # data cache.
     write_allocator = Param.WriteAllocator(NULL, "Write allocator")
 
+    # init vector of waymask by params
+    waymasks = VectorParam.UInt64([
+    0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,
+    0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,
+    0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,
+    0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF], "Way mask of this cache")
+
     # Luoshan: add params
     cache_level = Param.Unsigned(0, "Cache level")
 
