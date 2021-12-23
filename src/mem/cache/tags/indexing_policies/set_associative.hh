@@ -78,14 +78,6 @@ class ReplaceableEntry;
  */
 class SetAssociative : public BaseIndexingPolicy
 {
-  protected:
-    /**
-     * Apply a hash function to calculate address set.
-     *
-     * @param addr The address to calculate the set for.
-     * @return The set index for given combination of address and way.
-     */
-    virtual uint32_t extractSet(const Addr addr) const;
 
   public:
     /**

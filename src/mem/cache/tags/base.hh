@@ -79,6 +79,11 @@ class BaseTags : public ClockedObject
     /** The tag lookup latency of the cache. */
     const Cycles lookupLatency;
 
+    /** The number of slices*/
+    const int num_slices;
+    /** The slice bits offset in set index*/
+    const int slice_bits;
+
     /** System we are currently operating in. */
     System *system;
 
@@ -147,6 +152,9 @@ class BaseTags : public ClockedObject
 
         /** Occ % of each context/cpu using the cache */
         Stats::Formula percentOccsTaskId;
+
+        /** Total number of sets accessed in each slice */
+        Stats::Vector sliceSetAccesses;
 
         /** Number of tags consulted over all accesses. */
         Stats::Scalar tagAccesses;

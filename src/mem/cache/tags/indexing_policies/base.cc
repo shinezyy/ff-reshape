@@ -97,3 +97,9 @@ BaseIndexingPolicy::extractTag(const Addr addr) const
 {
     return (addr >> tagShift);
 }
+
+uint32_t
+BaseIndexingPolicy::extractSet(const Addr addr) const
+{
+    return (addr >> setShift) & setMask;
+}

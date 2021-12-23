@@ -51,6 +51,8 @@
 #include <string>
 #include <vector>
 
+#include "base/bitfield.hh"
+#include "base/intmath.hh"
 #include "base/logging.hh"
 #include "base/types.hh"
 #include "mem/cache/base.hh"
@@ -137,6 +139,18 @@ class BaseSetAssoc : public BaseTags
         } else {
             stats.dataAccesses += allocAssoc;
         }
+
+        if (slice_bits)
+        {
+            stats.sliceSetAccesses[bits<Addr>(
+                indexingPolicy->extractSet(addr),slice_bits-1,0)]++;
+        }
+        else
+        {
+            stats.sliceSetAccesses[0]++;
+        }
+
+
 
         // If a cache hit
         if (blk != nullptr) {

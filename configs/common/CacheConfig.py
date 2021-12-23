@@ -47,6 +47,8 @@ import m5
 from m5.objects import *
 from common.Caches import *
 from common import ObjectList
+from m5.objects.IndexingPolicies import *
+from m5.objects.Tags import *
 
 def _get_hwp(hwp_option):
     if hwp_option == None:
@@ -129,6 +131,16 @@ def config_cache(options, system):
 
         if options.l3_cache:
             system.l3 = L3Cache(clk_domain=system.cpu_clk_domain)
+
+            system.l3.tags.num_slices = options.l3_slices
+            if options.l3_complex:
+                system.l3.tags.indexing_policy = ComplexAssociative()
+                system.l3.tags.indexing_policy.num_slices = options.l3_slices
+                max_addr = 0
+                for m in system.mem_ranges:
+                    if max_addr < m.end:
+                        max_addr = m.end
+                system.l3.tags.indexing_policy.mem_size = str(max_addr+1) + "B"
 
             system.tol3bus = L2XBar(clk_domain = system.cpu_clk_domain,
                     width=64)
