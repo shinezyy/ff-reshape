@@ -47,6 +47,9 @@
 
 #include <cassert>
 
+#include "base/bitfield.hh"
+#include "base/intmath.hh"
+#include "base/logging.hh"
 #include "base/types.hh"
 #include "mem/cache/replacement_policies/replaceable_entry.hh"
 #include "mem/cache/tags/indexing_policies/base.hh"
@@ -58,6 +61,7 @@
 BaseTags::BaseTags(const Params &p)
     : ClockedObject(p), blkSize(p.block_size), blkMask(blkSize - 1),
       size(p.size), lookupLatency(p.tag_latency),
+      num_slices(p.num_slices), slice_bits(ceilLog2(p.num_slices)),
       system(p.system), indexingPolicy(p.indexing_policy),
       warmupBound((p.warmup_percentage/100.0) * (p.size / p.block_size)),
       warmedUp(false), numBlocks(p.size / p.block_size),
@@ -235,6 +239,8 @@ BaseTags::BaseTagStats::BaseTagStats(BaseTags &_tags)
     ageTaskId(this, "age_task_id_blocks", "Occupied blocks per task id"),
     percentOccsTaskId(this, "occ_task_id_percent",
                       "Percentage of cache occupancy per task id"),
+    sliceSetAccesses(this, "slice_set_accesses",
+                "Total number of sets accessed in a slice"),
     tagAccesses(this, "tag_accesses", "Number of tag accesses"),
     dataAccesses(this, "data_accesses", "Number of data accesses")
 {
@@ -275,6 +281,9 @@ BaseTags::BaseTagStats::regStats()
         .init(ContextSwitchTaskId::NumTaskId, 5)
         .flags(nozero | nonan)
         ;
+
+    // TODO: fix it as a parameter afterwards
+    sliceSetAccesses.init(16).flags(nozero);
 
     percentOccsTaskId.flags(nozero);
 

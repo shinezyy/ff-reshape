@@ -47,6 +47,8 @@ import m5
 from m5.objects import *
 from common.Caches import *
 from common import ObjectList
+from m5.objects.IndexingPolicies import *
+from m5.objects.Tags import *
 
 # cls: define new L3XBar
 class L3XBar(CoherentXBar):
@@ -153,10 +155,32 @@ def config_cache(options, system):
     if options.l2cache and options.elastic_trace_en:
         fatal("When elastic trace is enabled, do not configure L2 caches.")
 
-    # cls: change config for private l2cache and shared l3cache
-    if options.l3_cache:
-        system.l3 = L3Cache(clk_domain=system.cpu_clk_domain,
-                                     **_get_cache_opts('l3', options))
+    if options.l2cache:
+        # Provide a clock for the L2 and the L1-to-L2 bus here as they
+        # are not connected using addTwoLevelCacheHierarchy. Use the
+        # same clock as the CPUs.
+        system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
+                                   **_get_cache_opts('l2', options))
+
+        system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
+        system.l2.cpu_side = system.tol2bus.master
+
+        if options.l3_cache:
+            system.l3 = L3Cache(clk_domain=system.cpu_clk_domain,
+                                    **_get_cache_opts('l3', options))
+
+            system.l3.tags.num_slices = options.l3_slices
+            if options.l3_complex:
+                system.l3.tags.indexing_policy = ComplexAssociative()
+                system.l3.tags.indexing_policy.num_slices = options.l3_slices
+                max_addr = 0
+                for m in system.mem_ranges:
+                    if max_addr < m.end:
+                        max_addr = m.end
+                system.l3.tags.indexing_policy.mem_size = str(max_addr+1) + "B"
+
+            system.tol3bus = L2XBar(clk_domain = system.cpu_clk_domain,
+                    width=64)
 
         system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)
         system.l3.cpu_side = system.tol3bus.master

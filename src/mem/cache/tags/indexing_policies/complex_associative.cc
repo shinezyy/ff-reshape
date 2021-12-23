@@ -1,18 +1,5 @@
 /*
  * Copyright (c) 2018 Inria
- * Copyright (c) 2012-2014,2017 ARM Limited
- * All rights reserved.
- *
- * The license below extends only to copyright in the software and shall
- * not be construed as granting a license to any other intellectual
- * property including but not limited to intellectual property relating
- * to a hardware implementation of the functionality of the software
- * licensed hereunder.  You may use the software subject to the license
- * terms below provided that you ensure that this notice is replicated
- * unmodified and in its entirety in all distributions of the software,
- * modified or unmodified, in source code or in binary form.
- *
- * Copyright (c) 2003-2005,2014 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,31 +24,78 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Adapted from Original Implementation of Indexing Policy by Authors: Daniel Carvalho
  */
 
 /**
  * @file
- * Definitions of a set associative indexing policy.
+ * Definitions of a associative indexing policy simulating the intel complex addressing.
  */
+/* Author: Chuanqi Zhang.
+*/
 
-#include "mem/cache/tags/indexing_policies/set_associative.hh"
+#include "mem/cache/tags/indexing_policies/complex_associative.hh"
 
+#include "base/bitfield.hh"
+#include "base/intmath.hh"
+#include "base/logging.hh"
 #include "mem/cache/replacement_policies/replaceable_entry.hh"
 
-SetAssociative::SetAssociative(const Params &p)
-    : BaseIndexingPolicy(p)
+ComplexAssociative::ComplexAssociative(const Params &p)
+    : BaseIndexingPolicy(p), complex_bits(ceilLog2(p.num_slices)),
+    mem_size(p.mem_size),map_size(p.mem_size>>setShift)
 {
+  initIndexing();
 }
 
-Addr
-SetAssociative::regenerateAddr(const Addr tag, const ReplaceableEntry* entry)
-                                                                        const
+void
+ComplexAssociative::initIndexing()
 {
-    return (tag << tagShift) | (entry->getSet() << setShift);
+  complex_map_vec.resize(map_size);
+  for (uint64_t i = 0; i < map_size; i++)
+  {
+    complex_map_vec[i]=hash(i);
+  }
+}
+
+uint32_t
+ComplexAssociative::hash(const Addr tag) const
+{
+  // const uint64_t slice_addr_mask[3] = {
+  //   0x1b5f575440,
+  //   0x2eb5faa880,
+  //   0x3cccc93100
+  // };
+  const uint64_t slice_mask[3] = {
+    0x6d7d5d51,
+    0xbad7eaa2,
+    0xf33324c4
+  };
+
+  Addr temp_tag = tag;
+
+  for (size_t i = 0; i < complex_bits ; i++)
+  {
+    uint8_t xor_bit = popCount(tag&slice_mask[i])&1;
+    temp_tag = insertBits<Addr,uint8_t>(temp_tag,i,xor_bit);
+  }
+
+  return temp_tag & setMask;
+}
+
+uint32_t
+ComplexAssociative::extractSet(const Addr addr) const
+{
+
+  Addr line_addr = addr >> setShift;
+  Addr line_index = line_addr % map_size;
+
+  return  complex_map_vec[line_index];
 }
 
 std::vector<ReplaceableEntry*>
-SetAssociative::getPossibleEntries(const Addr addr) const
+ComplexAssociative::getPossibleEntries(const Addr addr) const
 {
-    return sets[extractSet(addr)];
+  return sets[extractSet(addr)];
 }

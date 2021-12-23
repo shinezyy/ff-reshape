@@ -51,3 +51,10 @@ class SkewedAssociative(BaseIndexingPolicy):
     type = 'SkewedAssociative'
     cxx_class = 'SkewedAssociative'
     cxx_header = "mem/cache/tags/indexing_policies/skewed_associative.hh"
+
+class ComplexAssociative(BaseIndexingPolicy):
+    type = 'ComplexAssociative'
+    cxx_class = 'ComplexAssociative'
+    cxx_header = "mem/cache/tags/indexing_policies/complex_associative.hh"
+    num_slices = Param.Unsigned(1, "Number of complex slices")
+    mem_size = Param.MemorySize("8GB","Memory size to set complex addr")

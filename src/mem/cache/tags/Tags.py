@@ -71,6 +71,7 @@ class BaseTags(ClockedObject):
     entry_size = Param.Int(Parent.cache_line_size,
                            "Indexing entry size in bytes")
 
+    num_slices = Param.Unsigned(1, "Number of slices")
 class BaseSetAssoc(BaseTags):
     type = 'BaseSetAssoc'
     cxx_header = "mem/cache/tags/base_set_assoc.hh"
