@@ -502,6 +502,17 @@ Walker::WalkerState::recvPacket(PacketPtr pkt)
             Addr vaddr = req->getVaddr();
             vaddr &= (static_cast<Addr>(1) << VADDR_BITS) - 1;
             Addr paddr = walker->tlb->translateWithTLB(vaddr, satp.asid, mode);
+            if (paddr < 0x80000000UL) {
+                req->setFlags(Request::UNCACHEABLE);
+                if (walker->nohypeIoStride != 0) {
+                    paddr += tc->contextId() * walker->nohypeIoStride;
+                }
+            }
+            else {
+                if (walker->nohypeMemStride != 0) {
+                    paddr += tc->contextId() * walker->nohypeMemStride;
+                }
+            }
             req->setPaddr(paddr);
             // Let the CPU continue.
             translation->finish(NoFault, req, tc, mode);

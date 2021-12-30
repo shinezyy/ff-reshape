@@ -155,6 +155,7 @@ namespace RiscvISA
 
       private:
         Addr nohypeMemStride;
+        Addr nohypeIoStride;
 
       public:
         // Kick off the state machine.
@@ -205,6 +206,7 @@ namespace RiscvISA
         Walker(const Params &params) :
             ClockedObject(params), port(name() + ".port", this),
             funcState(this, NULL, NULL, true), nohypeMemStride(params.nohype_mem_stride),
+            nohypeIoStride(params.nohype_io_stride),
             tlb(NULL), sys(params.system),
             requestorId(sys->getRequestorId(this)),
             numSquashable(params.num_squash_per_cycle),
