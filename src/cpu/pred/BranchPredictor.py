@@ -67,6 +67,11 @@ class BranchPredictor(SimObject):
     indirectBranchPred = Param.IndirectPredictor(SimpleIndirectPredictor(),
       "Indirect branch predictor, set to NULL to disable indirect predictions")
 
+class ForwardN(SimObject):
+    type = 'ForwardN'
+    cxx_class = 'gem5::branch_prediction::ForwardN'
+    cxx_header = "cpu/pred/forward_n.hh"
+
 class LocalBP(BranchPredictor):
     type = 'LocalBP'
     cxx_class = 'gem5::branch_prediction::LocalBP'

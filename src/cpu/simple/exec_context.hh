@@ -72,6 +72,9 @@ class SimpleExecContext : public ExecContext
     // Branch prediction
     std::unique_ptr<PCStateBase> predPC;
 
+    // ForwardN predicted
+    TheISA::PCState fnPred;
+
     /** PER-THREAD STATS */
     Counter numInst;
     Counter numOp;

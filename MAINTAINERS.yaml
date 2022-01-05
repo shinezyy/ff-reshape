@@ -188,6 +188,11 @@ fastmodel:
   maintainers:
     - Gabe Black <gabe.black@gmail.com>
 
+forward-n:
+  status: maintained
+  maintainers:
+    - Boyang Han <yqszxx@gmail.com>
+
 gcpt:
   status: maintained
   maintainers:

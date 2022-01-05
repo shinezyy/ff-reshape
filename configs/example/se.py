@@ -123,6 +123,8 @@ Options.addSEOptions(parser)
 if '--ruby' in sys.argv:
     Ruby.define_options(parser)
 
+parser.add_argument("--use-forward-n", action='store_true')
+
 args = parser.parse_args()
 
 multiprocesses = []
@@ -235,6 +237,9 @@ for i in range(np):
         indirectBPClass = \
             ObjectList.indirect_bp_list.get(args.indirect_bp_type)
         system.cpu[i].branchPred.indirectBranchPred = indirectBPClass()
+
+    if args.use_forward_n:
+        system.cpu[i].forwardN = m5.objects.ForwardN()
 
     system.cpu[i].createThreads()
 

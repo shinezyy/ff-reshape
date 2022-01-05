@@ -74,3 +74,6 @@ DebugFlag('Branch')
 DebugFlag('Tage')
 DebugFlag('LTage')
 DebugFlag('TageSCL')
+
+Source('forward_n.cc')
+DebugFlag('ForwardN')

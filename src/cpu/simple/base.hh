@@ -77,6 +77,7 @@ struct BaseSimpleCPUParams;
 namespace branch_prediction
 {
     class BPredUnit;
+    class ForwardN;
 } // namespace branch_prediction
 class SimpleExecContext;
 
@@ -85,6 +86,7 @@ class BaseSimpleCPU : public BaseCPU
   protected:
     ThreadID curThread;
     branch_prediction::BPredUnit *branchPred;
+    branch_prediction::ForwardN *forwardN;
 
     const RegIndex zeroReg;
 

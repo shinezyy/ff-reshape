@@ -50,3 +50,4 @@ class BaseSimpleCPU(BaseCPU):
             exit(1)
 
     branchPred = Param.BranchPredictor(NULL, "Branch Predictor")
+    forwardN = Param.ForwardN(NULL, "ForwardN Predictor")
