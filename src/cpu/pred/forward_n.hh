@@ -5,6 +5,9 @@
 #ifndef GEM5_FORWARD_N_H
 #define GEM5_FORWARD_N_H
 
+#include <map>
+#include <queue>
+
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "cpu/inst_seq.hh"
@@ -31,12 +34,9 @@ public:
 
     ForwardN(const ForwardNParams &params);
 
-    void predict(const StaticInstPtr &inst, TheISA::PCState &pc);
+    void predict(TheISA::PCState &pc);
 
-    void result(const StaticInstPtr &inst,
-                TheISA::PCState &pc,
-                bool correct,
-                const TheISA::PCState &correct_target);
+    void result(const TheISA::PCState &correct_target);
 
 private:
     struct ForwardNStats : public statistics::Group
@@ -47,10 +47,18 @@ private:
 
         statistics::Scalar correct;
 
-        statistics::Scalar incorrect;
+        statistics::Scalar hit;
 
         statistics::Formula correctRatio;
+
+        statistics::Formula hitRate;
     } stats;
+
+    std::map<Addr, Addr> predictor;
+    std::queue<Addr> pcBefore;
+    std::queue<Addr> predHist;
+
+    const Addr invalidPC = 0xFFFFFFFFFFFFFFFFLL;
 };
 
 } // namespace branch_prediction

@@ -17,12 +17,13 @@ ForwardN::ForwardNStats::ForwardNStats(statistics::Group *parent)
                    "Number of ForwardN lookups"),
           ADD_STAT(correct, statistics::units::Count::get(),
                    "Number of ForwardN correct predictions"),
-          ADD_STAT(incorrect, statistics::units::Count::get(),
-                   "Number of ForwardN incorrect predictions"),
           ADD_STAT(correctRatio, statistics::units::Ratio::get(),
-                   "ForwardN prediction correct ratio", correct / lookups)
+                   "ForwardN prediction correct ratio", correct / lookups),
+          ADD_STAT(hitRate, statistics::units::Ratio::get(),
+                   "ForwardN prediction hit rate", hit / lookups)
 {
-    correctRatio.precision(3);
+    correctRatio.precision(4);
+    hitRate.precision(4);
 }
 
 ForwardN::ForwardN(const ForwardNParams &params)
@@ -30,33 +31,38 @@ ForwardN::ForwardN(const ForwardNParams &params)
           stats(this)
 {
     DPRINTF(ForwardN, "ForwardN is here\n");
+
+    for (int i = 0; i < 64; i++) {
+        pcBefore.push(invalidPC);
+        predHist.push(invalidPC);
+    }
 }
 
-void ForwardN::predict(const StaticInstPtr &inst, TheISA::PCState &pc) {
+void ForwardN::predict(TheISA::PCState &pc) {
     ++stats.lookups;
 
-    DPRINTF(ForwardN, "Predict inst=`%s'\n",
-            inst->disassemble(pc.pc())
-    );
+    pcBefore.push(pc.pc());
 
-    pc.advance();
+    if (predictor.count(pc.pc())) {
+        ++stats.hit;
+        pc.pc(predictor[pc.pc()]);
+        predHist.push(pc.pc());
+    } else {
+        predHist.push(invalidPC);
+    }
 }
 
-void ForwardN::result(const StaticInstPtr &inst,
-                      TheISA::PCState &pc,
-                      bool correct,
-                      const TheISA::PCState &correct_target) {
-    if (correct) {
-        ++stats.correct;
-    } else {
-        ++stats.incorrect;
-    }
+void ForwardN::result(const TheISA::PCState &correct_target) {
+    Addr pcNBefore = pcBefore.front();
+    pcBefore.pop();
 
-    DPRINTF(ForwardN, "Result of inst=`%s': correct=%c, target=0x%016lX\n",
-            inst->disassemble(pc.pc()),
-            correct ? 'T' : 'F',
-            correct_target.pc()
-    );
+    predictor[pcNBefore] = correct_target.pc();
+
+    Addr prediction = predHist.front();
+    predHist.pop();
+    if (prediction == correct_target.pc()) {
+        ++stats.correct;
+    }
 }
 
 } // namespace branch_prediction
