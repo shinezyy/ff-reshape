@@ -72,6 +72,9 @@ class SimpleExecContext : public ExecContext {
     // Branch prediction
     TheISA::PCState predPC;
 
+    // ForwardN predicted
+    TheISA::PCState fnPred;
+
     /** PER-THREAD STATS */
     Counter numInst;
     Counter numOp;
