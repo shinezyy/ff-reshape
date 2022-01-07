@@ -127,7 +127,8 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
       globalSeqNum(1),
       system(params.system),
       lastRunningCycle(curCycle()),
-      cpuStats(this)
+      cpuStats(this),
+      enable_nemu_diff(params.nemuDiff)
 {
     fatal_if(FullSystem && params.numThreads > 1,
             "SMT is not supported in O3 in full system mode currently.");
@@ -363,17 +364,23 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
     for (ThreadID tid = 0; tid < this->numThreads; tid++)
         this->thread[tid]->setFuncExeInst(0);
 
-    diff.nemu_reg = nemu_reg;
-    // diff.wpc = diff_wpc;
-    // diff.wdata = diff_wdata;
-    // diff.wdst = diff_wdst;
-    diff.nemu_this_pc = 0x80000000u;
-    diff.cpu_id = params.cpu_id;
-    proxy = new NemuProxy(params.cpu_id,true);
-    proxy->regcpy(gem5_reg, REF_TO_DUT);
-    diff.dynamic_config.ignore_illegal_mem_access = false;
-    diff.dynamic_config.debug_difftest = false;
-    proxy->update_config(&diff.dynamic_config);
+    if (enable_nemu_diff){
+        diff.nemu_reg = nemu_reg;
+        // diff.wpc = diff_wpc;
+        // diff.wdata = diff_wdata;
+        // diff.wdst = diff_wdst;
+        diff.nemu_this_pc = 0x80000000u;
+        diff.cpu_id = params.cpu_id;
+        proxy = new NemuProxy(params.cpu_id,true);
+        proxy->regcpy(gem5_reg, REF_TO_DUT);
+        diff.dynamic_config.ignore_illegal_mem_access = false;
+        diff.dynamic_config.debug_difftest = false;
+        proxy->update_config(&diff.dynamic_config);
+    }
+    else {
+        hasCommit = true;
+    }
+
 }
 
 template <class Impl>
@@ -1555,7 +1562,7 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
         DPRINTF(ValueCommit, "Diff SC even if it is not the last Microop\n");
         should_diff = true;
     }
-    if (should_diff) {
+    if (enable_nemu_diff && should_diff) {
         auto [diff_at, npc_match] = diffWithNEMU(inst);
         if (diff_at != NoneDiff) {
             if (npc_match && diff_at == PCDiff) {

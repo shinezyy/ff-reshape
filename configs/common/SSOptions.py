@@ -175,3 +175,7 @@ def addO3Options(parser):
             action='store', type='int', default=2,
             help='cross group latency for multi-group')
 
+    parser.add_option("--nemu-diff",
+            action='store_true',
+            help="use NEMU as ref to do difftest")
+

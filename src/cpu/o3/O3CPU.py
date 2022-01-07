@@ -191,6 +191,8 @@ class DerivO3CPU(BaseCPU):
     needsTSO = Param.Bool(buildEnv['TARGET_ISA'] == 'x86',
                           "Enable TSO Memory model")
 
+    nemuDiff = Param.Bool(False,"use NEMU as ref to difftest")
+
     branchTrace = Param.BranchTrace(BranchTrace())
 
     def addCheckerCpu(self):

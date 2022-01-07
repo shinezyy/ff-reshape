@@ -789,6 +789,8 @@ class FullO3CPU : public BaseO3CPU
     uint64_t nemu_reg[DIFFTEST_NR_REG];
     DiffState diff;
     NemuProxy* proxy;
+
+    bool enable_nemu_diff;
     bool hasCommit{false};
 
     void readGem5Regs();

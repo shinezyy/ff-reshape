@@ -78,6 +78,9 @@ def modifyO3CPUConfig(options, cpu):
 
     cpu.commitTraceInterval = options.trace_interval
 
+    if options.nemu_diff:
+        cpu.nemuDiff = True
+
     if options.cpu_type == 'DerivFFCPU':
 
         cpu.FanoutPredLambda = options.fanout_lambda
