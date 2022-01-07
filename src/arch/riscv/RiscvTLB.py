@@ -42,6 +42,7 @@ class RiscvPagetableWalker(ClockedObject):
     num_squash_per_cycle = Param.Unsigned(32,
             "Number of outstanding walks that can be squashed per cycle")
     nohype_mem_stride = Param.Addr(0, "PTW nohype mem stride")
+    nohype_io_stride = Param.Addr(0, "TLB nohype io stride")
 
 class RiscvTLB(BaseTLB):
     type = 'RiscvTLB'

@@ -889,6 +889,9 @@ LSQUnit<Impl>::writebackStores()
             bool success = TheISA::handleLockedWrite(inst.get(),
                     req->request(), cacheBlockMask);
             inst->recordResult(true);
+
+            inst->lockedWriteSuccess(success);
+
             req->packetSent();
 
             if (!success) {

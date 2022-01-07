@@ -309,8 +309,6 @@ FFCPU<Impl>::FFCPU(const DerivFFCPUParams *params)
         this->thread[tid]->setFuncExeInst(0);
     }
 
-    init_difftest();
-
     diff.nemu_reg = nemu_reg;
     diff.wpc = diff_wpc;
     diff.wdata = diff_wdata;
@@ -1282,8 +1280,8 @@ FFCPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
             hasCommit = true;
             readGem5Regs();
             gem5_reg[DIFFTEST_THIS_PC] = inst->instAddr();
-            ref_difftest_memcpy_from_dut(0x80000000, pmemStart, pmemSize);
-            ref_difftest_setregs(gem5_reg);
+            // ref_difftest_memcpy_from_dut(0x80000000, pmemStart, pmemSize);
+            // ref_difftest_setregs(gem5_reg);
         }
 
         if (scFailed) {
@@ -1662,29 +1660,14 @@ FFCPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
     int diff_at = DiffAt::NoneDiff;
     bool npc_match = false;
 
-    difftest_step(&diff);
+    // difftest_step(&diff);
 
     auto gem5_pc = inst->instAddr();
     auto nemu_pc = nemu_reg[DIFFTEST_THIS_PC];
     DPRINTF(ValueCommit, "NEMU PC: %#x, GEM5 PC: %#x\n", nemu_pc, gem5_pc);
 
-    auto nemu_store_addr = nemu_reg[DIFFTEST_STORE_ADDR];
-    if (nemu_store_addr) {
-        DPRINTF(ValueCommit, "NEMU store addr: %#lx\n", nemu_store_addr);
-    }
-
-    uint8_t gem5_inst[5];
-    uint8_t nemu_inst[9];
-
-    int nemu_inst_len = nemu_reg[DIFFTEST_RVC] ? 2 : 4;
-    int gem5_inst_len = inst->pcState().compressed() ? 2 : 4;
-
-    assert(inst->staticInst->asBytes(gem5_inst, 8));
-    *reinterpret_cast<uint32_t *>(nemu_inst) =
-        htole<uint32_t>(nemu_reg[DIFFTEST_INST_PAYLOAD]);
 
     if (nemu_pc != gem5_pc) {
-        warn("NEMU store addr: %#lx\n", nemu_store_addr);
         warn("Inst [sn:%lli]\n", inst->seqNum);
         warn("Diff at %s, NEMU: %#lx, GEM5: %#lx\n",
                 "PC", nemu_pc, gem5_pc
@@ -1710,18 +1693,18 @@ FFCPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
                );
     }
 
-    if (nemu_inst_len != gem5_inst_len ||
-            memcmp(gem5_inst, nemu_inst, nemu_inst_len) != 0) {
-        warn("Inst [sn:%lli]\n", inst->seqNum);
-        warn("Diff at %s, NEMU: %02x %02x %02x %02x (%i),"
-                "GEM5: %02x %02x %02x %02x (%i)\n",
-                "inst payload",
-                nemu_inst[0], nemu_inst[1], nemu_inst[2], nemu_inst[3], nemu_inst_len,
-                gem5_inst[0], gem5_inst[1], gem5_inst[2], gem5_inst[3], gem5_inst_len
-            );
-        if (!diff_at)
-            diff_at = InstDiff;
-    }
+    // if (nemu_inst_len != gem5_inst_len ||
+    //         memcmp(gem5_inst, nemu_inst, nemu_inst_len) != 0) {
+    //     warn("Inst [sn:%lli]\n", inst->seqNum);
+    //     warn("Diff at %s, NEMU: %02x %02x %02x %02x (%i),"
+    //             "GEM5: %02x %02x %02x %02x (%i)\n",
+    //             "inst payload",
+    //             nemu_inst[0], nemu_inst[1], nemu_inst[2], nemu_inst[3], nemu_inst_len,
+    //             gem5_inst[0], gem5_inst[1], gem5_inst[2], gem5_inst[3], gem5_inst_len
+    //         );
+    //     if (!diff_at)
+    //         diff_at = InstDiff;
+    // }
 
     DPRINTF(ValueCommit, "Inst [sn:%llu] @ %#lx is %s\n",
             inst->seqNum, inst->instAddr(),

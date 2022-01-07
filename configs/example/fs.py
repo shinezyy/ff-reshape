@@ -235,9 +235,11 @@ def build_test_system(np):
                 cpu.mmu.itb.nohype_mem_stride = mem_stride_size
                 cpu.mmu.itb.nohype_io_stride = io_stride_size
                 cpu.mmu.itb.walker.nohype_mem_stride = mem_stride_size
+                cpu.mmu.itb.walker.nohype_io_stride = io_stride_size
                 cpu.mmu.dtb.nohype_mem_stride = mem_stride_size
                 cpu.mmu.dtb.nohype_io_stride = io_stride_size
                 cpu.mmu.dtb.walker.nohype_mem_stride = mem_stride_size
+                cpu.mmu.dtb.walker.nohype_io_stride = io_stride_size
                 for isa in cpu.isa:
                     isa.nohype = True
             test_sys.nohype_num = np

@@ -11,90 +11,6 @@
 # error Please define REF_SO to the path of NEMU shared object file
 #endif
 
-#define selectBit(src, x) (src & (1 << x))
-#define DEBUG_RETIRE_TRACE_SIZE 16
-#define DEBUG_WB_TRACE_SIZE 16
-
-void (*ref_difftest_memcpy_from_dut)(paddr_t dest, void *src, size_t n) = NULL;
-void (*ref_difftest_memcpy_from_ref)(void *dest, paddr_t src, size_t n) = NULL;
-void (*ref_difftest_getregs)(void *c) = NULL;
-void (*ref_difftest_setregs)(const void *c) = NULL;
-void (*ref_difftest_get_mastatus)(void *s) = NULL;
-void (*ref_difftest_set_mastatus)(const void *s) = NULL;
-void (*ref_difftest_get_csr)(void *c) = NULL;
-void (*ref_difftest_set_csr)(const void *c) = NULL;
-vaddr_t (*ref_disambiguate_exec)(void *disambiguate_para) = NULL;
-static void (*ref_difftest_exec)(uint64_t n) = NULL;
-static void (*ref_difftest_raise_intr)(uint64_t NO) = NULL;
-static void (*ref_isa_reg_display)(void) = NULL;
-
-static bool is_skip_ref;
-static bool is_skip_dut;
-
-// this is used to let ref skip instructions which
-// can not produce consistent behavior with NEMU
-void difftest_skip_ref() {
-  is_skip_ref = true;
-}
-
-// this is used to deal with instruction packing in QEMU.
-// Sometimes letting QEMU step once will execute multiple instructions.
-// We should skip checking until NEMU's pc catches up with QEMU's pc.
-void difftest_skip_dut() {
-  if (is_skip_dut) return;
-
-  ref_difftest_exec(1);
-  is_skip_dut = true;
-}
-
-void init_difftest() {
-  void *handle;
-  handle = dlopen(REF_SO, RTLD_LAZY | RTLD_DEEPBIND);
-  puts("Using " REF_SO " for difftest");
-  assert(handle);
-
-  ref_difftest_memcpy_from_dut = (void (*)(paddr_t, void *, size_t))dlsym(handle, "difftest_memcpy_from_dut");
-  assert(ref_difftest_memcpy_from_dut);
-
-  ref_difftest_memcpy_from_ref = (void (*)(void *, paddr_t, size_t))dlsym(handle, "difftest_memcpy_from_ref");
-  assert(ref_difftest_memcpy_from_ref);
-
-  ref_difftest_getregs = (void (*)(void *))dlsym(handle, "difftest_getregs");
-  assert(ref_difftest_getregs);
-
-  ref_difftest_setregs = (void (*)(const void *))dlsym(handle, "difftest_setregs");
-  assert(ref_difftest_setregs);
-
-  ref_difftest_get_mastatus = (void (*)(void *))dlsym(handle, "difftest_get_mastatus");
-  assert(ref_difftest_get_mastatus);
-
-  ref_difftest_set_mastatus = (void (*)(const void *))dlsym(handle, "difftest_set_mastatus");
-  assert(ref_difftest_set_mastatus);
-
-  ref_difftest_get_csr = (void (*)(void *))dlsym(handle, "difftest_get_csr");
-  assert(ref_difftest_get_csr);
-
-  ref_difftest_set_csr = (void (*)(const void *))dlsym(handle, "difftest_set_csr");
-  assert(ref_difftest_set_csr);
-
-  ref_disambiguate_exec = (vaddr_t (*)(void *))dlsym(handle, "disambiguate_exec");
-  assert(ref_disambiguate_exec);
-
-  ref_difftest_exec = (void (*)(uint64_t))dlsym(handle, "difftest_exec");
-  assert(ref_difftest_exec);
-
-  ref_difftest_raise_intr = (void (*)(uint64_t))dlsym(handle, "difftest_raise_intr");
-  assert(ref_difftest_raise_intr);
-
-  ref_isa_reg_display = (void (*)(void))dlsym(handle, "isa_reg_display");
-  assert(ref_isa_reg_display);
-
-  void (*ref_difftest_init)(void) = (void (*)(void))dlsym(handle, "difftest_init");
-  assert(ref_difftest_init);
-
-  ref_difftest_init();
-}
-
 const char *reg_name[DIFFTEST_NR_REG] = {
   "$0", "ra", "sp", "gp", "tp", "t0", "t1", "t2",
   "s0", "s1", "a0", "a1", "a2", "a3", "a4", "a5",
@@ -112,47 +28,97 @@ const char *reg_name[DIFFTEST_NR_REG] = {
   "mtval", "stval", "mtvec", "stvec", "mode"
 };
 
-static uint64_t nemu_this_pc = 0x80000000;
-static uint64_t pc_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
-static uint32_t inst_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
-static uint32_t retire_cnt_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
-static int pc_retire_pointer = DEBUG_RETIRE_TRACE_SIZE-1;
-static uint64_t pc_wb_queue[DEBUG_WB_TRACE_SIZE] = {0};
-static uint64_t wen_wb_queue[DEBUG_WB_TRACE_SIZE] = {0};
-static uint32_t wdst_wb_queue[DEBUG_WB_TRACE_SIZE] = {0};
-static uint64_t wdata_wb_queue[DEBUG_WB_TRACE_SIZE] = {0};
-static int wb_pointer = 0;
+NemuProxy::NemuProxy(int coreid) {
 
-uint64_t get_nemu_this_pc() { return nemu_this_pc; }
-void set_nemu_this_pc(uint64_t pc) { nemu_this_pc = pc; }
+  void *handle = dlmopen(LM_ID_NEWLM, REF_SO, RTLD_LAZY | RTLD_DEEPBIND);
+  puts("Using " REF_SO " for difftest");
+  if (!handle){
+    printf("%s\n", dlerror());
+    assert(0);
+  }
 
-void difftest_display(uint8_t mode) {
-  printf("\n==============Retire Trace==============\n");
-  int j;
-  for(j = 0; j < DEBUG_RETIRE_TRACE_SIZE; j++){
-    printf("retire trace [%x]: pc %010lx inst %08x cmtcnt %d %s\n",
-        j, pc_retire_queue[j], inst_retire_queue[j], retire_cnt_queue[j], (j==pc_retire_pointer)?"<--":"");
+  this->memcpy = (void (*)(paddr_t, void *, size_t, bool))dlsym(handle, "difftest_memcpy");
+  assert(this->memcpy);
+
+  regcpy = (void (*)(void *, bool))dlsym(handle, "difftest_regcpy");
+  assert(regcpy);
+
+  csrcpy = (void (*)(void *, bool))dlsym(handle, "difftest_csrcpy");
+  assert(csrcpy);
+
+  uarchstatus_cpy = (void (*)(void *, bool))dlsym(handle, "difftest_uarchstatus_cpy");
+  assert(uarchstatus_cpy);
+
+  exec = (void (*)(uint64_t))dlsym(handle, "difftest_exec");
+  assert(exec);
+
+  guided_exec = (vaddr_t (*)(void *))dlsym(handle, "difftest_guided_exec");
+  assert(guided_exec);
+
+  update_config = (vaddr_t (*)(void *))dlsym(handle, "update_dynamic_config");
+  assert(update_config);
+
+  store_commit = (int (*)(uint64_t*, uint64_t*, uint8_t*))dlsym(handle, "difftest_store_commit");
+  assert(store_commit);
+
+  raise_intr = (void (*)(uint64_t))dlsym(handle, "difftest_raise_intr");
+  assert(raise_intr);
+
+  isa_reg_display = (void (*)(void))dlsym(handle, "isa_reg_display");
+  assert(isa_reg_display);
+
+  query = (void (*)(void*, uint64_t))dlsym(handle, "difftest_query_ref");
+#ifdef ENABLE_RUNHEAD
+  assert(query);
+#endif
+
+  auto nemu_difftest_set_mhartid = (void (*)(int))dlsym(handle, "difftest_set_mhartid");
+  if (NUM_CORES > 1) {
+    assert(nemu_difftest_set_mhartid);
+    nemu_difftest_set_mhartid(coreid);
   }
-  printf("\n==============  WB Trace  ==============\n");
-  for(j = 0; j < DEBUG_WB_TRACE_SIZE; j++){
-    printf("wb trace [%x]: pc %010lx wen %x dst %08x data %016lx %s\n",
-        j, pc_wb_queue[j], wen_wb_queue[j]!=0, wdst_wb_queue[j], wdata_wb_queue[j], (j==((wb_pointer-1)%DEBUG_WB_TRACE_SIZE))?"<--":"");
-  }
-  printf("\n==============  Reg Diff  ==============\n");
-  ref_isa_reg_display();
-  printf("priviledgeMode: %d\n", mode);
+
+  auto nemu_init = (void (*)(void))dlsym(handle, "difftest_init");
+  assert(nemu_init);
+
+  nemu_init();
 }
 
-int difftest_step(DiffState *s) {
-  ref_difftest_exec(1);
+NemuProxy::NemuProxy(int tid, bool nohype) {
+  assert(nohype);
+  void *handle = dlmopen(LM_ID_NEWLM, REF_SO, RTLD_LAZY | RTLD_DEEPBIND);
+  puts("Using " REF_SO " for difftest");
+  if (!handle){
+    printf("%s\n", dlerror());
+    assert(0);
+  }
 
-  ref_difftest_getregs(s->nemu_reg);
+  this->memcpy = (void (*)(paddr_t, void *, size_t, bool))dlsym(handle, "difftest_memcpy");
+  assert(this->memcpy);
 
-  uint64_t next_pc = s->nemu_reg[DIFFTEST_THIS_PC];
+  regcpy = (void (*)(void *, bool))dlsym(handle, "difftest_regcpy");
+  assert(regcpy);
 
-  // replace with "this pc" for checking
-  s->nemu_reg[DIFFTEST_THIS_PC] = nemu_this_pc;
-  nemu_this_pc = next_pc;
-  s->npc = next_pc;
-  return 0;
+  csrcpy = (void (*)(void *, bool))dlsym(handle, "difftest_csrcpy");
+  assert(csrcpy);
+
+  uarchstatus_cpy = (void (*)(void *, bool))dlsym(handle, "difftest_uarchstatus_cpy");
+  assert(uarchstatus_cpy);
+
+  exec = (void (*)(uint64_t))dlsym(handle, "difftest_exec");
+  assert(exec);
+
+  update_config = (vaddr_t (*)(void *))dlsym(handle, "update_dynamic_config");
+  assert(update_config);
+
+  raise_intr = (void (*)(uint64_t))dlsym(handle, "difftest_raise_intr");
+  assert(raise_intr);
+
+  isa_reg_display = (void (*)(void))dlsym(handle, "isa_reg_display");
+  assert(isa_reg_display);
+
+  auto nemu_nohype_init = (void (*)(int))dlsym(handle, "difftest_nohype_init");
+  assert(nemu_nohype_init);
+
+  nemu_nohype_init(tid);
 }

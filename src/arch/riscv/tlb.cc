@@ -313,6 +313,17 @@ TLB::doTranslate(const RequestPtr &req, ThreadContext *tc,
     }
 
     Addr paddr = e->paddr << PageShift | (vaddr & mask(e->logBytes));
+    if (paddr < 0x80000000UL) {
+        req->setFlags(Request::UNCACHEABLE);
+        if (nohypeIoStride != 0) {
+            paddr += tc->contextId() * nohypeIoStride;
+        }
+    }
+    else {
+        if (nohypeMemStride != 0) {
+            paddr += tc->contextId() * nohypeMemStride;
+        }
+    }
     DPRINTF(TLBVerbose, "translate(vpn=%#x, asid=%#x): %#x\n",
             vaddr, satp.asid, paddr);
     req->setPaddr(paddr);
@@ -348,30 +359,23 @@ TLB::translate(const RequestPtr &req, ThreadContext *tc,
             /**
              * we simply set the virtual address to physical address
              */
-            req->setPaddr(req->getVaddr());
+            Addr paddr = req->getVaddr();
+            if (paddr < 0x80000000UL) {
+                req->setFlags(Request::UNCACHEABLE);
+                if (nohypeIoStride != 0) {
+                    paddr += tc->contextId() * nohypeIoStride;
+                }
+            }
+            else {
+                if (nohypeMemStride != 0) {
+                    paddr += tc->contextId() * nohypeMemStride;
+                }
+            }
+            req->setPaddr(paddr);
             fault = NoFault;
         } else {
             fault = doTranslate(req, tc, translation, mode, delayed);
             DPRINTF(TLB, "Has translation fault: %i\n", fault != NoFault);
-        }
-
-        if (!delayed && fault == NoFault)
-        {
-            if (req->getPaddr() < 0x80000000UL)
-            {
-                req->setFlags(Request::UNCACHEABLE);
-                if (nohypeIoStride != 0)
-                {
-                    req->setPaddr(req->getPaddr() + tc->contextId() * nohypeIoStride);
-                }
-            }
-            else
-            {
-                if (nohypeMemStride != 0)
-                {
-                    req->setPaddr(req->getPaddr() + tc->contextId() * nohypeMemStride);
-                }
-            }
         }
 
         // according to the RISC-V tests, negative physical addresses trigger

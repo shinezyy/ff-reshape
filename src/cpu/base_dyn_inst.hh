@@ -136,6 +136,7 @@ class BaseDynInst : public ExecContext, public RefCounted
         HitExternalSnoop,
         EffAddrValid,
         RecordResult,
+        LockedWriteSuccess,
         Predicate,
         MemAccPredicate,
         PredTaken,
@@ -273,6 +274,10 @@ class BaseDynInst : public ExecContext, public RefCounted
   public:
     /** Records changes to result? */
     void recordResult(bool f) { instFlags[RecordResult] = f; }
+
+    /** Is the locked write success */
+    bool lockedWriteSuccess() const { return instFlags[LockedWriteSuccess]; }
+    void lockedWriteSuccess(bool b) { instFlags[LockedWriteSuccess] = b; }
 
     /** Is the effective virtual address valid. */
     bool effAddrValid() const { return instFlags[EffAddrValid]; }

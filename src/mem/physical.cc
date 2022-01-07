@@ -462,8 +462,8 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
     AddrRange range = backingStore[store_id].range;
 
     pmemStart = pmem;
-    pmemSize = range.size();
-    Addr partSize = pmemSize/nohypeNum;
+    pmemSize = range.size()/nohypeNum;
+    Addr partSize = pmemSize;
 
     if (range_size != 0) {
         DPRINTF(Checkpoint, "Unserializing physical memory %s with size %d\n",
