@@ -788,7 +788,8 @@ class FullO3CPU : public BaseO3CPU
     uint64_t gem5_reg[DIFFTEST_NR_REG];
     uint64_t nemu_reg[DIFFTEST_NR_REG];
     DiffState diff;
-    bool hasCommit{};
+    NemuProxy* proxy;
+    bool hasCommit{false};
 
     void readGem5Regs();
 

@@ -176,6 +176,12 @@ BaseO3DynInst<Impl>::completeAcc(PacketPtr pkt)
     }
 
     this->fault = this->staticInst->completeAcc(pkt, this, this->traceData);
+    //TODO: move to isa someday
+    if (this->fault == NoFault) {
+        if (this->isStoreConditional()) {
+            this->lockedWriteSuccess(pkt->req->getExtraData()!=0);
+        }
+    }
 
     this->thread->noSquashFromTC = no_squash_from_TC;
 

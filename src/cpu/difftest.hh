@@ -5,6 +5,13 @@
 #include <assert.h>
 #include <string.h>
 
+#ifndef NUM_CORES
+#define NUM_CORES 1
+#endif
+enum { DIFFTEST_TO_DUT, DIFFTEST_TO_REF };
+enum { REF_TO_DUT, DUT_TO_REF };
+enum { REF_TO_DIFFTEST, DUT_TO_DIFFTEST };
+
 typedef uint64_t rtlreg_t;
 
 typedef uint64_t paddr_t;
@@ -35,21 +42,18 @@ enum {
   DIFFTEST_MTVEC,
   DIFFTEST_STVEC,
   DIFFTEST_MODE,
-  DIFFTEST_INST_PAYLOAD,
-  DIFFTEST_RVC,
-  DIFFTEST_STORE_ADDR,
-  DIFFTEST_STORE_VALUE,
-  DIFFTEST_HAS_MEM_XPT,
   DIFFTEST_NR_REG
 };
 
-struct SyncChannel {
-  uint64_t scFailed; // sc inst commited, it failed beacuse lr_valid === 0
-};
 
 struct SyncState {
   uint64_t lrscValid;
   uint64_t lrscAddr;
+};
+
+struct DynamicConfig {
+  bool ignore_illegal_mem_access;
+  bool debug_difftest;
 };
 
 struct DiffState {
@@ -70,31 +74,38 @@ struct DiffState {
   uint64_t npc;
 
   // Microarchitucural signal needed to sync status
-  struct SyncChannel sync;
-  // lrscValid needs to be synced as nemu does not know
-  // how many cycles were used to finish a lr/sc pair,
-  // this will lead to different sc results.
+  struct SyncState sync;
+
+  uint64_t nemu_this_pc;
+  uint64_t nemu_commit_inst_pc;
+  int cpu_id;
+  struct DynamicConfig dynamic_config;
 };
 
-struct DisambiguationState {
-  uint64_t exceptionNo;
-  uint64_t mtval;
-  uint64_t stval;
+class RefProxy {
+public:
+  // public callable functions
+  void (*memcpy)(paddr_t nemu_addr, void *dut_buf, size_t n, bool direction) = NULL;
+  void (*regcpy)(void *dut, bool direction) = NULL;
+  void (*csrcpy)(void *dut, bool direction) = NULL;
+  void (*uarchstatus_cpy)(void *dut, bool direction) = NULL;
+  int (*store_commit)(uint64_t *saddr, uint64_t *sdata, uint8_t *smask) = NULL;
+  void (*exec)(uint64_t n) = NULL;
+  vaddr_t (*guided_exec)(void *disambiguate_para) = NULL;
+  vaddr_t (*update_config)(void *config) = NULL;
+  void (*raise_intr)(uint64_t no) = NULL;
+  void (*isa_reg_display)() = NULL;
+  void (*query)(void *result_buffer, uint64_t type) = NULL;
+  void (*debug_mem_sync)(paddr_t addr, void *bytes, size_t size) = NULL;
 };
 
-extern void (*ref_difftest_memcpy_from_dut)(paddr_t dest, void *src, size_t n);
-extern void (*ref_difftest_memcpy_from_ref)(void *dest, paddr_t src, size_t n);
-extern void (*ref_difftest_getregs)(void *c);
-extern void (*ref_difftest_setregs)(const void *c);
-extern void (*ref_difftest_get_mastatus)(void *s);
-extern void (*ref_difftest_set_mastatus)(const void *s);
-extern void (*ref_difftest_get_csr)(void *c);
-extern void (*ref_difftest_set_csr)(const void *c);
-extern vaddr_t (*ref_disambiguate_exec)(void *disambiguate_para);
+class NemuProxy : public RefProxy {
+public:
+  NemuProxy(int coreid);
+  NemuProxy(int tid, bool nohype);
+private:
+};
 
-void init_difftest();
-int difftest_step(DiffState *s);
-void difftest_display(uint8_t mode);
 
 #define DIFFTEST_WIDTH 8
 
