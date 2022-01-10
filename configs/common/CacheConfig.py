@@ -102,6 +102,10 @@ def _get_cache_opts(level, options):
     if hasattr(options, prefetcher_attr):
         opts['prefetcher'] = _get_hwp(getattr(options, prefetcher_attr))
 
+    num_cpus_attr = 'num_cpus'
+    if hasattr(options, num_cpus_attr):
+        opts['num_cpus'] = getattr(options, num_cpus_attr)
+
     return opts
 
 def config_cache(options, system):
@@ -161,8 +165,16 @@ def config_cache(options, system):
     if options.memchecker:
         system.memchecker = MemChecker()
 
-    system.l2 = [ l2_cache_class(clk_domain=system.cpu_clk_domain, **_get_cache_opts('l2', options))
+    if options.num_cpus == 1:
+        system.l2 = [ l2_cache_class(clk_domain=system.cpu_clk_domain, **_get_cache_opts('l2', options))
                       for idx in range(options.num_cpus) ]
+        system.tol2bus = [ L2XBar(clk_domain = system.cpu_clk_domain)
+                      for idx in range(options.num_cpus) ]
+    else:
+        system.l2 = [ l2_cache_class(clk_domain=system.cpu_clk_domain, **_get_cache_opts('l2', options))
+                      for idx in range(options.num_cpus//2) ]
+        system.tol2bus = [ L2XBar(clk_domain = system.cpu_clk_domain)
+                      for idx in range(options.num_cpus//2) ]
     for i in range(options.num_cpus):
         if options.caches:
             icache = icache_class(**_get_cache_opts('l1i', options))
@@ -223,11 +235,11 @@ def config_cache(options, system):
         system.cpu[i].createInterruptController()
 
         # cls: change config for private l2cache and shared l3cache
-        system.cpu[i].tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
         if options.l2cache:
-            system.l2[i].cpu_side = system.cpu[i].tol2bus.master
-            system.l2[i].mem_side = system.tol3bus.slave
-            system.cpu[i].connectAllPorts(system.cpu[i].tol2bus, system.membus)
+            system.cpu[i].connectAllPorts(system.tol2bus[i//2], system.membus)
+            if i%2==0:
+                system.l2[i//2].cpu_side = system.tol2bus[i//2].master
+                system.l2[i//2].mem_side = system.tol3bus.slave
         elif options.external_memory_system:
             system.cpu[i].connectUncachedPorts(system.membus)
         else:
