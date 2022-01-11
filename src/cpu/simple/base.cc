@@ -386,7 +386,7 @@ BaseSimpleCPU::preExecute()
 
     if (forwardN && curStaticInst) {
         t_info.fnPred = thread->pcState();
-        forwardN->predict(t_info.fnPred);
+        forwardN->predict(t_info.fnPred, curStaticInst);
     }
 }
 
@@ -506,7 +506,7 @@ BaseSimpleCPU::advancePC(const Fault &fault)
     }
 
     if (forwardN && curStaticInst) {
-        forwardN->result(thread->pcState());
+        forwardN->result(thread->pcState(), curStaticInst);
     }
 }
 

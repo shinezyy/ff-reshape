@@ -41,18 +41,18 @@ ForwardN::ForwardN(const ForwardNParams &params)
         predHist.push(invalidPC);
     }
 
-    for (int i = 0; i < 16; i++) {
-        lastPCsForPred.push_back(invalidPC);
-        lastPCsForUpd.push_back(invalidPC);
+    for (int i = 0; i < 1; i++) {
+        lastCtrlsForPred.push_back(invalidPC);
+        lastCtrlsForUpd.push_back(invalidPC);
     }
 }
 
-void ForwardN::predict(TheISA::PCState &pc) {
+void ForwardN::predict(TheISA::PCState &pc, const StaticInstPtr &inst) {
     ++stats.lookups;
 
     pcBefore.push(pc.pc());
 
-    Addr lastPCsHash = hashHistory(lastPCsForPred);
+    Addr lastPCsHash = hashHistory(lastCtrlsForPred);
 
     Addr oldPC = pc.pc();
     if (predictor.count(pc.pc()) && predictor[pc.pc()].count(lastPCsHash)) {
@@ -63,20 +63,25 @@ void ForwardN::predict(TheISA::PCState &pc) {
         predHist.push(invalidPC);
     }
 
-    lastPCsForPred.pop_front();
-    lastPCsForPred.push_back(oldPC);
+    if (inst->isControl()) {
+        lastCtrlsForPred.pop_front();
+        lastCtrlsForPred.push_back(oldPC);
+    }
 }
 
-void ForwardN::result(const TheISA::PCState &correct_target) {
+void ForwardN::result(const TheISA::PCState &correct_target,
+                      const StaticInstPtr &inst) {
     Addr pcNBefore = pcBefore.front();
     pcBefore.pop();
 
-    Addr lastPCsHash = hashHistory(lastPCsForUpd);
+    Addr lastPCsHash = hashHistory(lastCtrlsForUpd);
 
     predictor[pcNBefore][lastPCsHash] = correct_target.pc();
 
-    lastPCsForUpd.pop_front();
-    lastPCsForUpd.push_back(pcNBefore);
+    if (inst->isControl()) {
+        lastCtrlsForUpd.pop_front();
+        lastCtrlsForUpd.push_back(pcNBefore);
+    }
 
     Addr prediction = predHist.front();
     predHist.pop();

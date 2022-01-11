@@ -35,9 +35,10 @@ public:
 
     ForwardN(const ForwardNParams &params);
 
-    void predict(TheISA::PCState &pc);
+    void predict(TheISA::PCState &pc, const StaticInstPtr &inst);
 
-    void result(const TheISA::PCState &correct_target);
+    void result(const TheISA::PCState &correct_target,
+                const StaticInstPtr &inst);
 
 private:
     static Addr hashHistory(const std::deque<Addr> &history);
@@ -65,8 +66,8 @@ private:
 
     const Addr invalidPC = 0xFFFFFFFFFFFFFFFFLL;
 
-    std::deque<Addr> lastPCsForPred;
-    std::deque<Addr> lastPCsForUpd;
+    std::deque<Addr> lastCtrlsForPred;
+    std::deque<Addr> lastCtrlsForUpd;
 };
 
 } // namespace branch_prediction
