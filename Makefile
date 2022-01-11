@@ -10,6 +10,7 @@ test-coremark: payload/coremark
 		--use-forward-n \
 		--cmd $^ \
 		--options "0x0 0x0 0x66 $(ITERATION) 7 1 2000"
+	grep forwardN m5out/stats.txt
 
 payload/coremark:
 	mkdir -p payload
