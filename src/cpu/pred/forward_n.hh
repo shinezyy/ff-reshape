@@ -5,6 +5,7 @@
 #ifndef GEM5_FORWARD_N_H
 #define GEM5_FORWARD_N_H
 
+#include <deque>
 #include <map>
 #include <queue>
 
@@ -39,6 +40,8 @@ public:
     void result(const TheISA::PCState &correct_target);
 
 private:
+    static Addr hashHistory(const std::deque<Addr> &history);
+
     struct ForwardNStats : public statistics::Group
     {
         ForwardNStats(statistics::Group *parent);
@@ -56,11 +59,14 @@ private:
 
     unsigned int traceStart, traceCount;
 
-    std::map<Addr, Addr> predictor;
+    std::map<Addr, std::map<Addr, Addr>> predictor;
     std::queue<Addr> pcBefore;
     std::queue<Addr> predHist;
 
     const Addr invalidPC = 0xFFFFFFFFFFFFFFFFLL;
+
+    std::deque<Addr> lastPCsForPred;
+    std::deque<Addr> lastPCsForUpd;
 };
 
 } // namespace branch_prediction

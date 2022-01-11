@@ -40,6 +40,11 @@ ForwardN::ForwardN(const ForwardNParams &params)
         pcBefore.push(invalidPC);
         predHist.push(invalidPC);
     }
+
+    for (int i = 0; i < 16; i++) {
+        lastPCsForPred.push_back(invalidPC);
+        lastPCsForUpd.push_back(invalidPC);
+    }
 }
 
 void ForwardN::predict(TheISA::PCState &pc) {
@@ -47,20 +52,31 @@ void ForwardN::predict(TheISA::PCState &pc) {
 
     pcBefore.push(pc.pc());
 
-    if (predictor.count(pc.pc())) {
+    Addr lastPCsHash = hashHistory(lastPCsForPred);
+
+    Addr oldPC = pc.pc();
+    if (predictor.count(pc.pc()) && predictor[pc.pc()].count(lastPCsHash)) {
         ++stats.hit;
-        pc.pc(predictor[pc.pc()]);
+        pc.pc(predictor[pc.pc()][lastPCsHash]);
         predHist.push(pc.pc());
     } else {
         predHist.push(invalidPC);
     }
+
+    lastPCsForPred.pop_front();
+    lastPCsForPred.push_back(oldPC);
 }
 
 void ForwardN::result(const TheISA::PCState &correct_target) {
     Addr pcNBefore = pcBefore.front();
     pcBefore.pop();
 
-    predictor[pcNBefore] = correct_target.pc();
+    Addr lastPCsHash = hashHistory(lastPCsForUpd);
+
+    predictor[pcNBefore][lastPCsHash] = correct_target.pc();
+
+    lastPCsForUpd.pop_front();
+    lastPCsForUpd.push_back(pcNBefore);
 
     Addr prediction = predHist.front();
     predHist.pop();
@@ -79,6 +95,17 @@ void ForwardN::result(const TheISA::PCState &correct_target) {
         }
         c++;
     }
+}
+
+Addr ForwardN::hashHistory(const std::deque<Addr> &history) {
+    Addr hash = 0;
+    std::for_each(
+            history.begin(),
+            history.end(),
+            [&hash](Addr a) {
+                hash ^= a;
+            });
+    return hash;
 }
 
 } // namespace branch_prediction
