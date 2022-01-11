@@ -36,3 +36,4 @@ configs/dram/lowp_sweep.cfg
 CMakeLists.txt
 cmake-build-*
 
+payload
