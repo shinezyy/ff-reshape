@@ -47,9 +47,9 @@ private:
 
         statistics::Scalar correct;
 
-        statistics::Scalar hit;
-
         statistics::Formula correctRatio;
+
+        statistics::Scalar hit;
 
         statistics::Formula hitRate;
     } stats;
