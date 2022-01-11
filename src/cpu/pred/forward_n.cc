@@ -19,6 +19,8 @@ ForwardN::ForwardNStats::ForwardNStats(statistics::Group *parent)
                    "Number of ForwardN correct predictions"),
           ADD_STAT(correctRatio, statistics::units::Ratio::get(),
                    "ForwardN prediction correct ratio", correct / lookups),
+          ADD_STAT(hit, statistics::units::Count::get(),
+                   "Number of ForwardN hit"),
           ADD_STAT(hitRate, statistics::units::Ratio::get(),
                    "ForwardN prediction hit rate", hit / lookups)
 {
