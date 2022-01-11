@@ -54,6 +54,8 @@ private:
         statistics::Formula hitRate;
     } stats;
 
+    unsigned int traceStart, traceCount;
+
     std::map<Addr, Addr> predictor;
     std::queue<Addr> pcBefore;
     std::queue<Addr> predHist;

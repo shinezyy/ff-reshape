@@ -124,6 +124,7 @@ if '--ruby' in sys.argv:
     Ruby.define_options(parser)
 
 parser.add_argument("--use-forward-n", action='store_true')
+parser.add_argument("--trace-forward-n")
 
 args = parser.parse_args()
 
@@ -240,6 +241,11 @@ for i in range(np):
 
     if args.use_forward_n:
         system.cpu[i].forwardN = m5.objects.ForwardN()
+        if args.trace_forward_n:
+            system.cpu[i].forwardN.traceStart =\
+                args.trace_forward_n.split(":")[0]
+            system.cpu[i].forwardN.traceCount =\
+                args.trace_forward_n.split(":")[1]
 
     system.cpu[i].createThreads()
 

@@ -30,7 +30,9 @@ ForwardN::ForwardNStats::ForwardNStats(statistics::Group *parent)
 
 ForwardN::ForwardN(const ForwardNParams &params)
         : SimObject(params),
-          stats(this)
+          stats(this),
+          traceStart(params.traceStart),
+          traceCount(params.traceCount)
 {
     DPRINTF(ForwardN, "ForwardN is here\n");
 
@@ -64,6 +66,18 @@ void ForwardN::result(const TheISA::PCState &correct_target) {
     predHist.pop();
     if (prediction == correct_target.pc()) {
         ++stats.correct;
+    } else {
+        static int c = 0;
+        if (c >= traceStart && c < traceStart + traceCount) {
+            DPRINTF(ForwardN, "Mispred: pred=0x%016lX, act=0x%016lX, off=%d\n",
+                    prediction,
+                    correct_target.pc(),
+                    correct_target.pc() > prediction ?
+                        (signed int)(correct_target.pc() - prediction) :
+                        -(signed int)(prediction - correct_target.pc())
+                    );
+        }
+        c++;
     }
 }
 

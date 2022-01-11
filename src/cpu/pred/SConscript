@@ -75,5 +75,6 @@ DebugFlag('Tage')
 DebugFlag('LTage')
 DebugFlag('TageSCL')
 
+SimObject('ForwardN.py')
 Source('forward_n.cc')
 DebugFlag('ForwardN')
