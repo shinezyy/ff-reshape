@@ -17,9 +17,10 @@ test-coremark: payload/coremark
 		--options "0x0 0x0 0x66 50 7 1 2000"
 
 test-bzip2-program: payload/bzip2 payload/program
-	./build/RISCV/gem5.opt $(COMMON_OPTIONS) \
+	timeout -s SIGINT 10 ./build/RISCV/gem5.opt $(COMMON_OPTIONS) \
 		--cmd $< \
-		--options "payload/program 5"
+		--options "payload/program 5" \
+		|| true
 
 payload/%:
 	mkdir -p payload
