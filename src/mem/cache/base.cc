@@ -84,6 +84,7 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       compressor(p.compressor),
       prefetcher(p.prefetcher),
       writeAllocator(p.write_allocator),
+      enable_waymask(p.enable_waymask),
       waymasks(p.waymasks),
       writebackClean(p.writeback_clean),
       tempBlockWriteback(nullptr),
@@ -1542,7 +1543,7 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
     // Find replacement victim
     std::vector<CacheBlk*> evict_blks;
     CacheBlk *victim;
-    if (pkt->req->taskId()<ContextSwitchTaskId::MaxNormalTaskId)
+    if (enable_waymask && pkt->req->taskId()<ContextSwitchTaskId::MaxNormalTaskId)
     {
         victim = tags->findVictim(addr, is_secure, blk_size_bits,
                                         evict_blks,waymasks[pkt->req->taskId()]);

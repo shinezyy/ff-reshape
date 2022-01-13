@@ -380,6 +380,7 @@ class BaseCache : public ClockedObject
     WriteAllocator * const writeAllocator;
 
     /** PARD: waymasks */
+    bool enable_waymask;
     std::vector<uint64_t> waymasks;
 
     /**

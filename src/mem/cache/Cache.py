@@ -148,6 +148,7 @@ class BaseCache(ClockedObject):
     # data cache.
     write_allocator = Param.WriteAllocator(NULL, "Write allocator")
 
+    enable_waymask = Param.Bool(False, "enable waymask logic")
     # init vector of waymask by params
     waymasks = VectorParam.UInt64([
     0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,
