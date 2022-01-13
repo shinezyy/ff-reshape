@@ -125,6 +125,7 @@ if '--ruby' in sys.argv:
 
 parser.add_argument("--use-forward-n", action='store_true')
 parser.add_argument("--trace-forward-n")
+parser.add_argument("--forward-n-histlen")
 
 args = parser.parse_args()
 
@@ -242,10 +243,13 @@ for i in range(np):
     if args.use_forward_n:
         system.cpu[i].forwardN = m5.objects.ForwardN()
         if args.trace_forward_n:
-            system.cpu[i].forwardN.traceStart =\
+            system.cpu[i].forwardN.traceStart = \
                 args.trace_forward_n.split(":")[0]
-            system.cpu[i].forwardN.traceCount =\
+            system.cpu[i].forwardN.traceCount = \
                 args.trace_forward_n.split(":")[1]
+        if args.forward_n_histlen:
+            system.cpu[i].forwardN.histLength = \
+                int(args.forward_n_histlen)
 
     system.cpu[i].createThreads()
 

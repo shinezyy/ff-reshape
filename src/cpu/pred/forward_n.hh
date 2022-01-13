@@ -63,6 +63,8 @@ private:
         statistics::Scalar histMiss;
     } stats;
 
+    unsigned int histLength;
+
     unsigned int traceStart, traceCount;
 
     std::map<Addr, std::map<Addr, Addr>> predictor;

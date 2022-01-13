@@ -7,6 +7,7 @@ COMMON_OPTIONS = 	--debug-flags=ForwardN \
 					--cpu-type AtomicSimpleCPU \
 					--use-forward-n \
 					--trace-forward-n 1000000:100 \
+					--forward-n-histlen 4 \
 
 show-result: test-$(TEST_CASE)
 	grep forwardN m5out/stats.txt

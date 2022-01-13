@@ -35,17 +35,18 @@ ForwardN::ForwardNStats::ForwardNStats(statistics::Group *parent)
 ForwardN::ForwardN(const ForwardNParams &params)
         : SimObject(params),
           stats(this),
+          histLength(params.histLength),
           traceStart(params.traceStart),
           traceCount(params.traceCount)
 {
-    DPRINTF(ForwardN, "ForwardN is here\n");
+    DPRINTF(ForwardN, "ForwardN, N=64, histLength=%u\n", histLength);
 
     for (int i = 0; i < 64; i++) {
         pcBefore.push(std::make_pair(invalidPC, false));
         predHist.push(invalidPC);
     }
 
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < histLength; i++) {
         lastCtrlsForPred.push_back(invalidPC);
         lastCtrlsForUpd.push_back(invalidPC);
     }

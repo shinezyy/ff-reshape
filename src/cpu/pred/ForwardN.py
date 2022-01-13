@@ -7,5 +7,7 @@ class ForwardN(SimObject):
     cxx_class = 'gem5::branch_prediction::ForwardN'
     cxx_header = "cpu/pred/forward_n.hh"
 
+    histLength = Param.Unsigned(1, "History length for control inst PCs")
+
     traceStart = Param.Unsigned(0, "Trace misprediction from inst count")
     traceCount = Param.Unsigned(0, "Trace misprediction count")
