@@ -8,6 +8,7 @@
 #include <deque>
 #include <map>
 #include <queue>
+#include <utility>
 
 #include "base/statistics.hh"
 #include "base/types.hh"
@@ -56,12 +57,16 @@ private:
         statistics::Scalar hit;
 
         statistics::Formula hitRate;
+
+        statistics::Scalar pcMiss;
+
+        statistics::Scalar histMiss;
     } stats;
 
     unsigned int traceStart, traceCount;
 
     std::map<Addr, std::map<Addr, Addr>> predictor;
-    std::queue<Addr> pcBefore;
+    std::queue<std::pair<Addr, bool>> pcBefore; // (pc, isControl)
     std::queue<Addr> predHist;
 
     const Addr invalidPC = 0xFFFFFFFFFFFFFFFFLL;

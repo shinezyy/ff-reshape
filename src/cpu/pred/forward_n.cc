@@ -22,7 +22,11 @@ ForwardN::ForwardNStats::ForwardNStats(statistics::Group *parent)
           ADD_STAT(hit, statistics::units::Count::get(),
                    "Number of ForwardN hit"),
           ADD_STAT(hitRate, statistics::units::Ratio::get(),
-                   "ForwardN prediction hit rate", hit / lookups)
+                   "ForwardN prediction hit rate", hit / lookups),
+          ADD_STAT(pcMiss, statistics::units::Count::get(),
+                   "ForwardN prediction miss count caused by current pc"),
+          ADD_STAT(histMiss, statistics::units::Count::get(),
+                   "ForwardN prediction miss count caused by history hash")
 {
     correctRatio.precision(4);
     hitRate.precision(4);
@@ -37,7 +41,7 @@ ForwardN::ForwardN(const ForwardNParams &params)
     DPRINTF(ForwardN, "ForwardN is here\n");
 
     for (int i = 0; i < 64; i++) {
-        pcBefore.push(invalidPC);
+        pcBefore.push(std::make_pair(invalidPC, false));
         predHist.push(invalidPC);
     }
 
@@ -50,16 +54,22 @@ ForwardN::ForwardN(const ForwardNParams &params)
 void ForwardN::predict(TheISA::PCState &pc, const StaticInstPtr &inst) {
     ++stats.lookups;
 
-    pcBefore.push(pc.pc());
+    pcBefore.push(std::make_pair(pc.pc(), inst->isControl()));
 
     Addr lastPCsHash = hashHistory(lastCtrlsForPred);
 
     Addr oldPC = pc.pc();
-    if (predictor.count(pc.pc()) && predictor[pc.pc()].count(lastPCsHash)) {
-        ++stats.hit;
-        pc.pc(predictor[pc.pc()][lastPCsHash]);
-        predHist.push(pc.pc());
+    if (predictor.count(pc.pc())) {
+        if (predictor[pc.pc()].count(lastPCsHash)) {
+            ++stats.hit;
+            pc.pc(predictor[pc.pc()][lastPCsHash]);
+            predHist.push(pc.pc());
+        } else {
+            ++stats.histMiss;
+            predHist.push(invalidPC);
+        }
     } else {
+        ++stats.pcMiss;
         predHist.push(invalidPC);
     }
 
@@ -71,14 +81,15 @@ void ForwardN::predict(TheISA::PCState &pc, const StaticInstPtr &inst) {
 
 void ForwardN::result(const TheISA::PCState &correct_target,
                       const StaticInstPtr &inst) {
-    Addr pcNBefore = pcBefore.front();
+    Addr pcNBefore = pcBefore.front().first;
+    bool isControlNBefore = pcBefore.front().second;
     pcBefore.pop();
 
     Addr lastPCsHash = hashHistory(lastCtrlsForUpd);
 
     predictor[pcNBefore][lastPCsHash] = correct_target.pc();
 
-    if (inst->isControl()) {
+    if (isControlNBefore) {
         lastCtrlsForUpd.pop_front();
         lastCtrlsForUpd.push_back(pcNBefore);
     }
