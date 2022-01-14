@@ -7,7 +7,8 @@ COMMON_OPTIONS = 	--debug-flags=ForwardN \
 					--cpu-type AtomicSimpleCPU \
 					--use-forward-n \
 					--trace-forward-n 1000000:100 \
-					--forward-n-histlen 4 \
+					--forward-n-histlen 8 \
+					--forward-n-histtakenlen 16 \
 
 show-result: test-$(TEST_CASE)
 	grep forwardN m5out/stats.txt
@@ -18,7 +19,7 @@ test-coremark: payload/coremark
 		--options "0x0 0x0 0x66 50 7 1 2000"
 
 test-bzip2-program: payload/bzip2 payload/program
-	timeout -s SIGINT 10 ./build/RISCV/gem5.opt $(COMMON_OPTIONS) \
+	timeout -s SIGINT 120 ./build/RISCV/gem5.opt $(COMMON_OPTIONS) \
 		--cmd $< \
 		--options "payload/program 5" \
 		|| true
