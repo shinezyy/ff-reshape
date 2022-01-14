@@ -39,7 +39,8 @@ public:
     void predict(TheISA::PCState &pc, const StaticInstPtr &inst);
 
     void result(const TheISA::PCState &correct_target,
-                const StaticInstPtr &inst);
+                const StaticInstPtr &inst,
+                const TheISA::PCState &pc);
 
 private:
     static Addr hashHistory(const std::deque<Addr> &history);
@@ -63,18 +64,25 @@ private:
         statistics::Scalar histMiss;
     } stats;
 
-    unsigned int histLength;
+    unsigned int histLength, histTakenLength;
 
     unsigned int traceStart, traceCount;
 
-    std::map<Addr, std::map<Addr, Addr>> predictor;
-    std::queue<std::pair<Addr, bool>> pcBefore; // (pc, isControl)
+    // [pc][histPath][histTaken]
+    std::map<Addr,
+        std::map<Addr,
+            std::map<uint64_t, Addr>>> predictor;
+
+    // (pc, isControl, taken)
+    std::queue<std::tuple<Addr, bool, bool>> pcBefore;
     std::queue<Addr> predHist;
 
     const Addr invalidPC = 0xFFFFFFFFFFFFFFFFLL;
 
     std::deque<Addr> lastCtrlsForPred;
     std::deque<Addr> lastCtrlsForUpd;
+
+    uint64_t histTaken;
 };
 
 } // namespace branch_prediction

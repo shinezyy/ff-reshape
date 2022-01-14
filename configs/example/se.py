@@ -126,6 +126,7 @@ if '--ruby' in sys.argv:
 parser.add_argument("--use-forward-n", action='store_true')
 parser.add_argument("--trace-forward-n")
 parser.add_argument("--forward-n-histlen")
+parser.add_argument("--forward-n-histtakenlen")
 
 args = parser.parse_args()
 
@@ -250,6 +251,9 @@ for i in range(np):
         if args.forward_n_histlen:
             system.cpu[i].forwardN.histLength = \
                 int(args.forward_n_histlen)
+        if args.forward_n_histtakenlen:
+            system.cpu[i].forwardN.histTakenLength = \
+                int(args.forward_n_histtakenlen)
 
     system.cpu[i].createThreads()
 

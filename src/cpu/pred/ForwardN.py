@@ -8,6 +8,8 @@ class ForwardN(SimObject):
     cxx_header = "cpu/pred/forward_n.hh"
 
     histLength = Param.Unsigned(1, "History length for control inst PCs")
+    histTakenLength = \
+        Param.Unsigned(1, "History length for control inst takens")
 
     traceStart = Param.Unsigned(0, "Trace misprediction from inst count")
     traceCount = Param.Unsigned(0, "Trace misprediction count")

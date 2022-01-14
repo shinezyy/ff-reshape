@@ -36,13 +36,20 @@ ForwardN::ForwardN(const ForwardNParams &params)
         : SimObject(params),
           stats(this),
           histLength(params.histLength),
+          histTakenLength(params.histTakenLength),
           traceStart(params.traceStart),
-          traceCount(params.traceCount)
+          traceCount(params.traceCount),
+          histTaken(0)
 {
-    DPRINTF(ForwardN, "ForwardN, N=64, histLength=%u\n", histLength);
+    DPRINTF(ForwardN, "ForwardN, N=64, "
+                      "histLength=%u, "
+                      "histTakenLength=%u\n",
+                      histLength,
+                      histTakenLength
+                      );
 
     for (int i = 0; i < 64; i++) {
-        pcBefore.push(std::make_pair(invalidPC, false));
+        pcBefore.push(std::make_tuple(invalidPC, false, false));
         predHist.push(invalidPC);
     }
 
@@ -55,15 +62,13 @@ ForwardN::ForwardN(const ForwardNParams &params)
 void ForwardN::predict(TheISA::PCState &pc, const StaticInstPtr &inst) {
     ++stats.lookups;
 
-    pcBefore.push(std::make_pair(pc.pc(), inst->isControl()));
-
     Addr lastPCsHash = hashHistory(lastCtrlsForPred);
 
     Addr oldPC = pc.pc();
     if (predictor.count(pc.pc())) {
         if (predictor[pc.pc()].count(lastPCsHash)) {
             ++stats.hit;
-            pc.pc(predictor[pc.pc()][lastPCsHash]);
+            pc.pc(predictor[pc.pc()][lastPCsHash][histTaken]);
             predHist.push(pc.pc());
         } else {
             ++stats.histMiss;
@@ -81,18 +86,34 @@ void ForwardN::predict(TheISA::PCState &pc, const StaticInstPtr &inst) {
 }
 
 void ForwardN::result(const TheISA::PCState &correct_target,
-                      const StaticInstPtr &inst) {
-    Addr pcNBefore = pcBefore.front().first;
-    bool isControlNBefore = pcBefore.front().second;
+                      const StaticInstPtr &inst,
+                      const TheISA::PCState &pc) {
+    pcBefore.push(std::make_tuple(pc.pc(), inst->isControl(), pc.branching()));
+
+    Addr pcNBefore = std::get<0>(pcBefore.front());
+    bool isControlNBefore = std::get<1>(pcBefore.front());
+    bool isBranchingNBefore = std::get<2>(pcBefore.front());
     pcBefore.pop();
 
     Addr lastPCsHash = hashHistory(lastCtrlsForUpd);
 
-    predictor[pcNBefore][lastPCsHash] = correct_target.pc();
+    static uint64_t histTakenUpd = 0;
+
+    predictor[pcNBefore][lastPCsHash][histTakenUpd] = correct_target.pc();
+
+    if (inst->isControl()) {
+        histTaken <<= 1;
+        histTaken |= pc.branching();
+        histTaken &= ((1 << histTakenLength) - 1);
+    }
 
     if (isControlNBefore) {
         lastCtrlsForUpd.push_back(pcNBefore);
         lastCtrlsForUpd.pop_front();
+
+        histTakenUpd <<= 1;
+        histTakenUpd |= isBranchingNBefore;
+        histTakenUpd &= ((1 << histTakenLength) - 1);
     }
 
     Addr prediction = predHist.front();

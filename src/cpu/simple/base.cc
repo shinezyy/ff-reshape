@@ -506,7 +506,7 @@ BaseSimpleCPU::advancePC(const Fault &fault)
     }
 
     if (forwardN && curStaticInst) {
-        forwardN->result(thread->pcState(), curStaticInst);
+        forwardN->result(thread->pcState(), curStaticInst, lastPC);
     }
 }
 
