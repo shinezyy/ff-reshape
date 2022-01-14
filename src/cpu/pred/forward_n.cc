@@ -75,8 +75,8 @@ void ForwardN::predict(TheISA::PCState &pc, const StaticInstPtr &inst) {
     }
 
     if (inst->isControl()) {
-        lastCtrlsForPred.pop_front();
         lastCtrlsForPred.push_back(oldPC);
+        lastCtrlsForPred.pop_front();
     }
 }
 
@@ -91,8 +91,8 @@ void ForwardN::result(const TheISA::PCState &correct_target,
     predictor[pcNBefore][lastPCsHash] = correct_target.pc();
 
     if (isControlNBefore) {
-        lastCtrlsForUpd.pop_front();
         lastCtrlsForUpd.push_back(pcNBefore);
+        lastCtrlsForUpd.pop_front();
     }
 
     Addr prediction = predHist.front();
