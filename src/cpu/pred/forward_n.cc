@@ -67,7 +67,6 @@ void ForwardN::predict(TheISA::PCState &pc, const StaticInstPtr &inst) {
 
     Addr lastPCsHash = hashHistory(lastCtrlsForPred);
 
-    Addr oldPC = pc.pc();
     if (predictor.count(pc.pc())) {
         if (predictor[pc.pc()].count(lastPCsHash)) {
             if (predictor[pc.pc()][lastPCsHash].count(histTaken)) {
@@ -85,11 +84,6 @@ void ForwardN::predict(TheISA::PCState &pc, const StaticInstPtr &inst) {
     } else {
         ++stats.pcMiss;
         predHist.push(invalidPC);
-    }
-
-    if (inst->isControl()) {
-        lastCtrlsForPred.push_back(oldPC);
-        lastCtrlsForPred.pop_front();
     }
 }
 
@@ -110,6 +104,9 @@ void ForwardN::result(const TheISA::PCState &correct_target,
     predictor[pcNBefore][lastPCsHash][histTakenUpd] = correct_target.pc();
 
     if (inst->isControl()) {
+        lastCtrlsForPred.push_back(pc.pc());
+        lastCtrlsForPred.pop_front();
+
         histTaken <<= 1;
         histTaken |= pc.branching();
         histTaken &= ((1 << histTakenLength) - 1);
