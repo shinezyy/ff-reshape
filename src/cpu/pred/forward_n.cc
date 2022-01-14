@@ -26,7 +26,10 @@ ForwardN::ForwardNStats::ForwardNStats(statistics::Group *parent)
           ADD_STAT(pcMiss, statistics::units::Count::get(),
                    "ForwardN prediction miss count caused by current pc"),
           ADD_STAT(histMiss, statistics::units::Count::get(),
-                   "ForwardN prediction miss count caused by history hash")
+                   "ForwardN prediction miss count caused by history hash"),
+          ADD_STAT(histTakenMiss, statistics::units::Count::get(),
+                   "ForwardN prediction miss count caused by "
+                   "history taken records")
 {
     correctRatio.precision(4);
     hitRate.precision(4);
@@ -67,9 +70,14 @@ void ForwardN::predict(TheISA::PCState &pc, const StaticInstPtr &inst) {
     Addr oldPC = pc.pc();
     if (predictor.count(pc.pc())) {
         if (predictor[pc.pc()].count(lastPCsHash)) {
-            ++stats.hit;
-            pc.pc(predictor[pc.pc()][lastPCsHash][histTaken]);
-            predHist.push(pc.pc());
+            if (predictor[pc.pc()][lastPCsHash].count(histTaken)) {
+                ++stats.hit;
+                pc.pc(predictor[pc.pc()][lastPCsHash][histTaken]);
+                predHist.push(pc.pc());
+            } else {
+                ++stats.histTakenMiss;
+                predHist.push(invalidPC);
+            }
         } else {
             ++stats.histMiss;
             predHist.push(invalidPC);

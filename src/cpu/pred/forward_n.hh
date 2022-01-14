@@ -62,6 +62,8 @@ private:
         statistics::Scalar pcMiss;
 
         statistics::Scalar histMiss;
+
+        statistics::Scalar histTakenMiss;
     } stats;
 
     unsigned int histLength, histTakenLength;
