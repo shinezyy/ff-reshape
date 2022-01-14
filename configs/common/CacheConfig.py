@@ -47,6 +47,8 @@ import m5
 from m5.objects import *
 from common.Caches import *
 from common import ObjectList
+from m5.objects.IndexingPolicies import *
+from m5.objects.Tags import *
 
 # cls: define new L3XBar
 class L3XBar(CoherentXBar):
@@ -106,6 +108,11 @@ def _get_cache_opts(level, options):
     # if hasattr(options, num_cpus_attr):
     #     opts['num_cpus'] = getattr(options, num_cpus_attr)
 
+    latency_attr = '{}_latency'.format(level)
+    if hasattr(options, latency_attr):
+        opts['tag_latency'] = getattr(options, latency_attr)
+        opts['data_latency'] = getattr(options, latency_attr)
+
     return opts
 
 def config_cache(options, system):
@@ -157,10 +164,30 @@ def config_cache(options, system):
     if options.l3_cache:
         system.l3 = L3Cache(clk_domain=system.cpu_clk_domain,
                                      **_get_cache_opts('l3', options))
+    if options.l2cache:
+        # Provide a clock for the L2 and the L1-to-L2 bus here as they
+        # are not connected using addTwoLevelCacheHierarchy. Use the
+        # same clock as the CPUs.
+        system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
+                                   **_get_cache_opts('l2', options))
 
-        system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)
-        system.l3.cpu_side = system.tol3bus.master
-        system.l3.mem_side = system.membus.slave
+        system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
+        system.l2.cpu_side = system.tol2bus.master
+
+        if options.l3_cache:
+            system.l3.tags.num_slices = options.l3_slices
+            if options.l3_complex:
+                system.l3.tags.indexing_policy = ComplexAssociative()
+                system.l3.tags.indexing_policy.num_slices = options.l3_slices
+                max_addr = 0
+                for m in system.mem_ranges:
+                    if max_addr < m.end:
+                        max_addr = m.end
+                system.l3.tags.indexing_policy.mem_size = str(max_addr+1) + "B"
+
+            system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)
+            system.l3.cpu_side = system.tol3bus.master
+            system.l3.mem_side = system.membus.slave
 
     if options.memchecker:
         system.memchecker = MemChecker()
@@ -234,12 +261,15 @@ def config_cache(options, system):
 
         system.cpu[i].createInterruptController()
 
-        # cls: change config for private l2cache and shared l3cache
+        # cls: change config for 2-core shared l2cache and shared l3cache
         if options.l2cache:
             system.cpu[i].connectAllPorts(system.tol2bus[i//2], system.membus)
             if i%2==0:
                 system.l2[i//2].cpu_side = system.tol2bus[i//2].master
-                system.l2[i//2].mem_side = system.tol3bus.slave
+                if options.l3cache:
+                    system.l2[i//2].mem_side = system.tol3bus.slave
+                else:
+                    system.l2[i//2].mem_side = system.membus.slave
         elif options.external_memory_system:
             system.cpu[i].connectUncachedPorts(system.membus)
         else:

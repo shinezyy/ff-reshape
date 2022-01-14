@@ -136,6 +136,15 @@ class BaseIndexingPolicy : public SimObject
     virtual Addr extractTag(const Addr addr) const;
 
     /**
+     * Apply a hash function to calculate address set.
+     *
+     * @param addr The address to calculate the set for.
+     * @return The set index for given combination of address and way.
+     */
+    virtual uint32_t extractSet(const Addr addr) const;
+
+
+    /**
      * Find all possible entries for insertion and replacement of an address.
      * Should be called immediately before ReplacementPolicy's findVictim()
      * not to break cache resizing.
