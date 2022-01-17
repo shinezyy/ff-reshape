@@ -67,6 +67,7 @@ class L1_ICache(L1Cache):
     cache_level = 1
 
 class L1_DCache(L1Cache):
+    assoc = 8
     write_buffers = 16
     data_latency = 4
     # Luoshan: add params
@@ -74,29 +75,31 @@ class L1_DCache(L1Cache):
 
 class L2Cache(Cache):
     writeback_clean = True
-    assoc = 16
+    assoc = 12
     tag_latency = 12
     data_latency = 12
     response_latency = 5
     mshrs = 32
     tgts_per_mshr = 8
     write_buffers = 8
-    size = '1MB'
-    clusivity='mostly_excl'
+    replacement_policy = RRIPRP()
+    size = '768kB'
+    clusivity='mostly_incl'
 
     prefetcher = BOPPrefetcher()
     # Luoshan: add params
     cache_level = 2
 
 class L3Cache(Cache):
-    assoc = 16
+    assoc = 8
     tag_latency = 20
     data_latency = 20
     response_latency = 20
     mshrs = 20
     tgts_per_mshr = 12
     write_buffers = 8
-    size = '16MB'
+    replacement_policy = BRRIPRP()
+    size = '2MB'
     clusivity='mostly_excl'
     # Luoshan: add params
     cache_level = 3
