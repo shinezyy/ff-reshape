@@ -104,6 +104,7 @@ class BaseTags : public ClockedObject
     /** The data blocks, 1 per cache block. */
     std::unique_ptr<uint8_t[]> dataBlks;
 
+    std::vector<std::set<Addr>> accessTagSets;
     /**
      * TODO: It would be good if these stats were acquired after warmup.
      */
@@ -155,6 +156,9 @@ class BaseTags : public ClockedObject
 
         /** Total number of sets accessed in each slice */
         Stats::Vector sliceSetAccesses;
+
+        /** Total number of different tags in sets accessed in each slice */
+        Stats::Vector sliceSetAccessUnique;
 
         /** Number of tags consulted over all accesses. */
         Stats::Scalar tagAccesses;
