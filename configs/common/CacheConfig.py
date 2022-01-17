@@ -113,6 +113,10 @@ def _get_cache_opts(level, options):
         opts['tag_latency'] = getattr(options, latency_attr)
         opts['data_latency'] = getattr(options, latency_attr)
 
+    waymasks_attr = '{}_waymasks'.format(level)
+    if hasattr(options, waymasks_attr):
+        opts['waymasks'] = getattr(options, waymasks_attr)
+
     return opts
 
 def config_cache(options, system):
@@ -266,7 +270,7 @@ def config_cache(options, system):
             system.cpu[i].connectAllPorts(system.tol2bus[i//2], system.membus)
             if i%2==0:
                 system.l2[i//2].cpu_side = system.tol2bus[i//2].master
-                if options.l3cache:
+                if options.l3_cache:
                     system.l2[i//2].mem_side = system.tol3bus.slave
                 else:
                     system.l2[i//2].mem_side = system.membus.slave
