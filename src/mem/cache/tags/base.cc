@@ -66,6 +66,7 @@ BaseTags::BaseTags(const Params &p)
       warmupBound((p.warmup_percentage/100.0) * (p.size / p.block_size)),
       warmedUp(false), numBlocks(p.size / p.block_size),
       dataBlks(new uint8_t[p.size]), // Allocate data storage in one big chunk
+      accessTagSets(p.num_slices),
       stats(*this)
 {
     registerExitCallback([this]() { cleanupRefs(); });
@@ -197,6 +198,12 @@ BaseTags::computeStats()
     }
 
     forEachBlk([this](CacheBlk &blk) { computeStatsVisitor(blk); });
+
+    for (size_t i = 0; i < num_slices; i++)
+    {
+        stats.sliceSetAccessUnique[i] = accessTagSets[i].size();
+        accessTagSets[i].clear();
+    }
 }
 
 std::string
@@ -241,6 +248,8 @@ BaseTags::BaseTagStats::BaseTagStats(BaseTags &_tags)
                       "Percentage of cache occupancy per task id"),
     sliceSetAccesses(this, "slice_set_accesses",
                 "Total number of sets accessed in a slice"),
+    sliceSetAccessUnique(this, "slice_set_accesses_unique",
+                "Total number of unique tag&set access in a slice"),
     tagAccesses(this, "tag_accesses", "Number of tag accesses"),
     dataAccesses(this, "data_accesses", "Number of data accesses")
 {
@@ -282,8 +291,8 @@ BaseTags::BaseTagStats::regStats()
         .flags(nozero | nonan)
         ;
 
-    // TODO: fix it as a parameter afterwards
-    sliceSetAccesses.init(16).flags(nozero);
+    sliceSetAccesses.init(tags.num_slices);
+    sliceSetAccessUnique.init(tags.num_slices);
 
     percentOccsTaskId.flags(nozero);
 
