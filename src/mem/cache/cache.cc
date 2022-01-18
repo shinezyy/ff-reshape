@@ -499,20 +499,29 @@ Cache::recvTimingReq(PacketPtr pkt)
         }else{
             //fprintf(stderr,"use tokens out, bucket %d\n",bucket_num);
         }
+        /* send all pkt in cross_queue out */
         if (!cross_queue.empty()){
-            PacketPtr cross_pkt = cross_queue.front();
-            BaseCache::recvTimingReq(cross_pkt);
-            cross_queue.pop();
+            send_cross_pkts();
         }
     }else{
         BaseCache::recvTimingReq(pkt);
     }
 }
 
+void Cache::send_cross_pkts()
+{
+    while (!cross_queue.empty()){
+        PacketPtr cross_pkt = cross_queue.front();
+        BaseCache::recvTimingReq(cross_pkt);
+        cross_queue.pop();
+    }
+}
+
 void
-Cache::sendOrderedReq(PacketPtr pkt)
-{ // Luoshan: for BaseCache::recvTimingReq
-    BaseCache::recvTimingReq(pkt);
+Cache::sendOrderedReqs()
+{
+    //em->reschedule(sendPktEvent, curTick()+1);
+    send_cross_pkts();
 }
 
 PacketPtr

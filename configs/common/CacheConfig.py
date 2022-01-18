@@ -102,9 +102,9 @@ def _get_cache_opts(level, options):
     if hasattr(options, prefetcher_attr):
         opts['prefetcher'] = _get_hwp(getattr(options, prefetcher_attr))
 
-    num_cpus_attr = 'num_cpus'
-    if hasattr(options, num_cpus_attr):
-        opts['num_cpus'] = getattr(options, num_cpus_attr)
+    #num_cpus_attr = 'num_cpus'
+    #if hasattr(options, num_cpus_attr):
+    #    opts['num_cpus'] = getattr(options, num_cpus_attr)
 
     return opts
 

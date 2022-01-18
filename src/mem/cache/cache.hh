@@ -79,10 +79,11 @@ class Cache : public BaseCache
     std::unordered_set<RequestPtr> outstandingSnoop;
 
     /* Luoshan: Add tokenbucket here */
-    static const int num_core = 5;
+    static const int num_core = 4;
     Token_Bucket *buckets[num_core];
     /* Luoshan: Add a cross queue for pkt from multi-buckets to cache */
     cross_queue_t cross_queue;
+    void send_cross_pkts();                  // sending all pkts in cross_queue
 
   protected:
     /**
@@ -178,7 +179,7 @@ class Cache : public BaseCache
      * @return True if the port is waiting for a retry
      */
     bool sendMSHRQueuePacket(MSHR* mshr) override;
-    void sendOrderedReq(PacketPtr pkt);
+    void sendOrderedReqs();
 };
 
 #endif // __MEM_CACHE_CACHE_HH__

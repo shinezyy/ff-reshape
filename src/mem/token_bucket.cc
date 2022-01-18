@@ -29,9 +29,7 @@ void Token_Bucket::update_tokens(){
             cross_queuePtr->push(req->pkt);
         }
         if (!cross_queuePtr->empty()){
-            PacketPtr cross_pkt = cross_queuePtr->front();
-            parent_cache->sendOrderedReq(cross_pkt);
-            cross_queuePtr->pop();
+            parent_cache->sendOrderedReqs();
         }
     }
     em->reschedule(updateTokenEvent, curTick()+freq, true);
