@@ -72,10 +72,10 @@ Cache::Cache(const CacheParams &p)
     assert(p.tags);
     assert(p.replacement_policy);
     /* Luoshan: initialize token buckets */
-    int init_size = 60, init_freq = 10000000, init_inc = 2;
+    int init_size = 10000, init_freq = 10000, init_inc = 50;
     for (int i = 0; i < num_core; i++){
-        //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, p.cache_level!=3, &cross_queue, this);
-        buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, true, &cross_queue, this);
+        buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, p.cache_level!=2, &cross_queue, this);
+        //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, true, &cross_queue, this);
         //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, false, &cross_queue, this);
     }
 }
@@ -499,20 +499,29 @@ Cache::recvTimingReq(PacketPtr pkt)
         }else{
             //fprintf(stderr,"use tokens out, bucket %d\n",bucket_num);
         }
+        /* send all pkt in cross_queue out */
         if (!cross_queue.empty()){
-            PacketPtr cross_pkt = cross_queue.front();
-            BaseCache::recvTimingReq(cross_pkt);
-            cross_queue.pop();
+            send_cross_pkts();
         }
     }else{
         BaseCache::recvTimingReq(pkt);
     }
 }
 
+void Cache::send_cross_pkts()
+{
+    while (!cross_queue.empty()){
+        PacketPtr cross_pkt = cross_queue.front();
+        BaseCache::recvTimingReq(cross_pkt);
+        cross_queue.pop();
+    }
+}
+
 void
-Cache::sendOrderedReq(PacketPtr pkt)
-{ // Luoshan: for BaseCache::recvTimingReq
-    BaseCache::recvTimingReq(pkt);
+Cache::sendOrderedReqs()
+{
+    //em->reschedule(sendPktEvent, curTick()+1);
+    send_cross_pkts();
 }
 
 PacketPtr

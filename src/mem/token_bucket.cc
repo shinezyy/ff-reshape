@@ -14,7 +14,7 @@ Token_Bucket::Token_Bucket(EventManager *_em, int _size, int _freq, int _inc, bo
       cross_queuePtr(cross_queuePtr), parent_cache(parent_cache)
 {
     assert(size >= inc && "inc should not be greater than size");
-    em->schedule(updateTokenEvent, curTick()+freq);
+    em->schedule(updateTokenEvent, curTick() + freq); //cyclesToTicks(Cycles(freq))
 }
 
 // when cycle == freq, add tokens
@@ -29,12 +29,10 @@ void Token_Bucket::update_tokens(){
             cross_queuePtr->push(req->pkt);
         }
         if (!cross_queuePtr->empty()){
-            PacketPtr cross_pkt = cross_queuePtr->front();
-            parent_cache->sendOrderedReq(cross_pkt);
-            cross_queuePtr->pop();
+            parent_cache->sendOrderedReqs();
         }
     }
-    em->reschedule(updateTokenEvent, curTick()+freq, true);
+    em->reschedule(updateTokenEvent, curTick()+freq, true);//cyclesToTicks
 }
 
 // fetch one req from waiting queue
