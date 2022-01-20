@@ -72,10 +72,10 @@ Cache::Cache(const CacheParams &p)
     assert(p.tags);
     assert(p.replacement_policy);
     /* Luoshan: initialize token buckets */
-    int init_size = 60, init_freq = 10000000, init_inc = 2;
+    int init_size = 10000, init_freq = 10000, init_inc = 50;
     for (int i = 0; i < num_core; i++){
-        //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, p.cache_level!=3, &cross_queue, this);
-        buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, true, &cross_queue, this);
+        buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, p.cache_level!=2, &cross_queue, this);
+        //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, true, &cross_queue, this);
         //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, false, &cross_queue, this);
     }
 }

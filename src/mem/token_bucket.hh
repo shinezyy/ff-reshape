@@ -9,6 +9,7 @@
 //event? schedule?
 #include "mem/cache/cache.hh"
 #include "sim/eventq.hh"
+//#include "sim/clocked_object.hh"
 
 class OrderedReq {
 public:
