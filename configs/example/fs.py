@@ -181,9 +181,17 @@ def build_test_system(np):
             if np > 1:
                 fatal("SimPoint generation not supported with more than one CPUs")
 
+        if args.depcheck:
+            if not ObjectList.is_noncaching_cpu(TestCPUClass):
+                fatal("Depcheck should be done with atomic cpu")
+            if np > 1:
+                fatal("Depcheck not supported with more than one CPUs")
+
         for i in range(np):
             if args.simpoint_profile:
                 test_sys.cpu[i].addSimPointProbe(args.simpoint_interval)
+            if args.depcheck:
+                test_sys.cpu[i].addDepCheckProbe(args.depcheck_group_size)
             if args.checker:
                 test_sys.cpu[i].addCheckerCpu()
             if not ObjectList.is_kvm_cpu(TestCPUClass):

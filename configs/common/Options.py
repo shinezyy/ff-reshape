@@ -333,6 +333,11 @@ def addCommonOptions(parser):
                         help="restore from a simpoint checkpoint taken with " +
                         "--take-simpoint-checkpoints")
 
+    parser.add_argument("--depcheck", action="store_true",
+                        help="Group based dependency check")
+    parser.add_argument("--depcheck-group-size", type=int, default=64,
+                        help="Depcheck group size in num of instructions")
+
     # Checkpointing options
     # Note that performing checkpointing via python script files will override
     # checkpoint instructions built into binaries.

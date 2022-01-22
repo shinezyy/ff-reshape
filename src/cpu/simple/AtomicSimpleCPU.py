@@ -39,6 +39,7 @@
 from m5.params import *
 from m5.objects.BaseSimpleCPU import BaseSimpleCPU
 from m5.objects.SimPoint import SimPoint
+from m5.objects.DepCheck import DepCheck
 
 class AtomicSimpleCPU(BaseSimpleCPU):
     """Simple CPU model executing a configurable number of
@@ -65,3 +66,8 @@ class AtomicSimpleCPU(BaseSimpleCPU):
         simpoint = SimPoint()
         simpoint.interval = interval
         self.probeListener = simpoint
+
+    def addDepCheckProbe(self, groupSize):
+        depcheck = DepCheck()
+        depcheck.groupSize = groupSize
+        self.probeListener = depcheck

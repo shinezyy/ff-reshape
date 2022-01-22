@@ -31,3 +31,7 @@ Import('*')
 if 'AtomicSimpleCPU' in env['CPU_MODELS']:
     SimObject('SimPoint.py', sim_objects=['SimPoint'])
     Source('simpoint.cc')
+
+    SimObject('DepCheck.py', sim_objects=['DepCheck'])
+    Source('depcheck.cc')
+    DebugFlag('DepCheck')

@@ -136,6 +136,11 @@ cpu-simple:
     - Jason Lowe-Power <jason@lowepower.com>
     - Gabe Black <gabe.black@gmail.com>
 
+dep-check:
+  status: maintained
+  maintainers:
+    - Boyang Han <yqszxx@gmail.com>
+
 dev:
   status: maintained
   maintainers:
