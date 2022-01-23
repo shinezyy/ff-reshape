@@ -57,7 +57,8 @@ void DepCheck::profile(const std::pair<SimpleThread *, StaticInstPtr> &p) {
     for (int i = 0; i < numSrcRegs; i++)  {
         RegId r = inst->srcRegIdx(i);
 
-        if (r.classValue() == IntRegClass || r.classValue() == FloatRegClass) {
+        if ((r.classValue() == IntRegClass && r.index() != 0) ||
+            r.classValue() == FloatRegClass) {
             hasDependencies = true;
 
             int rid = r.index();
