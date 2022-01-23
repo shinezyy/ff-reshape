@@ -48,6 +48,12 @@ void DepCheck::profile(const std::pair<SimpleThread *, StaticInstPtr> &p) {
     bool hasDependencies = false;
     bool hasIntraDep = true;
 
+    const uint64_t currentGroup = instCount / groupSize;
+
+    if (instCount % groupSize == 0) { // first inst in group
+        accessedInGroup.clear();
+    }
+
     for (int i = 0; i < numSrcRegs; i++)  {
         RegId r = inst->srcRegIdx(i);
 
@@ -61,10 +67,11 @@ void DepCheck::profile(const std::pair<SimpleThread *, StaticInstPtr> &p) {
 
             uint64_t producer = lastProducer[rid];
             uint64_t producerGroup = producer / groupSize;
-            uint64_t currentGroup = instCount / groupSize;
 
-            if (producerGroup != currentGroup) {
+            if (accessedInGroup.count(rid) == 0 &&
+                producerGroup != currentGroup) {
                 hasIntraDep = false;
+                accessedInGroup.insert(rid);
             }
         }
     }

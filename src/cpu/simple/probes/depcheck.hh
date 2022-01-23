@@ -5,6 +5,8 @@
 #ifndef GEM5_DEPCHECK_HH
 #define GEM5_DEPCHECK_HH
 
+#include <set>
+
 #include "base/statistics.hh"
 #include "cpu/simple_thread.hh"
 #include "params/DepCheck.hh"
@@ -41,6 +43,8 @@ private:
     uint64_t instCount = 0;
 
     uint64_t lastProducer[64] {};  // 32 int + 32 fp
+
+    std::set<int> accessedInGroup {};
 };
 
 }
