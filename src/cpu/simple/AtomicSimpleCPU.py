@@ -67,7 +67,8 @@ class AtomicSimpleCPU(BaseSimpleCPU):
         simpoint.interval = interval
         self.probeListener = simpoint
 
-    def addDepCheckProbe(self, groupSize):
+    def addDepCheckProbe(self, groupSize, archRegCommitPeriod):
         depcheck = DepCheck()
         depcheck.groupSize = groupSize
+        depcheck.archRegCommitPeriod = archRegCommitPeriod
         self.probeListener = depcheck

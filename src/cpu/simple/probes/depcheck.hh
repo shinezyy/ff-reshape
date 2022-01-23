@@ -29,6 +29,10 @@ public:
 private:
     uint32_t groupSize;
 
+    uint32_t archRegCommitPeriod; // count in groups
+
+    static const uint64_t ARCH_REG = 0xFFFF'FFFF'FFFF'FFFFULL;
+
     struct DepCheckStats : public statistics::Group
     {
         DepCheckStats(statistics::Group *parent);

@@ -9,3 +9,5 @@ class DepCheck(ProbeListenerObject):
     cxx_class = 'gem5::DepCheck'
 
     groupSize = Param.UInt32(64, "Group Size (insts)")
+    archRegCommitPeriod = Param.UInt32(4, "Period in which arch reg "
+                                          "is committed (groups)")

@@ -337,6 +337,9 @@ def addCommonOptions(parser):
                         help="Group based dependency check")
     parser.add_argument("--depcheck-group-size", type=int, default=64,
                         help="Depcheck group size in num of instructions")
+    parser.add_argument("--depcheck-commit-period", type=int, default=4,
+                        help="Period in which arch reg is committed "
+                             "in num of groups")
 
     # Checkpointing options
     # Note that performing checkpointing via python script files will override

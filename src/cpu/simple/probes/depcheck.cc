@@ -24,8 +24,13 @@ DepCheck::DepCheckStats::DepCheckStats(statistics::Group *parent)
 DepCheck::DepCheck(const DepCheckParams &p)
       : ProbeListenerObject(p),
         groupSize(p.groupSize),
+        archRegCommitPeriod(p.archRegCommitPeriod),
         stats(this)
 {
+    // initially all data in arch reg
+    for (unsigned long & i : lastProducer) {
+        i = ARCH_REG;
+    }
 }
 
 void DepCheck::init() {
@@ -52,6 +57,12 @@ void DepCheck::profile(const std::pair<SimpleThread *, StaticInstPtr> &p) {
 
     if (instCount % groupSize == 0) { // first inst in group
         accessedInGroup.clear();
+        if (currentGroup % archRegCommitPeriod == 0) {
+            // time to commit back to arch reg
+            for (unsigned long & i : lastProducer) {
+                i = ARCH_REG;
+            }
+        }
     }
 
     for (int i = 0; i < numSrcRegs; i++)  {
@@ -59,7 +70,6 @@ void DepCheck::profile(const std::pair<SimpleThread *, StaticInstPtr> &p) {
 
         if ((r.classValue() == IntRegClass && r.index() != 0) ||
             r.classValue() == FloatRegClass) {
-            hasDependencies = true;
 
             int rid = r.index();
             if (r.classValue() ==  FloatRegClass) {
@@ -67,6 +77,11 @@ void DepCheck::profile(const std::pair<SimpleThread *, StaticInstPtr> &p) {
             }
 
             uint64_t producer = lastProducer[rid];
+
+            // arch reg is not a dependency
+            if (producer == ARCH_REG) continue;
+
+            hasDependencies = true;
             uint64_t producerGroup = producer / groupSize;
 
             if (accessedInGroup.count(rid) == 0 &&

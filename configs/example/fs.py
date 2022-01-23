@@ -191,7 +191,8 @@ def build_test_system(np):
             if args.simpoint_profile:
                 test_sys.cpu[i].addSimPointProbe(args.simpoint_interval)
             if args.depcheck:
-                test_sys.cpu[i].addDepCheckProbe(args.depcheck_group_size)
+                test_sys.cpu[i].addDepCheckProbe(args.depcheck_group_size,
+                                                 args.depcheck_commit_period)
             if args.checker:
                 test_sys.cpu[i].addCheckerCpu()
             if not ObjectList.is_kvm_cpu(TestCPUClass):
