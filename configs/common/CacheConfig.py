@@ -269,6 +269,7 @@ def config_cache(options, system):
         if options.l2cache:
             system.cpu[i].connectAllPorts(system.tol2bus[i//2], system.membus)
             if i%2==0:
+                system.l2[i//2].tags.num_slices = options.l2_slices
                 system.l2[i//2].cpu_side = system.tol2bus[i//2].master
                 if options.l3_cache:
                     system.l2[i//2].mem_side = system.tol3bus.slave
