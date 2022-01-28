@@ -138,6 +138,7 @@ def addNoISAOptions(parser):
     parser.add_option("--l2_latency", type="int", default=5)
     parser.add_option("--l3_latency", type="int", default=7)
     parser.add_option("--l3_complex", action="store_true")
+    parser.add_option("--l2_slices", type="int", default=1)
     parser.add_option("--l3_slices", type="int", default=4)
     parser.add_option("--cacheline_size", type="int", default=64)
 
