@@ -86,7 +86,7 @@ class L2Cache(Cache):
     size = '768kB'
     clusivity='mostly_incl'
 
-    prefetcher = BOPPrefetcher()
+    # prefetcher = BOPPrefetcher()
     # Luoshan: add params
     cache_level = 2
 
