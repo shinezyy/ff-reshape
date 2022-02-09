@@ -48,6 +48,7 @@
 #include "cpu/o3/loop_buffer.hh"
 #include "cpu/pc_event.hh"
 #include "cpu/pred/bpred_unit.hh"
+#include "cpu/pred/ff_bpred_unit.hh"
 #include "cpu/timebuf.hh"
 #include "cpu/translation.hh"
 #include "enums/SMTFetchPolicy.hh"
@@ -379,6 +380,9 @@ class DefaultFetch
 
     RequestPort &getInstPort() { return icachePort; }
 
+    /** Oracle BP for FF */
+    inline FFBPredUnit *getFFBranchPred() const { return ffBranchPred; }
+
   private:
     DynInstPtr buildInst(ThreadID tid, StaticInstPtr staticInst,
                          StaticInstPtr curMacroop, TheISA::PCState thisPC,
@@ -431,6 +435,8 @@ class DefaultFetch
 
     /** BPredUnit. */
     BPredUnit *branchPred;
+    /** BPredUnit for FF */
+    FFBPredUnit *ffBranchPred;
 
     TheISA::PCState pc[Impl::MaxThreads];
 

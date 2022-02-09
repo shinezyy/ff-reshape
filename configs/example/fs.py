@@ -313,6 +313,8 @@ Options.addCommonOptions(parser)
 Options.addFSOptions(parser)
 SSOptions.addO3Options(parser)
 
+parser.add_option("--use-ff-oracle-bp", action='store_true')
+
 # Add the ruby specific and protocol specific options
 if '--ruby' in sys.argv:
     Ruby.define_options(parser)
@@ -362,6 +364,12 @@ if options.generic_rv_cpt is not None:
         test_sys.gcpt_restorer_file = ""
     else:
         test_sys.gcpt_restorer_file = options.gcpt_restorer
+
+if options.use_ff_oracle_bp:
+    assert(options.generic_rv_cpt is not None)
+    assert(options.cpu_type == 'DerivO3CPU') # FIXME later
+    for (i, cpu) in enumerate(test_sys.cpu):
+        cpu.ffBranchPred = m5.objects.FFOracleBP()
 
 if len(bm) == 2:
     drive_sys = build_drive_system(np)

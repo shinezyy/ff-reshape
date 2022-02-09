@@ -128,7 +128,8 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
       system(params.system),
       lastRunningCycle(curCycle()),
       cpuStats(this),
-      enable_nemu_diff(params.nemuDiff)
+      enable_nemu_diff(params.nemuDiff),
+      ffBPredInited(false)
 {
     fatal_if(FullSystem && params.numThreads > 1,
             "SMT is not supported in O3 in full system mode currently.");
@@ -380,7 +381,10 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
     else {
         hasCommit = true;
     }
-
+    if (fetch.getFFBranchPred()) {
+        fetch.getFFBranchPred()->initNEMU(params);
+    }
+    cpuID = params.cpu_id;
 }
 
 template <class Impl>
@@ -523,6 +527,12 @@ FullO3CPU<Impl>::tick()
     updateCycleCounters(BaseCPU::CPU_STATE_ON);
 
 //    activity = false;
+
+    if (fetch.getFFBranchPred() && !ffBPredInited) {
+        ffBPredInited = true;
+        readGem5Regs();
+        fetch.getFFBranchPred()->syncArchState(0x80000000u, pmemStart+pmemSize*cpuID, pmemSize, gem5_reg);
+    }
 
     //Tick each of the stages
     fetch.tick();

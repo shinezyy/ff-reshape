@@ -800,6 +800,8 @@ class FullO3CPU : public BaseO3CPU
     bool scFenceInFlight{false};
     unsigned scFailed{0};
     unsigned totalSCFailures{0};
+    bool ffBPredInited;
+    int cpuID;
 };
 
 #endif // __CPU_O3_CPU_HH__
