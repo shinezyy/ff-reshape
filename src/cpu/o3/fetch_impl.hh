@@ -1059,13 +1059,16 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
                               fromDecode->decodeInfo[tid].nextPC,
                               fromDecode->decodeInfo[tid].branchTaken,
                               tid);
+            if (ffBranchPred)
+                ffBranchPred->squash(fromDecode->decodeInfo[tid].doneSeqNum,
+                                fromDecode->decodeInfo[tid].nextPC, // FIXME
+                                tid);
         } else {
             branchPred->squash(fromDecode->decodeInfo[tid].doneSeqNum,
                               tid);
-        }
-        if (ffBranchPred) {
-            ffBranchPred->squash(fromDecode->decodeInfo[tid].doneSeqNum,
-                              tid);
+            if (ffBranchPred)
+                ffBranchPred->squash(fromDecode->decodeInfo[tid].doneSeqNum,
+                                tid);
         }
 
         if (fetchStatus[tid] != Squashing) {
