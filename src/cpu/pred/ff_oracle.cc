@@ -22,11 +22,12 @@ FFOracleBP::FFOracleBP(const FFOracleBPParams &params)
     : FFBPredUnit(params),
         numLookAhead(params.numLookAhead),
         proxy(nullptr),
-        oracleIID(numLookAhead - 2)
+        oracleIID(0),
+        inited(false)
 {
-    DPRINTF(FFOracleBP, "FFOracleBP: look ahead %u insts\n", numLookAhead);
-    state.commit_iid = numLookAhead - 2;
-    state.front_iid = numLookAhead - 2;
+    DPRINTF(FFOracleBP, "FFOracleBP with %u look-ahead insts\n", numLookAhead);
+    state.commit_iid = numLookAhead - 1;
+    state.front_iid = numLookAhead - 1;
     reset();
 }
 
@@ -40,18 +41,23 @@ void FFOracleBP::initNEMU(const DerivO3CPUParams &params)
     assert(!proxy);
     diff.nemu_reg = nemu_reg;
     diff.cpu_id = params.cpu_id;
-    proxy = new FFOracleNemuProxy(params.cpu_id,true);
+    // Use a different TID for each NEMU instance,
+    // because of the fixed virtual address mapping for pmem inside NEMU.
+    proxy = new FFOracleNemuProxy(params.numThreads + params.cpu_id,true);
     diff.dynamic_config.ignore_illegal_mem_access = true; // FIXME
     diff.dynamic_config.debug_difftest = false;
     proxy->update_config(&diff.dynamic_config);
 }
 
-void FFOracleBP::syncArchState(paddr_t pmemAddr, void *pmemPtr, size_t pmemSize, void *regs)
+void FFOracleBP::syncArchState(Addr resetPC, paddr_t pmemAddr, void *pmemPtr, size_t pmemSize, void *regs)
 {
     DPRINTF(FFOracleBP, "Will start memcpy to NEMU\n");
     proxy->memcpy(pmemAddr, pmemStart+pmemSize*diff.cpu_id, pmemSize, DUT_TO_REF);
     DPRINTF(FFOracleBP, "Will start regcpy to NEMU\n");
+    diff.nemu_this_pc = resetPC;
+    ((uint64_t*)regs)[DIFFTEST_THIS_PC] = resetPC;
     proxy->regcpy(regs, DUT_TO_REF);
+    DPRINTF(FFOracleBP, "reset PC = %#x.\n", resetPC);
 }
 
 Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
@@ -60,12 +66,13 @@ Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
     auto hist = new BPState(state);
     bp_history = hist;
 
-    DPRINTF(FFOracleBP, "+ lookup PC=%x iid=%u\n", instPC, hist->front_iid);
-
     advanceFront();
     syncFront();
 
-    hist->pred_nextK_PC = frontPointer->npc;
+    hist->pred_nextK_PC = frontPointer->pc;
+
+    DPRINTF(FFOracleBP, "+ lookup PC=%#x iid=%u next-%u PC=%#x\n",
+                        instPC, hist->front_iid, numLookAhead, hist->pred_nextK_PC);
     return hist->pred_nextK_PC;
 }
 
@@ -99,6 +106,9 @@ void FFOracleBP::update(ThreadID tid, Addr instPC,
 void FFOracleBP::squash(ThreadID tid, void *bp_history)
 {
     auto history_state = static_cast<BPState *>(bp_history);
+
+    DPRINTF(FFOracleBP, "x squash iid=%lu\n", history_state->front_iid);
+
     if (history_state->front_iid < state.front_iid) {
         state.front_iid = history_state->front_iid;
 
@@ -125,28 +135,18 @@ void FFOracleBP::squash(ThreadID tid, void *bp_history)
     delete history_state;
 }
 
-FFOracleBP::EntryIter FFOracleBP::lookAheadInsts()
+void FFOracleBP::lookAheadInsts(unsigned len)
 {
-    EntryIter front;
-    bool init = (oracleIID == numLookAhead - 2);
-    assert(!init || orderedOracleEntries.empty());
-    unsigned feedSize = (init ? numLookAhead * 2 : numLookAhead);
+    DPRINTF(FFOracleBP, "Start feeding %i insts.\n", len);
+    for (unsigned i = 0; i < len; i++) {
+        DPRINTF(FFOracleBP, "Got PC: %#x\n", diff.nemu_this_pc);
+        orderedOracleEntries.push_front(OracleEntry{oracleIID++, diff.nemu_this_pc});
 
-    DPRINTF(FFOracleBP, "Start feeding %i insts.\n", feedSize);
-    for (unsigned i = 0; i < feedSize; i++) {
         proxy->exec(1);
         proxy->regcpy(diff.nemu_reg,REF_TO_DIFFTEST);
-        uint64_t npc = diff.nemu_reg[DIFFTEST_THIS_PC];
-        DPRINTF(FFOracleBP, "Got NPC: %#x.\n", npc);
-
-        if (!init || i>=numLookAhead) {
-            orderedOracleEntries.push_front(OracleEntry{++oracleIID, npc});
-            if (i==0 || i==numLookAhead)
-                front = orderedOracleEntries.begin();
-        }
+        diff.nemu_this_pc = diff.nemu_reg[DIFFTEST_THIS_PC];
     }
     assert(orderedOracleEntries.size() < 3000);
-    return front;
 }
 
 void FFOracleBP::advanceFront() {
@@ -156,15 +156,23 @@ void FFOracleBP::advanceFront() {
 void FFOracleBP::syncFront() {
     DPRINTF(FFOracleBP, "Oracle table size: %lu.\n", orderedOracleEntries.size());
 
+    if (!inited) {
+        lookAheadInsts(numLookAhead);
+        orderedOracleEntries.clear();
+        inited = true;
+    }
+
     if (orderedOracleEntries.size() == 0) {
-        frontPointer = lookAheadInsts();
+        lookAheadInsts(1);
+        frontPointer = orderedOracleEntries.begin();
+        assert(state.front_iid == frontPointer->iid);
         dumpState();
 
     } else if (state.front_iid > orderedOracleEntries.front().iid) {
         // younger, must feed more
         DPRINTF(FFOracleBP, "before state.front_iid=%lu frontPointer->iid=%lu.\n", state.front_iid, frontPointer->iid);
-        frontPointer = lookAheadInsts();
-        DPRINTF(FFOracleBP, "state.front_iid=%lu frontPointer->iid=%lu.\n", state.front_iid, frontPointer->iid);
+        lookAheadInsts(1);
+        frontPointer = orderedOracleEntries.begin();
         assert(state.front_iid == frontPointer->iid);
         dumpState();
 
@@ -269,7 +277,7 @@ FFOracleNemuProxy::FFOracleNemuProxy(int coreid) {
 FFOracleNemuProxy::FFOracleNemuProxy(int tid, bool nohype) {
   assert(nohype);
   void *handle = dlmopen(LM_ID_NEWLM, REF_SO, RTLD_LAZY | RTLD_DEEPBIND);
-  puts("Using " REF_SO " for difftest");
+  puts("Using " REF_SO " for oracle BP");
   if (!handle){
     printf("%s\n", dlerror());
     assert(0);

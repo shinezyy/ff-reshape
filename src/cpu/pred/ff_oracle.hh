@@ -39,7 +39,7 @@ public:
 
     void squash(ThreadID tid, void *bp_history) override;
 
-    void syncArchState(uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, void *regs) override;
+    void syncArchState(Addr resetPC, uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, void *regs) override;
 
     void initNEMU(const DerivO3CPUParams &params) override;
 
@@ -53,10 +53,11 @@ public:
     DiffState diff;
     FFOracleNemuProxy *proxy;
     uint64_t oracleIID;
+    bool inited;
 
     struct OracleEntry {
         uint64_t iid;
-        Addr npc;
+        Addr pc;
     };
     std::list<OracleEntry> orderedOracleEntries;
 
@@ -72,7 +73,7 @@ public:
 
 private:
     void reset();
-    EntryIter lookAheadInsts();
+    void lookAheadInsts(unsigned len);
     void advanceFront();
     void syncFront();
     void dumpState();

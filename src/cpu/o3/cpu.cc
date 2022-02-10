@@ -531,7 +531,9 @@ FullO3CPU<Impl>::tick()
     if (fetch.getFFBranchPred() && !ffBPredInited) {
         ffBPredInited = true;
         readGem5Regs();
-        fetch.getFFBranchPred()->syncArchState(0x80000000u, pmemStart+pmemSize*cpuID, pmemSize, gem5_reg);
+        // TODO: how about MT?
+        fetch.getFFBranchPred()->syncArchState(pcState(0).instAddr(),
+                0x80000000u, pmemStart+pmemSize*cpuID, pmemSize, gem5_reg);
     }
 
     //Tick each of the stages

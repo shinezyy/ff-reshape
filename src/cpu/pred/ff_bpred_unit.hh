@@ -136,7 +136,7 @@ class FFBPredUnit : public SimObject
                    void *bp_history, bool squashed,
                    const StaticInstPtr &inst, Addr corr_nextK_PC) = 0;
 
-    virtual void syncArchState(uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, void *regs) {}
+    virtual void syncArchState(Addr resetPC, uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, void *regs) {}
 
     virtual void initNEMU(const DerivO3CPUParams &params) {}
 
