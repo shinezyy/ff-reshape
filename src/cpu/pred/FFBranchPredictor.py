@@ -9,10 +9,9 @@ class FFBranchPredictor(SimObject):
     abstract = True
 
     numThreads = Param.Unsigned(Parent.numThreads, "Number of threads")
+    numLookAhead = Param.Unsigned(64, "Number of look-ahead insts")
 
 class FFOracleBP(FFBranchPredictor):
     type = 'FFOracleBP'
     cxx_class = 'FFOracleBP'
     cxx_header = "cpu/pred/ff_oracle.hh"
-
-    numLookAhead = Param.Unsigned(64, "Number of look-ahead insts")

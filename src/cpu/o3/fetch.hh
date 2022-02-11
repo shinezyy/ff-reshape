@@ -437,6 +437,7 @@ class DefaultFetch
     BPredUnit *branchPred;
     /** BPredUnit for FF */
     FFBPredUnit *ffBranchPred;
+    FFBPAdapter_4_O3CPU *ffBPAdapter;
 
     TheISA::PCState pc[Impl::MaxThreads];
 

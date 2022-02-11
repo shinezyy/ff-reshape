@@ -25,6 +25,7 @@ FFOracleBP::FFOracleBP(const FFOracleBPParams &params)
         oracleIID(0),
         inited(false)
 {
+    assert(numLookAhead >= 1);
     DPRINTF(FFOracleBP, "FFOracleBP with %u look-ahead insts\n", numLookAhead);
     state.commit_iid = numLookAhead - 1;
     state.front_iid = numLookAhead - 1;
@@ -85,7 +86,8 @@ void FFOracleBP::update(ThreadID tid, Addr instPC,
     DPRINTF(FFOracleBP, "- update%s PC=%x\n", squashed ? " squashed" : " ", instPC);
 
     if (squashed) {
-        // Do nothing
+        DPRINTF(FFOracleBP, "update squash: ");
+        squash(tid, bp_history);
     } else {
         DPRINTF(FFOracleBP, "Committing iid %u\n", history_state->front_iid + 1);
         DPRINTF(FFOracleBP, "Back iid = %u\n",
@@ -139,14 +141,15 @@ void FFOracleBP::lookAheadInsts(unsigned len)
 {
     DPRINTF(FFOracleBP, "Start feeding %i insts.\n", len);
     for (unsigned i = 0; i < len; i++) {
-        DPRINTF(FFOracleBP, "Got PC: %#x\n", diff.nemu_this_pc);
-        orderedOracleEntries.push_front(OracleEntry{oracleIID++, diff.nemu_this_pc});
+        DPRINTF(FFOracleBP, "Got PC [sn%lu]: %#x\n", oracleIID, diff.nemu_this_pc);
+        orderedOracleEntries.push_front(OracleEntry{oracleIID, diff.nemu_this_pc});
+        oracleIID++;
 
         proxy->exec(1);
         proxy->regcpy(diff.nemu_reg,REF_TO_DIFFTEST);
         diff.nemu_this_pc = diff.nemu_reg[DIFFTEST_THIS_PC];
     }
-    assert(orderedOracleEntries.size() < 3000);
+    assert(orderedOracleEntries.size() < 30000);
 }
 
 void FFOracleBP::advanceFront() {
@@ -154,6 +157,7 @@ void FFOracleBP::advanceFront() {
 }
 
 void FFOracleBP::syncFront() {
+    DPRINTF(FFOracleBP, "syncFront\n");
     DPRINTF(FFOracleBP, "Oracle table size: %lu.\n", orderedOracleEntries.size());
 
     if (!inited) {

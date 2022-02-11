@@ -102,6 +102,9 @@ class FFBPredUnit : public SimObject
 
     void dump();
 
+    inline unsigned getNumThreads() const { return numThreads; }
+    inline unsigned getNumLookAhead() const { return numLookAhead; }
+
     /** Perform sanity checks after a drain. */
     void drainSanityCheck() const;
 
@@ -182,6 +185,8 @@ class FFBPredUnit : public SimObject
     /** Number of the threads for which the branch history is maintained. */
     const unsigned numThreads;
 
+    const unsigned numLookAhead;
+
     /**
      * The per-thread predictor history. This is used to update the predictor
      * as instructions are committed, or restore it to the proper state after
@@ -195,11 +200,59 @@ class FFBPredUnit : public SimObject
 
         Stats::Scalar lookups;
 
-        Stats::Scalar correct;
+        Stats::Scalar incorrect;
 
         Stats::Formula correctRatio;
     } stats;
 
+};
+
+/**
+ * Test/run FF branch predictor on O3 CPU,
+ * while FF branch predictor is originally designed for forwardflow arch...
+ */
+class FFBPAdapter_4_O3CPU {
+public:
+    FFBPAdapter_4_O3CPU(FFBPredUnit *_ffBranchPred);
+
+    void tick();
+    Addr predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
+                 TheISA::PCState &pc, ThreadID tid);
+    void update(const InstSeqNum &done_sn, ThreadID tid);
+    void squash(const InstSeqNum &squashed_sn, ThreadID tid);
+    void squash(const InstSeqNum &squashed_sn,
+                const TheISA::PCState &corrTarget,
+                ThreadID tid);
+
+private:
+    enum HistStatus {
+        Killed = 0,
+        Committed
+    };
+    struct PredictorHistory {
+        PredictorHistory(const InstSeqNum &seq_num, Addr instPC,
+                         Addr _nextK_PC, ThreadID _tid,
+                         const StaticInstPtr & inst)
+            : seqNum(seq_num), pc(instPC),
+              tid(_tid),
+              nextK_PC(_nextK_PC),
+              inst(inst),
+              status(Killed)
+        {}
+        bool operator==(const PredictorHistory &entry) const {
+            return this->seqNum == entry.seqNum;
+        }
+        InstSeqNum seqNum;
+        Addr pc;
+        ThreadID tid;
+        Addr nextK_PC;
+        const StaticInstPtr inst;
+        HistStatus status;
+    };
+    FFBPredUnit *ffBranchPred;
+    unsigned int numLookAhead;
+    typedef std::deque<PredictorHistory> History;
+    std::vector<History> predHist, reslvHist;
 };
 
 #endif // __CPU_PRED_FF_BPRED_UNIT_H

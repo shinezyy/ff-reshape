@@ -1970,6 +1970,10 @@ FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
         //ismmio
         diff.dynamic_config.ignore_illegal_mem_access = true;
         proxy->update_config(&diff.dynamic_config);
+
+        if (fetch.getFFBranchPred())
+            warn("Oracle BP currently not supports MMIO: %s paddr=%#x\n",
+                inst->isStore() ? "write" : "read", inst->physEffAddr);
     }
 
     //difftest step start
