@@ -80,8 +80,6 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
     : fetchPolicy(params.smtFetchPolicy),
       cpu(_cpu),
       branchPred(nullptr),
-      ffBranchPred(nullptr),
-      ffBPAdapter(nullptr),
       decodeToFetchDelay(params.decodeToFetchDelay),
       renameToFetchDelay(params.renameToFetchDelay),
       iewToFetchDelay(params.iewToFetchDelay),
@@ -135,12 +133,6 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
 
     branchPred = params.branchPred;
     lbuf = params.loopBuffer;
-    ffBranchPred = params.ffBranchPred;
-    if (ffBranchPred) {
-        // An adapter is required to run FF BP on O3 CPU,
-        // while FF BP is originally designed for forwardflow arch...
-        ffBPAdapter = new FFBPAdapter_4_O3CPU(ffBranchPred);
-    }
 
     for (ThreadID tid = 0; tid < numThreads; tid++) {
         decoder[tid] = new TheISA::Decoder(
@@ -431,8 +423,6 @@ DefaultFetch<Impl>::drainSanityCheck() const
     }
 
     branchPred->drainSanityCheck();
-    if (ffBranchPred)
-        ffBranchPred->drainSanityCheck();
 }
 
 template <class Impl>
@@ -542,12 +532,6 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     // this function updates it.
     bool predict_taken;
     bool cpc_compressed = nextPC.compressed();
-
-    if (ffBPAdapter) {
-        Addr nextK_PC = ffBPAdapter->predict(inst->staticInst, inst->seqNum,
-                                        nextPC, inst->threadNumber);
-        (void)(nextK_PC);
-    }
 
     if (!inst->isControl()) {
         DPRINTF(Fetch, "Advancing PC from %s", nextPC);
@@ -997,10 +981,6 @@ DefaultFetch<Impl>::tick()
 
     // Reset the number of the instruction we've fetched.
     numInst = 0;
-
-    // Only FF BP adapter needs this.
-    if (ffBPAdapter)
-        ffBPAdapter->tick();
 }
 
 template <class Impl>
@@ -1037,15 +1017,8 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
                               fromCommit->commitInfo[tid].pc,
                               fromCommit->commitInfo[tid].branchTaken,
                               tid);
-            if (ffBPAdapter)
-                ffBPAdapter->squash(fromCommit->commitInfo[tid].doneSeqNum,
-                              fromCommit->commitInfo[tid].pc,
-                              tid);
         } else {
             branchPred->squash(fromCommit->commitInfo[tid].doneSeqNum,
-                              tid);
-            if (ffBPAdapter)
-                ffBPAdapter->squash(fromCommit->commitInfo[tid].doneSeqNum,
                               tid);
         }
 
@@ -1054,8 +1027,6 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
         // Update the branch predictor if it wasn't a squashed instruction
         // that was broadcasted.
         branchPred->update(fromCommit->commitInfo[tid].doneSeqNum, tid);
-        if (ffBPAdapter)
-            ffBPAdapter->update(fromCommit->commitInfo[tid].doneSeqNum, tid);
     }
 
     // Check squash signals from decode.
@@ -1069,16 +1040,9 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
                               fromDecode->decodeInfo[tid].nextPC,
                               fromDecode->decodeInfo[tid].branchTaken,
                               tid);
-            if (ffBPAdapter)
-                ffBPAdapter->squash(fromDecode->decodeInfo[tid].doneSeqNum,
-                                fromDecode->decodeInfo[tid].nextPC,
-                                tid);
         } else {
             branchPred->squash(fromDecode->decodeInfo[tid].doneSeqNum,
                               tid);
-            if (ffBPAdapter)
-                ffBPAdapter->squash(fromDecode->decodeInfo[tid].doneSeqNum,
-                                tid);
         }
 
         if (fetchStatus[tid] != Squashing) {

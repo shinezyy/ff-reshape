@@ -15,3 +15,6 @@ class FFOracleBP(FFBranchPredictor):
     type = 'FFOracleBP'
     cxx_class = 'FFOracleBP'
     cxx_header = "cpu/pred/ff_oracle.hh"
+
+    presetAccuracy = Param.Float(1.0, "Preset accuracy")
+    randNumSeed = Param.Unsigned(0, "Random number seed")

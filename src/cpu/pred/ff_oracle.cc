@@ -9,10 +9,14 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <random>
 
 #include "base/trace.hh"
 #include "cpu/nemu_common.hh"
-#include "debug/FFOracleBP.hh"
+#include "debug/FFOracleBP_lookup.hh"
+#include "debug/FFOracleBP_misc.hh"
+#include "debug/FFOracleBP_squash.hh"
+#include "debug/FFOracleBP_update.hh"
 
 #ifndef REF_SO
 # error Please define REF_SO to the path of NEMU shared object file
@@ -20,13 +24,19 @@
 
 FFOracleBP::FFOracleBP(const FFOracleBPParams &params)
     : FFBPredUnit(params),
-        numLookAhead(params.numLookAhead),
+        numLookAhead(getNumLookAhead()),
+        presetAccuracy(params.presetAccuracy),
         proxy(nullptr),
         oracleIID(0),
-        inited(false)
+        inited(false),
+        randGen(params.randNumSeed),
+        bdGen(params.presetAccuracy)
 {
     assert(numLookAhead >= 1);
-    DPRINTF(FFOracleBP, "FFOracleBP with %u look-ahead insts\n", numLookAhead);
+    assert(0 <= params.presetAccuracy && params.presetAccuracy <= 1);
+    DPRINTF(FFOracleBP_misc, "Look ahead: %u insts. Preset accuracy: %f%%.\n",
+                    numLookAhead,
+                    params.presetAccuracy * 100);
     state.commit_iid = numLookAhead - 1;
     state.front_iid = numLookAhead - 1;
     reset();
@@ -45,23 +55,29 @@ void FFOracleBP::initNEMU(const DerivO3CPUParams &params)
     // Use a different TID for each NEMU instance,
     // because of the fixed virtual address mapping for pmem inside NEMU.
     proxy = new FFOracleNemuProxy(params.numThreads + params.cpu_id,true);
-    diff.dynamic_config.ignore_illegal_mem_access = true; // FIXME
+    diff.dynamic_config.ignore_illegal_mem_access = true; // FIXME: how about mmio?
     diff.dynamic_config.debug_difftest = false;
     proxy->update_config(&diff.dynamic_config);
 }
 
-void FFOracleBP::syncArchState(Addr resetPC, paddr_t pmemAddr, void *pmemPtr, size_t pmemSize, void *regs)
+void FFOracleBP::syncArchState(Addr resetPC, paddr_t pmemAddr, void *pmemPtr, size_t pmemSize, const void *regs)
 {
-    DPRINTF(FFOracleBP, "Will start memcpy to NEMU\n");
+    DPRINTF(FFOracleBP_misc, "Will start memcpy to NEMU\n");
     proxy->memcpy(pmemAddr, pmemStart+pmemSize*diff.cpu_id, pmemSize, DUT_TO_REF);
-    DPRINTF(FFOracleBP, "Will start regcpy to NEMU\n");
+
+    DPRINTF(FFOracleBP_misc, "Will start regcpy to NEMU\n");
+    uint64_t tmp_regs[DIFFTEST_NR_REG];
+    proxy->regcpy(tmp_regs, REF_TO_DUT);
+    memcpy(tmp_regs, regs, sizeof(uint64_t) * 32);
     diff.nemu_this_pc = resetPC;
-    ((uint64_t*)regs)[DIFFTEST_THIS_PC] = resetPC;
-    proxy->regcpy(regs, DUT_TO_REF);
-    DPRINTF(FFOracleBP, "reset PC = %#x.\n", resetPC);
+    tmp_regs[DIFFTEST_THIS_PC] = resetPC;
+    proxy->regcpy(tmp_regs, DUT_TO_REF);
+
+    DPRINTF(FFOracleBP_misc, "reset PC = %#x.\n", resetPC);
 }
 
 Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
+    Addr predPC;
     assert(tid == 0);
 
     auto hist = new BPState(state);
@@ -70,11 +86,17 @@ Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
     advanceFront();
     syncFront();
 
-    hist->pred_nextK_PC = frontPointer->pc;
+    if (bdGen(randGen)) {
+        predPC = frontPointer->pc;
+    } else {
+        // Generate wrong prediction
+        predPC = 0x0;
+    }
+    hist->instPC = instPC;
 
-    DPRINTF(FFOracleBP, "+ lookup PC=%#x iid=%u next-%u PC=%#x\n",
-                        instPC, hist->front_iid, numLookAhead, hist->pred_nextK_PC);
-    return hist->pred_nextK_PC;
+    DPRINTF(FFOracleBP_lookup, "+ lookup PC=%#x hist_iid=%u next-%u PC=%#x\n",
+                        instPC, hist->front_iid, numLookAhead, predPC);
+    return predPC;
 }
 
 void FFOracleBP::update(ThreadID tid, Addr instPC,
@@ -83,14 +105,15 @@ void FFOracleBP::update(ThreadID tid, Addr instPC,
 
     auto history_state = static_cast<BPState *>(bp_history);
 
-    DPRINTF(FFOracleBP, "- update%s PC=%x\n", squashed ? " squashed" : " ", instPC);
+    DPRINTF(FFOracleBP_update, "- update%s PC=%x hist_iid=%u\n",
+                                squashed ? " squashed" : " ", instPC,
+                                history_state->front_iid);
 
     if (squashed) {
-        DPRINTF(FFOracleBP, "update squash: ");
-        squash(tid, bp_history);
+        // do nothing
     } else {
-        DPRINTF(FFOracleBP, "Committing iid %u\n", history_state->front_iid + 1);
-        DPRINTF(FFOracleBP, "Back iid = %u\n",
+        DPRINTF(FFOracleBP_misc, "Committing iid %u\n", history_state->front_iid + 1);
+        DPRINTF(FFOracleBP_misc, "Back iid = %u\n",
                 orderedOracleEntries.back().iid);
 
         assert(history_state->front_iid + 1 == orderedOracleEntries.back().iid);
@@ -98,7 +121,7 @@ void FFOracleBP::update(ThreadID tid, Addr instPC,
         assert(!orderedOracleEntries.empty());
         orderedOracleEntries.pop_back();
 
-        DPRINTF(FFOracleBP, "Oracle table size: %lu.\n", orderedOracleEntries.size());
+        DPRINTF(FFOracleBP_misc, "Oracle table size: %lu.\n", orderedOracleEntries.size());
 
         state.commit_iid++;
         dumpState();
@@ -109,12 +132,18 @@ void FFOracleBP::squash(ThreadID tid, void *bp_history)
 {
     auto history_state = static_cast<BPState *>(bp_history);
 
-    DPRINTF(FFOracleBP, "x squash iid=%lu\n", history_state->front_iid);
+    // Am I a perfect predictor?
+    if (std::fabs(presetAccuracy - 1.0) < std::numeric_limits<double>::epsilon()) {
+        warn("Oracle BP fault: mispredicted @ %#x (iid=%u).\n",
+                history_state->instPC, history_state->front_iid + 1);
+    }
+
+    DPRINTF(FFOracleBP_squash, "- squash hist_iid=%lu\n", history_state->front_iid);
 
     if (history_state->front_iid < state.front_iid) {
         state.front_iid = history_state->front_iid;
 
-        DPRINTF(FFOracleBP, "After squash\n");
+        DPRINTF(FFOracleBP_misc, "After squash\n");
         dumpState();
 
         for (frontPointer = orderedOracleEntries.begin();
@@ -131,7 +160,7 @@ void FFOracleBP::squash(ThreadID tid, void *bp_history)
         }
         dumpState();
     } else {
-        DPRINTF(FFOracleBP, "recorded front iid = %u, state.front_iid = %u\n",
+        DPRINTF(FFOracleBP_misc, "recorded front iid = %u, state.front_iid = %u\n",
                 history_state->front_iid, state.front_iid);
     }
     delete history_state;
@@ -139,9 +168,9 @@ void FFOracleBP::squash(ThreadID tid, void *bp_history)
 
 void FFOracleBP::lookAheadInsts(unsigned len)
 {
-    DPRINTF(FFOracleBP, "Start feeding %i insts.\n", len);
+    DPRINTF(FFOracleBP_misc, "Start feeding %i insts.\n", len);
     for (unsigned i = 0; i < len; i++) {
-        DPRINTF(FFOracleBP, "Got PC [sn%lu]: %#x\n", oracleIID, diff.nemu_this_pc);
+        DPRINTF(FFOracleBP_misc, "Got PC [sn%lu]: %#x\n", oracleIID, diff.nemu_this_pc);
         orderedOracleEntries.push_front(OracleEntry{oracleIID, diff.nemu_this_pc});
         oracleIID++;
 
@@ -157,8 +186,8 @@ void FFOracleBP::advanceFront() {
 }
 
 void FFOracleBP::syncFront() {
-    DPRINTF(FFOracleBP, "syncFront\n");
-    DPRINTF(FFOracleBP, "Oracle table size: %lu.\n", orderedOracleEntries.size());
+    DPRINTF(FFOracleBP_misc, "syncFront\n");
+    DPRINTF(FFOracleBP_misc, "Oracle table size: %lu.\n", orderedOracleEntries.size());
 
     if (!inited) {
         lookAheadInsts(numLookAhead);
@@ -174,7 +203,8 @@ void FFOracleBP::syncFront() {
 
     } else if (state.front_iid > orderedOracleEntries.front().iid) {
         // younger, must feed more
-        DPRINTF(FFOracleBP, "before state.front_iid=%lu frontPointer->iid=%lu.\n", state.front_iid, frontPointer->iid);
+        DPRINTF(FFOracleBP_misc, "before state.front_iid=%lu frontPointer->iid=%lu.\n",
+                                    state.front_iid, frontPointer->iid);
         lookAheadInsts(1);
         frontPointer = orderedOracleEntries.begin();
         assert(state.front_iid == frontPointer->iid);
@@ -202,14 +232,14 @@ void FFOracleBP::syncFront() {
 void FFOracleBP::dumpState()
 {
     if (orderedOracleEntries.size() > 0) {
-        DPRINTF(FFOracleBP, "commit iid: %lu, front iid: %lu, frontPointer iid: %lu, "
+        DPRINTF(FFOracleBP_misc, "commit iid: %lu, front iid: %lu, frontPointer iid: %lu, "
                 "table back: %lu, table front: %lu\n",
                 state.commit_iid, state.front_iid, frontPointer->iid,
                 orderedOracleEntries.back().iid,
                 orderedOracleEntries.front().iid
                );
     } else {
-        DPRINTF(FFOracleBP, "commit iid: %lu, front iid: %lu, frontPointer iid: %lu\n",
+        DPRINTF(FFOracleBP_misc, "commit iid: %lu, front iid: %lu, frontPointer iid: %lu\n",
                 state.commit_iid, state.front_iid, frontPointer->iid
                );
     }

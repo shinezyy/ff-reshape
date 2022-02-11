@@ -60,6 +60,7 @@
 #include "cpu/o3/thread_state.hh"
 #include "cpu/activity.hh"
 #include "cpu/base.hh"
+#include "cpu/pred/ff_bpred_unit.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/timebuf.hh"
 #include "params/DerivO3CPU.hh"
@@ -800,8 +801,26 @@ class FullO3CPU : public BaseO3CPU
     bool scFenceInFlight{false};
     unsigned scFailed{0};
     unsigned totalSCFailures{0};
-    bool ffBPredInited;
-    int cpuID;
+
+    bool ffBranchPredInited{false};
+    int cpuID{0};
+    FFBPredUnit *ffBranchPred;
+    struct FFBranchPredHistory {
+        FFBranchPredHistory(Addr _pc, InstSeqNum _seqNum, ThreadID _tid, Addr _predNextKPC,
+                            const StaticInstPtr &_staticInst)
+            : pc(_pc),
+              seqNum(_seqNum),
+              tid(_tid),
+              predNextKPC(_predNextKPC),
+              staticInst(_staticInst)
+        {}
+        Addr pc;
+        InstSeqNum seqNum;
+        ThreadID tid;
+        Addr predNextKPC;
+        StaticInstPtr staticInst;
+    };
+    std::vector<std::deque<FFBranchPredHistory>> ffBPCommittedInsts;
 };
 
 #endif // __CPU_O3_CPU_HH__

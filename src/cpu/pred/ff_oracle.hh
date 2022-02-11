@@ -8,6 +8,7 @@
 #include <deque>
 #include <map>
 #include <queue>
+#include <random>
 #include <utility>
 
 #include "base/statistics.hh"
@@ -39,12 +40,15 @@ public:
 
     void squash(ThreadID tid, void *bp_history) override;
 
-    void syncArchState(Addr resetPC, uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, void *regs) override;
+    void syncArchState(Addr resetPC, uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, const void *regs) override;
 
     void initNEMU(const DerivO3CPUParams &params) override;
 
+    bool isOracle() const override { return true; }
+
   private:
     unsigned int numLookAhead;
+    double presetAccuracy;
 
     uint32_t diff_wdst[DIFFTEST_WIDTH];
     uint64_t diff_wdata[DIFFTEST_WIDTH];
@@ -67,9 +71,12 @@ public:
     struct BPState {
         uint64_t commit_iid;
         uint64_t front_iid;
-        Addr pred_nextK_PC;
+        Addr instPC;
     };
     BPState state;
+
+    std::default_random_engine randGen;
+    std::bernoulli_distribution bdGen;
 
 private:
     void reset();

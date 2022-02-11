@@ -314,6 +314,7 @@ Options.addFSOptions(parser)
 SSOptions.addO3Options(parser)
 
 parser.add_option("--use-ff-oracle-bp", action='store_true')
+parser.add_option("--ff-oracle-preset-accuracy", type='float', default=1.0)
 
 # Add the ruby specific and protocol specific options
 if '--ruby' in sys.argv:
@@ -370,6 +371,7 @@ if options.use_ff_oracle_bp:
     assert(options.cpu_type == 'DerivO3CPU') # FIXME later
     for (i, cpu) in enumerate(test_sys.cpu):
         cpu.ffBranchPred = m5.objects.FFOracleBP()
+        cpu.ffBranchPred.presetAccuracy = options.ff_oracle_preset_accuracy
 
 if len(bm) == 2:
     drive_sys = build_drive_system(np)

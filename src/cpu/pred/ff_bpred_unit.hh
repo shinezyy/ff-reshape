@@ -53,7 +53,9 @@
 #include "sim/sim_object.hh"
 
 /**
- * Basically a wrapper class to hold history of FF branch predictor
+ * Basically a wrapper class to hold history of FF branch predictor.
+ * Compared with BPredUnit, this class has no RAS and BTB, and
+ * accepts next-K PC instead of next PC for correcting.
  */
 class FFBPredUnit : public SimObject
 {
@@ -66,11 +68,10 @@ class FFBPredUnit : public SimObject
      * @param inst The branch instruction.
      * @param PC The predicted PC is passed back through this parameter.
      * @param tid The thread id.
-     * @param nextK_pc
-     * @return next-K PC
+     * @return Predicted next-K PC.
      */
     Addr predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
-                 TheISA::PCState &pc, ThreadID tid);
+                 const TheISA::PCState &pc, ThreadID tid);
 
     /**
      * Tells the branch predictor to commit any updates until the given
@@ -139,9 +140,11 @@ class FFBPredUnit : public SimObject
                    void *bp_history, bool squashed,
                    const StaticInstPtr &inst, Addr corr_nextK_PC) = 0;
 
-    virtual void syncArchState(Addr resetPC, uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, void *regs) {}
+    virtual void syncArchState(Addr resetPC, uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, const void *regs) {}
 
     virtual void initNEMU(const DerivO3CPUParams &params) {}
+
+    virtual bool isOracle() const { return false; }
 
   private:
     struct PredictorHistory {
@@ -202,57 +205,11 @@ class FFBPredUnit : public SimObject
 
         Stats::Scalar incorrect;
 
+        Stats::Scalar squashed;
+
         Stats::Formula correctRatio;
     } stats;
 
-};
-
-/**
- * Test/run FF branch predictor on O3 CPU,
- * while FF branch predictor is originally designed for forwardflow arch...
- */
-class FFBPAdapter_4_O3CPU {
-public:
-    FFBPAdapter_4_O3CPU(FFBPredUnit *_ffBranchPred);
-
-    void tick();
-    Addr predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
-                 TheISA::PCState &pc, ThreadID tid);
-    void update(const InstSeqNum &done_sn, ThreadID tid);
-    void squash(const InstSeqNum &squashed_sn, ThreadID tid);
-    void squash(const InstSeqNum &squashed_sn,
-                const TheISA::PCState &corrTarget,
-                ThreadID tid);
-
-private:
-    enum HistStatus {
-        Killed = 0,
-        Committed
-    };
-    struct PredictorHistory {
-        PredictorHistory(const InstSeqNum &seq_num, Addr instPC,
-                         Addr _nextK_PC, ThreadID _tid,
-                         const StaticInstPtr & inst)
-            : seqNum(seq_num), pc(instPC),
-              tid(_tid),
-              nextK_PC(_nextK_PC),
-              inst(inst),
-              status(Killed)
-        {}
-        bool operator==(const PredictorHistory &entry) const {
-            return this->seqNum == entry.seqNum;
-        }
-        InstSeqNum seqNum;
-        Addr pc;
-        ThreadID tid;
-        Addr nextK_PC;
-        const StaticInstPtr inst;
-        HistStatus status;
-    };
-    FFBPredUnit *ffBranchPred;
-    unsigned int numLookAhead;
-    typedef std::deque<PredictorHistory> History;
-    std::vector<History> predHist, reslvHist;
 };
 
 #endif // __CPU_PRED_FF_BPRED_UNIT_H

@@ -52,8 +52,10 @@
 FFBPredUnit::FFBPredUnitStats::FFBPredUnitStats(Stats::Group *parent)
         : Stats::Group(parent, "ff_bpred_unit"),
           ADD_STAT(lookups, "Number of FF BP lookups"),
-          ADD_STAT(incorrect, "Number of FF BP correct predictions"),
-          ADD_STAT(correctRatio, "FF BP prediction correct ratio", 1.0 - incorrect / lookups)
+          ADD_STAT(incorrect, "Number of FF BP incorrect predictions"),
+          ADD_STAT(squashed, "Number of FF BP squashed predictions"),
+          ADD_STAT(correctRatio, "FF BP prediction correct ratio",
+                1 - incorrect / (lookups - squashed))
 {
     correctRatio.precision(4);
 }
@@ -69,7 +71,7 @@ FFBPredUnit::FFBPredUnit(const Params &p)
 
 Addr
 FFBPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
-                   TheISA::PCState &pc, ThreadID tid)
+                   const TheISA::PCState &pc, ThreadID tid)
 {
     Addr nextK_pc;
     void *bp_history = nullptr;
@@ -120,6 +122,7 @@ FFBPredUnit::squash(const InstSeqNum &squashed_sn, ThreadID tid)
     while (!pred_hist.empty() &&
            pred_hist.front().seqNum > squashed_sn) {
         // This call should delete the bpHistory.
+        ++stats.squashed;
         squash(tid, pred_hist.front().bpHistory);
 
         DPRINTF(Branch, "[tid:%i] [squash sn:%llu] "
@@ -230,151 +233,4 @@ FFBPredUnit::drainSanityCheck() const
     // a drained system.
     for (M5_VAR_USED const auto& ph : predHist)
         assert(ph.empty());
-}
-
-
-//---------------------------------------------------------------------------------
-//---------------------------------------------------------------------------------
-// **** FFBPAdapter_4_O3CPU ****
-//---------------------------------------------------------------------------------
-//---------------------------------------------------------------------------------
-
-FFBPAdapter_4_O3CPU::FFBPAdapter_4_O3CPU(FFBPredUnit *_ffBranchPred)
-    : ffBranchPred(_ffBranchPred),
-      numLookAhead(_ffBranchPred->getNumLookAhead()),
-      predHist(_ffBranchPred->getNumThreads()),
-      reslvHist(_ffBranchPred->getNumThreads())
-{
-    assert(numLookAhead >= 1);
-}
-
-Addr
-FFBPAdapter_4_O3CPU::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
-                            TheISA::PCState &pc, ThreadID tid)
-{
-    Addr nextK_PC = ffBranchPred->predict(inst, seqNum, pc, tid);
-
-    PredictorHistory predict_record(seqNum, pc.instAddr(),
-                                    nextK_PC, tid, inst);
-    predHist[tid].push_front(predict_record);
-
-    return nextK_PC;
-}
-
-void
-FFBPAdapter_4_O3CPU::update(const InstSeqNum &done_sn, ThreadID tid)
-{
-    while (!predHist[tid].empty() &&
-           predHist[tid].back().seqNum <= done_sn) {
-
-        // commit
-        PredictorHistory temp(predHist[tid].back());
-        temp.status = Committed;
-        reslvHist[tid].push_front(temp);
-        //warn("updatecommit %#x\n", predHist[tid].back().pc);
-
-        predHist[tid].pop_back();
-    }
-}
-
-void
-FFBPAdapter_4_O3CPU::squash(const InstSeqNum &squashed_sn, ThreadID tid)
-{
-    History &pred_hist = predHist[tid];
-
-    while (!pred_hist.empty() &&
-           pred_hist.front().seqNum > squashed_sn) {
-
-        PredictorHistory temp(pred_hist.front());
-        temp.status = Killed;
-        reslvHist[tid].push_front(temp);
-        //warn("kill squashed_sn=%u %#x\n", squashed_sn, temp.pc);
-        ffBranchPred->squash(pred_hist.front().seqNum, pred_hist.front().tid);
-
-        pred_hist.pop_front();
-    }
-}
-
-void
-FFBPAdapter_4_O3CPU::squash(const InstSeqNum &squashed_sn,
-                           const TheISA::PCState &corrTarget,
-                           ThreadID tid)
-{
-    History &pred_hist = predHist[tid];
-
-    // Squash All Branches AFTER this mispredicted branch
-    //warn("kill update squashed_sn=%u\n", squashed_sn);
-    squash(squashed_sn, tid);
-
-    // If there's a squash due to a syscall, there may not be an entry
-    // corresponding to the squash.  In that case, don't bother trying to
-    // fix up the entry.
-    if (!pred_hist.empty()) {
-        if (pred_hist.front().seqNum != squashed_sn) {
-            DPRINTF(Branch, "Front sn %i != Squash sn %i\n",
-                    pred_hist.front().seqNum, squashed_sn);
-                warn("Front sn %i != Squash sn %i\n",
-                    pred_hist.front().seqNum, squashed_sn);
-
-            assert(pred_hist.front().seqNum == squashed_sn);
-        }
-
-        // commit
-        (void)corrTarget;
-        DPRINTF(FFOracleBP, "2squash: ");
-        ffBranchPred->squash(pred_hist.front().seqNum, pred_hist.front().tid);
-    }
-}
-
-void
-FFBPAdapter_4_O3CPU::tick()
-{
-    for (auto &hist : reslvHist) {
-        if (hist.empty())
-            continue;
-        if (hist.back().status == Killed) {
-
-            hist.pop_back();
-
-        } else if (hist.size() > numLookAhead && hist.back().status == Committed) {
-            Addr correct_nextK_PC = 0;
-            int count = 0;
-            for (int i=hist.size() - 2; i>=0; i--) {
-                if (hist[i].status == Committed) {
-                    if (++count == numLookAhead) {
-                        correct_nextK_PC = hist[i].pc;
-                        break;
-                    }
-                }
-            }
-            if (count < numLookAhead)
-                continue; // no enough committed insts
-            else {
-                if (hist.back().nextK_PC == correct_nextK_PC) {
-                    // prediction is right
-                    //warn("@ %#x right\n", hist.back().pc);
-                    ffBranchPred->update(hist.back().seqNum, hist.back().tid);
-                } else {
-                    // wrong
-                    warn("Oracle-BP fault: @ %#x right PC=%#x predicted PC=%#x\n",
-                        hist.back().pc, correct_nextK_PC, hist.back().nextK_PC);
-                    ffBranchPred->squash(hist.back().seqNum,
-                                        correct_nextK_PC,
-                                        hist.back().tid);
-#if 0
-                    warn("Dump inst flow:\n");
-                    int cnt=0;
-                    for (int i=hist.size()-1; i>=0; i--) {
-                        if (hist[i].status == Committed) {
-                            warn("%s@ %#x\n", cnt++==numLookAhead ? "-> " : "", hist[i].pc);
-                        }
-                    }
-#endif
-                }
-
-                hist.pop_back();
-            }
-        }
-        assert(hist.size() < 30000);
-    }
 }
