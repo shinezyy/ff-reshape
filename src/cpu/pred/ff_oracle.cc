@@ -179,7 +179,7 @@ void FFOracleBP::lookAheadInsts(unsigned len)
         proxy->regcpy(diff.nemu_reg,REF_TO_DIFFTEST);
         diff.nemu_this_pc = diff.nemu_reg[DIFFTEST_THIS_PC];
     }
-    assert(orderedOracleEntries.size() < 30000);
+    assert(orderedOracleEntries.size() < 300000);
 }
 
 void FFOracleBP::advanceFront() {
