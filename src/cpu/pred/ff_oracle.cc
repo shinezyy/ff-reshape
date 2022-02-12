@@ -86,11 +86,12 @@ Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
     advanceFront();
     syncFront();
 
-    if (bdGen(randGen)) {
-        predPC = frontPointer->pc;
-    } else {
+    predPC = frontPointer->pc;
+    if (!bdGen(randGen)) {
         // Generate wrong prediction
-        predPC = 0x0;
+        std::uniform_int_distribution<size_t> u(1, numLookAhead);
+        predPC += ((predPC & 3) ? 2 : 4) * u(randGen);
+        assert (predPC != frontPointer->pc);
     }
     hist->instPC = instPC;
 
