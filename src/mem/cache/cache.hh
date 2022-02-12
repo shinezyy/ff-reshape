@@ -51,6 +51,7 @@
 #include <unordered_set>
 
 #include "base/types.hh"
+#include "dev/controlplane.hh"
 #include "mem/cache/base.hh"
 #include "mem/packet.hh"
 
@@ -79,8 +80,7 @@ class Cache : public BaseCache
     std::unordered_set<RequestPtr> outstandingSnoop;
 
     /* Luoshan: Add tokenbucket here */
-    static const int num_core = 4;
-    Token_Bucket *buckets[num_core];
+    std::vector <Token_Bucket *> buckets;
     /* Luoshan: Add a cross queue for pkt from multi-buckets to cache */
     cross_queue_t cross_queue;
     void send_cross_pkts();                  // sending all pkts in cross_queue
@@ -164,7 +164,7 @@ class Cache : public BaseCache
     bool isCachedAbove(PacketPtr pkt, bool is_timing = true);
 
     /* Luoshan: Alloc Req to corresponding tb */
-    int allocReq2Bucket(PacketPtr pkt, Token_Bucket **buckets, int num_core);
+    int allocReq2Bucket(PacketPtr pkt);
 
   public:
     /** Instantiates a basic cache object. */

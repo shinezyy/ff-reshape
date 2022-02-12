@@ -14,14 +14,12 @@ Token_Bucket::Token_Bucket(EventManager *_em, int _size, int _freq, int _inc, bo
       cross_queuePtr(cross_queuePtr), parent_cache(parent_cache)
 {
     assert(size >= inc && "inc should not be greater than size");
-    em->schedule(updateTokenEvent, curTick() + freq); //cyclesToTicks(Cycles(freq))
+    em->schedule(updateTokenEvent, curTick() + parent_cache->cyclesToTicks(Cycles(freq)));
 }
 
 // when cycle == freq, add tokens
 void Token_Bucket::update_tokens(){
-    if (!bypass){
-        tokens = std::min(size, tokens + inc);
-    }
+    tokens = std::min(size, tokens + inc);
     if (tokens > 0) {
         OrderedReq* req = dequeue_request();
         if (req){
@@ -40,7 +38,12 @@ OrderedReq* Token_Bucket::dequeue_request() {
     if (waiting_queue.empty()){
         return NULL;
     }
-    if (bypass || inc == size || tokens > 0){
+    if (bypass) {
+        OrderedReq* req = waiting_queue.front();
+        waiting_queue.pop();
+        return req;
+    }
+    if (tokens > 0 || inc == size){
         OrderedReq* req = waiting_queue.front();
         tokens --;
         waiting_queue.pop();
@@ -76,7 +79,10 @@ OrderedReq* Token_Bucket::get_waitq_front() {
 
 // if no tokens, return false; if there are, get one token out; used when a req arrives memobj
 bool Token_Bucket::test_and_get(){
-    if (bypass || inc == size || tokens > 0){
+    if (bypass) {
+        return true;
+    }
+    if (tokens > 0 || inc == size){
         tokens --;
         return true;
     }

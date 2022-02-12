@@ -73,8 +73,9 @@ Cache::Cache(const CacheParams &p)
     assert(p.replacement_policy);
     /* Luoshan: initialize token buckets */
     int init_size = 10000, init_freq = 10000, init_inc = 50;
-    for (int i = 0; i < num_core; i++){
-        buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, p.cache_level!=2, &cross_queue, this);
+    for (int i = 0; i < LvNATaskId::NumId; i++){
+        buckets.push_back(new Token_Bucket(
+            this, init_size, init_freq, init_inc, p.cache_level!=2, &cross_queue, this));
         //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, true, &cross_queue, this);
         //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, false, &cross_queue, this);
     }
@@ -478,11 +479,11 @@ Cache::recvTimingReq(PacketPtr pkt)
 
     if (pkt->isRequest()){
         /* Luoshan: Add Tokenbucket port */
-        allocReq2Bucket(pkt, buckets, num_core);
+        allocReq2Bucket(pkt);
         /* fetch one packet from tokenbuckets */
         OrderedReq *earliest_req = nullptr;
         int index;
-        for (int i = 0; i < num_core; i++){
+        for (int i = 0; i < LvNATaskId::NumId; i++){
             OrderedReq *req = buckets[i]->get_waitq_front();
             int token = buckets[i]->get_tokens();
             if (req && token>0){
@@ -1410,13 +1411,13 @@ Cache::isCachedAbove(PacketPtr pkt, bool is_timing)
 
 /* Luoshan:  */
 int
-Cache::allocReq2Bucket(PacketPtr pkt, Token_Bucket **buckets, int num_core)
+Cache::allocReq2Bucket(PacketPtr pkt)
 {
     if (pkt->isRequest()){
         RequestPtr req = pkt->req;
         int index;
         if (req->hasContextId())
-            index = req->contextId() % num_core;
+            index = req->contextId() % LvNATaskId::NumId;
         else
             index = 0;
         OrderedReq *ordered_req = new OrderedReq(pkt, curTick());
