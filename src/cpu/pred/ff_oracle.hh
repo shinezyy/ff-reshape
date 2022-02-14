@@ -11,6 +11,7 @@
 #include <random>
 #include <utility>
 
+#include "arch/decoder.hh"
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "cpu/difftest.hh"
@@ -22,9 +23,10 @@
 
 class FFOracleNemuProxy : public RefProxy {
 public:
-  FFOracleNemuProxy(int coreid);
   FFOracleNemuProxy(int tid, bool nohype);
-private:
+public:
+  uint64_t (*vaddr_read_safe)(uint64_t addr, int len) = NULL;
+  uint32_t (*riscv_get_last_exec_inst)() = NULL;
 };
 
 class FFOracleBP : public FFBPredUnit
@@ -40,11 +42,17 @@ public:
 
     void squash(ThreadID tid, void *bp_history) override;
 
+    void syncStoreCondtion(bool lrValid, ThreadID tid) override;
+
     void syncArchState(Addr resetPC, uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, const void *regs) override;
 
     void initNEMU(const DerivO3CPUParams &params) override;
 
     bool isOracle() const override { return true; }
+
+  private:
+    void nemuStep();
+    bool isExceptionRaised(Addr npc);
 
   private:
     unsigned int numLookAhead;
@@ -77,6 +85,11 @@ public:
 
     std::default_random_engine randGen;
     std::bernoulli_distribution bdGen;
+
+    bool scInFlight;
+    Addr scBreakpoint{0};
+
+    TheISA::Decoder *decoder;
 
 private:
     void reset();
