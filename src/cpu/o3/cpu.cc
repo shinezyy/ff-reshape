@@ -128,7 +128,8 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
       system(params.system),
       lastRunningCycle(curCycle()),
       cpuStats(this),
-      enable_nemu_diff(params.nemuDiff)
+      enable_nemu_diff(params.nemuDiff),
+      ffBranchPred(params.ffBranchPred)
 {
     fatal_if(FullSystem && params.numThreads > 1,
             "SMT is not supported in O3 in full system mode currently.");
@@ -381,6 +382,11 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
         hasCommit = true;
     }
 
+    if (ffBranchPred) {
+        ffBPCommittedInsts.resize(params.numThreads);
+        ffBranchPred->initNEMU(params);
+    }
+    cpuID = params.cpu_id;
 }
 
 template <class Impl>
@@ -523,6 +529,33 @@ FullO3CPU<Impl>::tick()
     updateCycleCounters(BaseCPU::CPU_STATE_ON);
 
 //    activity = false;
+
+    if (ffBranchPred) { // Test FF BP
+
+        for (auto &hist : ffBPCommittedInsts) {
+            if (hist.size() > ffBranchPred->getNumLookAhead()) {
+                Addr corrNextKPC = hist[hist.size() - 1 - ffBranchPred->getNumLookAhead()].pc;
+
+                if (hist.back().predNextKPC == corrNextKPC) {
+                    ffBranchPred->update(hist.back().seqNum, hist.back().tid);
+                } else {
+                    ffBranchPred->squash(hist.back().seqNum,
+                                        corrNextKPC,
+                                        hist.back().tid);
+
+                    // Simulate the behavior of real FF after pipeline squashing:
+                    // Re-run prediction as if these insts were squashed.
+                    for (int i=hist.size()-2; i>=0; i--) {
+                        hist[i].predNextKPC = ffBranchPred->predict(hist[i].staticInst,
+                                                hist[i].seqNum,
+                                                hist[i].pc,
+                                                hist[i].tid);
+                    }
+                }
+                hist.pop_back();
+            }
+        }
+    }
 
     //Tick each of the stages
     fetch.tick();
@@ -1536,6 +1569,38 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
             if (this->repeatDumpInstCount) {
                 this->nextDumpInstCount += this->repeatDumpInstCount;
             };
+        }
+
+        // Test FF branch predictor
+        if (ffBranchPred) {
+
+            if (!ffBranchPredInited) {
+                ffBranchPredInited = true;
+
+                // Copy arch state to BP (useful for Oracle BP)
+                readGem5Regs();
+                ffBranchPred->syncArchState(pcState(0 /* TODO: how about MT? */).instAddr(),
+                        0x80000000u, pmemStart+pmemSize*cpuID, pmemSize, gem5_reg);
+            }
+
+            // We make prediction on commit stage, which behaves differently from the actual FF arch.
+            Addr nextK_PC = ffBranchPred->predict(inst->staticInst,
+                                                    inst->seqNum,
+                                                    inst->pcState(),
+                                                    tid);
+
+            FFBranchPredHistory hist {inst->instAddr(), inst->seqNum, tid, nextK_PC, inst->staticInst};
+            ffBPCommittedInsts[tid].push_front(hist);
+
+            // FIXME
+            if (ffBranchPred->isOracle()) {
+                bool is_mmio = 0x38000000u < inst->physEffAddr && inst->physEffAddr < 0x41000000u;
+                if (inst->isStoreConditional())
+                    warn("FF Oracle BP currently not supports atomic insts.\n");
+                if (is_mmio)
+                    warn("FF Oracle BP currently not supports MMIO: %s paddr=%#x\n",
+                        inst->isStore() ? "write" : "read", inst->physEffAddr);
+            }
         }
 
         if (!hasCommit && inst->instAddr() == 0x80000000u) {
