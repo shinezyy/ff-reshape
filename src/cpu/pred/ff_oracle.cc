@@ -22,6 +22,12 @@
 # error Please define REF_SO to the path of NEMU shared object file
 #endif
 
+FFOracleBP::FFOracleBPStats::FFOracleBPStats(Stats::Group *parent)
+        : Stats::Group(parent, "ff_oracle_bp"),
+          ADD_STAT(incorrectAfterSC, "Incorrect predictions after SC.")
+{
+}
+
 FFOracleBP::FFOracleBP(const FFOracleBPParams &params)
     : FFBPredUnit(params),
         numLookAhead(getNumLookAhead()),
@@ -32,7 +38,8 @@ FFOracleBP::FFOracleBP(const FFOracleBPParams &params)
         randGen(params.randNumSeed),
         bdGen(params.presetAccuracy),
         scInFlight(false),
-        decoder(new TheISA::Decoder())
+        decoder(new TheISA::Decoder()),
+        stats(this)
 {
     assert(numLookAhead >= 1);
     assert(0 <= params.presetAccuracy && params.presetAccuracy <= 1);
@@ -98,6 +105,7 @@ Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
         assert (predPC != frontPointer->pc);
     }
     hist->instPC = instPC;
+    hist->scInFlight = frontPointer->scInFlight;
 
     DPRINTF(FFOracleBP_lookup, "+ lookup PC=%#x hist_iid=%u next-%u PC=%#x\n",
                         instPC, hist->front_iid, numLookAhead, predPC);
@@ -115,7 +123,16 @@ void FFOracleBP::update(ThreadID tid, Addr instPC,
                                 history_state->front_iid);
 
     if (squashed) {
-        // do nothing
+        // Am I a perfect predictor?
+        if (std::fabs(presetAccuracy - 1.0) < std::numeric_limits<double>::epsilon()) {
+            if (!history_state->scInFlight)
+                warn("Oracle BP fault: mispredicted @ %#x (iid=%u).\n",
+                        history_state->instPC, history_state->front_iid + 1);
+        }
+
+        if (history_state->scInFlight)
+            ++stats.incorrectAfterSC;
+
     } else {
         DPRINTF(FFOracleBP_misc, "Committing iid %u\n", history_state->front_iid + 1);
         DPRINTF(FFOracleBP_misc, "Back iid = %u\n",
@@ -136,12 +153,6 @@ void FFOracleBP::update(ThreadID tid, Addr instPC,
 void FFOracleBP::squash(ThreadID tid, void *bp_history)
 {
     auto history_state = static_cast<BPState *>(bp_history);
-
-    // Am I a perfect predictor?
-    if (std::fabs(presetAccuracy - 1.0) < std::numeric_limits<double>::epsilon()) {
-        warn("Oracle BP fault: mispredicted @ %#x (iid=%u).\n",
-                history_state->instPC, history_state->front_iid + 1);
-    }
 
     DPRINTF(FFOracleBP_squash, "- squash hist_iid=%lu\n", history_state->front_iid);
 
@@ -178,7 +189,7 @@ void FFOracleBP::lookAheadInsts(unsigned len, bool record)
         Addr pc = diff.nemu_this_pc;
         DPRINTF(FFOracleBP_misc, "Got PC [sn%lu]: %#x\n", oracleIID, pc);
         if (record) {
-            orderedOracleEntries.push_front(OracleEntry{oracleIID, pc});
+            orderedOracleEntries.push_front(OracleEntry{oracleIID, pc, scInFlight});
             assert(orderedOracleEntries.size() < 300000);
             oracleIID++;
         }
@@ -197,10 +208,7 @@ void FFOracleBP::lookAheadInsts(unsigned len, bool record)
             uint32_t inst = proxy->riscv_get_last_exec_inst();
             TheISA::PCState pcState(pc);
             decoder->reset();
-            decoder->moreBytes(pcState, pc, inst);
-            if (!decoder->instReady() && decoder->needMoreBytes()) {
-                decoder->moreBytes(pcState, pc, inst >> 16);
-            }
+            decoder->moreBytes(0, 0, inst);
             assert(decoder->instReady());
             StaticInstPtr staticInst = decoder->decode(pcState);
 

@@ -1340,7 +1340,15 @@ DefaultCommit<Impl>::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 
         // Generate trap squash event.
         generateTrapEvent(tid, inst_fault);
+
+        if (!head_inst->isNop() && !head_inst->isInstPrefetch()) {
+            cpu->instDoneOrFailed(tid, head_inst, inst_fault);
+        }
         return false;
+    }
+
+    if (!head_inst->isNop() && !head_inst->isInstPrefetch()) {
+        cpu->instDoneOrFailed(tid, head_inst, inst_fault);
     }
 
     updateComInstStats(head_inst);

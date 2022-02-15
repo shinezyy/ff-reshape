@@ -70,6 +70,7 @@ public:
     struct OracleEntry {
         uint64_t iid;
         Addr pc;
+        bool scInFlight;
     };
     std::list<OracleEntry> orderedOracleEntries;
 
@@ -80,6 +81,7 @@ public:
         uint64_t commit_iid;
         uint64_t front_iid;
         Addr instPC;
+        bool scInFlight;
     };
     BPState state;
 
@@ -95,6 +97,14 @@ public:
     uint64_t numInstAfterSC{0};
 
     TheISA::Decoder *decoder;
+
+    struct FFOracleBPStats : public Stats::Group
+    {
+        FFOracleBPStats(Stats::Group *parent);
+
+        Stats::Scalar incorrectAfterSC;
+
+    } stats;
 
 private:
     void reset();
