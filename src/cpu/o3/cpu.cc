@@ -530,31 +530,13 @@ FullO3CPU<Impl>::tick()
 
 //    activity = false;
 
-    if (ffBranchPred) { // Test FF BP
+    if (ffBranchPred && !ffBranchPredInited) {
+        ffBranchPredInited = true;
 
-        for (auto &hist : ffBPCommittedInsts) {
-            if (hist.size() > ffBranchPred->getNumLookAhead()) {
-                Addr corrNextKPC = hist[hist.size() - 1 - ffBranchPred->getNumLookAhead()].pc;
-
-                if (hist.back().predNextKPC == corrNextKPC) {
-                    ffBranchPred->update(hist.back().seqNum, hist.back().tid);
-                } else {
-                    ffBranchPred->squash(hist.back().seqNum,
-                                        corrNextKPC,
-                                        hist.back().tid);
-
-                    // Simulate the behavior of real FF after pipeline squashing:
-                    // Re-run prediction as if these insts were squashed.
-                    for (int i=hist.size()-2; i>=0; i--) {
-                        hist[i].predNextKPC = ffBranchPred->predict(hist[i].staticInst,
-                                                hist[i].seqNum,
-                                                hist[i].pc,
-                                                hist[i].tid);
-                    }
-                }
-                hist.pop_back();
-            }
-        }
+        // Copy arch state to BP (useful for Oracle BP)
+        readGem5Regs();
+        ffBranchPred->syncArchState(pcState(0 /* TODO: how about MT? */).instAddr(),
+                0x80000000u, pmemStart+pmemSize*cpuID, pmemSize, gem5_reg);
     }
 
     //Tick each of the stages
@@ -1571,38 +1553,6 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
             };
         }
 
-        // Test FF branch predictor
-        if (ffBranchPred) {
-
-            if (!ffBranchPredInited) {
-                ffBranchPredInited = true;
-
-                // Copy arch state to BP (useful for Oracle BP)
-                readGem5Regs();
-                ffBranchPred->syncArchState(pcState(0 /* TODO: how about MT? */).instAddr(),
-                        0x80000000u, pmemStart+pmemSize*cpuID, pmemSize, gem5_reg);
-            }
-
-            // We make prediction on commit stage, which behaves differently from the actual FF arch.
-            Addr nextK_PC = ffBranchPred->predict(inst->staticInst,
-                                                    inst->seqNum,
-                                                    inst->pcState(),
-                                                    tid);
-
-            FFBranchPredHistory hist {inst->instAddr(), inst->seqNum, tid, nextK_PC, inst->staticInst};
-            ffBPCommittedInsts[tid].push_front(hist);
-
-            // FIXME
-            if (ffBranchPred->isOracle()) {
-                bool is_mmio = 0x38000000u < inst->physEffAddr && inst->physEffAddr < 0x41000000u;
-                if (inst->isStoreConditional())
-                    warn("FF Oracle BP currently not supports atomic insts.\n");
-                if (is_mmio)
-                    warn("FF Oracle BP currently not supports MMIO: %s paddr=%#x\n",
-                        inst->isStore() ? "write" : "read", inst->physEffAddr);
-            }
-        }
-
         if (!hasCommit && inst->instAddr() == 0x80000000u) {
             hasCommit = true;
             readGem5Regs();
@@ -1657,6 +1607,77 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
     probeInstCommit(inst->staticInst, inst->instAddr());
 
     cpuStats.lastCommitTick = curTick();
+
+    if (ffBranchPred) {
+        // Skip fence.AQ
+        bool normInst = false;
+        if (!inst->isMicroop() || inst->isLastMicroop()) {
+            normInst = true;
+            if (scAQInFlight) {
+                assert(inst->isLastMicroop() &&
+                        inst->isWriteBarrier() && inst->isReadBarrier());
+                normInst = false;
+            }
+        }
+        scAQInFlight = false;
+        if (!inst->isLastMicroop() &&
+                inst->isStoreConditional() && inst->isDelayedCommit()) {
+            scAQInFlight = true;
+            normInst = true;
+        }
+
+        if (normInst)
+            testFFBranchPred(inst, tid);
+    }
+}
+
+template <class Impl>
+void
+FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
+{
+    //
+    // dummy frontend
+    //
+    Addr nextK_PC = ffBranchPred->predict(inst->staticInst,
+                                            inst->seqNum,
+                                            inst->pcState(),
+                                            tid);
+
+    FFBranchPredHistory hist {inst->instAddr(),
+                                inst->seqNum, tid, nextK_PC, inst->staticInst, inst};
+    ffBPCommittedInsts[tid].push_front(hist);
+
+    //
+    // dummy backend
+    //
+    for (auto &hist : ffBPCommittedInsts) {
+        if (hist.size() > ffBranchPred->getNumLookAhead()) {
+
+            if (hist.back().dynInst->isStoreConditional()) {
+                ffBranchPred->syncStoreConditional(hist.back().dynInst->lockedWriteSuccess(),
+                                                    hist.back().tid);
+            }
+
+            Addr corrNextKPC = hist[hist.size() - 1 - ffBranchPred->getNumLookAhead()].pc;
+            if (hist.back().predNextKPC == corrNextKPC) {
+                ffBranchPred->update(hist.back().seqNum, hist.back().tid);
+            } else {
+                ffBranchPred->squash(hist.back().seqNum,
+                                    corrNextKPC,
+                                    hist.back().tid);
+
+                // Simulate the behavior of real FF after pipeline squashing:
+                // Re-run prediction as if these insts were squashed.
+                for (int i=hist.size()-2; i>=0; i--) {
+                    hist[i].predNextKPC = ffBranchPred->predict(hist[i].staticInst,
+                                            hist[i].seqNum,
+                                            hist[i].pc,
+                                            hist[i].tid);
+                }
+            }
+            hist.pop_back();
+        }
+    }
 }
 
 template <class Impl>

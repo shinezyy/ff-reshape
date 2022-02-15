@@ -30,7 +30,9 @@ FFOracleBP::FFOracleBP(const FFOracleBPParams &params)
         oracleIID(0),
         inited(false),
         randGen(params.randNumSeed),
-        bdGen(params.presetAccuracy)
+        bdGen(params.presetAccuracy),
+        scInFlight(false),
+        decoder(new TheISA::Decoder())
 {
     assert(numLookAhead >= 1);
     assert(0 <= params.presetAccuracy && params.presetAccuracy <= 1);
@@ -54,7 +56,9 @@ void FFOracleBP::initNEMU(const DerivO3CPUParams &params)
     diff.cpu_id = params.cpu_id;
     // Use a different TID for each NEMU instance,
     // because of the fixed virtual address mapping for pmem inside NEMU.
-    proxy = new FFOracleNemuProxy(params.numThreads + params.cpu_id,true);
+    static ThreadID nemuID = 1;
+    proxy = new FFOracleNemuProxy(params.numThreads * nemuID + params.cpu_id, true);
+    ++nemuID;
     diff.dynamic_config.ignore_illegal_mem_access = true; // FIXME: how about mmio?
     diff.dynamic_config.debug_difftest = false;
     proxy->update_config(&diff.dynamic_config);
@@ -167,19 +171,87 @@ void FFOracleBP::squash(ThreadID tid, void *bp_history)
     delete history_state;
 }
 
-void FFOracleBP::lookAheadInsts(unsigned len)
+void FFOracleBP::lookAheadInsts(unsigned len, bool record)
 {
     DPRINTF(FFOracleBP_misc, "Start feeding %i insts.\n", len);
     for (unsigned i = 0; i < len; i++) {
-        DPRINTF(FFOracleBP_misc, "Got PC [sn%lu]: %#x\n", oracleIID, diff.nemu_this_pc);
-        orderedOracleEntries.push_front(OracleEntry{oracleIID, diff.nemu_this_pc});
-        oracleIID++;
+        Addr pc = diff.nemu_this_pc;
+        DPRINTF(FFOracleBP_misc, "Got PC [sn%lu]: %#x\n", oracleIID, pc);
+        if (record) {
+            orderedOracleEntries.push_front(OracleEntry{oracleIID, pc});
+            assert(orderedOracleEntries.size() < 300000);
+            oracleIID++;
+        }
 
-        proxy->exec(1);
-        proxy->regcpy(diff.nemu_reg,REF_TO_DIFFTEST);
-        diff.nemu_this_pc = diff.nemu_reg[DIFFTEST_THIS_PC];
+        if (!scInFlight) {
+            // prevent SC from modifying memory
+            diff.sync.lrscValid = false;
+            proxy->uarchstatus_cpy(&diff.sync, DIFFTEST_TO_REF);
+            // Even if SC not success, SPF (if raised) also needs to be reported,
+            // which forces us to save the register state to roll back from the exception.
+            proxy->regcpy(scBreakpoint.reg, REF_TO_DIFFTEST);
+
+            nemuStep();
+
+            // disassemble inst @ PC
+            uint32_t inst = proxy->riscv_get_last_exec_inst();
+            TheISA::PCState pcState(pc);
+            decoder->reset();
+            decoder->moreBytes(pcState, pc, inst);
+            if (!decoder->instReady() && decoder->needMoreBytes()) {
+                decoder->moreBytes(pcState, pc, inst >> 16);
+            }
+            assert(decoder->instReady());
+            StaticInstPtr staticInst = decoder->decode(pcState);
+
+            auto checkSC = [this](const StaticInstPtr &inst) {
+                if (inst->isStoreConditional() && !scInFlight) {
+                    scBreakpoint.bpState = state;
+                    numInstAfterSC = 0;
+                    scInFlight = true;
+                }
+            };
+
+            if (staticInst->isMacroop()) {
+                StaticInstPtr mircoOp;
+                do {
+                    mircoOp = staticInst->fetchMicroop(pcState.upc());
+                    checkSC(mircoOp);
+                    pcState.uAdvance();
+                } while (!mircoOp->isLastMicroop());
+            } else {
+                checkSC(staticInst);
+            }
+
+        } else {
+            ++numInstAfterSC;
+            // naive prediction.
+            diff.nemu_this_pc += (diff.nemu_this_pc & 3) ? 2 : 4;
+        }
     }
-    assert(orderedOracleEntries.size() < 300000);
+}
+
+void FFOracleBP::syncStoreConditional(bool lrValid, ThreadID tid) {
+    assert(scInFlight);
+
+    // synchronize LR/SC flag of NEMU
+    diff.sync.lrscValid = lrValid;
+    proxy->uarchstatus_cpy(&diff.sync, DIFFTEST_TO_REF);
+
+    // restore context
+    diff.nemu_this_pc = scBreakpoint.reg[DIFFTEST_THIS_PC];
+    proxy->regcpy(scBreakpoint.reg, DIFFTEST_TO_REF);
+
+    scInFlight = false;
+    nemuStep();
+    lookAheadInsts(numInstAfterSC, false);
+}
+
+void FFOracleBP::nemuStep() {
+    proxy->exec(1);
+
+    proxy->regcpy(diff.nemu_reg, REF_TO_DIFFTEST);
+    diff.nemu_this_pc = diff.nemu_reg[DIFFTEST_THIS_PC];
 }
 
 void FFOracleBP::advanceFront() {
@@ -191,13 +263,13 @@ void FFOracleBP::syncFront() {
     DPRINTF(FFOracleBP_misc, "Oracle table size: %lu.\n", orderedOracleEntries.size());
 
     if (!inited) {
-        lookAheadInsts(numLookAhead);
+        lookAheadInsts(numLookAhead, true);
         orderedOracleEntries.clear();
         inited = true;
     }
 
     if (orderedOracleEntries.size() == 0) {
-        lookAheadInsts(1);
+        lookAheadInsts(1, true);
         frontPointer = orderedOracleEntries.begin();
         assert(state.front_iid == frontPointer->iid);
         dumpState();
@@ -206,7 +278,7 @@ void FFOracleBP::syncFront() {
         // younger, must feed more
         DPRINTF(FFOracleBP_misc, "before state.front_iid=%lu frontPointer->iid=%lu.\n",
                                     state.front_iid, frontPointer->iid);
-        lookAheadInsts(1);
+        lookAheadInsts(1, true);
         frontPointer = orderedOracleEntries.begin();
         assert(state.front_iid == frontPointer->iid);
         dumpState();
@@ -253,62 +325,6 @@ void FFOracleBP::dumpState()
 //---------------------------------------------------------------------------------
 //---------------------------------------------------------------------------------
 
-FFOracleNemuProxy::FFOracleNemuProxy(int coreid) {
-
-  void *handle = dlmopen(LM_ID_NEWLM, REF_SO, RTLD_LAZY | RTLD_DEEPBIND);
-  puts("Using " REF_SO " for oracle BP");
-  if (!handle){
-    printf("%s\n", dlerror());
-    assert(0);
-  }
-
-  this->memcpy = (void (*)(paddr_t, void *, size_t, bool))dlsym(handle, "difftest_memcpy");
-  assert(this->memcpy);
-
-  regcpy = (void (*)(void *, bool))dlsym(handle, "difftest_regcpy");
-  assert(regcpy);
-
-  csrcpy = (void (*)(void *, bool))dlsym(handle, "difftest_csrcpy");
-  assert(csrcpy);
-
-  uarchstatus_cpy = (void (*)(void *, bool))dlsym(handle, "difftest_uarchstatus_cpy");
-  assert(uarchstatus_cpy);
-
-  exec = (void (*)(uint64_t))dlsym(handle, "difftest_exec");
-  assert(exec);
-
-  guided_exec = (vaddr_t (*)(void *))dlsym(handle, "difftest_guided_exec");
-  assert(guided_exec);
-
-  update_config = (vaddr_t (*)(void *))dlsym(handle, "update_dynamic_config");
-  assert(update_config);
-
-  store_commit = (int (*)(uint64_t*, uint64_t*, uint8_t*))dlsym(handle, "difftest_store_commit");
-  assert(store_commit);
-
-  raise_intr = (void (*)(uint64_t))dlsym(handle, "difftest_raise_intr");
-  assert(raise_intr);
-
-  isa_reg_display = (void (*)(void))dlsym(handle, "isa_reg_display");
-  assert(isa_reg_display);
-
-  query = (void (*)(void*, uint64_t))dlsym(handle, "difftest_query_ref");
-#ifdef ENABLE_RUNHEAD
-  assert(query);
-#endif
-
-  auto nemu_difftest_set_mhartid = (void (*)(int))dlsym(handle, "difftest_set_mhartid");
-  if (NUM_CORES > 1) {
-    assert(nemu_difftest_set_mhartid);
-    nemu_difftest_set_mhartid(coreid);
-  }
-
-  auto nemu_init = (void (*)(void))dlsym(handle, "difftest_init");
-  assert(nemu_init);
-
-  nemu_init();
-}
-
 FFOracleNemuProxy::FFOracleNemuProxy(int tid, bool nohype) {
   assert(nohype);
   void *handle = dlmopen(LM_ID_NEWLM, REF_SO, RTLD_LAZY | RTLD_DEEPBIND);
@@ -344,6 +360,12 @@ FFOracleNemuProxy::FFOracleNemuProxy(int tid, bool nohype) {
 
   auto nemu_nohype_init = (void (*)(int))dlsym(handle, "difftest_nohype_init");
   assert(nemu_nohype_init);
+
+  vaddr_read_safe = (uint64_t (*)(uint64_t, int))dlsym(handle, "vaddr_read_safe");
+  assert(vaddr_read_safe);
+
+  riscv_get_last_exec_inst = (uint32_t (*)())dlsym(handle, "riscv_get_last_exec_inst");
+  assert(riscv_get_last_exec_inst);
 
   nemu_nohype_init(tid);
 }

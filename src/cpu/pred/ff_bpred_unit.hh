@@ -140,6 +140,8 @@ class FFBPredUnit : public SimObject
                    void *bp_history, bool squashed,
                    const StaticInstPtr &inst, Addr corr_nextK_PC) = 0;
 
+    virtual void syncStoreConditional(bool lrValid, ThreadID tid) {}
+
     virtual void syncArchState(Addr resetPC, uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, const void *regs) {}
 
     virtual void initNEMU(const DerivO3CPUParams &params) {}
@@ -147,6 +149,8 @@ class FFBPredUnit : public SimObject
     virtual bool isOracle() const { return false; }
 
   private:
+    int squashWorker(const InstSeqNum &squashed_sn, ThreadID tid);
+
     struct PredictorHistory {
         /**
          * Makes a predictor history struct that contains any
