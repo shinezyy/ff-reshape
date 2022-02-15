@@ -204,34 +204,6 @@ FFBPredUnit::squash(const InstSeqNum &squashed_sn,
 }
 
 void
-FFBPredUnit::syncStoreCondtion(InstSeqNum seqNum, bool lrValid, ThreadID tid)
-{
-    if (!isOracle())
-        return;
-
-    syncStoreCondtion(lrValid, tid);
-
-    History &pred_hist = predHist[tid];
-
-    // update histories after this inst.
-    size_t i;
-    for (i=0;
-        i < pred_hist.size() && pred_hist[i].seqNum >= seqNum;
-        i++)
-    {
-        squash(pred_hist[i].tid, pred_hist[i].bpHistory);
-    }
-    for (int j=i-1;
-        j >= 0 && pred_hist[j].seqNum >= seqNum;
-        j--)
-    {
-        lookup(pred_hist[j].tid,
-                pred_hist[j].pc,
-                pred_hist[j].bpHistory);
-    }
-}
-
-void
 FFBPredUnit::dump()
 {
     int i = 0;

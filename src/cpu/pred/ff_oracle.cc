@@ -171,19 +171,25 @@ void FFOracleBP::squash(ThreadID tid, void *bp_history)
     delete history_state;
 }
 
-void FFOracleBP::lookAheadInsts(unsigned len)
+void FFOracleBP::lookAheadInsts(unsigned len, bool record)
 {
     DPRINTF(FFOracleBP_misc, "Start feeding %i insts.\n", len);
     for (unsigned i = 0; i < len; i++) {
         Addr pc = diff.nemu_this_pc;
         DPRINTF(FFOracleBP_misc, "Got PC [sn%lu]: %#x\n", oracleIID, pc);
-        orderedOracleEntries.push_front(OracleEntry{oracleIID, pc});
-        oracleIID++;
+        if (record) {
+            orderedOracleEntries.push_front(OracleEntry{oracleIID, pc});
+            assert(orderedOracleEntries.size() < 300000);
+            oracleIID++;
+        }
 
         if (!scInFlight) {
             // prevent SC from modifying memory
             diff.sync.lrscValid = false;
             proxy->uarchstatus_cpy(&diff.sync, DIFFTEST_TO_REF);
+            // Even if SC not success, SPF (if raised) also needs to be reported,
+            // which forces us to save the register state to roll back from the exception.
+            proxy->regcpy(scBreakpoint.reg, REF_TO_DIFFTEST);
 
             nemuStep();
 
@@ -192,39 +198,53 @@ void FFOracleBP::lookAheadInsts(unsigned len)
             TheISA::PCState pcState(pc);
             decoder->reset();
             decoder->moreBytes(pcState, pc, inst);
-            if (decoder->needMoreBytes())
+            if (!decoder->instReady() && decoder->needMoreBytes()) {
                 decoder->moreBytes(pcState, pc, inst >> 16);
+            }
             assert(decoder->instReady());
             StaticInstPtr staticInst = decoder->decode(pcState);
 
-            if (staticInst->isStoreConditional() && !scInFlight) {
-                scBreakpoint = pc;
-                scInFlight = true;
+            auto checkSC = [this](const StaticInstPtr &inst) {
+                if (inst->isStoreConditional() && !scInFlight) {
+                    scBreakpoint.bpState = state;
+                    numInstAfterSC = 0;
+                    scInFlight = true;
+                }
+            };
+
+            if (staticInst->isMacroop()) {
+                StaticInstPtr mircoOp;
+                do {
+                    mircoOp = staticInst->fetchMicroop(pcState.upc());
+                    checkSC(mircoOp);
+                    pcState.uAdvance();
+                } while (!mircoOp->isLastMicroop());
+            } else {
+                checkSC(staticInst);
             }
 
         } else {
-            // naive next PC prediction.
+            ++numInstAfterSC;
+            // naive prediction.
             diff.nemu_this_pc += (diff.nemu_this_pc & 3) ? 2 : 4;
         }
     }
-    assert(orderedOracleEntries.size() < 300000);
 }
 
-void FFOracleBP::syncStoreCondtion(bool lrValid, ThreadID tid) {
+void FFOracleBP::syncStoreConditional(bool lrValid, ThreadID tid) {
     assert(scInFlight);
 
     // synchronize LR/SC flag of NEMU
     diff.sync.lrscValid = lrValid;
     proxy->uarchstatus_cpy(&diff.sync, DIFFTEST_TO_REF);
 
-    // restore PC
-    diff.nemu_this_pc = scBreakpoint;
-    proxy->regcpy(diff.nemu_reg, REF_TO_DIFFTEST);
-    diff.nemu_reg[DIFFTEST_THIS_PC] = scBreakpoint;
-    proxy->regcpy(diff.nemu_reg, DIFFTEST_TO_REF);
+    // restore context
+    diff.nemu_this_pc = scBreakpoint.reg[DIFFTEST_THIS_PC];
+    proxy->regcpy(scBreakpoint.reg, DIFFTEST_TO_REF);
 
     scInFlight = false;
     nemuStep();
+    lookAheadInsts(numInstAfterSC, false);
 }
 
 void FFOracleBP::nemuStep() {
@@ -243,13 +263,13 @@ void FFOracleBP::syncFront() {
     DPRINTF(FFOracleBP_misc, "Oracle table size: %lu.\n", orderedOracleEntries.size());
 
     if (!inited) {
-        lookAheadInsts(numLookAhead);
+        lookAheadInsts(numLookAhead, true);
         orderedOracleEntries.clear();
         inited = true;
     }
 
     if (orderedOracleEntries.size() == 0) {
-        lookAheadInsts(1);
+        lookAheadInsts(1, true);
         frontPointer = orderedOracleEntries.begin();
         assert(state.front_iid == frontPointer->iid);
         dumpState();
@@ -258,7 +278,7 @@ void FFOracleBP::syncFront() {
         // younger, must feed more
         DPRINTF(FFOracleBP_misc, "before state.front_iid=%lu frontPointer->iid=%lu.\n",
                                     state.front_iid, frontPointer->iid);
-        lookAheadInsts(1);
+        lookAheadInsts(1, true);
         frontPointer = orderedOracleEntries.begin();
         assert(state.front_iid == frontPointer->iid);
         dumpState();

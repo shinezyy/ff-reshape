@@ -825,6 +825,8 @@ class FullO3CPU : public BaseO3CPU
     };
     std::vector<std::deque<FFBranchPredHistory>> ffBPCommittedInsts;
 
+    bool scAQInFlight{false};
+
     void testFFBranchPred(const DynInstPtr &inst, ThreadID tid);
 };
 

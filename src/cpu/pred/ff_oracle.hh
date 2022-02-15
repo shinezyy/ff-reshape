@@ -42,7 +42,7 @@ public:
 
     void squash(ThreadID tid, void *bp_history) override;
 
-    void syncStoreCondtion(bool lrValid, ThreadID tid) override;
+    void syncStoreConditional(bool lrValid, ThreadID tid) override;
 
     void syncArchState(Addr resetPC, uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, const void *regs) override;
 
@@ -87,13 +87,18 @@ public:
     std::bernoulli_distribution bdGen;
 
     bool scInFlight;
-    Addr scBreakpoint{0};
+    struct SCBreakPoint {
+        BPState bpState;
+        uint64_t reg[DIFFTEST_NR_REG];
+    };
+    SCBreakPoint scBreakpoint;
+    uint64_t numInstAfterSC{0};
 
     TheISA::Decoder *decoder;
 
 private:
     void reset();
-    void lookAheadInsts(unsigned len);
+    void lookAheadInsts(unsigned len, bool record);
     void advanceFront();
     void syncFront();
     void dumpState();

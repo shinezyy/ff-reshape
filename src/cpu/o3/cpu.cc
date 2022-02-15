@@ -1608,8 +1608,27 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
 
     cpuStats.lastCommitTick = curTick();
 
-    if (ffBranchPred && !inst->isMicroop())
-        testFFBranchPred(inst, tid);
+    if (ffBranchPred) {
+        // Skip fence.AQ
+        bool normInst = false;
+        if (!inst->isMicroop() || inst->isLastMicroop()) {
+            normInst = true;
+            if (scAQInFlight) {
+                assert(inst->isLastMicroop() &&
+                        inst->isWriteBarrier() && inst->isReadBarrier());
+                normInst = false;
+            }
+        }
+        scAQInFlight = false;
+        if (!inst->isLastMicroop() &&
+                inst->isStoreConditional() && inst->isDelayedCommit()) {
+            scAQInFlight = true;
+            normInst = true;
+        }
+
+        if (normInst)
+            testFFBranchPred(inst, tid);
+    }
 }
 
 template <class Impl>
@@ -1635,8 +1654,8 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
         if (hist.size() > ffBranchPred->getNumLookAhead()) {
 
             if (hist.back().dynInst->isStoreConditional()) {
-                ffBranchPred->syncStoreCondtion(hist.back().seqNum,
-                                                hist.back().dynInst->lockedWriteSuccess());
+                ffBranchPred->syncStoreConditional(hist.back().dynInst->lockedWriteSuccess(),
+                                                    hist.back().tid);
             }
 
             Addr corrNextKPC = hist[hist.size() - 1 - ffBranchPred->getNumLookAhead()].pc;
