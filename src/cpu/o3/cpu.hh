@@ -490,6 +490,9 @@ class FullO3CPU : public BaseO3CPU
     /** Function to tell the CPU that an instruction has completed. */
     void instDone(ThreadID tid, const DynInstPtr &inst);
 
+    /** Function to tell the CPU that an instruction has completed (including fault). */
+    void instDoneOrFailed(ThreadID tid, const DynInstPtr &inst, Fault fault);
+
     /** Remove an instruction from the front end of the list.  There's
      *  no restriction on location of the instruction.
      */

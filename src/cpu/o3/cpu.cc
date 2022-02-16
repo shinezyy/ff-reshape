@@ -1607,7 +1607,12 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
     probeInstCommit(inst->staticInst, inst->instAddr());
 
     cpuStats.lastCommitTick = curTick();
+}
 
+template <class Impl>
+void
+FullO3CPU<Impl>::instDoneOrFailed(ThreadID tid, const DynInstPtr &inst, Fault fault)
+{
     if (ffBranchPred) {
         // Skip fence.AQ
         bool normInst = false;
