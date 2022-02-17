@@ -1,5 +1,6 @@
 from m5.params import *
 from m5.proxy import *
+from m5.SimObject import *
 
 from m5.objects.Device import BasicPioDevice
 
@@ -10,12 +11,13 @@ class ControlPlane(BasicPioDevice):
     type = 'ControlPlane'
     cxx_header = "dev/controlplane.hh"
 
-    # cxx_exports = [
-    #     PyBindMethod("switchOut"),
-    #     PyBindMethod("takeOverFrom"),
-    #     PyBindMethod("getTaskId"),
-    #     PyBindMethod("setTaskId"),
-    # ]
+    cxx_exports = [
+        PyBindMethod("startTraining"),
+        PyBindMethod("startQoS"),
+        PyBindMethod("startTTI"),
+        PyBindMethod("endTTI"),
+        PyBindMethod("setJob"),
+    ]
 
     pio_addr = 0x20000
     pio_size = Param.Addr(0x10000, "cp space size")

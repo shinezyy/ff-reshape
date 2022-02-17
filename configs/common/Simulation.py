@@ -419,59 +419,90 @@ def restoreSimpointCheckpoint():
 
 
 def repeatJobs(testsys, maxtick):
-    init_clk = 10000
-    exit_event = m5.simulate(init_clk)
+    exit_event = m5.simulate()
     exit_cause = exit_event.getCause()
-    if exit_cause != "simulate() limit reached":
+    if exit_cause != "core 0 warmup done":
         return exit_event
 
     print("starting jobs loop")
+
+    cpu_period = testsys.cpu_clk_domain.clock[0].getValue()
+
+    #start get QoS stats in 100w cycle
+
+    np = len(testsys.cpu)
+
     job_eq = EventQueue()
 
-    # init jobs, every job cycle means 10000 clock cycles
-    sch_job1 = SmallJob(0, "SCH_job1", job_eq, testsys)
-    dp_job3 = SmallJob(1, "DP_job3", job_eq, testsys)
-    usr_job3 = SmallJob(2, "USR_job3", job_eq, testsys)
-    usr_job4 = SmallJob(3, "USR_job4", job_eq, testsys)
-    usr_job2 = SmallJob(4, "USR_job2", job_eq, testsys)
+    # init jobs, every job cycle means 10000 cpu clock cycles
+    # means tick period is 10000*cpu_period
+    job_clk_period = 10000*cpu_period
+
+    sch_job1 = SmallJob(0, 0, "SCH_job1", job_eq, testsys)
+    dp_job3  = SmallJob(1, 1, "DP_job3" , job_eq, testsys)
+    usr_job3 = SmallJob(2, 2, "USR_job3", job_eq, testsys)
+    usr_job4 = SmallJob(3, 2, "USR_job4", job_eq, testsys)
+    usr_job2 = SmallJob(4, 3, "USR_job2", job_eq, testsys)
+
+    fake_job = SmallJob(100,100,"fake_job", job_eq, testsys)
 
     # init actions
-    usr_job3.set_wakeup_action([
-        SmallActionMeta(usr_job3, ActOp.stop, 10),
-        SmallActionMeta(sch_job1, ActOp.wakeup, 10),
-        SmallActionMeta(usr_job3, ActOp.wakeup, 100),  # next TTI start
+    usr_job3.set_priority_action([
+        SmallActionMeta(usr_job3, ActOp.releasePriority, 10),
+        SmallActionMeta(sch_job1, ActOp.getPriority, 10),
     ])
-    sch_job1.set_wakeup_action([
-        SmallActionMeta(sch_job1, ActOp.stop, 50),
-        SmallActionMeta(dp_job3, ActOp.wakeup, 50),
-        SmallActionMeta(usr_job4, ActOp.wakeup, 50),
+    sch_job1.set_priority_action([
+        SmallActionMeta(sch_job1, ActOp.releasePriority, 50),
+        SmallActionMeta(dp_job3, ActOp.getPriority, 50),
+        SmallActionMeta(usr_job4, ActOp.getPriority, 50),
     ])
-    dp_job3.set_wakeup_action([
-        SmallActionMeta(dp_job3, ActOp.stop, 30),
-        SmallActionMeta(usr_job2, ActOp.wakeup, 30),
+    dp_job3.set_priority_action([
+        SmallActionMeta(dp_job3, ActOp.releasePriority, 30),
+        SmallActionMeta(usr_job2, ActOp.getPriority, 30),
     ])
-    usr_job4.set_wakeup_action([
-        SmallActionMeta(usr_job4, ActOp.stop, 10),
+    usr_job4.set_priority_action([
+        SmallActionMeta(usr_job4, ActOp.releasePriority, 10),
     ])
-    usr_job2.set_wakeup_action([
-        SmallActionMeta(usr_job2, ActOp.stop, 10),
+    usr_job2.set_priority_action([
+        SmallActionMeta(usr_job2, ActOp.releasePriority, 10),
     ])
+    usr_job2.set_release_action([
+        #last job of a TTI calls end barrier when release
+        SmallActionMeta(fake_job, ActOp.endTTIBarrier,0),
+    ])
+
+    #next start TTI happens in the same cycle
+    fake_job.startTTI_actions = [
+        SmallActionMeta(usr_job3, ActOp.getPriority, 0), #TTI start first job immediately
+        SmallActionMeta(fake_job, ActOp.endTTIBarrier,100), #call end barrier after 100w cycle
+    ]
+    fake_job.endTTI_actions = [
+        SmallActionMeta(fake_job, ActOp.startTTI, 0), #start next TTI after last end immediately
+    ]
+    #set barrier init status
+    fake_job.endTTI_BarrierNum = 0
+    fake_job.endTTI_BarrierMax = 2
 
     # init event
     job_clk = 0
-    job_eq.add_event(SmallEvent(0, usr_job3, ActOp.wakeup), 0)
+    job_eq.add_event(SmallEvent(0, fake_job, ActOp.startTTI), 0)
+    maxtick = job_clk_period * 201
+
+    testsys.controlplane.startTraining()
 
     while True:  # loop for clk
         while (job_eq.peek_cycle() <= job_clk):  # loop for event in the same cycle
             eve = job_eq.pop_event()
             eve.schedule_out(job_clk)
+        if job_clk == 100:
+            testsys.controlplane.startQoS()
         next_event_cycle = job_eq.peek_cycle()
 
-        if maxtick <= init_clk + next_event_cycle * 10000:
-            exit_event = m5.simulate(maxtick - m5.curTick())
+        if maxtick <= next_event_cycle*job_clk_period:
+            exit_event = m5.simulate((next_event_cycle - job_clk)*job_clk_period)
             return exit_event
 
-        exit_event = m5.simulate((next_event_cycle - job_clk)*10000)
+        exit_event = m5.simulate((next_event_cycle - job_clk)*job_clk_period)
         exit_cause = exit_event.getCause()
         if exit_cause != "simulate() limit reached":
             return exit_event

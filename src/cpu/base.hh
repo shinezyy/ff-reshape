@@ -220,6 +220,11 @@ class BaseCPU : public ClockedObject
     /** Set cpu task id */
     void taskId(uint32_t id) { _taskId = id; }
 
+    /** Get cpu task id */
+    uint32_t getTaskId() const { return _taskId; }
+    /** Set cpu task id */
+    void setTaskId(uint32_t id) { _taskId = id; }
+
     uint32_t getPid() const { return _pid; }
     void setPid(uint32_t pid) { _pid = pid; }
 

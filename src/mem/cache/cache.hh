@@ -79,11 +79,13 @@ class Cache : public BaseCache
      */
     std::unordered_set<RequestPtr> outstandingSnoop;
 
-    /* Luoshan: Add tokenbucket here */
-    std::vector <Token_Bucket *> buckets;
     /* Luoshan: Add a cross queue for pkt from multi-buckets to cache */
     cross_queue_t cross_queue;
     void send_cross_pkts();                  // sending all pkts in cross_queue
+
+  public:
+    /* Luoshan: Add tokenbucket here */
+    std::vector <Token_Bucket *> buckets;
 
   protected:
     /**

@@ -781,6 +781,13 @@ class FullO3CPU : public BaseO3CPU
     void htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
                             HtmFailureFaultCause cause);
 
+    uint64_t getCommittedInsts(){
+      return cpuStats.committedInsts[0].value();
+    }
+    uint64_t getNumCycles(){
+      return baseStats.numCycles.value();
+    }
+
   private:
     uint32_t diff_wdst[DIFFTEST_WIDTH];
     uint64_t diff_wdata[DIFFTEST_WIDTH];

@@ -41,6 +41,7 @@ from __future__ import print_function
 from m5.defines import buildEnv
 from m5.params import *
 from m5.proxy import *
+from m5.SimObject import *
 
 from m5.objects.BaseCPU import BaseCPU
 from m5.objects.FUPool import *
@@ -64,6 +65,11 @@ class CommitPolicy(ScopedEnum):
 class DerivO3CPU(BaseCPU):
     type = 'DerivO3CPU'
     cxx_header = 'cpu/o3/deriv.hh'
+
+    cxx_exports = [
+        PyBindMethod("getCommittedInsts"),
+        PyBindMethod("getNumCycles"),
+    ]
 
     @classmethod
     def memory_mode(cls):

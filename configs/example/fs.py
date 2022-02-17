@@ -243,6 +243,11 @@ def build_test_system(np):
                 for isa in cpu.isa:
                     isa.nohype = True
             test_sys.nohype_num = np
+            test_sys.controlplane = ControlPlane(clk_domain=test_sys.cpu_clk_domain)
+            test_sys.controlplane.pio = test_sys.iobus.master
+            test_sys.controlplane.cpus = test_sys.cpu
+            test_sys.controlplane.l2s = test_sys.l2
+            test_sys.controlplane.l3 = test_sys.l3
 
     return test_sys
 
