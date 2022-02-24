@@ -10,17 +10,7 @@
 #include "mem/cache/cache.hh"
 #include "sim/eventq.hh"
 //#include "sim/clocked_object.hh"
-
-class OrderedReq {
-public:
-    PacketPtr pkt;
-    /// timestamp
-    uint64_t time_arrive = 0;
-
-    OrderedReq(PacketPtr pkt, uint64_t time_arrive) :
-      pkt(pkt), time_arrive(time_arrive)
-    { };
-};
+class Cache;
 
 class Token_Bucket
 {
@@ -30,18 +20,17 @@ class Token_Bucket
     bool bypass;            // bypass true: do not use token bucket
     int tokens;             // current num of tokens in the bucket
 
-    std::queue<OrderedReq *> waiting_queue;  // reqs not yet sent to mem_ctrl
+    std::queue<PacketPtr> waiting_queue;  // reqs not yet sent to mem_ctrl
 
     EventManager *em;                        // The manager which is used for the event queue
     void update_tokens();                    // Used to schedule updating tokens when curTick%freq==0
     EventFunctionWrapper updateTokenEvent;   // Event used to call update_tokens
 
-    cross_queue_t* cross_queuePtr;           // point to the cross_queue in cache
     Cache *parent_cache;                     // point to cache it belongs to
 
   public:
-    Token_Bucket(EventManager *_em, int size, int freq, int inc, bool bypass,\
-    cross_queue_t *cross_queuePtr, Cache *parent_cache);
+    Token_Bucket(EventManager *_em, int size, int freq, int inc, bool bypass,
+      Cache *parent_cache);
 
     inline int get_size() { return size; }
     inline void set_size(int s) { size = s; }
@@ -57,11 +46,16 @@ class Token_Bucket
 
     inline int get_tokens() { return (bypass) ? 1 : tokens; }
 
-    OrderedReq* dequeue_request();
-    void enqueue_request(OrderedReq *request, bool head);
-    OrderedReq* get_waitq_front();
-
+    /**
+     * return true if the pkt passes,
+     * return false if there are not enought tokens and
+     * the pkt is pushed into the waiting queue
+     */
+    bool checkPassPkt(PacketPtr pkt);
+    private:
+    void enqueue_request(PacketPtr request, bool head=false);
     bool test_and_get();
+    void enqueue_request(PacketPtr pkt);
 };
 
 #endif

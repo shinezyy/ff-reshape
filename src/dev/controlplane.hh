@@ -16,7 +16,8 @@ namespace LvNATasks {
     enum JobId {
         MaxLowPrivId = 7,
         JobIdStart = 8,
-        NumId = 16
+        NumId = 16,
+        NumBuckets = 32,
     };
     const int NumJobs = 5;
     static inline uint32_t job2TaskId(uint32_t job_id){
@@ -24,6 +25,9 @@ namespace LvNATasks {
     }
     static inline uint32_t task2JobId(uint32_t task_id){
       return task_id - JobIdStart;
+    }
+    static inline uint32_t taskId2OptionalBypassIdx(uint32_t task_id){
+      return task_id + NumId;
     }
 }
 
