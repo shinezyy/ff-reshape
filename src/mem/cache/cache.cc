@@ -67,15 +67,16 @@
 
 Cache::Cache(const CacheParams &p)
     : BaseCache(p, p.system->cacheLineSize()),
-      doFastWrites(true)
+      doFastWrites(true),
+      numSets(p.size / (p.system->cacheLineSize() * p.assoc))
 {
     assert(p.tags);
     assert(p.replacement_policy);
     /* Luoshan: initialize token buckets */
     int init_size = 10000, init_freq = 10000, init_inc = 50;
-    for (int i = 0; i < LvNATasks::NumId; i++){
+    for (int i = 0; i < LvNATasks::NumBuckets; i++){
         buckets.push_back(new Token_Bucket(
-            this, init_size, init_freq, init_inc, true, &cross_queue, this));
+            this, init_size, init_freq, init_inc, true, this));
         //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, true, &cross_queue, this);
         //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, false, &cross_queue, this);
     }
@@ -478,51 +479,25 @@ Cache::recvTimingReq(PacketPtr pkt)
     }
 
     if (pkt->isRequest()){
-        /* Luoshan: Add Tokenbucket port */
-        allocReq2Bucket(pkt);
-        /* fetch one packet from tokenbuckets */
-        OrderedReq *earliest_req = nullptr;
-        int index;
-        for (int i = 0; i < LvNATasks::NumId; i++){
-            OrderedReq *req = buckets[i]->get_waitq_front();
-            int token = buckets[i]->get_tokens();
-            if (req && token>0){
-                if (earliest_req==nullptr || req->time_arrive < earliest_req->time_arrive)
-                {
-                    earliest_req = req;
-                    index = i;
-                }
-            }
+        int task_id = pkt->req->taskId();
+        if (task_id >= LvNATasks::NumId){
+            BaseCache::recvTimingReq(pkt);
+            return;
         }
-        if (earliest_req) {
-            buckets[index]->dequeue_request();
-            cross_queue.push(earliest_req->pkt);
-        }else{
-            //fprintf(stderr,"use tokens out, bucket %d\n",bucket_num);
-        }
-        /* send all pkt in cross_queue out */
-        if (!cross_queue.empty()){
-            send_cross_pkts();
+        int index = task_id;
+        bool ok_to_pass = buckets[index]->checkPassPkt(pkt);
+        if (ok_to_pass)
+        {
+            BaseCache::recvTimingReq(pkt);
         }
     }else{
         BaseCache::recvTimingReq(pkt);
     }
 }
 
-void Cache::send_cross_pkts()
+void Cache::handleStalledPkt(PacketPtr pkt)
 {
-    while (!cross_queue.empty()){
-        PacketPtr cross_pkt = cross_queue.front();
-        BaseCache::recvTimingReq(cross_pkt);
-        cross_queue.pop();
-    }
-}
-
-void
-Cache::sendOrderedReqs()
-{
-    //em->reschedule(sendPktEvent, curTick()+1);
-    send_cross_pkts();
+    BaseCache::recvTimingReq(pkt);
 }
 
 PacketPtr
@@ -1406,25 +1381,6 @@ Cache::isCachedAbove(PacketPtr pkt, bool is_timing)
     } else {
         cpuSidePort.sendAtomicSnoop(pkt);
         return pkt->isBlockCached();
-    }
-}
-
-/* Luoshan:  */
-int
-Cache::allocReq2Bucket(PacketPtr pkt)
-{
-    if (pkt->isRequest()){
-        RequestPtr req = pkt->req;
-        int index;
-        if (req->hasContextId())
-            index = req->contextId() % LvNATasks::NumId;
-        else
-            index = 0;
-        OrderedReq *ordered_req = new OrderedReq(pkt, curTick());
-        buckets[index]->enqueue_request(ordered_req,false);
-        return index;
-    }else{
-        return -1;
     }
 }
 
