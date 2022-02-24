@@ -276,6 +276,8 @@ def scriptCheckpoints(options, maxtick, cptdir):
 def benchCheckpoints(options, maxtick, cptdir):
     exit_event = m5.simulate(maxtick - m5.curTick())
     exit_cause = exit_event.getCause()
+    if exit_cause == "core 0 warmup done":
+        exit_event = m5.simulate(maxtick - m5.curTick())
 
     num_checkpoints = 0
     max_checkpoints = options.max_checkpoints
