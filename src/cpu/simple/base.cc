@@ -55,6 +55,7 @@
 #include "cpu/checker/thread_context.hh"
 #include "cpu/exetrace.hh"
 #include "cpu/pred/bpred_unit.hh"
+#include "cpu/pred/forward_n.hh"
 #include "cpu/simple/exec_context.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/smt.hh"
@@ -84,6 +85,7 @@ BaseSimpleCPU::BaseSimpleCPU(const BaseSimpleCPUParams &p)
     : BaseCPU(p),
       curThread(0),
       branchPred(p.branchPred),
+      forwardN(p.forwardN),
       traceData(NULL),
       inst(),
       _status(Idle)
@@ -390,6 +392,11 @@ BaseSimpleCPU::preExecute()
         if (predict_taken)
             ++t_info.execContextStats.numPredictedBranches;
     }
+
+    if (forwardN && curStaticInst) {
+        t_info.fnPred = thread->pcState();
+        forwardN->predict(t_info.fnPred, curStaticInst);
+    }
 }
 
 void
@@ -476,6 +483,8 @@ BaseSimpleCPU::advancePC(const Fault &fault)
 
     const bool branching(thread->pcState().branching());
 
+    TheISA::PCState lastPC = thread->pcState();
+
     //Since we're moving to a new pc, zero out the offset
     t_info.fetchOffset = 0;
     if (fault != NoFault) {
@@ -505,5 +514,9 @@ BaseSimpleCPU::advancePC(const Fault &fault)
             branchPred->squash(cur_sn, thread->pcState(), branching, curThread);
             ++t_info.execContextStats.numBranchMispred;
         }
+    }
+
+    if (forwardN && curStaticInst) {
+        forwardN->result(thread->pcState(), curStaticInst, lastPC);
     }
 }

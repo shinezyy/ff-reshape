@@ -75,6 +75,7 @@ namespace Trace {
 
 struct BaseSimpleCPUParams;
 class BPredUnit;
+class ForwardN;
 class SimpleExecContext;
 
 class BaseSimpleCPU : public BaseCPU
@@ -82,6 +83,7 @@ class BaseSimpleCPU : public BaseCPU
   protected:
     ThreadID curThread;
     BPredUnit *branchPred;
+    ForwardN *forwardN;
 
     void checkPcEventQueue();
     void swapActiveThread();

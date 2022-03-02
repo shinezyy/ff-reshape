@@ -87,3 +87,6 @@ DebugFlag('FFOracleBP_squash')
 DebugFlag('FFOracleBP_misc')
 CompoundFlag('FFOracleBP', [ 'FFOracleBP_lookup', 'FFOracleBP_update', 'FFOracleBP_squash',
                                 'FFOracleBP_misc'])
+SimObject('ForwardN.py')
+Source('forward_n.cc')
+DebugFlag('ForwardN')
