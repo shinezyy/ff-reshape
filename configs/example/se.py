@@ -125,11 +125,6 @@ Options.addSEOptions(parser)
 if '--ruby' in sys.argv:
     Ruby.define_options(parser)
 
-parser.add_argument("--use-forward-n", action='store_true')
-parser.add_argument("--trace-forward-n")
-parser.add_argument("--forward-n-histlen")
-parser.add_argument("--forward-n-histtakenlen")
-
 (options, args) = parser.parse_args()
 
 if args:
@@ -247,20 +242,6 @@ for i in range(np):
         indirectBPClass = \
             ObjectList.indirect_bp_list.get(options.indirect_bp_type)
         system.cpu[i].branchPred.indirectBranchPred = indirectBPClass()
-
-    if options.use_forward_n:
-        system.cpu[i].forwardN = m5.objects.ForwardN()
-        if options.trace_forward_n:
-            system.cpu[i].forwardN.traceStart = \
-                options.trace_forward_n.split(":")[0]
-            system.cpu[i].forwardN.traceCount = \
-                options.trace_forward_n.split(":")[1]
-        if options.forward_n_histlen:
-            system.cpu[i].forwardN.histLength = \
-                int(options.forward_n_histlen)
-        if options.forward_n_histtakenlen:
-            system.cpu[i].forwardN.histTakenLength = \
-                int(options.forward_n_histtakenlen)
 
     system.cpu[i].createThreads()
 

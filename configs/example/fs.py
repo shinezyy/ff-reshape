@@ -313,8 +313,18 @@ Options.addCommonOptions(parser)
 Options.addFSOptions(parser)
 SSOptions.addO3Options(parser)
 
-parser.add_option("--use-ff-oracle-bp", action='store_true')
+parser.add_option("--ff-bp-type", type="choice", default="none",
+                      choices=['none', 'forwardN', 'oracle'],
+                      help = "type of FF branch predictor");
+
+# Options for forwardN BP
+parser.add_option("--trace-forward-n")
+parser.add_option("--forward-n-histlen")
+parser.add_option("--forward-n-histtakenlen")
+
+# Options for oracle BP
 parser.add_option("--ff-oracle-preset-accuracy", type='float', default=1.0)
+
 
 # Add the ruby specific and protocol specific options
 if '--ruby' in sys.argv:
@@ -366,12 +376,28 @@ if options.generic_rv_cpt is not None:
     else:
         test_sys.gcpt_restorer_file = options.gcpt_restorer
 
-if options.use_ff_oracle_bp:
+if options.ff_bp_type != 'none':
     assert(options.generic_rv_cpt is not None)
     assert(options.cpu_type == 'DerivO3CPU') # FIXME later
+
     for (i, cpu) in enumerate(test_sys.cpu):
-        cpu.ffBranchPred = m5.objects.FFOracleBP()
-        cpu.ffBranchPred.presetAccuracy = options.ff_oracle_preset_accuracy
+        if options.ff_bp_type == 'forwardN':
+            cpu.ffBranchPred = m5.objects.ForwardN()
+            if options.trace_forward_n:
+                cpu.ffBranchPred.traceStart = \
+                    options.trace_forward_n.split(":")[0]
+                cpu.ffBranchPred.traceCount = \
+                    options.trace_forward_n.split(":")[1]
+            if options.forward_n_histlen:
+                cpu.ffBranchPred.histLength = \
+                    int(options.forward_n_histlen)
+            if options.forward_n_histtakenlen:
+                cpu.ffBranchPred.histTakenLength = \
+                    int(options.forward_n_histtakenlen)
+
+        elif options.ff_bp_type == 'oracle':
+            cpu.ffBranchPred = m5.objects.FFOracleBP()
+            cpu.ffBranchPred.presetAccuracy = options.ff_oracle_preset_accuracy
 
 if len(bm) == 2:
     drive_sys = build_drive_system(np)

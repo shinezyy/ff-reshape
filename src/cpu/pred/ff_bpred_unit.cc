@@ -108,6 +108,7 @@ FFBPredUnit::update(const InstSeqNum &done_sn, ThreadID tid)
         update(tid, predHist[tid].back().pc,
                     predHist[tid].back().bpHistory, false,
                     predHist[tid].back().inst,
+                    predHist[tid].back().nextK_PC,
                     predHist[tid].back().nextK_PC);
 
         predHist[tid].pop_back();
@@ -139,6 +140,7 @@ FFBPredUnit::squash(const InstSeqNum &squashed_sn, ThreadID tid)
 
 void
 FFBPredUnit::squash(const InstSeqNum &squashed_sn,
+                  const TheISA::PCState &thisPC,
                   const TheISA::PCState &corr_nextK_PC,
                   ThreadID tid)
 {
@@ -190,12 +192,10 @@ FFBPredUnit::squash(const InstSeqNum &squashed_sn,
         // local/global histories. The counter tables will be updated when
         // the branch actually commits.
 
-        // Remember the correct direction for the update at commit.
-        pred_hist.front().nextK_PC = corr_nextK_PC.instAddr();
-
-        update(tid, (*hist_it).pc,
+        assert(thisPC.pc() == (*hist_it).pc);
+        update(tid, thisPC,
                pred_hist.front().bpHistory, true, pred_hist.front().inst,
-               corr_nextK_PC.instAddr());
+               pred_hist.front().nextK_PC, corr_nextK_PC.instAddr());
 
     } else {
         DPRINTF(Branch, "[tid:%i] [sn:%llu] pred_hist empty, can't "

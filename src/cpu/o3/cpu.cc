@@ -1663,11 +1663,13 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
                                                     hist.back().tid);
             }
 
-            Addr corrNextKPC = hist[hist.size() - 1 - ffBranchPred->getNumLookAhead()].pc;
-            if (hist.back().predNextKPC == corrNextKPC) {
+            const TheISA::PCState &corrNextKPC =
+                    hist[hist.size() - 1- ffBranchPred->getNumLookAhead()].dynInst->pcState();
+            if (hist.back().predNextKPC == corrNextKPC.pc()) {
                 ffBranchPred->update(hist.back().seqNum, hist.back().tid);
             } else {
                 ffBranchPred->squash(hist.back().seqNum,
+                                    hist.back().dynInst->pcState(),
                                     corrNextKPC,
                                     hist.back().tid);
 

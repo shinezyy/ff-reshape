@@ -18,3 +18,15 @@ class FFOracleBP(FFBranchPredictor):
 
     presetAccuracy = Param.Float(1.0, "Preset accuracy")
     randNumSeed = Param.Unsigned(0, "Random number seed")
+
+class ForwardN(FFBranchPredictor):
+    type = 'ForwardN'
+    cxx_class = 'ForwardN'
+    cxx_header = "cpu/pred/forward_n.hh"
+
+    histLength = Param.Unsigned(8, "History length for control inst PCs")
+    histTakenLength = \
+        Param.Unsigned(16, "History length for control inst takens")
+
+    traceStart = Param.Unsigned(0, "Trace misprediction from inst count")
+    traceCount = Param.Unsigned(0, "Trace misprediction count")

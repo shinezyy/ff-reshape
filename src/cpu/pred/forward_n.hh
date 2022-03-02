@@ -13,9 +13,9 @@
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/pred/ff_bpred_unit.hh"
 #include "cpu/static_inst.hh"
 #include "params/ForwardN.hh"
-#include "sim/sim_object.hh"
 
 /**
  * Implements a local predictor that uses the PC to index into a table of
@@ -24,17 +24,19 @@
  * predictor state that needs to be recorded or updated; the update can be
  * determined solely by the branch being taken or not taken.
  */
-class ForwardN : public SimObject
+class ForwardN : public FFBPredUnit
 {
 public:
 
     ForwardN(const ForwardNParams &params);
 
-    void predict(TheISA::PCState &pc, const StaticInstPtr &inst);
+    Addr lookup(ThreadID tid, Addr instPC, void * &bp_history) override;
 
-    void result(const TheISA::PCState &correct_target,
-                const StaticInstPtr &inst,
-                const TheISA::PCState &pc);
+    void update(ThreadID tid, const TheISA::PCState &thisPC,
+                void *bp_history, bool squashed,
+                const StaticInstPtr &inst, Addr pred_nextK_PC, Addr corr_nextK_PC) override;
+
+    void squash(ThreadID tid, void *bp_history) override;
 
 private:
     static Addr hashHistory(const std::deque<Addr> &history);
@@ -44,10 +46,6 @@ private:
         ForwardNStats(Stats::Group *parent);
 
         Stats::Scalar lookups;
-
-        Stats::Scalar correct;
-
-        Stats::Formula correctRatio;
 
         Stats::Scalar hit;
 
@@ -69,16 +67,18 @@ private:
         std::map<Addr,
             std::map<uint64_t, Addr>>> predictor;
 
-    // (pc, isControl, taken)
-    std::queue<std::tuple<Addr, bool, bool>> pcBefore;
-    std::queue<Addr> predHist;
-
     const Addr invalidPC = 0xFFFFFFFFFFFFFFFFLL;
 
     std::deque<Addr> lastCtrlsForPred;
     std::deque<Addr> lastCtrlsForUpd;
 
     uint64_t histTaken;
+
+    unsigned coldStartCount{0};
+
+    struct BPState {
+
+    } state;
 };
 
 #endif //GEM5_FORWARD_N_H

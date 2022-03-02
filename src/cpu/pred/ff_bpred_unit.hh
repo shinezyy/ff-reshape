@@ -98,6 +98,7 @@ class FFBPredUnit : public SimObject
      * @param tid The thread id.
      */
     void squash(const InstSeqNum &squashed_sn,
+                const TheISA::PCState &thisPC,
                 const TheISA::PCState &corr_nextK_PC,
                 ThreadID tid);
 
@@ -136,9 +137,9 @@ class FFBPredUnit : public SimObject
      * for squashed branches)
      * @todo Make this update flexible enough to handle a global predictor.
      */
-    virtual void update(ThreadID tid, Addr instPC,
+    virtual void update(ThreadID tid, const TheISA::PCState &thisPC,
                    void *bp_history, bool squashed,
-                   const StaticInstPtr &inst, Addr corr_nextK_PC) = 0;
+                   const StaticInstPtr &inst, Addr pred_nextK_PC, Addr corr_nextK_PC) = 0;
 
     virtual void syncStoreConditional(bool lrValid, ThreadID tid) {}
 

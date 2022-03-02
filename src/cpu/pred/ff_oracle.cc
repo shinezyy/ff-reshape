@@ -112,14 +112,14 @@ Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
     return predPC;
 }
 
-void FFOracleBP::update(ThreadID tid, Addr instPC,
+void FFOracleBP::update(ThreadID tid, const TheISA::PCState &thisPC,
                         void *bp_history, bool squashed,
-                        const StaticInstPtr &inst, Addr corr_nextK_PC) {
+                        const StaticInstPtr &inst, Addr pred_nextK_PC, Addr corr_nextK_PC) {
 
     auto history_state = static_cast<BPState *>(bp_history);
 
     DPRINTF(FFOracleBP_update, "- update%s PC=%x hist_iid=%u\n",
-                                squashed ? " squashed" : " ", instPC,
+                                squashed ? " squashed" : " ", thisPC.pc(),
                                 history_state->front_iid);
 
     if (squashed) {

@@ -36,9 +36,9 @@ public:
 
     Addr lookup(ThreadID tid, Addr instPC, void * &bp_history) override;
 
-    void update(ThreadID tid, Addr instPC,
+    void update(ThreadID tid, const TheISA::PCState &thisPC,
                 void *bp_history, bool squashed,
-                const StaticInstPtr &inst, Addr corr_nextK_PC) override;
+                const StaticInstPtr &inst, Addr pred_nextK_PC, Addr corr_nextK_PC) override;
 
     void squash(ThreadID tid, void *bp_history) override;
 
@@ -52,7 +52,6 @@ public:
 
   private:
     void nemuStep();
-    bool isExceptionRaised(Addr npc);
 
   private:
     unsigned int numLookAhead;
