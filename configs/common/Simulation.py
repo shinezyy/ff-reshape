@@ -498,6 +498,8 @@ def repeatJobs(testsys, maxtick):
             eve.schedule_out(job_clk)
         if job_clk == 100:
             testsys.controlplane.startQoS()
+            m5.stats.dump()
+            m5.stats.reset()
         next_event_cycle = job_eq.peek_cycle()
 
         if maxtick <= next_event_cycle*job_clk_period:

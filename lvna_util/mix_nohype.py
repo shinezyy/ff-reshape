@@ -9,12 +9,17 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-b','--benchmark', type=str, required=True,help="like gcc-xal-xal-xal")
 parser.add_argument('-I','--insts',type=int,default=2_000_000)
 parser.add_argument('-W','--warmup',type=int,default=50_000_000)
+parser.add_argument('-D','--output',type=str,default='',help='output dir')
 parser.add_argument('--debug-flag',type=str)
+parser.add_argument('-C','--compile', action="store_true",help="compile Gem5 first")
 args = parser.parse_args()
+
+if args.compile:
+    os.system('python3 `which scons` '+ff_base+'build/RISCV/gem5.opt -j9')
 
 # ==================  Basics  ==================
 binary = ff_base+'build/RISCV/gem5.opt'
-outdir = ff_base+'log/{}'.format(args.benchmark)
+outdir = ff_base+'log/{}'.format(args.benchmark) if args.output=='' else args.output
 outopt = '--outdir='+outdir
 debugf = '--debug-flag='+ args.debug_flag if args.debug_flag else ''
 fspy   = ff_base+'configs/example/fs.py'
@@ -34,7 +39,7 @@ opt.append('--l2_size=768kB --l2_assoc=12')
 opt.append('--l3_size=2MB --l3_assoc=8')
 
 gcpt_all = [(benchmark_dir + benchmark_cpt_file[bm]) for bm in args.benchmark.split("-")]
-# opt.append('--job-benchmark')
+opt.append('--job-benchmark')
 
 # use "" around multiple paths connnected by ;
 opt.append('--generic-rv-cpt=' + '"' + ";".join(gcpt_all) + '"')
