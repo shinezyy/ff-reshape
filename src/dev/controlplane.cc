@@ -12,7 +12,8 @@ FgJobMeta::FgJobMeta(ControlPlane *cp):
 void
 FgJobMeta::jobUp(int job_id, int cpu_id,uint64_t now_cycle, uint64_t now_insts)
 {
-  cp->cpus[cpu_id]->setTaskId(LvNATasks::job2TaskId(job_id));
+  // cp->cpus[cpu_id]->setTaskId(LvNATasks::job2TaskId(job_id));
+  cp->cpus[cpu_id]->setTaskId(LvNATasks::jobId2OptionalBypassIdx(job_id));
   up(now_cycle,now_insts);
 }
 void

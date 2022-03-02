@@ -13,6 +13,9 @@
 #include "params/ControlPlane.hh"
 
 namespace LvNATasks {
+    // 0~7 for low priv
+    // 8~15 for high priv task
+    // 16~31 are bypassIdx of 0~15
     enum JobId {
         MaxLowPrivId = 7,
         JobIdStart = 8,
@@ -25,6 +28,9 @@ namespace LvNATasks {
     }
     static inline uint32_t task2JobId(uint32_t task_id){
       return task_id - JobIdStart;
+    }
+    static inline uint32_t jobId2OptionalBypassIdx(uint32_t job_id){
+      return job_id + JobIdStart + NumId;
     }
     static inline uint32_t taskId2OptionalBypassIdx(uint32_t task_id){
       return task_id + NumId;

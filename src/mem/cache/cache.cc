@@ -73,12 +73,17 @@ Cache::Cache(const CacheParams &p)
     assert(p.tags);
     assert(p.replacement_policy);
     /* Luoshan: initialize token buckets */
-    int init_size = 10000, init_freq = 10000, init_inc = 50;
-    for (int i = 0; i < LvNATasks::NumBuckets; i++){
+    int init_size = 10000, init_freq = 10000, init_inc = 10;
+    // ptb_walker_cache and iocache at level 0
+    for (int i = 0; i < LvNATasks::NumId; i++){
+         buckets.push_back(new Token_Bucket(
+             this, init_size, init_freq, init_inc, p.cache_level!=2, this));
+        //buckets.push_back(new Token_Bucket(
+        //    this, init_size, init_freq, init_inc, false, this));
+    }
+    for (int i = LvNATasks::NumId; i < LvNATasks::NumBuckets; i++){
         buckets.push_back(new Token_Bucket(
             this, init_size, init_freq, init_inc, true, this));
-        //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, true, &cross_queue, this);
-        //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, false, &cross_queue, this);
     }
 }
 
