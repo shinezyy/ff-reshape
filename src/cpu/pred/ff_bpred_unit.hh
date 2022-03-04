@@ -133,13 +133,13 @@ class FFBPredUnit : public SimObject
      * @param squashed Set to true when this function is called during a
      * squash operation.
      * @param inst Static instruction information
-     * @param corr_nextK_PC The resolved target of the branch (only needed
-     * for squashed branches)
+     * @param corr_DBB The resolved target of DBB
      * @todo Make this update flexible enough to handle a global predictor.
      */
     virtual void update(ThreadID tid, const TheISA::PCState &thisPC,
                    void *bp_history, bool squashed,
-                   const StaticInstPtr &inst, Addr pred_nextK_PC, Addr corr_nextK_PC) = 0;
+                   const StaticInstPtr &inst,
+                   const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) = 0;
 
     virtual void syncStoreConditional(bool lrValid, ThreadID tid) {}
 
@@ -182,7 +182,7 @@ class FFBPredUnit : public SimObject
 
         void *bpHistory;
 
-        Addr nextK_PC;
+        TheISA::PCState nextK_PC;
 
         /** The branch instrction */
         const StaticInstPtr inst;

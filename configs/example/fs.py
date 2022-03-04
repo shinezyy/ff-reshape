@@ -377,7 +377,6 @@ if options.generic_rv_cpt is not None:
         test_sys.gcpt_restorer_file = options.gcpt_restorer
 
 if options.ff_bp_type != 'none':
-    assert(options.generic_rv_cpt is not None)
     assert(options.cpu_type == 'DerivO3CPU') # FIXME later
 
     for (i, cpu) in enumerate(test_sys.cpu):
@@ -396,6 +395,7 @@ if options.ff_bp_type != 'none':
                     int(options.forward_n_histtakenlen)
 
         elif options.ff_bp_type == 'oracle':
+            assert(options.generic_rv_cpt is not None)
             cpu.ffBranchPred = m5.objects.FFOracleBP()
             cpu.ffBranchPred.presetAccuracy = options.ff_oracle_preset_accuracy
 

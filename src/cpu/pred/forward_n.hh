@@ -34,9 +34,11 @@ public:
 
     void update(ThreadID tid, const TheISA::PCState &thisPC,
                 void *bp_history, bool squashed,
-                const StaticInstPtr &inst, Addr pred_nextK_PC, Addr corr_nextK_PC) override;
+                const StaticInstPtr &inst,
+                const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) override;
 
     void squash(ThreadID tid, void *bp_history) override;
+
 
 private:
     static Addr hashHistory(const std::deque<Addr> &history);
@@ -77,8 +79,20 @@ private:
     unsigned coldStartCount{0};
 
     struct BPState {
-
     } state;
+
+
+    struct DBB {
+        Addr exitPointPC;
+        bool branching;
+        // (pc, isControl)
+        std::vector<std::pair<Addr, bool>> pcSet;
+    };
+    std::queue<DBB> bblockBefore;
+
+    // dynamic basic blocks are identified by exit point PC
+    Addr currentDBB;
+
 };
 
 #endif //GEM5_FORWARD_N_H
