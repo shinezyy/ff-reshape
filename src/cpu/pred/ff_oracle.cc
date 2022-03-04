@@ -48,6 +48,8 @@ FFOracleBP::FFOracleBP(const FFOracleBPParams &params)
                     params.presetAccuracy * 100);
     state.commit_iid = numLookAhead - 1;
     state.front_iid = numLookAhead - 1;
+    state.front_seqNum = 0;
+    seqNum = 0;
     reset();
 }
 
@@ -94,8 +96,19 @@ Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
     auto hist = new BPState(state);
     bp_history = hist;
 
-    advanceFront();
+    state.front_seqNum++;
+
+    if (!inited) {
+        lookAheadInsts(numLookAhead, true);
+        orderedOracleEntries.clear();
+        inited = true;
+        advanceFront();
+    }
+
     syncFront();
+    if (state.front_seqNum == frontPointer->exitSeqNum) {
+        advanceFront();
+    }
 
     predPC = frontPointer->pc;
     if (!bdGen(randGen)) {
@@ -114,7 +127,8 @@ Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
 
 void FFOracleBP::update(ThreadID tid, const TheISA::PCState &thisPC,
                         void *bp_history, bool squashed,
-                        const StaticInstPtr &inst, Addr pred_nextK_PC, Addr corr_nextK_PC) {
+                        const StaticInstPtr &inst,
+                        const TheISA::PCState &pred_nextK_PC, const TheISA::PCState &corr_nextK_PC) {
 
     auto history_state = static_cast<BPState *>(bp_history);
 
@@ -138,10 +152,10 @@ void FFOracleBP::update(ThreadID tid, const TheISA::PCState &thisPC,
         DPRINTF(FFOracleBP_misc, "Back iid = %u\n",
                 orderedOracleEntries.back().iid);
 
-        assert(history_state->front_iid + 1 == orderedOracleEntries.back().iid);
-
-        assert(!orderedOracleEntries.empty());
-        orderedOracleEntries.pop_back();
+        if (!orderedOracleEntries.empty() &&
+                history_state->front_seqNum + 1 == orderedOracleEntries.back().exitSeqNum) {
+            orderedOracleEntries.pop_back();
+        }
 
         DPRINTF(FFOracleBP_misc, "Oracle table size: %lu.\n", orderedOracleEntries.size());
 
@@ -155,6 +169,10 @@ void FFOracleBP::squash(ThreadID tid, void *bp_history)
     auto history_state = static_cast<BPState *>(bp_history);
 
     DPRINTF(FFOracleBP_squash, "- squash hist_iid=%lu\n", history_state->front_iid);
+
+    if (history_state->front_seqNum < state.front_seqNum) {
+        state.front_seqNum = history_state->front_seqNum;
+    }
 
     if (history_state->front_iid < state.front_iid) {
         state.front_iid = history_state->front_iid;
@@ -185,14 +203,11 @@ void FFOracleBP::squash(ThreadID tid, void *bp_history)
 void FFOracleBP::lookAheadInsts(unsigned len, bool record)
 {
     DPRINTF(FFOracleBP_misc, "Start feeding %i insts.\n", len);
-    for (unsigned i = 0; i < len; i++) {
+    for (unsigned numDBB = 0; numDBB < len; ) {
+        bool exitDBB = false;
         Addr pc = diff.nemu_this_pc;
         DPRINTF(FFOracleBP_misc, "Got PC [sn%lu]: %#x\n", oracleIID, pc);
-        if (record) {
-            orderedOracleEntries.push_front(OracleEntry{oracleIID, pc, scInFlight});
-            assert(orderedOracleEntries.size() < 300000);
-            oracleIID++;
-        }
+        ++seqNum;
 
         if (!scInFlight) {
             // prevent SC from modifying memory
@@ -211,6 +226,10 @@ void FFOracleBP::lookAheadInsts(unsigned len, bool record)
             decoder->moreBytes(0, 0, inst);
             assert(decoder->instReady());
             StaticInstPtr staticInst = decoder->decode(pcState);
+
+            if (staticInst->isControl()) { // entering new basic block
+                ++numDBB, exitDBB = true;
+            }
 
             auto checkSC = [this](const StaticInstPtr &inst) {
                 if (inst->isStoreConditional() && !scInFlight) {
@@ -235,6 +254,13 @@ void FFOracleBP::lookAheadInsts(unsigned len, bool record)
             ++numInstAfterSC;
             // naive prediction.
             diff.nemu_this_pc += (diff.nemu_this_pc & 3) ? 2 : 4;
+            ++numDBB, exitDBB = true;
+        }
+
+        if (exitDBB && record) {
+            orderedOracleEntries.push_front(OracleEntry{oracleIID, pc, scInFlight, seqNum});
+            assert(orderedOracleEntries.size() < 300000);
+            oracleIID++;
         }
     }
 }
@@ -269,12 +295,6 @@ void FFOracleBP::advanceFront() {
 void FFOracleBP::syncFront() {
     DPRINTF(FFOracleBP_misc, "syncFront\n");
     DPRINTF(FFOracleBP_misc, "Oracle table size: %lu.\n", orderedOracleEntries.size());
-
-    if (!inited) {
-        lookAheadInsts(numLookAhead, true);
-        orderedOracleEntries.clear();
-        inited = true;
-    }
 
     if (orderedOracleEntries.size() == 0) {
         lookAheadInsts(1, true);

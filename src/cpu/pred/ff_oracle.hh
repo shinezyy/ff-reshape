@@ -38,7 +38,8 @@ public:
 
     void update(ThreadID tid, const TheISA::PCState &thisPC,
                 void *bp_history, bool squashed,
-                const StaticInstPtr &inst, Addr pred_nextK_PC, Addr corr_nextK_PC) override;
+                const StaticInstPtr &inst,
+                const TheISA::PCState &pred_nextK_PC, const TheISA::PCState &corr_nextK_PC) override;
 
     void squash(ThreadID tid, void *bp_history) override;
 
@@ -70,6 +71,7 @@ public:
         uint64_t iid;
         Addr pc;
         bool scInFlight;
+        uint64_t exitSeqNum;
     };
     std::list<OracleEntry> orderedOracleEntries;
 
@@ -77,12 +79,14 @@ public:
     EntryIter frontPointer;
 
     struct BPState {
-        uint64_t commit_iid;
-        uint64_t front_iid;
+        uint64_t commit_iid, front_iid;
+        uint64_t front_seqNum;
         Addr instPC;
         bool scInFlight;
     };
     BPState state;
+
+    uint64_t seqNum;
 
     std::default_random_engine randGen;
     std::bernoulli_distribution bdGen;

@@ -383,7 +383,11 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
     }
 
     if (ffBranchPred) {
-        ffBPCommittedInsts.resize(params.numThreads);
+        committedInsts.resize(this->numThreads);
+        committedDBBs.resize(this->numThreads);
+        for (int tid=0; tid < this->numThreads; tid++) {
+            committedDBBs[tid].emplace_front();
+        }
         ffBranchPred->initNEMU(params);
     }
     cpuID = params.cpu_id;
@@ -1650,38 +1654,53 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
 
     FFBranchPredHistory hist {inst->instAddr(),
                                 inst->seqNum, tid, nextK_PC, inst->staticInst, inst};
-    ffBPCommittedInsts[tid].push_front(hist);
+    committedInsts[tid].push_front(hist);
+
+    if (inst->isControl()) { // Entering new dynamic basic block
+        committedDBBs[tid].front().exitPC = inst->instAddr();
+        committedDBBs[tid].front().exitSeqNum = inst->seqNum;
+        committedDBBs[tid].emplace_front();
+    }
+
 
     //
     // dummy backend
     //
-    for (auto &hist : ffBPCommittedInsts) {
-        if (hist.size() > ffBranchPred->getNumLookAhead()) {
+    for (int tid=0; tid < this->numThreads; tid++) {
+        auto &hist = committedInsts[tid];
+        auto &DBBlist = committedDBBs[tid];
+
+        if (DBBlist.size() > ffBranchPred->getNumLookAhead()) {
+
+            const auto &corrDBB = DBBlist[DBBlist.size() - 1 - ffBranchPred->getNumLookAhead()].exitPC;
 
             if (hist.back().dynInst->isStoreConditional()) {
                 ffBranchPred->syncStoreConditional(hist.back().dynInst->lockedWriteSuccess(),
                                                     hist.back().tid);
             }
 
-            const TheISA::PCState &corrNextKPC =
-                    hist[hist.size() - 1- ffBranchPred->getNumLookAhead()].dynInst->pcState();
-            if (hist.back().predNextKPC == corrNextKPC.pc()) {
+            if (hist.back().predDBB == corrDBB.pc()) {
                 ffBranchPred->update(hist.back().seqNum, hist.back().tid);
             } else {
                 ffBranchPred->squash(hist.back().seqNum,
                                     hist.back().dynInst->pcState(),
-                                    corrNextKPC,
+                                    corrDBB.pc(),
                                     hist.back().tid);
 
                 // Simulate the behavior of real FF after pipeline squashing:
                 // Re-run prediction as if these insts were squashed.
                 for (int i=hist.size()-2; i>=0; i--) {
-                    hist[i].predNextKPC = ffBranchPred->predict(hist[i].staticInst,
+                    hist[i].predDBB = ffBranchPred->predict(hist[i].staticInst,
                                             hist[i].seqNum,
                                             hist[i].pc,
                                             hist[i].tid);
                 }
             }
+
+            if (DBBlist.back().exitSeqNum == hist.back().seqNum) {
+                DBBlist.pop_back();
+            }
+
             hist.pop_back();
         }
     }

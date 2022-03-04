@@ -108,8 +108,7 @@ FFBPredUnit::update(const InstSeqNum &done_sn, ThreadID tid)
         update(tid, predHist[tid].back().pc,
                     predHist[tid].back().bpHistory, false,
                     predHist[tid].back().inst,
-                    predHist[tid].back().nextK_PC,
-                    predHist[tid].back().nextK_PC);
+                    predHist[tid].back().nextK_PC, predHist[tid].back().nextK_PC);
 
         predHist[tid].pop_back();
     }
@@ -194,8 +193,9 @@ FFBPredUnit::squash(const InstSeqNum &squashed_sn,
 
         assert(thisPC.pc() == (*hist_it).pc);
         update(tid, thisPC,
-               pred_hist.front().bpHistory, true, pred_hist.front().inst,
-               pred_hist.front().nextK_PC, corr_nextK_PC.instAddr());
+               pred_hist.front().bpHistory, true,
+               pred_hist.front().inst,
+               pred_hist.front().nextK_PC, corr_nextK_PC);
 
     } else {
         DPRINTF(Branch, "[tid:%i] [sn:%llu] pred_hist empty, can't "
@@ -214,7 +214,7 @@ FFBPredUnit::dump()
             cprintf("predHist[%i].size(): %i\n", i++, ph.size());
 
             while (pred_hist_it != ph.end()) {
-                cprintf("sn:%llu], PC:%#x, tid:%i, next-K PC:%#x, "
+                cprintf("sn:%llu], PC:%#x, tid:%i, next-K PC:%s, "
                         "\n",
                         pred_hist_it->seqNum, pred_hist_it->pc,
                         pred_hist_it->tid, pred_hist_it->nextK_PC);

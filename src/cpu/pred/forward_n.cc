@@ -27,7 +27,8 @@ ForwardN::ForwardN(const ForwardNParams &params)
           histTakenLength(params.histTakenLength),
           traceStart(params.traceStart),
           traceCount(params.traceCount),
-          histTaken(0)
+          histTaken(0),
+          currentDBB(invalidPC)
 {
     DPRINTF(ForwardN, "ForwardN, N=%u, "
                       "histLength=%u, "
@@ -72,7 +73,8 @@ Addr ForwardN::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
 
 void ForwardN::update(ThreadID tid, const TheISA::PCState &thisPC,
                 void *bp_history, bool squashed,
-                const StaticInstPtr &inst, Addr pred_nextK_PC, Addr corr_nextK_PC) {
+                const StaticInstPtr &inst,
+                const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) {
 
     Addr pcNBefore = thisPC.pc();
     bool isControlNBefore = inst->isControl();
@@ -82,7 +84,7 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &thisPC,
 
     static uint64_t histTakenUpd = 0;
 
-    predictor[pcNBefore][lastPCsHash][histTakenUpd] = corr_nextK_PC;
+    predictor[pcNBefore][lastPCsHash][histTakenUpd] = corr_DBB.pc();
 
     if (inst->isControl()) {
         lastCtrlsForPred.push_back(thisPC.pc());
@@ -106,11 +108,11 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &thisPC,
         static int c = 0;
         if (c >= traceStart && c < traceStart + traceCount) {
             DPRINTF(ForwardN, "Mispred: pred=0x%016lX, act=0x%016lX, off=%d\n",
-                    pred_nextK_PC,
-                    corr_nextK_PC,
-                    corr_nextK_PC > pred_nextK_PC ?
-                        (signed int)(corr_nextK_PC - pred_nextK_PC) :
-                        -(signed int)(pred_nextK_PC - corr_nextK_PC)
+                    pred_DBB.pc(),
+                    corr_DBB.pc(),
+                    corr_DBB.pc() > pred_DBB.pc() ?
+                        (signed int)(corr_DBB.pc() - pred_DBB.pc()) :
+                        -(signed int)(pred_DBB.pc() - corr_DBB.pc())
                     );
         }
         c++;
@@ -130,8 +132,6 @@ Addr ForwardN::hashHistory(const std::deque<Addr> &history) {
 
 void ForwardN::squash(ThreadID tid, void *bp_history) {
     auto history_state = static_cast<BPState *>(bp_history);
-
-    // TODO: recover predictor status
 
     delete history_state;
 }
