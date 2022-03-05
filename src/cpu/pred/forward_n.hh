@@ -1,5 +1,7 @@
 //
 // Created by yqszxx on 1/4/22.
+// ChangeLog:
+// gaozb 3/5/22 - adapt to PPM-like predictor
 //
 
 #ifndef GEM5_FORWARD_N_H
@@ -8,6 +10,7 @@
 #include <deque>
 #include <map>
 #include <queue>
+#include <random>
 #include <utility>
 
 #include "base/statistics.hh"
@@ -41,7 +44,55 @@ public:
 
 
 private:
-    static Addr hashHistory(const std::deque<Addr> &history);
+    class GTabBank {
+    public:
+        GTabBank(int numEntries, int histLen);
+
+        inline int getLogNumEntries() const { return logNumEntries; }
+        inline int getHistLen() const { return histLen; }
+
+    public:
+        struct Entry {
+            Entry() : useful(false) {}
+            Addr pc;
+            Addr tag;
+            bool useful;
+        };
+
+        std::vector<Entry> entries;
+        int logNumEntries;
+        int histLen;
+
+        inline Entry &operator()(unsigned ind) {
+            return entries[ind];
+        }
+    };
+
+    class BTabBank {
+    public:
+        BTabBank(int numEntries);
+
+        struct Entry {
+            Entry() : meta(false) {}
+            Addr pc;
+            bool meta;
+        };
+
+        std::vector<Entry> entries;
+        int logNumEntries;
+
+        inline Entry &operator()(unsigned ind) {
+            return entries[ind];
+        }
+    };
+
+private:
+    void foldedXOR(Addr &dst, Addr src, int srcLen, int dstLen);
+    Addr bankHash(Addr PC, const std::deque<Addr> &history, uint64_t histTaken, const GTabBank &bank);
+    Addr tagHash(Addr PC, uint64_t histTaken, const GTabBank &bank);
+    Addr btabHash(Addr PC);
+    void allocEntry(int bank, Addr PC, Addr corrDBB,
+                    const std::vector<Addr> &computedInd, const std::vector<Addr> &computedTag);
 
     struct ForwardNStats : public Stats::Group
     {
@@ -49,25 +100,21 @@ private:
 
         Stats::Scalar lookups;
 
-        Stats::Scalar hit;
+        Stats::Scalar gtabHit;
 
-        Stats::Formula hitRate;
+        Stats::Formula gtabHitRate;
 
-        Stats::Scalar pcMiss;
-
-        Stats::Scalar histMiss;
-
-        Stats::Scalar histTakenMiss;
+        Stats::Scalar coldStart;
     } stats;
 
-    unsigned int histLength, histTakenLength;
+    unsigned int histTakenMaxLength;
 
     unsigned int traceStart, traceCount;
 
-    // [pc][histPath][histTaken]
-    std::map<Addr,
-        std::map<Addr,
-            std::map<uint64_t, Addr>>> predictor;
+    std::vector<GTabBank> gtabBanks;
+    BTabBank btabBank;
+
+    std::default_random_engine randGen;
 
     const Addr invalidPC = 0xFFFFFFFFFFFFFFFFLL;
 
@@ -76,22 +123,12 @@ private:
 
     uint64_t histTaken;
 
-    unsigned coldStartCount{0};
-
     struct BPState {
+        int bank;
+        std::vector<Addr> computedInd;
+        std::vector<Addr> computedTag;
+        Addr predPC;
     } state;
-
-
-    struct DBB {
-        Addr exitPointPC;
-        bool branching;
-        // (pc, isControl)
-        std::vector<std::pair<Addr, bool>> pcSet;
-    };
-    std::queue<DBB> bblockBefore;
-
-    // dynamic basic blocks are identified by exit point PC
-    Addr currentDBB;
 
 };
 

@@ -34,7 +34,6 @@ FFOracleBP::FFOracleBP(const FFOracleBPParams &params)
         presetAccuracy(params.presetAccuracy),
         proxy(nullptr),
         oracleIID(0),
-        inited(false),
         randGen(params.randNumSeed),
         bdGen(params.presetAccuracy),
         scInFlight(false),
@@ -98,15 +97,8 @@ Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
 
     state.front_seqNum++;
 
-    if (!inited) {
-        lookAheadInsts(numLookAhead, true);
-        orderedOracleEntries.clear();
-        inited = true;
-        advanceFront();
-    }
-
     syncFront();
-    if (state.front_seqNum == frontPointer->exitSeqNum) {
+    if (state.front_seqNum == frontPointerDBB->exitSeqNum) {
         advanceFront();
     }
 
@@ -192,6 +184,8 @@ void FFOracleBP::squash(ThreadID tid, void *bp_history)
                     orderedOracleEntries.back().iid == state.front_iid + 1 ||
                     state.front_iid == numLookAhead - 2);
         }
+        syncFrontDBB();
+
         dumpState();
     } else {
         DPRINTF(FFOracleBP_misc, "recorded front iid = %u, state.front_iid = %u\n",
@@ -227,7 +221,8 @@ void FFOracleBP::lookAheadInsts(unsigned len, bool record)
             assert(decoder->instReady());
             StaticInstPtr staticInst = decoder->decode(pcState);
 
-            if (staticInst->isControl()) { // entering new basic block
+            pcState.npc(diff.nemu_this_pc);
+            if (pcState.branching()) { // entering new basic block
                 ++numDBB, exitDBB = true;
             }
 
@@ -297,9 +292,15 @@ void FFOracleBP::syncFront() {
     DPRINTF(FFOracleBP_misc, "Oracle table size: %lu.\n", orderedOracleEntries.size());
 
     if (orderedOracleEntries.size() == 0) {
+        lookAheadInsts(numLookAhead, true);
+        advanceFront();
+    }
+
+    if (orderedOracleEntries.size() == numLookAhead) {
         lookAheadInsts(1, true);
         frontPointer = orderedOracleEntries.begin();
         assert(state.front_iid == frontPointer->iid);
+        syncFrontDBB();
         dumpState();
 
     } else if (state.front_iid > orderedOracleEntries.front().iid) {
@@ -309,6 +310,7 @@ void FFOracleBP::syncFront() {
         lookAheadInsts(1, true);
         frontPointer = orderedOracleEntries.begin();
         assert(state.front_iid == frontPointer->iid);
+        syncFrontDBB();
         dumpState();
 
     } else {
@@ -325,7 +327,18 @@ void FFOracleBP::syncFront() {
             dumpState();
 
             assert(frontPointer != orderedOracleEntries.end());
+            syncFrontDBB();
         }
+    }
+}
+
+void FFOracleBP::syncFrontDBB()
+{
+    frontPointerDBB = frontPointer;
+    // FIXME: time consuming. adapt to O(1)
+    for (unsigned i=0;i<numLookAhead;i++) {
+        ++frontPointerDBB;
+        assert(frontPointerDBB != orderedOracleEntries.end());
     }
 }
 

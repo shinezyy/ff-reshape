@@ -65,7 +65,6 @@ public:
     DiffState diff;
     FFOracleNemuProxy *proxy;
     uint64_t oracleIID;
-    bool inited;
 
     struct OracleEntry {
         uint64_t iid;
@@ -77,6 +76,7 @@ public:
 
     using EntryIter = std::list<OracleEntry>::iterator;
     EntryIter frontPointer;
+    EntryIter frontPointerDBB;
 
     struct BPState {
         uint64_t commit_iid, front_iid;
@@ -114,6 +114,7 @@ private:
     void lookAheadInsts(unsigned len, bool record);
     void advanceFront();
     void syncFront();
+    void syncFrontDBB();
     void dumpState();
 };
 

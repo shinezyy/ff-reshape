@@ -20,10 +20,10 @@ for ckp in ${TARGETS[*]}; do
 		--caches --cpu-type=DerivO3CPU \
 		--ff-bp-type=forwardN \
         --trace-forward-n 1000000:100 \
-		--forward-n-histlen 8 \
-		--forward-n-histtakenlen 16
+		--forward-n-histlen 8
 
-    date > ./rpt/${count}.rpt
+    echo "Checkpoint: ${ckp}" > ./rpt/${count}.rpt
+    date >> ./rpt/${count}.rpt
 	grep ffBranchPred m5out/stats.txt >> ./rpt/${count}.rpt
     let count++
 done
