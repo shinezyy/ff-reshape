@@ -1,5 +1,7 @@
 //
 // Created by yqszxx on 1/4/22.
+// ChangeLog:
+// gaozb 3/5/22 - adapt to PPM-like predictor
 //
 
 #include "debug/ForwardN.hh"
@@ -8,40 +10,53 @@
 ForwardN::ForwardNStats::ForwardNStats(Stats::Group *parent)
         : Stats::Group(parent, "forward_n"),
           ADD_STAT(lookups, "Number of ForwardN lookups"),
-          ADD_STAT(hit, "Number of ForwardN hit"),
-          ADD_STAT(hitRate, "ForwardN prediction hit rate",
-                   hit / lookups),
-          ADD_STAT(pcMiss, "ForwardN prediction miss count caused "
-                           "by current pc"),
-          ADD_STAT(histMiss, "ForwardN prediction miss count caused by history hash"),
-          ADD_STAT(histTakenMiss, "ForwardN prediction miss count caused by "
-                   "history taken records")
+          ADD_STAT(gtabHit, "Number of ForwardN global table hit"),
+          ADD_STAT(gtabHitRate, "ForwardN prediction global table hit rate",
+                   gtabHit / lookups)
 {
-    hitRate.precision(4);
+    gtabHitRate.precision(4);
 }
 
 ForwardN::ForwardN(const ForwardNParams &params)
         : FFBPredUnit(params),
           stats(this),
-          histLength(params.histLength),
-          histTakenLength(params.histTakenLength),
           traceStart(params.traceStart),
           traceCount(params.traceCount),
-          histTaken(0),
-          currentDBB(invalidPC)
+          btabBank(params.numBTabEntries),
+          randGen(params.randNumSeed),
+          histTaken(0)
 {
     DPRINTF(ForwardN, "ForwardN, N=%u, "
-                      "histLength=%u, "
-                      "histTakenLength=%u\n",
+                      "numGTabBanks=%u, "
+                      "numGTabEntries=%u, "
+                      "numBTabEntries=%u, "
+                      "histLenInitial=%u, "
+                      "histLenGrowth=%f\n",
                       getNumLookAhead(),
-                      histLength,
-                      histTakenLength
+                      params.numGTabBanks,
+                      params.numGTabEntries,
+                      params.numBTabEntries,
+                      params.histLenInitial,
+                      params.histLenGrowth
                       );
 
-    for (int i = 0; i < histLength; i++) {
+    int histLen = params.histLenInitial;
+    for (int i = 0; i < params.numGTabBanks; i++) {
+        gtabBanks.emplace_back(GTabBank(params.numGTabEntries, histLen));
+        histTakenMaxLength = histLen;
+        DPRINTF(ForwardN, "GTab Bank #%d: histLen=%d\n", i, histLen);
+
+        // L(j) = g^(j-1)*L(1)
+        histLen = int(params.histLenGrowth * histLen + 0.5);
+    }
+
+    for (int i = 0; i < params.histLength; i++) {
         lastCtrlsForPred.push_back(invalidPC);
         lastCtrlsForUpd.push_back(invalidPC);
     }
+
+    state.computedInd.resize(gtabBanks.size());
+    state.computedTag.resize(gtabBanks.size());
 }
 
 Addr ForwardN::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
@@ -50,25 +65,29 @@ Addr ForwardN::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
 
     ++stats.lookups;
 
-    Addr nextK_PC = invalidPC;
-    Addr lastPCsHash = hashHistory(lastCtrlsForPred);
+    hist->bank = -1;
 
-    if (predictor.count(instPC)) {
-        if (predictor[instPC].count(lastPCsHash)) {
-            if (predictor[instPC][lastPCsHash].count(histTaken)) {
-                ++stats.hit;
-                nextK_PC = predictor[instPC][lastPCsHash][histTaken];
-            } else {
-                ++stats.histTakenMiss;
-            }
-        } else {
-            ++stats.histMiss;
+    // Look for the bank with longest matching history
+    for (int i = gtabBanks.size()-1; i >= 0; i--) {
+        hist->computedInd[i] = bankHash(instPC, lastCtrlsForPred, histTaken, gtabBanks[i]);
+        hist->computedTag[i] = tagHash(instPC, histTaken, gtabBanks[i]);
+
+        if (hist->computedTag[i] == gtabBanks[i](hist->computedInd[i]).tag) {
+            hist->bank = i;
+            hist->predPC = gtabBanks[i](hist->computedInd[i]).pc;
+            ++stats.gtabHit;
+            break;
         }
-    } else {
-        ++stats.pcMiss;
+    }
+    // Look up base predictor
+    if (hist->bank == -1) {
+        hist->predPC = btabBank(btabHash(instPC)).pc;
     }
 
-    return nextK_PC;
+    if (hist->bank != gtabBanks.size() - 1)
+        ++stats.coldStart;
+
+    return hist->predPC;
 }
 
 void ForwardN::update(ThreadID tid, const TheISA::PCState &thisPC,
@@ -76,32 +95,62 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &thisPC,
                 const StaticInstPtr &inst,
                 const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) {
 
-    Addr pcNBefore = thisPC.pc();
-    bool isControlNBefore = inst->isControl();
-    bool isBranchingNBefore = thisPC.branching();
-
-    Addr lastPCsHash = hashHistory(lastCtrlsForUpd);
+    auto bp_hist = static_cast<BPState *>(bp_history);
 
     static uint64_t histTakenUpd = 0;
 
-    predictor[pcNBefore][lastPCsHash][histTakenUpd] = corr_DBB.pc();
+    if (squashed) {
+        // prediction is incorrect
+        if (bp_hist->bank >= 0) {
+            int indice = bp_hist->computedInd[bp_hist->bank];
+            gtabBanks[bp_hist->bank](indice).pc = corr_DBB.pc();
+        } else {
+            btabBank(btabHash(thisPC.pc())).pc = corr_DBB.pc();
+        }
 
+        allocEntry(bp_hist->bank, thisPC.pc(), corr_DBB.pc(),
+                    bp_hist->computedInd, bp_hist->computedTag);
+
+        if (bp_hist->bank >= 0) {
+            // update status bits
+            int indice = bp_hist->computedInd[bp_hist->bank];
+            gtabBanks[bp_hist->bank](indice).useful = false;
+            btabBank(btabHash(thisPC.pc())).meta = false;
+        }
+
+    } else {
+        // prediction is correct
+        if (bp_hist->bank >= 0) {
+            int indice = bp_hist->computedInd[bp_hist->bank];
+
+            gtabBanks[bp_hist->bank](indice).pc = corr_DBB.pc();
+
+            gtabBanks[bp_hist->bank](indice).useful = true;
+            btabBank(btabHash(thisPC.pc())).meta = true;
+
+        } else {
+            btabBank(btabHash(thisPC.pc())).pc = corr_DBB.pc();
+        }
+    }
+
+    // Update global history
+    if (inst->isControl()) {
+        lastCtrlsForUpd.push_back(thisPC.pc());
+        lastCtrlsForUpd.pop_front();
+
+        histTakenUpd <<= 1;
+        histTakenUpd |= thisPC.branching();
+        histTakenUpd &= ((1 << histTakenMaxLength) - 1);
+    }
+
+    // FIXME: this must be updated speculatively
     if (inst->isControl()) {
         lastCtrlsForPred.push_back(thisPC.pc());
         lastCtrlsForPred.pop_front();
 
         histTaken <<= 1;
         histTaken |= thisPC.branching();
-        histTaken &= ((1 << histTakenLength) - 1);
-    }
-
-    if (isControlNBefore) {
-        lastCtrlsForUpd.push_back(pcNBefore);
-        lastCtrlsForUpd.pop_front();
-
-        histTakenUpd <<= 1;
-        histTakenUpd |= isBranchingNBefore;
-        histTakenUpd &= ((1 << histTakenLength) - 1);
+        histTaken &= ((1 << histTakenMaxLength) - 1);
     }
 
     if (squashed) {
@@ -119,19 +168,100 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &thisPC,
     }
 }
 
-Addr ForwardN::hashHistory(const std::deque<Addr> &history) {
+void ForwardN::foldedXOR(Addr &dst, Addr src, int srcLen, int dstLen) {
+    while (srcLen > 0) {
+        dst ^= src & ((1 << dstLen) - 1);
+        src >>= dstLen;
+        srcLen -= dstLen;
+    }
+}
+
+Addr ForwardN::bankHash(Addr PC, const std::deque<Addr> &history, uint64_t histTaken, const GTabBank &bank) {
     Addr hash = 0;
+    foldedXOR(hash, PC, sizeof(PC)*8, bank.getLogNumEntries());
     std::for_each(
             history.begin(),
             history.end(),
-            [&hash](Addr a) {
-                hash ^= a;
+            [&hash, &bank, this](Addr a) {
+                foldedXOR(hash, a, sizeof(a)*8, bank.getLogNumEntries());
             });
+    foldedXOR(hash, histTaken, bank.getHistLen(), bank.getLogNumEntries());
+    assert(hash < (1<<bank.getLogNumEntries()));
     return hash;
 }
 
-void ForwardN::squash(ThreadID tid, void *bp_history) {
-    auto history_state = static_cast<BPState *>(bp_history);
+Addr ForwardN::tagHash(Addr PC, uint64_t histTaken, const GTabBank &bank) {
+    Addr hash = 0;
+    foldedXOR(hash, PC, sizeof(PC)*8, bank.getLogNumEntries());
+    foldedXOR(hash, histTaken, bank.getHistLen(), bank.getLogNumEntries());
+    assert(hash < (1<<bank.getLogNumEntries()));
+    return hash;
+}
 
-    delete history_state;
+Addr ForwardN::btabHash(Addr PC) {
+    return PC % btabBank.entries.size();
+}
+
+void ForwardN::allocEntry(int bank, Addr PC, Addr corrDBB,
+                          const std::vector<Addr> &computedInd, const std::vector<Addr> &computedTag) {
+
+    auto reinit = [PC, corrDBB, this](int n, Addr indice, Addr tag) {
+        gtabBanks[n](indice).tag = tag;
+        gtabBanks[n](indice).useful = false;
+
+        const auto &baseEntry = btabBank(btabHash(PC));
+        if (baseEntry.meta) {
+            gtabBanks[n](indice).pc = corrDBB;
+        } else {
+            gtabBanks[n](indice).pc = baseEntry.pc;
+        }
+    };
+
+    if (bank != gtabBanks.size() - 1) {
+        bool allUseful = true;
+        for (int n = bank + 1; n < gtabBanks.size(); n++) {
+            if (!gtabBanks[n](computedInd[n]).useful) {
+                allUseful = false;
+                reinit(n, computedInd[n], computedTag[n]);
+            }
+        }
+        if (allUseful) {
+            std::uniform_int_distribution<size_t> u(bank + 1, gtabBanks.size() - 1);
+            int n = u(randGen);
+            reinit(n, computedInd[n], computedTag[n]);
+        }
+    }
+}
+
+
+void ForwardN::squash(ThreadID tid, void *bp_history) {
+    auto bp_hist = static_cast<BPState *>(bp_history);
+
+    delete bp_hist;
+}
+
+//---------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------
+// **** ForwardN::GTabBank ****
+//---------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------
+
+ForwardN::GTabBank::GTabBank(int numEntries, int histLen)
+    : histLen(histLen)
+{
+    assert(!(numEntries & 1));
+    logNumEntries = std::log2(numEntries);
+    entries.resize(numEntries);
+}
+
+//---------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------
+// **** ForwardN::BTabBank ****
+//---------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------
+
+ForwardN::BTabBank::BTabBank(int numEntries) {
+    assert(!(numEntries & 1));
+    logNumEntries = std::log2(numEntries);
+    entries.resize(numEntries);
 }

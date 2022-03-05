@@ -319,8 +319,13 @@ parser.add_option("--ff-bp-type", type="choice", default="none",
 
 # Options for forwardN BP
 parser.add_option("--trace-forward-n")
-parser.add_option("--forward-n-histlen")
-parser.add_option("--forward-n-histtakenlen")
+parser.add_option("--forward-n-histlen", type='int')
+parser.add_option("--forward-n-numGtabBanks", type='int')
+parser.add_option("--forward-n-numGTabEntries", type='int')
+parser.add_option("--forward-n-numBTabEntries", type='int')
+parser.add_option("--forward-n-histLenInitial", type='int')
+parser.add_option("--forward-n-histLenGrowth", type='float')
+parser.add_option("--forward-n-randNumSeed", type='int')
 
 # Options for oracle BP
 parser.add_option("--ff-oracle-preset-accuracy", type='float', default=1.0)
@@ -390,9 +395,24 @@ if options.ff_bp_type != 'none':
             if options.forward_n_histlen:
                 cpu.ffBranchPred.histLength = \
                     int(options.forward_n_histlen)
-            if options.forward_n_histtakenlen:
-                cpu.ffBranchPred.histTakenLength = \
-                    int(options.forward_n_histtakenlen)
+            if options.forward_n_numGtabBanks:
+                cpu.ffBranchPred.numGtabBanks = \
+                    int(options.forward_n_numGtabBanks)
+            if options.forward_n_numGTabEntries:
+                cpu.ffBranchPred.numGTabEntries = \
+                    int(options.forward_n_numGTabEntries)
+            if options.forward_n_numBTabEntries:
+                cpu.ffBranchPred.numBTabEntries = \
+                    int(options.forward_n_numBTabEntries)
+            if options.forward_n_histLenInitial:
+                cpu.ffBranchPred.histLenInitial = \
+                    int(options.forward_n_histLenInitial)
+            if options.forward_n_histLenGrowth:
+                cpu.ffBranchPred.histLenGrowth = \
+                    int(options.forward_n_histLenGrowth)
+            if options.forward_n_randNumSeed:
+                cpu.ffBranchPred.randNumSeed = \
+                    int(options.forward_n_randNumSeed)
 
         elif options.ff_bp_type == 'oracle':
             assert(options.generic_rv_cpt is not None)
