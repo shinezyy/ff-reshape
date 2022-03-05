@@ -479,12 +479,16 @@ Cache::recvTimingReq(PacketPtr pkt)
     }
 
     if (pkt->isRequest()){
-        int task_id = pkt->req->taskId();
-        if (task_id >= LvNATasks::NumId){
+        if (!pkt->req->hasContextId()){
             BaseCache::recvTimingReq(pkt);
             return;
         }
-        int index = task_id;
+        int ctx_id = pkt->req->contextId();
+        if (ctx_id >= LvNATasks::NumId){
+            BaseCache::recvTimingReq(pkt);
+            return;
+        }
+        int index = context2QosIDMap[ctx_id];
         bool ok_to_pass = buckets[index]->checkPassPkt(pkt);
         if (ok_to_pass)
         {

@@ -12,7 +12,7 @@ FgJobMeta::FgJobMeta(ControlPlane *cp):
 void
 FgJobMeta::jobUp(int job_id, int cpu_id,uint64_t now_cycle, uint64_t now_insts)
 {
-  cp->cpus[cpu_id]->setTaskId(LvNATasks::job2TaskId(job_id));
+  cp->setContextQosId(cpu_id, LvNATasks::job2QosId(job_id));
   up(now_cycle,now_insts);
 }
 void
@@ -30,7 +30,7 @@ BgCpuMeta::BgCpuMeta(ControlPlane *cp):
 void
 BgCpuMeta::bgUp(int cpu_id,uint64_t now_cycle, uint64_t now_insts)
 {
-  cp->cpus[cpu_id]->setTaskId(cpu_id);
+  cp->setContextQosId(cpu_id, cpu_id);
   up(now_cycle,now_insts);
 }
 void
@@ -68,6 +68,22 @@ ControlPlane::ControlPlane(const ControlPlaneParams *p) :
   {
     BgCpuMap[i] = new BgCpuMeta(this);
   }
+  for (size_t i = 0; i < np; i++)
+  {
+    setContextQosId(i,i);
+  }
+
+  for (size_t i = 0; i < LvNATasks::NumId; i++)
+  {
+    uint32_t alt_id = i + LvNATasks::NumId;
+    QosIDAlterMap[i] = alt_id;
+    for (const auto &c:l2s)
+    {
+      c->QosIDAlterMap[i] = i + alt_id;
+    }
+    l3->QosIDAlterMap[i] = alt_id;
+  }
+
   resetTTIMeta();
 
 }
@@ -76,6 +92,17 @@ ControlPlane *
 ControlPlaneParams::create() const
 {
   return new ControlPlane(this);
+}
+
+void
+ControlPlane::setContextQosId(uint32_t ctx_id, uint32_t qos_id)
+{
+  context2QosIDMap[ctx_id]=qos_id;
+  for (const auto &c:l2s)
+  {
+    c->context2QosIDMap[ctx_id] = qos_id;
+  }
+  l3->context2QosIDMap[ctx_id] = qos_id;
 }
 
 void ControlPlane::resetTTIMeta()

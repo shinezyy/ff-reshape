@@ -52,6 +52,7 @@
 #include "debug/CachePort.hh"
 #include "debug/CacheRepl.hh"
 #include "debug/CacheVerbose.hh"
+#include "dev/controlplane.hh"
 #include "mem/cache/compressors/base.hh"
 #include "mem/cache/mshr.hh"
 #include "mem/cache/prefetch/base.hh"
@@ -1543,10 +1544,13 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
     // Find replacement victim
     std::vector<CacheBlk*> evict_blks;
     CacheBlk *victim;
-    if (enable_waymask && pkt->req->taskId()<ContextSwitchTaskId::MaxNormalTaskId)
+    if (enable_waymask &&
+        pkt->req->hasContextId() &&
+        pkt->req->contextId() <= LvNATasks::MaxCtxId)
     {
+        int index = context2QosIDMap[pkt->req->contextId()];
         victim = tags->findVictim(addr, is_secure, blk_size_bits,
-                                        evict_blks,waymasks[pkt->req->taskId()]);
+                                        evict_blks,waymasks[index]);
     }
     else
     {
