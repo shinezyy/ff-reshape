@@ -47,15 +47,18 @@ class Token_Bucket
     inline int get_tokens() { return (bypass) ? 1 : tokens; }
 
     /**
-     * return true if the pkt passes,
+     * return true if the pkt passes (may modify tokens),
      * return false if there are not enought tokens and
      * the pkt is pushed into the waiting queue
      */
     bool checkPassPkt(PacketPtr pkt);
+    /**
+     * return true if the pkt passes (may modify tokens),
+     * return false if there are not enought tokens
+     */
+    bool test_and_get();
     private:
     void enqueue_request(PacketPtr request, bool head=false);
-    bool test_and_get();
-    void enqueue_request(PacketPtr pkt);
 };
 
 #endif
