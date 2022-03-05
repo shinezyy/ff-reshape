@@ -7,12 +7,14 @@ benchmark_cpt_file = {
              'xal4':'xalancbmk_1041650000000_0.0838451/0/_1650000000_.gz'
 }
 
-# like 'gcc':'gcc_ref32_O5_22850000000_0.197858/
+# like 'gcc':'gcc_ref32_O5_22850000000_0.197858/'
 benchmarks = {k:v.split('/')[0] for k,v in benchmark_cpt_file.items() }
 
 # ff_base = '/nfs/home/chenxi/ff-reshape/'
 # benchmark_dir = '/nfs/home/share/checkpoints_profiles/nemu_take_simpoint_cpt_17/'
 # gcpt_bin_path = '/nfs/home/share/checkpoints_profiles/gcpt.bin'
 ff_base = '/home/chenxi/ff-reshape/'
-benchmark_dir = '/home/zcq/lvna/5g/research-data/checkpoints_profiles/nemu_take_simpoint_cpt_17/'
-gcpt_bin_path = '/home/zcq/lvna/5g/research-data/gcpt.bin'
+# benchmark_dir = '/home/zcq/lvna/5g/research-data/checkpoints_profiles/nemu_take_simpoint_cpt_17/'
+# gcpt_bin_path = '/home/zcq/lvna/5g/research-data/gcpt.bin'
+benchmark_dir = '/home/chenxi/research-data/'
+gcpt_bin_path = '/home/chenxi/research-data/gcpt.bin'

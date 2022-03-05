@@ -39,7 +39,7 @@ opt.append('--l2_size=768kB --l2_assoc=12')
 opt.append('--l3_size=2MB --l3_assoc=8')
 
 gcpt_all = [(benchmark_dir + benchmark_cpt_file[bm]) for bm in args.benchmark.split("-")]
-opt.append('--job-benchmark')
+# opt.append('--job-benchmark')
 
 # use "" around multiple paths connnected by ;
 opt.append('--generic-rv-cpt=' + '"' + ";".join(gcpt_all) + '"')
