@@ -56,12 +56,15 @@
 #include "sim/system.hh"
 
 BaseTags::BaseTags(const Params &p)
-    : ClockedObject(p), blkSize(p.block_size), blkMask(blkSize - 1),
+    : ClockedObject(p),
+      blkSize(p.block_size), blkMask(blkSize - 1),
       size(p.size), lookupLatency(p.tag_latency),
       system(p.system), indexingPolicy(p.indexing_policy),
       warmupBound((p.warmup_percentage/100.0) * (p.size / p.block_size)),
       warmedUp(false), numBlocks(p.size / p.block_size),
       dataBlks(new uint8_t[p.size]), // Allocate data storage in one big chunk
+      isMemoryCache(p.is_memory_cache),
+      dumpCachelineFlag(p.dump_cachelines),
       stats(*this)
 {
     registerExitCallback([this]() { cleanupRefs(); });
@@ -287,4 +290,32 @@ BaseTags::BaseTagStats::preDumpStats()
     Stats::Group::preDumpStats();
 
     tags.computeStats();
+}
+
+
+void
+BaseTags::dumpCachelines() const
+{
+    panic("%s: %s not implemented\n", name().c_str(), __func__);
+    warn("%s: Dumping cache on Exit\n", name().c_str());
+}
+
+void
+BaseTags::startup()
+{
+    if (dumpCachelineFlag) {
+        warn("%s: Registered event to dump cache lines on exit\n", name().c_str());
+        registerExitCallback([this]()
+                             { dumpCachelines(); });
+    }
+}
+
+void
+BaseTags::cacheDumpVisitor(const CacheBlk &blk, std::stringstream &ss) const
+{
+    if (!blk.isValid()) {
+        return;
+    }
+    Addr blk_addr = regenerateBlkAddr(&blk);
+    ss << std::hex << blk_addr << "\n";
 }
