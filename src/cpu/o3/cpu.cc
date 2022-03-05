@@ -1656,7 +1656,7 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
                                 inst->seqNum, tid, nextK_PC, inst->staticInst, inst};
     committedInsts[tid].push_front(hist);
 
-    if (inst->isControl()) { // Entering new dynamic basic block
+    if (inst->pcState().branching()) { // Entering new dynamic basic block
         committedDBBs[tid].front().exitPC = inst->instAddr();
         committedDBBs[tid].front().exitSeqNum = inst->seqNum;
         committedDBBs[tid].emplace_front();
@@ -1671,20 +1671,21 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
         auto &DBBlist = committedDBBs[tid];
 
         if (DBBlist.size() > ffBranchPred->getNumLookAhead()) {
-
-            const auto &corrDBB = DBBlist[DBBlist.size() - 1 - ffBranchPred->getNumLookAhead()].exitPC;
+            const auto &corrDBB = DBBlist[DBBlist.size() - 1 - ffBranchPred->getNumLookAhead()];
+            if (corrDBB.exitSeqNum == 0)
+                continue; // the DBB is unresolved
 
             if (hist.back().dynInst->isStoreConditional()) {
                 ffBranchPred->syncStoreConditional(hist.back().dynInst->lockedWriteSuccess(),
                                                     hist.back().tid);
             }
 
-            if (hist.back().predDBB == corrDBB.pc()) {
+            if (hist.back().predDBB == corrDBB.exitPC.pc()) {
                 ffBranchPred->update(hist.back().seqNum, hist.back().tid);
             } else {
                 ffBranchPred->squash(hist.back().seqNum,
                                     hist.back().dynInst->pcState(),
-                                    corrDBB.pc(),
+                                    corrDBB.exitPC.pc(),
                                     hist.back().tid);
 
                 // Simulate the behavior of real FF after pipeline squashing:

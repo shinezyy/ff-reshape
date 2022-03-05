@@ -39,7 +39,6 @@ public:
 
     void squash(ThreadID tid, void *bp_history) override;
 
-
 private:
     static Addr hashHistory(const std::deque<Addr> &history);
 
