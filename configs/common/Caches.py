@@ -58,7 +58,6 @@ class L1Cache(Cache):
     tgts_per_mshr = 16
     writeback_clean = True
     is_memory_cache = True
-    dump_cachelines = True
 
 class L1_ICache(L1Cache):
     assoc = 4
@@ -82,7 +81,6 @@ class L2Cache(Cache):
     size = '1MB'
     clusivity='mostly_excl'
     is_memory_cache = True
-    dump_cachelines = True
 
     prefetcher = BOPPrefetcher()
 
@@ -97,7 +95,6 @@ class L3Cache(Cache):
     size = '16MB'
     clusivity='mostly_excl'
     is_memory_cache = True
-    dump_cachelines = True
 
 
 class IOCache(Cache):
