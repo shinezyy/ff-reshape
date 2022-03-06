@@ -20,7 +20,12 @@ for ckp in ${TARGETS[*]}; do
 		--caches --cpu-type=DerivO3CPU \
 		--ff-bp-type=forwardN \
         --trace-forward-n 1000000:100 \
-		--forward-n-histlen 8
+        --forward-n-numGTabBanks 4 \
+        --forward-n-numGTabEntries 1024 \
+        --forward-n-numBTabEntries 4096 \
+        --forward-n-histLenInitial 10 \
+        --forward-n-histLenGrowth 2 \
+        --forward-n-randNumSeed 0
 
     echo "Checkpoint: ${ckp}" > ./rpt/${count}.rpt
     date >> ./rpt/${count}.rpt

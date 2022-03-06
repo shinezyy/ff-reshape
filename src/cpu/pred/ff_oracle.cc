@@ -88,7 +88,7 @@ void FFOracleBP::syncArchState(Addr resetPC, paddr_t pmemAddr, void *pmemPtr, si
     DPRINTF(FFOracleBP_misc, "reset PC = %#x.\n", resetPC);
 }
 
-Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
+Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_history) {
     Addr predPC;
     assert(tid == 0);
 

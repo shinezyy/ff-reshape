@@ -33,7 +33,7 @@ public:
 
     ForwardN(const ForwardNParams &params);
 
-    Addr lookup(ThreadID tid, Addr instPC, void * &bp_history) override;
+    Addr lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_history) override;
 
     void update(ThreadID tid, const TheISA::PCState &thisPC,
                 void *bp_history, bool squashed,
@@ -88,11 +88,12 @@ private:
 
 private:
     void foldedXOR(Addr &dst, Addr src, int srcLen, int dstLen);
-    Addr bankHash(Addr PC, const std::deque<Addr> &history, uint64_t histTaken, const GTabBank &bank);
+    Addr bankHash(Addr PC, Addr pathHist, uint64_t histTaken, const GTabBank &bank);
     Addr tagHash(Addr PC, uint64_t histTaken, const GTabBank &bank);
     Addr btabHash(Addr PC);
     void allocEntry(int bank, Addr PC, Addr corrDBB,
                     const std::vector<Addr> &computedInd, const std::vector<Addr> &computedTag);
+    void updateHistory(bool isControl, bool taken, Addr pc);
 
     struct ForwardNStats : public Stats::Group
     {
@@ -118,16 +119,14 @@ private:
 
     const Addr invalidPC = 0xFFFFFFFFFFFFFFFFLL;
 
-    std::deque<Addr> lastCtrlsForPred;
-    std::deque<Addr> lastCtrlsForUpd;
-
-    uint64_t histTaken;
-
     struct BPState {
         int bank;
         std::vector<Addr> computedInd;
         std::vector<Addr> computedTag;
         Addr predPC;
+
+        Addr pathHist;
+        uint64_t histTaken;
     } state;
 
 };

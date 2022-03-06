@@ -77,7 +77,7 @@ FFBPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
     void *bp_history = nullptr;
 
     ++stats.lookups;
-    nextK_pc = lookup(tid, pc.instAddr(), bp_history);
+    nextK_pc = lookup(tid, pc.instAddr(), inst->isControl(), bp_history);
 
     DPRINTF(Branch, "[tid:%i] [sn:%llu] "
                 "Branch predictor predicted next-K PC=%#x for PC %s\n",

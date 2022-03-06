@@ -319,8 +319,7 @@ parser.add_option("--ff-bp-type", type="choice", default="none",
 
 # Options for forwardN BP
 parser.add_option("--trace-forward-n")
-parser.add_option("--forward-n-histlen", type='int')
-parser.add_option("--forward-n-numGtabBanks", type='int')
+parser.add_option("--forward-n-numGTabBanks", type='int')
 parser.add_option("--forward-n-numGTabEntries", type='int')
 parser.add_option("--forward-n-numBTabEntries", type='int')
 parser.add_option("--forward-n-histLenInitial", type='int')
@@ -392,12 +391,9 @@ if options.ff_bp_type != 'none':
                     options.trace_forward_n.split(":")[0]
                 cpu.ffBranchPred.traceCount = \
                     options.trace_forward_n.split(":")[1]
-            if options.forward_n_histlen:
-                cpu.ffBranchPred.histLength = \
-                    int(options.forward_n_histlen)
-            if options.forward_n_numGtabBanks:
-                cpu.ffBranchPred.numGtabBanks = \
-                    int(options.forward_n_numGtabBanks)
+            if options.forward_n_numGTabBanks:
+                cpu.ffBranchPred.numGTabBanks = \
+                    int(options.forward_n_numGTabBanks)
             if options.forward_n_numGTabEntries:
                 cpu.ffBranchPred.numGTabEntries = \
                     int(options.forward_n_numGTabEntries)
@@ -409,7 +405,7 @@ if options.ff_bp_type != 'none':
                     int(options.forward_n_histLenInitial)
             if options.forward_n_histLenGrowth:
                 cpu.ffBranchPred.histLenGrowth = \
-                    int(options.forward_n_histLenGrowth)
+                    float(options.forward_n_histLenGrowth)
             if options.forward_n_randNumSeed:
                 cpu.ffBranchPred.randNumSeed = \
                     int(options.forward_n_randNumSeed)

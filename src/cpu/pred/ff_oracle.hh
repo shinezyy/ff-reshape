@@ -34,7 +34,7 @@ class FFOracleBP : public FFBPredUnit
 public:
     FFOracleBP(const FFOracleBPParams &params);
 
-    Addr lookup(ThreadID tid, Addr instPC, void * &bp_history) override;
+    Addr lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_history) override;
 
     void update(ThreadID tid, const TheISA::PCState &thisPC,
                 void *bp_history, bool squashed,

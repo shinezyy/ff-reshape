@@ -23,8 +23,7 @@ ForwardN::ForwardN(const ForwardNParams &params)
           traceStart(params.traceStart),
           traceCount(params.traceCount),
           btabBank(params.numBTabEntries),
-          randGen(params.randNumSeed),
-          histTaken(0)
+          randGen(params.randNumSeed)
 {
     DPRINTF(ForwardN, "ForwardN, N=%u, "
                       "numGTabBanks=%u, "
@@ -50,16 +49,14 @@ ForwardN::ForwardN(const ForwardNParams &params)
         histLen = int(params.histLenGrowth * histLen + 0.5);
     }
 
-    for (int i = 0; i < params.histLength; i++) {
-        lastCtrlsForPred.push_back(invalidPC);
-        lastCtrlsForUpd.push_back(invalidPC);
-    }
-
     state.computedInd.resize(gtabBanks.size());
     state.computedTag.resize(gtabBanks.size());
+
+    state.pathHist = 0;
+    state.histTaken = 0;
 }
 
-Addr ForwardN::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
+Addr ForwardN::lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_history) {
     auto hist = new BPState(state);
     bp_history = hist;
 
@@ -69,8 +66,8 @@ Addr ForwardN::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
 
     // Look for the bank with longest matching history
     for (int i = gtabBanks.size()-1; i >= 0; i--) {
-        hist->computedInd[i] = bankHash(instPC, lastCtrlsForPred, histTaken, gtabBanks[i]);
-        hist->computedTag[i] = tagHash(instPC, histTaken, gtabBanks[i]);
+        hist->computedInd[i] = bankHash(instPC, state.pathHist, state.histTaken, gtabBanks[i]);
+        hist->computedTag[i] = tagHash(instPC, state.histTaken, gtabBanks[i]);
 
         if (hist->computedTag[i] == gtabBanks[i](hist->computedInd[i]).tag) {
             hist->bank = i;
@@ -87,6 +84,8 @@ Addr ForwardN::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
     if (hist->bank != gtabBanks.size() - 1)
         ++stats.coldStart;
 
+    updateHistory(isControl, true, instPC);
+
     return hist->predPC;
 }
 
@@ -96,8 +95,6 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &thisPC,
                 const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) {
 
     auto bp_hist = static_cast<BPState *>(bp_history);
-
-    static uint64_t histTakenUpd = 0;
 
     if (squashed) {
         // prediction is incorrect
@@ -133,26 +130,6 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &thisPC,
         }
     }
 
-    // Update global history
-    if (inst->isControl()) {
-        lastCtrlsForUpd.push_back(thisPC.pc());
-        lastCtrlsForUpd.pop_front();
-
-        histTakenUpd <<= 1;
-        histTakenUpd |= thisPC.branching();
-        histTakenUpd &= ((1 << histTakenMaxLength) - 1);
-    }
-
-    // FIXME: this must be updated speculatively
-    if (inst->isControl()) {
-        lastCtrlsForPred.push_back(thisPC.pc());
-        lastCtrlsForPred.pop_front();
-
-        histTaken <<= 1;
-        histTaken |= thisPC.branching();
-        histTaken &= ((1 << histTakenMaxLength) - 1);
-    }
-
     if (squashed) {
         static int c = 0;
         if (c >= traceStart && c < traceStart + traceCount) {
@@ -176,15 +153,10 @@ void ForwardN::foldedXOR(Addr &dst, Addr src, int srcLen, int dstLen) {
     }
 }
 
-Addr ForwardN::bankHash(Addr PC, const std::deque<Addr> &history, uint64_t histTaken, const GTabBank &bank) {
+Addr ForwardN::bankHash(Addr PC, Addr pathHist, uint64_t histTaken, const GTabBank &bank) {
     Addr hash = 0;
     foldedXOR(hash, PC, sizeof(PC)*8, bank.getLogNumEntries());
-    std::for_each(
-            history.begin(),
-            history.end(),
-            [&hash, &bank, this](Addr a) {
-                foldedXOR(hash, a, sizeof(a)*8, bank.getLogNumEntries());
-            });
+    foldedXOR(hash, pathHist, sizeof(pathHist)*8, bank.getLogNumEntries());
     foldedXOR(hash, histTaken, bank.getHistLen(), bank.getLogNumEntries());
     assert(hash < (1<<bank.getLogNumEntries()));
     return hash;
@@ -233,9 +205,22 @@ void ForwardN::allocEntry(int bank, Addr PC, Addr corrDBB,
     }
 }
 
+void ForwardN::updateHistory(bool isControl, bool taken, Addr pc) {
+    if (isControl) {
+        state.pathHist ^= pc;
+
+        state.histTaken <<= 1;
+        state.histTaken |= taken;
+        state.histTaken &= ((1 << histTakenMaxLength) - 1);
+    }
+}
 
 void ForwardN::squash(ThreadID tid, void *bp_history) {
     auto bp_hist = static_cast<BPState *>(bp_history);
+
+    // restore histories. for speculative updates
+    state.pathHist = bp_hist->pathHist;
+    state.histTaken = bp_hist->histTaken;
 
     delete bp_hist;
 }

@@ -119,11 +119,12 @@ class FFBPredUnit : public SimObject
     /**
      * Looks up a given PC in the BP to acquire next-K PC.
      * @param inst_PC The PC to look up.
+     * @param isControl Is that control-transfer instruction
      * @param bp_history Pointer that will be set to an object that
      * has the branch predictor state associated with the lookup.
      * @return next-K PC
      */
-    virtual Addr lookup(ThreadID tid, Addr instPC, void * &bp_history) = 0;
+    virtual Addr lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_history) = 0;
 
     /**
      * Updates the BP with taken/not taken information.

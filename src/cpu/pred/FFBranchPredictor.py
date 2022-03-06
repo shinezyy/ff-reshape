@@ -24,8 +24,6 @@ class ForwardN(FFBranchPredictor):
     cxx_class = 'ForwardN'
     cxx_header = "cpu/pred/forward_n.hh"
 
-    histLength = Param.Unsigned(8, "History length for control inst PCs")
-
     traceStart = Param.Unsigned(0, "Trace misprediction from inst count")
     traceCount = Param.Unsigned(0, "Trace misprediction count")
 
