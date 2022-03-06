@@ -32,7 +32,6 @@ if env['TARGET_ISA'] == 'null':
     Return()
 
 SimObject('BranchPredictor.py')
-SimObject('FFBranchPredictor.py')
 SimObject('MemDepPredictor.py')
 
 DebugFlag('Indirect')
@@ -89,3 +88,7 @@ CompoundFlag('FFOracleBP', [ 'FFOracleBP_lookup', 'FFOracleBP_update', 'FFOracle
                                 'FFOracleBP_misc'])
 Source('forward_n.cc')
 DebugFlag('ForwardN')
+
+Source('ff_trivial.cc')
+DebugFlag('FFTrivialBP')
+
