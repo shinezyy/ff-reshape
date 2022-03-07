@@ -96,6 +96,8 @@ class ControlPlane: public BasicPioDevice
     std::vector<Cache *> l2s;
     Cache * l3;
     int np;
+    uint32_t l2inc, l3inc;
+    double mixIpc;
     //these are used to record performance in one TTI
     std::vector<double> JobIpc;
     std::vector<double> CPUBackgroundIpc;
@@ -110,6 +112,8 @@ class ControlPlane: public BasicPioDevice
     void startTraining();
     //clean up stats, start real QoS simulation
     void startQoS();
+    // adjust params after a TTI
+    void tuning();
     //tell cp a TTI start
     void startTTI();
     //tell cp the TTI is end

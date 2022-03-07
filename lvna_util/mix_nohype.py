@@ -7,7 +7,7 @@ from common import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-b','--benchmark', type=str, required=True,help="like gcc-xal-xal-xal")
-parser.add_argument('-I','--insts',type=int,default=2_000_000)
+parser.add_argument('-I','--insts',type=int,default=10_000_000)
 parser.add_argument('-W','--warmup',type=int,default=50_000_000)
 parser.add_argument('-D','--output',type=str,default='',help='output dir')
 parser.add_argument('--debug-flag',type=str)

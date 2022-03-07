@@ -58,6 +58,8 @@ ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     l2s(p->l2s),
     l3(p->l3),
     np(cpus.size()),
+    l2inc(p->l2inc),
+    l3inc(p->l3inc),
     cpStat(*this)
 {
   for (size_t i = 0; i < LvNATasks::NumJobs; i++)
@@ -129,10 +131,46 @@ void
 ControlPlane::startQoS()
 {
   //reset stats
-  cpStat.resetStats();
   inform("start real QoS\n");
+  std::vector<double> bgIpcs;
+  cpStat.CPUBackgroundIpc.result(bgIpcs);
+  mixIpc = bgIpcs[0];
+
+  l2s[0]->buckets[1]->set_bypass(false);
+  l2s[0]->buckets[1]->set_inc(l2inc);
+
+  for (int i=1; i<4; i++)
+  {
+    l3->buckets[i]->set_bypass(false);
+    l3->buckets[i]->set_inc(l3inc);
+  }
   // this->schedule();
 }
+
+void
+ControlPlane::tuning()
+{
+  std::vector<double> bgIpcs;
+  cpStat.CPUBackgroundIpc.result(bgIpcs);
+  double estimatedIpc = mixIpc * 1.10;
+  double diff = (estimatedIpc - bgIpcs[0])/mixIpc;
+
+  // far from target
+  if (diff > 0.08)
+  {
+
+  }// still needs adjustment
+  else if (diff > 0.04)
+  {
+
+  }// relax a little
+  else if (diff < -0.02)
+  {
+
+  }
+
+}
+
 void
 ControlPlane::startTTI()
 {
