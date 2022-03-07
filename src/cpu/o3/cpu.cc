@@ -1675,14 +1675,21 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
             if (corrDBB.exitSeqNum == 0)
                 continue; // the DBB is unresolved
 
+            // This instr could be committed now
+
             if (hist.back().dynInst->isStoreConditional()) {
                 ffBranchPred->syncStoreConditional(hist.back().dynInst->lockedWriteSuccess(),
                                                     hist.back().tid);
             }
 
             if (hist.back().predDBB == corrDBB.exitPC.pc()) {
-                ffBranchPred->update(hist.back().seqNum, hist.back().tid);
+                // prediction is correct
+                ffBranchPred->update(hist.back().seqNum,
+                                    hist.back().dynInst->pcState().npc(),
+                                    hist.back().tid);
+
             } else {
+                // prediction is incorrect
                 ffBranchPred->squash(hist.back().seqNum,
                                     hist.back().dynInst->pcState(),
                                     corrDBB.exitPC.pc(),

@@ -796,6 +796,9 @@ class FFTrivialBP(FFBranchPredictor):
     cxx_header = "cpu/pred/ff_trivial.hh"
 
     tage = Param.TAGEBase(TAGEBase(), "Tage object")
+    BTBEntries = Param.Unsigned(4096, "Number of BTB entries")
+    BTBTagSize = Param.Unsigned(16, "Size of the BTB tags, in bits")
+    instShiftAmt = Param.Unsigned(2, "Number of bits to shift instructions by")
 
 class ForwardN(FFBranchPredictor):
     type = 'ForwardN'

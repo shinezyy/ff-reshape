@@ -12,7 +12,8 @@ ForwardN::ForwardNStats::ForwardNStats(Stats::Group *parent)
           ADD_STAT(lookups, "Number of ForwardN lookups"),
           ADD_STAT(gtabHit, "Number of ForwardN global table hit"),
           ADD_STAT(gtabHitRate, "ForwardN prediction global table hit rate",
-                   gtabHit / lookups)
+                   gtabHit / lookups),
+          ADD_STAT(coldStart, "Number of cold-start lookups")
 {
     gtabHitRate.precision(4);
 }
@@ -56,7 +57,7 @@ ForwardN::ForwardN(const ForwardNParams &params)
     state.histTaken = 0;
 }
 
-Addr ForwardN::lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_history) {
+Addr ForwardN::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst, void * &bp_history) {
     auto hist = new BPState(state);
     bp_history = hist;
 
@@ -66,8 +67,8 @@ Addr ForwardN::lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_hist
 
     // Look for the bank with longest matching history
     for (int i = gtabBanks.size()-1; i >= 0; i--) {
-        hist->computedInd[i] = bankHash(instPC, state.pathHist, state.histTaken, gtabBanks[i]);
-        hist->computedTag[i] = tagHash(instPC, state.histTaken, gtabBanks[i]);
+        hist->computedInd[i] = bankHash(pc.pc(), state.pathHist, state.histTaken, gtabBanks[i]);
+        hist->computedTag[i] = tagHash(pc.pc(), state.histTaken, gtabBanks[i]);
 
         if (hist->computedTag[i] == gtabBanks[i](hist->computedInd[i]).tag) {
             hist->bank = i;
@@ -78,41 +79,47 @@ Addr ForwardN::lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_hist
     }
     // Look up base predictor
     if (hist->bank == -1) {
-        hist->predPC = btabBank(btabHash(instPC)).pc;
+        hist->predPC = btabBank(btabHash(pc.pc())).pc;
     }
 
     if (hist->bank != gtabBanks.size() - 1)
         ++stats.coldStart;
 
-    updateHistory(isControl, true, instPC);
+    updateHistory(inst->isControl(), true, pc.pc());
 
     return hist->predPC;
 }
 
-void ForwardN::update(ThreadID tid, const TheISA::PCState &thisPC,
-                void *bp_history, bool squashed,
-                const StaticInstPtr &inst,
-                const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) {
+void ForwardN::update(ThreadID tid, const TheISA::PCState &pc,
+                      void *bp_history, bool squashed,
+                      const StaticInstPtr &inst,
+                      const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) {
 
     auto bp_hist = static_cast<BPState *>(bp_history);
 
     if (squashed) {
         // prediction is incorrect
+
+        // restore global histories, then recompute them
+        restoreHistory(bp_hist);
+        updateHistory(inst->isControl(), true, pc.pc());
+
+        // update and/or allocate banks
         if (bp_hist->bank >= 0) {
             int indice = bp_hist->computedInd[bp_hist->bank];
             gtabBanks[bp_hist->bank](indice).pc = corr_DBB.pc();
         } else {
-            btabBank(btabHash(thisPC.pc())).pc = corr_DBB.pc();
+            btabBank(btabHash(pc.pc())).pc = corr_DBB.pc();
         }
 
-        allocEntry(bp_hist->bank, thisPC.pc(), corr_DBB.pc(),
+        allocEntry(bp_hist->bank, pc.pc(), corr_DBB.pc(),
                     bp_hist->computedInd, bp_hist->computedTag);
 
         if (bp_hist->bank >= 0) {
             // update status bits
             int indice = bp_hist->computedInd[bp_hist->bank];
             gtabBanks[bp_hist->bank](indice).useful = false;
-            btabBank(btabHash(thisPC.pc())).meta = false;
+            btabBank(btabHash(pc.pc())).meta = false;
         }
 
     } else {
@@ -123,10 +130,10 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &thisPC,
             gtabBanks[bp_hist->bank](indice).pc = corr_DBB.pc();
 
             gtabBanks[bp_hist->bank](indice).useful = true;
-            btabBank(btabHash(thisPC.pc())).meta = true;
+            btabBank(btabHash(pc.pc())).meta = true;
 
         } else {
-            btabBank(btabHash(thisPC.pc())).pc = corr_DBB.pc();
+            btabBank(btabHash(pc.pc())).pc = corr_DBB.pc();
         }
     }
 
@@ -143,6 +150,8 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &thisPC,
         }
         c++;
     }
+
+    delete bp_hist;
 }
 
 void ForwardN::foldedXOR(Addr &dst, Addr src, int srcLen, int dstLen) {
@@ -218,11 +227,16 @@ void ForwardN::updateHistory(bool isControl, bool taken, Addr pc) {
 void ForwardN::squash(ThreadID tid, void *bp_history) {
     auto bp_hist = static_cast<BPState *>(bp_history);
 
-    // restore histories. for speculative updates
-    state.pathHist = bp_hist->pathHist;
-    state.histTaken = bp_hist->histTaken;
+    // for speculative updates
+    restoreHistory(bp_hist);
 
     delete bp_hist;
+}
+
+void ForwardN::restoreHistory(BPState *bp_hist)
+{
+    state.pathHist = bp_hist->pathHist;
+    state.histTaken = bp_hist->histTaken;
 }
 
 //---------------------------------------------------------------------------------

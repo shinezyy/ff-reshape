@@ -88,7 +88,7 @@ void FFOracleBP::syncArchState(Addr resetPC, paddr_t pmemAddr, void *pmemPtr, si
     DPRINTF(FFOracleBP_misc, "reset PC = %#x.\n", resetPC);
 }
 
-Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_history) {
+Addr FFOracleBP::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst, void * &bp_history) {
     Addr predPC;
     assert(tid == 0);
 
@@ -109,15 +109,15 @@ Addr FFOracleBP::lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_hi
         predPC += ((predPC & 3) ? 2 : 4) * u(randGen);
         assert (predPC != frontPointer->pc);
     }
-    hist->instPC = instPC;
+    hist->instPC = pc.pc();
     hist->scInFlight = frontPointer->scInFlight;
 
     DPRINTF(FFOracleBP_lookup, "+ lookup PC=%#x hist_iid=%u next-%u PC=%#x\n",
-                        instPC, hist->front_iid, numLookAhead, predPC);
+                        pc.pc(), hist->front_iid, numLookAhead, predPC);
     return predPC;
 }
 
-void FFOracleBP::update(ThreadID tid, const TheISA::PCState &thisPC,
+void FFOracleBP::update(ThreadID tid, const TheISA::PCState &pc,
                         void *bp_history, bool squashed,
                         const StaticInstPtr &inst,
                         const TheISA::PCState &pred_nextK_PC, const TheISA::PCState &corr_nextK_PC) {
@@ -125,7 +125,7 @@ void FFOracleBP::update(ThreadID tid, const TheISA::PCState &thisPC,
     auto history_state = static_cast<BPState *>(bp_history);
 
     DPRINTF(FFOracleBP_update, "- update%s PC=%x hist_iid=%u\n",
-                                squashed ? " squashed" : " ", thisPC.pc(),
+                                squashed ? " squashed" : " ", pc.pc(),
                                 history_state->front_iid);
 
     if (squashed) {
@@ -154,6 +154,8 @@ void FFOracleBP::update(ThreadID tid, const TheISA::PCState &thisPC,
         state.commit_iid++;
         dumpState();
     }
+
+    delete history_state;
 }
 
 void FFOracleBP::squash(ThreadID tid, void *bp_history)

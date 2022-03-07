@@ -10,6 +10,7 @@
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/pred/btb.hh"
 #include "cpu/pred/ff_bpred_unit.hh"
 #include "cpu/pred/tage_base.hh"
 #include "cpu/static_inst.hh"
@@ -29,9 +30,9 @@ public:
 
     FFTrivialBP(const FFTrivialBPParams &params);
 
-    Addr lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_history) override;
+    Addr lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst, void * &bp_history) override;
 
-    void update(ThreadID tid, const TheISA::PCState &thisPC,
+    void update(ThreadID tid, const TheISA::PCState &pc,
                 void *bp_history, bool squashed,
                 const StaticInstPtr &inst,
                 const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) override;
@@ -52,6 +53,8 @@ private:
     };
 
     unsigned int numLookAhead;
+
+    DefaultBTB BTB;
 };
 
 #endif //GEM5_FF_TRIVIAL_H

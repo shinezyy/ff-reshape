@@ -77,9 +77,10 @@ class FFBPredUnit : public SimObject
      * Tells the branch predictor to commit any updates until the given
      * sequence number.
      * @param done_sn The sequence number to commit any older updates up until.
+     * @param pc PC state with correct npc value.
      * @param tid The thread id.
      */
-    void update(const InstSeqNum &done_sn, ThreadID tid);
+    void update(const InstSeqNum &done_sn, const TheISA::PCState &pc, ThreadID tid);
 
     /**
      * Squashes all outstanding updates until a given sequence number.
@@ -94,12 +95,13 @@ class FFBPredUnit : public SimObject
      * corrects that sn's update with the proper address and taken/not taken.
      * @param squashed_sn The sequence number to squash any younger updates up
      * until.
-     * @param corr_nextK_PC The correct next-K PC.
+     * @param pc PC state with correct npc value.
+     * @param corr_DBB The correct next-K DBB PC.
      * @param tid The thread id.
      */
     void squash(const InstSeqNum &squashed_sn,
-                const TheISA::PCState &thisPC,
-                const TheISA::PCState &corr_nextK_PC,
+                const TheISA::PCState &pc,
+                const TheISA::PCState &corr_DBB,
                 ThreadID tid);
 
     void dump();
@@ -124,7 +126,7 @@ class FFBPredUnit : public SimObject
      * has the branch predictor state associated with the lookup.
      * @return next-K PC
      */
-    virtual Addr lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_history) = 0;
+    virtual Addr lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst, void * &bp_history) = 0;
 
     /**
      * Updates the BP with taken/not taken information.
@@ -137,7 +139,7 @@ class FFBPredUnit : public SimObject
      * @param corr_DBB The resolved target of DBB
      * @todo Make this update flexible enough to handle a global predictor.
      */
-    virtual void update(ThreadID tid, const TheISA::PCState &thisPC,
+    virtual void update(ThreadID tid, const TheISA::PCState &pc,
                    void *bp_history, bool squashed,
                    const StaticInstPtr &inst,
                    const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) = 0;

@@ -31,50 +31,89 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "arch/utility.hh"
+#include "base/random.hh"
+#include "config/the_isa.hh"
 #include "debug/FFTrivialBP.hh"
 #include "ff_trivial.hh"
 
 FFTrivialBP::FFTrivialBP(const FFTrivialBPParams &params)
         : FFBPredUnit(params),
           tage(params.tage),
-          numLookAhead(params.numLookAhead)
+          numLookAhead(params.numLookAhead),
+          BTB(params.BTBEntries,
+              params.BTBTagSize,
+              params.instShiftAmt,
+              params.numThreads)
 {
 }
 
-Addr FFTrivialBP::lookup(ThreadID tid, Addr instPC, bool isControl, void * &bp_history) {
-    auto bi = new BPState(*tage);
-    bp_history = bi;
+Addr FFTrivialBP::lookup(ThreadID tid, const TheISA::PCState &instPC, const StaticInstPtr &inst, void * &bp_history) {
+    BPState tstate(*tage);
+    BPState *bi[2] = {new BPState(*tage), &tstate};
+    int ind = 0;
 
-    Addr pc = instPC;
+    TheISA::PCState pc(instPC);
 
     for (int i=0; i<numLookAhead; i++) {
-        bool taken = tage->tagePredict(tid, pc, isControl, bi->info);
+        // predicate direction
+        bool taken = tage->tagePredict(tid, pc.pc(), true, bi[ind]->info);
 
-        tage->updateHistories(tid, pc, taken, bi->info, true);
+        tage->updateHistories(tid, pc.pc(), taken, bi[ind]->info, true);
 
-        // TODO: add BTB
+        // predicate target
         if (taken) {
-            pc = 0;
-        } else {
-            pc = 0;
+            if (BTB.valid(pc.pc(), tid)) {
+                pc = BTB.lookup(pc.pc(), tid);
+            } else {
+                taken = false;
+            }
         }
-    }
+        if (!taken) {
+            TheISA::advancePC(pc, inst);
+        }
 
-    return pc;
+        ind = 1;
+    }
+    bp_history = bi[0];
+
+    return pc.pc();
 }
 
-void FFTrivialBP::update(ThreadID tid, const TheISA::PCState &thisPC,
-                void *bp_history, bool squashed,
-                const StaticInstPtr &inst,
-                const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) {
+void FFTrivialBP::update(ThreadID tid, const TheISA::PCState &pc,
+                         void *bp_history, bool squashed,
+                         const StaticInstPtr &inst,
+                         const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) {
 
-    // TODO
+    BPState *bi = static_cast<BPState*>(bp_history);
+    TAGEBase::BranchInfo *tage_bi = bi->info;
+    bool taken = pc.branching();
+
+    if (squashed) {
+        // This restores the global history, then update it
+        // and recomputes the folded histories.
+        tage->squash(tid, taken, tage_bi, pc.npc());
+        return;
+    }
+
+    int nrand = random_mt.random<int>() & 3;
+    if (tage_bi->condBranch) {
+        tage->updateStats(taken, tage_bi);
+        tage->condBranchUpdate(tid, pc.pc(), taken, tage_bi, nrand,
+                               pc.npc(), tage_bi->tagePred);
+    }
+
+    // optional non speculative update of the histories
+    tage->updateHistories(tid, pc.pc(), taken, tage_bi, false, inst,
+                          pc.npc());
+
+    BTB.update(pc.pc(), pc.npc(), tid);
+
+    delete bi;
 }
 
 void FFTrivialBP::squash(ThreadID tid, void *bp_history) {
     auto bi = static_cast<BPState *>(bp_history);
-
-    // TODO
-
+    // Nothing to do
     delete bi;
 }

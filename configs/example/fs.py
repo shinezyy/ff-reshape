@@ -314,7 +314,7 @@ Options.addFSOptions(parser)
 SSOptions.addO3Options(parser)
 
 parser.add_option("--ff-bp-type", type="choice", default="none",
-                      choices=['none', 'forwardN', 'oracle'],
+                      choices=['none', 'forwardN', 'oracle', 'trivial'],
                       help = "type of FF branch predictor");
 
 # Options for forwardN BP
@@ -328,6 +328,11 @@ parser.add_option("--forward-n-randNumSeed", type='int')
 
 # Options for oracle BP
 parser.add_option("--ff-oracle-preset-accuracy", type='float', default=1.0)
+
+# Options for trivial BP
+parser.add_option("--ff-trivial-BTBEntries", type='int')
+parser.add_option("--ff-trivial-BTBTagSize", type='int')
+parser.add_option("--ff-trivial-instShiftAmt", type='int')
 
 
 # Add the ruby specific and protocol specific options
@@ -414,6 +419,18 @@ if options.ff_bp_type != 'none':
             assert(options.generic_rv_cpt is not None)
             cpu.ffBranchPred = m5.objects.FFOracleBP()
             cpu.ffBranchPred.presetAccuracy = options.ff_oracle_preset_accuracy
+
+        elif options.ff_bp_type == 'trivial':
+            cpu.ffBranchPred = m5.objects.FFTrivialBP()
+            if options.ff_trivial_BTBEntries:
+                cpu.ffBranchPred.BTBEntries = \
+                    int(options.ff_trivial_BTBEntries)
+            if options.ff_trivial_BTBTagSize:
+                cpu.ffBranchPred.BTBTagSize = \
+                    int(options.ff_trivial_BTBTagSize)
+            if options.ff_trivial_instShiftAmt:
+                cpu.ffBranchPred.instShiftAmt = \
+                    int(options.ff_trivial_instShiftAmt)
 
 if len(bm) == 2:
     drive_sys = build_drive_system(np)

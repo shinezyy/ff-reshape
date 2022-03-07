@@ -77,7 +77,7 @@ FFBPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
     void *bp_history = nullptr;
 
     ++stats.lookups;
-    nextK_pc = lookup(tid, pc.instAddr(), inst->isControl(), bp_history);
+    nextK_pc = lookup(tid, pc.instAddr(), inst, bp_history);
 
     DPRINTF(Branch, "[tid:%i] [sn:%llu] "
                 "Branch predictor predicted next-K PC=%#x for PC %s\n",
@@ -95,7 +95,7 @@ FFBPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
 }
 
 void
-FFBPredUnit::update(const InstSeqNum &done_sn, ThreadID tid)
+FFBPredUnit::update(const InstSeqNum &done_sn, const TheISA::PCState &pc, ThreadID tid)
 {
     DPRINTF(Branch, "[tid:%i] Committing branches until "
             "sn:%llu]\n", tid, done_sn);
@@ -105,7 +105,8 @@ FFBPredUnit::update(const InstSeqNum &done_sn, ThreadID tid)
         // Update the branch predictor with the correct results.
         DPRINTF(Branch, "Committing branch [sn:%lli].\n",
                 predHist[tid].back().seqNum);
-        update(tid, predHist[tid].back().pc,
+
+        update(tid, pc,
                     predHist[tid].back().bpHistory, false,
                     predHist[tid].back().inst,
                     predHist[tid].back().nextK_PC, predHist[tid].back().nextK_PC);
@@ -139,8 +140,8 @@ FFBPredUnit::squash(const InstSeqNum &squashed_sn, ThreadID tid)
 
 void
 FFBPredUnit::squash(const InstSeqNum &squashed_sn,
-                  const TheISA::PCState &thisPC,
-                  const TheISA::PCState &corr_nextK_PC,
+                  const TheISA::PCState &pc,
+                  const TheISA::PCState &corr_DBB,
                   ThreadID tid)
 {
     // Now that we know that a branch was mispredicted, we need to undo
@@ -159,7 +160,7 @@ FFBPredUnit::squash(const InstSeqNum &squashed_sn,
     ++stats.incorrect;
 
     DPRINTF(Branch, "[tid:%i] Squashing from sequence number %i, "
-            "setting correct next-K PC to %s\n", tid, squashed_sn, corr_nextK_PC);
+            "setting correct next-K PC to %s\n", tid, squashed_sn, corr_DBB);
 
     // Squash All Branches AFTER this mispredicted branch
     squash(squashed_sn, tid);
@@ -169,7 +170,7 @@ FFBPredUnit::squash(const InstSeqNum &squashed_sn,
     // fix up the entry.
     if (!pred_hist.empty()) {
 
-        auto hist_it = pred_hist.begin();
+        //auto hist_it = pred_hist.begin();
         //HistoryIt hist_it = find(pred_hist.begin(), pred_hist.end(),
         //                       squashed_sn);
 
@@ -191,11 +192,10 @@ FFBPredUnit::squash(const InstSeqNum &squashed_sn,
         // local/global histories. The counter tables will be updated when
         // the branch actually commits.
 
-        assert(thisPC.pc() == (*hist_it).pc);
-        update(tid, thisPC,
+        update(tid, pc,
                pred_hist.front().bpHistory, true,
                pred_hist.front().inst,
-               pred_hist.front().nextK_PC, corr_nextK_PC);
+               pred_hist.front().nextK_PC, corr_DBB);
 
     } else {
         DPRINTF(Branch, "[tid:%i] [sn:%llu] pred_hist empty, can't "
