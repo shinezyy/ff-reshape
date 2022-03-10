@@ -52,12 +52,22 @@ Addr FFTrivialBP::lookup(ThreadID tid, const TheISA::PCState &instPC, const Stat
     BPState tstate(*tage);
     BPState *bi[2] = {new BPState(*tage), &tstate};
     int ind = 0;
+    Addr ret = 0;
 
     TheISA::PCState pc(instPC);
 
-    for (int i=0; i<numLookAhead; i++) {
+    for (int numDBB=0; numDBB<numLookAhead; ) {
+        bool isControl;
+        if (BTB.valid(pc.pc(), tid)) {
+            TheISA::PCState test(pc);
+            test.npc(BTB.lookup(pc.pc(), tid).pc());
+            isControl = test.branching();
+        } else {
+            isControl = true;
+        }
+
         // predicate direction
-        bool taken = tage->tagePredict(tid, pc.pc(), true, bi[ind]->info);
+        bool taken = tage->tagePredict(tid, pc.pc(), isControl, bi[ind]->info);
 
         tage->updateHistories(tid, pc.pc(), taken, bi[ind]->info, true);
 
@@ -73,11 +83,16 @@ Addr FFTrivialBP::lookup(ThreadID tid, const TheISA::PCState &instPC, const Stat
             TheISA::advancePC(pc, inst);
         }
 
+        if (isControl) {
+            if (++numDBB == numLookAhead)
+                ret = pc.pc();
+        }
+
         ind = 1;
     }
     bp_history = bi[0];
 
-    return pc.pc();
+    return ret;
 }
 
 void FFTrivialBP::update(ThreadID tid, const TheISA::PCState &pc,
