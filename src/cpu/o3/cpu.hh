@@ -778,12 +778,24 @@ class FullO3CPU : public BaseO3CPU
         Stats::Scalar miscRegfileWrites;
 
         Stats::Scalar lastCommitTick;
+        //ld&st
+        Stats::Scalar intra_num;
+        Stats::Scalar inter_num;
     } cpuStats;
 
   public:
     // hardware transactional memory
     void htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
                             HtmFailureFaultCause cause);
+
+    Addr current_reg[256];
+    unsigned current_size[256];
+    uint64_t current_num;
+    Addr last_reg[256];
+    unsigned last_size[256];
+  //  uint64_t intra_num;
+  //  uint64_t inter_num;
+    uint64_t theinstnum;
 
   private:
     uint32_t diff_wdst[DIFFTEST_WIDTH];
@@ -797,6 +809,7 @@ class FullO3CPU : public BaseO3CPU
     bool enable_nemu_diff;
     bool hasCommit{false};
 
+
     void readGem5Regs();
 
     std::pair<int, bool> diffWithNEMU(const DynInstPtr &inst);
@@ -808,6 +821,7 @@ class FullO3CPU : public BaseO3CPU
     bool ffBranchPredInited{false};
     int cpuID{0};
     FFBPredUnit *ffBranchPred;
+    bool enable_xgroup_mem_dep;
     struct FFBranchPredHistory {
         FFBranchPredHistory(Addr _pc, InstSeqNum _seqNum, ThreadID _tid, Addr _predNextKPC,
                             const StaticInstPtr &_staticInst,

@@ -129,7 +129,8 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
       lastRunningCycle(curCycle()),
       cpuStats(this),
       enable_nemu_diff(params.nemuDiff),
-      ffBranchPred(params.ffBranchPred)
+      ffBranchPred(params.ffBranchPred),
+      enable_xgroup_mem_dep(params.xgroup_mem_dep)
 {
     fatal_if(FullSystem && params.numThreads > 1,
             "SMT is not supported in O3 in full system mode currently.");
@@ -137,6 +138,8 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
     fatal_if(!FullSystem && params.numThreads < params.workload.size(),
             "More workload items (%d) than threads (%d) on CPU %s.",
             params.workload.size(), params.numThreads, name());
+    theinstnum = 1;
+    current_num = 0;
 
     if (!params.switched_out) {
         _status = Running;
@@ -440,7 +443,10 @@ FullO3CPUStats::FullO3CPUStats(FullO3CPU *cpu)
       ADD_STAT(ccRegfileWrites, "number of cc regfile writes"),
       ADD_STAT(miscRegfileReads, "number of misc regfile reads"),
       ADD_STAT(miscRegfileWrites, "number of misc regfile writes"),
-      ADD_STAT(lastCommitTick, "lastCommitTick")
+      ADD_STAT(lastCommitTick, "lastCommitTick"),
+      ADD_STAT(intra_num, "ld&st intra_num"),
+      ADD_STAT(inter_num, "ld&st inter_num")
+
 {
     // Register any of the O3CPU's stats here.
     timesIdled
@@ -515,6 +521,12 @@ FullO3CPUStats::FullO3CPUStats(FullO3CPU *cpu)
 
     miscRegfileWrites
         .prereq(miscRegfileWrites);
+
+    intra_num
+        .prereq(intra_num);
+
+    inter_num
+        .prereq(inter_num);
 }
 
 template <class Impl>
@@ -1596,6 +1608,61 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
         } else { // no diff
             ;
         }
+    }
+    if (enable_xgroup_mem_dep){
+        if (theinstnum%256==1){
+            for (int j=0;j<256;j++){
+                if (theinstnum==1){
+                    current_reg[j] = 0;
+                    current_size[j] = 0;
+                    last_reg[j] = 0;
+                    last_size[j] = 0;
+                }
+                else{
+                    last_reg[j] = current_reg[j];
+                    last_size[j] = current_size[j];
+                }
+            }
+        current_num = 0;
+        }
+        if (inst->isStore()){
+            current_reg[current_num] = inst->physEffAddr;
+            current_size[current_num] = inst->effSize;
+            current_num++;
+          //  aaaa = inst->physEffAddr;
+          //   bbbb = inst->effSize;
+        }
+         if (inst->isLoad()){
+            Addr inst_addr1 = inst->physEffAddr;
+            Addr inst_addr2 = inst->physEffAddr+inst->effSize;
+            for (int i=0;i<current_num;i++){
+                Addr inst_reg1 = current_reg[i];
+                Addr inst_reg2 = current_reg[i]+current_size[i]-1;
+
+                if (((inst_reg1<=inst_addr1)&&(inst_addr1<inst_reg2))||
+                ((inst_reg1< inst_addr2)&&(inst_addr2<=inst_reg2))){
+                    cpuStats.intra_num++;
+                    break;
+
+                }
+            }
+
+            if (theinstnum>256){
+            for (int k=0;k<256;k++){
+                Addr inst_reg3 = last_reg[k];
+                Addr inst_reg4 = last_reg[k]+current_size[k]-1;
+
+                if (((inst_reg3<=inst_addr1)&&(inst_addr1<inst_reg4))||
+                ((inst_reg3<inst_addr2)&&(inst_addr2<=inst_reg4))){
+                    cpuStats.inter_num++;
+                    break;
+
+                }
+            }
+            }
+
+        }
+        theinstnum++;
     }
 
     DPRINTF(ValueCommit, "commit_pc: %s\n", inst->pcState());

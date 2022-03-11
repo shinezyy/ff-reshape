@@ -179,3 +179,6 @@ def addO3Options(parser):
             action='store_true',
             help="use NEMU as ref to do difftest")
 
+    parser.add_option("--xgroup_mem_dep",
+            action='store_true',
+            help="use NEMU as ref to do difftest")

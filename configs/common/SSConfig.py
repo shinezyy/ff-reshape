@@ -81,6 +81,9 @@ def modifyO3CPUConfig(options, cpu):
     if options.nemu_diff:
         cpu.nemuDiff = True
 
+    if options.xgroup_mem_dep:
+        cpu.xgroup_mem_dep = True
+
     if options.cpu_type == 'DerivFFCPU':
 
         cpu.FanoutPredLambda = options.fanout_lambda

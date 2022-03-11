@@ -194,6 +194,8 @@ class DerivO3CPU(BaseCPU):
     ffBranchPred = Param.FFBranchPredictor(NULL, "Branch Predictor for ForwardFlow")
 
     nemuDiff = Param.Bool(False,"use NEMU as ref to difftest")
+    xgroup_mem_dep = Param.Bool(False,"ld&st dependency")
+
 
     branchTrace = Param.BranchTrace(BranchTrace())
 
