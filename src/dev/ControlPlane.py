@@ -27,5 +27,5 @@ class ControlPlane(BasicPioDevice):
 
     l2s = VectorParam.Cache([],'l2 caches under control')
     l3 = Param.Cache(NULL,'l3 cache under control')
-    l2inc = Param.UInt32(1, 'l2 tb inc')
-    l3inc = Param.UInt32(1, 'l3 tb inc')
+    l2inc = Param.UInt32(10000, 'l2 tb inc')
+    l3inc = Param.UInt32(10000, 'l3 tb inc')

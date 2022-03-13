@@ -63,10 +63,12 @@ void Token_Bucket::enqueue_request(PacketPtr request, bool head) {
 // if no tokens, return false; if there are, get one token out; used when a req arrives memobj
 bool Token_Bucket::test_and_get(){
     if (bypass) {
+        accesses = accesses + 1;
         return true;
     }
     if (tokens > 0 || inc == size){
         tokens --;
+        accesses = accesses + 1;
         return true;
     }
     return false;

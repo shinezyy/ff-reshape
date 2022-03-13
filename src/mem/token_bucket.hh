@@ -19,6 +19,7 @@ class Token_Bucket
     int size, freq, inc;    // max_size of the bucket, freq of adding tokens, num of tokens added every cycle
     bool bypass;            // bypass true: do not use token bucket
     int tokens;             // current num of tokens in the bucket
+    int accesses;
 
     std::queue<PacketPtr> waiting_queue;  // reqs not yet sent to mem_ctrl
 
@@ -45,6 +46,8 @@ class Token_Bucket
     inline void set_bypass(bool b) { bypass = b; }
 
     inline int get_tokens() { return (bypass) ? 1 : tokens; }
+    inline int get_accesses() { return accesses; }
+    inline void reset_accesses() { accesses = 0; }
 
     /**
      * return true if the pkt passes (may modify tokens),

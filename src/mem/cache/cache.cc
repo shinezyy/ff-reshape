@@ -82,26 +82,26 @@ Cache::Cache(const CacheParams &p)
 
     int level = p.cache_level;
 
-    // core 0 at higher prior
-    buckets.push_back(new Token_Bucket(
-        this, init_size[level], init_freq[level], init_inc[level], true, this));
-    for (int i = 1; i < LvNATasks::NumId; i++){
-         buckets.push_back(new Token_Bucket(
-             this, init_size[level], init_freq[level], init_inc[level], bypass[level], this));
-    }
-    for (int i = LvNATasks::NumId; i < LvNATasks::NumBuckets; i++){
-        buckets.push_back(new Token_Bucket(
-            this, init_size[level], init_freq[level], init_inc[level], true, this));
-    }
-
-    // for (int i = 0; i < LvNATasks::QosIdStart; i++){
+    // // core 0 at higher prior
+    // buckets.push_back(new Token_Bucket(
+    //     this, init_size[level], init_freq[level], init_inc[level], true, this));
+    // for (int i = 1; i < LvNATasks::NumId; i++){
     //      buckets.push_back(new Token_Bucket(
     //          this, init_size[level], init_freq[level], init_inc[level], bypass[level], this));
     // }
-    // for (int i = LvNATasks::QosIdStart; i < LvNATasks::NumBuckets; i++){
+    // for (int i = LvNATasks::NumId; i < LvNATasks::NumBuckets; i++){
     //     buckets.push_back(new Token_Bucket(
     //         this, init_size[level], init_freq[level], init_inc[level], true, this));
     // }
+
+    for (int i = 0; i < LvNATasks::QosIdStart; i++){
+         buckets.push_back(new Token_Bucket(
+             this, init_size[level], init_freq[level], init_inc[level], bypass[level], this));
+    }
+    for (int i = LvNATasks::QosIdStart; i < LvNATasks::NumBuckets; i++){
+        buckets.push_back(new Token_Bucket(
+            this, init_size[level], init_freq[level], init_inc[level], true, this));
+    }
 }
 
 void
