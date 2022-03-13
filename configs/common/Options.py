@@ -140,6 +140,8 @@ def addNoISAOptions(parser):
     parser.add_option("--l3_complex", action="store_true")
     parser.add_option("--l2_slices", type="int", default=1)
     parser.add_option("--l3_slices", type="int", default=1)
+    parser.add_option("--l2inc", type="int", default=1)
+    parser.add_option("--l3inc", type="int", default=1)
     parser.add_option("--cacheline_size", type="int", default=64)
 
     # Enable Ruby

@@ -137,6 +137,7 @@ ControlPlane::startQoS()
   mixIpc = bgIpcs[0];
 
   l2s[0]->buckets[1]->set_bypass(false);
+  printf("l2inc %d l3inc %d\n",l2inc,l3inc);
   l2s[0]->buckets[1]->set_inc(l2inc);
 
   for (int i=1; i<4; i++)

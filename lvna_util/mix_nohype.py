@@ -12,6 +12,8 @@ parser.add_argument('-W','--warmup',type=int,default=50_000_000)
 parser.add_argument('-D','--output',type=str,default='',help='output dir')
 parser.add_argument('--debug-flag',type=str)
 parser.add_argument('-C','--compile', action="store_true",help="compile Gem5 first")
+parser.add_argument('--l2inc',type=int,default=1)
+parser.add_argument('--l3inc',type=int,default=1)
 args = parser.parse_args()
 
 if args.compile:
@@ -37,6 +39,7 @@ opt.append('--l1d_size=32kB --l1d_assoc=8')
 
 opt.append('--l2_size=768kB --l2_assoc=12')
 opt.append('--l3_size=2MB --l3_assoc=8')
+opt.append('--l2inc={} --l3inc={}'.format(args.l2inc, args.l3inc))
 
 gcpt_all = [(benchmark_dir + benchmark_cpt_file[bm]) for bm in args.benchmark.split("-")]
 # opt.append('--job-benchmark')
