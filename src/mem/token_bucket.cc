@@ -7,11 +7,11 @@
 using namespace std;
 
 Token_Bucket::Token_Bucket(EventManager *_em, int _size, int _freq, int _inc, bool _bypass=true,
-    cross_queue_t* cross_queuePtr=nullptr, Cache *parent_cache=nullptr)
+    Cache *parent_cache=nullptr)
     : size(_size), freq(_freq), inc(_inc), bypass(_bypass), tokens(_inc),
       em(_em),
       updateTokenEvent([this]{ update_tokens(); }, "update_token"),
-      cross_queuePtr(cross_queuePtr), parent_cache(parent_cache)
+      parent_cache(parent_cache)
 {
     assert(size >= inc && "inc should not be greater than size");
     em->schedule(updateTokenEvent, curTick() + parent_cache->cyclesToTicks(Cycles(freq)));
@@ -20,40 +20,34 @@ Token_Bucket::Token_Bucket(EventManager *_em, int _size, int _freq, int _inc, bo
 // when cycle == freq, add tokens
 void Token_Bucket::update_tokens(){
     tokens = std::min(size, tokens + inc);
-    if (tokens > 0) {
-        OrderedReq* req = dequeue_request();
-        if (req){
-            //fprintf(stderr,"enqueue cus new token\n");
-            cross_queuePtr->push(req->pkt);
+    while (!waiting_queue.empty())
+    {
+        if (test_and_get())
+        {
+            PacketPtr outPkt = waiting_queue.front();
+            parent_cache->handleStalledPkt(outPkt);
+            waiting_queue.pop();
         }
-        if (!cross_queuePtr->empty()){
-            parent_cache->sendOrderedReqs();
-        }
+        else
+            break;
     }
-    em->reschedule(updateTokenEvent, curTick()+freq, true);//cyclesToTicks
+    em->reschedule(updateTokenEvent, curTick()+parent_cache->cyclesToTicks(Cycles(freq)), true);
 }
 
-// fetch one req from waiting queue
-OrderedReq* Token_Bucket::dequeue_request() {
-    if (waiting_queue.empty()){
-        return NULL;
+bool Token_Bucket::checkPassPkt(PacketPtr pkt)
+{
+    if (test_and_get())
+    {
+        return true;
     }
-    if (bypass) {
-        OrderedReq* req = waiting_queue.front();
-        waiting_queue.pop();
-        return req;
+    else
+    {
+        enqueue_request(pkt,false);
+        return false;
     }
-    if (tokens > 0 || inc == size){
-        OrderedReq* req = waiting_queue.front();
-        tokens --;
-        waiting_queue.pop();
-        return req;
-    }
-    return NULL;
 }
-
 // add one req to waiting queue
-void Token_Bucket::enqueue_request(OrderedReq *request, bool head=false) {
+void Token_Bucket::enqueue_request(PacketPtr request, bool head) {
     waiting_queue.push(request);
     if (head) {   // head -> order?
         int num = waiting_queue.size() - 1;
@@ -66,24 +60,15 @@ void Token_Bucket::enqueue_request(OrderedReq *request, bool head=false) {
     }
 }
 
-// get the first req in waiting queue but not dequeue
-OrderedReq* Token_Bucket::get_waitq_front() {
-    if (waiting_queue.empty()){
-        return NULL;
-    }else
-    {
-        OrderedReq* req = waiting_queue.front();
-        return req;
-    }
-}
-
 // if no tokens, return false; if there are, get one token out; used when a req arrives memobj
 bool Token_Bucket::test_and_get(){
     if (bypass) {
+        accesses = accesses + 1;
         return true;
     }
     if (tokens > 0 || inc == size){
         tokens --;
+        accesses = accesses + 1;
         return true;
     }
     return false;

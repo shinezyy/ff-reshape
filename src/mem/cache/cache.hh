@@ -54,12 +54,13 @@
 #include "dev/controlplane.hh"
 #include "mem/cache/base.hh"
 #include "mem/packet.hh"
+#include "mem/token_bucket.hh"
 
 class CacheBlk;
 struct CacheParams;
 class MSHR;
 class Token_Bucket;
-typedef std::queue<PacketPtr> cross_queue_t;
+
 
 /**
  * A coherent cache that can be arranged in flexible topologies.
@@ -79,13 +80,11 @@ class Cache : public BaseCache
      */
     std::unordered_set<RequestPtr> outstandingSnoop;
 
-    /* Luoshan: Add a cross queue for pkt from multi-buckets to cache */
-    cross_queue_t cross_queue;
-    void send_cross_pkts();                  // sending all pkts in cross_queue
-
   public:
     /* Luoshan: Add tokenbucket here */
     std::vector <Token_Bucket *> buckets;
+    const uint32_t numSets;
+    void handleStalledPkt(PacketPtr pkt);
 
   protected:
     /**
@@ -164,9 +163,6 @@ class Cache : public BaseCache
      * found, set the BLOCK_CACHED flag in pkt.
      */
     bool isCachedAbove(PacketPtr pkt, bool is_timing = true);
-
-    /* Luoshan: Alloc Req to corresponding tb */
-    int allocReq2Bucket(PacketPtr pkt);
 
   public:
     /** Instantiates a basic cache object. */

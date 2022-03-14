@@ -12,7 +12,7 @@ FgJobMeta::FgJobMeta(ControlPlane *cp):
 void
 FgJobMeta::jobUp(int job_id, int cpu_id,uint64_t now_cycle, uint64_t now_insts)
 {
-  cp->cpus[cpu_id]->setTaskId(LvNATasks::job2TaskId(job_id));
+  cp->setContextQosId(cpu_id, LvNATasks::job2QosId(job_id));
   up(now_cycle,now_insts);
 }
 void
@@ -30,7 +30,7 @@ BgCpuMeta::BgCpuMeta(ControlPlane *cp):
 void
 BgCpuMeta::bgUp(int cpu_id,uint64_t now_cycle, uint64_t now_insts)
 {
-  cp->cpus[cpu_id]->setTaskId(cpu_id);
+  cp->setContextQosId(cpu_id, cpu_id);
   up(now_cycle,now_insts);
 }
 void
@@ -58,6 +58,8 @@ ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     l2s(p->l2s),
     l3(p->l3),
     np(cpus.size()),
+    l2inc(p->l2inc),
+    l3inc(p->l3inc),
     cpStat(*this)
 {
   for (size_t i = 0; i < LvNATasks::NumJobs; i++)
@@ -68,6 +70,22 @@ ControlPlane::ControlPlane(const ControlPlaneParams *p) :
   {
     BgCpuMap[i] = new BgCpuMeta(this);
   }
+  for (size_t i = 0; i < np; i++)
+  {
+    setContextQosId(i,i);
+  }
+
+  for (size_t i = 0; i < LvNATasks::NumId; i++)
+  {
+    uint32_t alt_id = i + LvNATasks::NumId;
+    QosIDAlterMap[i] = alt_id;
+    for (const auto &c:l2s)
+    {
+      c->QosIDAlterMap[i] = i + alt_id;
+    }
+    l3->QosIDAlterMap[i] = alt_id;
+  }
+
   resetTTIMeta();
 
 }
@@ -76,6 +94,17 @@ ControlPlane *
 ControlPlaneParams::create() const
 {
   return new ControlPlane(this);
+}
+
+void
+ControlPlane::setContextQosId(uint32_t ctx_id, uint32_t qos_id)
+{
+  context2QosIDMap[ctx_id]=qos_id;
+  for (const auto &c:l2s)
+  {
+    c->context2QosIDMap[ctx_id] = qos_id;
+  }
+  l3->context2QosIDMap[ctx_id] = qos_id;
 }
 
 void ControlPlane::resetTTIMeta()
@@ -102,10 +131,52 @@ void
 ControlPlane::startQoS()
 {
   //reset stats
-  cpStat.resetStats();
   inform("start real QoS\n");
+  std::vector<double> bgIpcs;
+  cpStat.CPUBackgroundIpc.result(bgIpcs);
+  mixIpc = bgIpcs[0];
+
+  for (int i = 0; i < LvNATasks::QosIdStart; i++)
+  {
+    l3->buckets[i]->set_bypass(false);
+    int l3accesses = l3->buckets[i]->get_accesses();
+    l3->buckets[i]->reset_accesses();
+    l3->buckets[i]->set_inc(l3accesses/2);
+  }
+  printf("l2inc %d l3inc %d\n",l2inc,l3inc);
   // this->schedule();
 }
+
+void
+ControlPlane::tuning()
+{
+  inform("start tuning\n");
+  std::vector<double> bgIpcs;
+  cpStat.CPUBackgroundIpc.result(bgIpcs);
+  double estimatedIpc = mixIpc * 1.10;
+  double diff = (estimatedIpc - bgIpcs[0])/mixIpc;
+
+  for (int i = 0; i < LvNATasks::QosIdStart; i++)
+  {
+    int l3accesses = l3->buckets[i]->get_accesses();
+    l3->buckets[i]->reset_accesses();
+    int l3inc = l3->buckets[i]->get_inc();
+    // far from target
+    if (diff > 0.08)
+    {
+      l3->buckets[i]->set_inc(l3accesses/2);
+    }// still needs adjustment
+    else if (diff > 0.02)
+    {
+      l3->buckets[i]->set_inc(l3inc-50);
+    }// relax a little
+    else if (diff < -0.02)
+    {
+      l3->buckets[i]->set_inc(l3inc+50);
+    }
+  }
+}
+
 void
 ControlPlane::startTTI()
 {

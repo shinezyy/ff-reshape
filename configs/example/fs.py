@@ -248,6 +248,8 @@ def build_test_system(np):
             test_sys.controlplane.cpus = test_sys.cpu
             test_sys.controlplane.l2s = test_sys.l2
             test_sys.controlplane.l3 = test_sys.l3
+            test_sys.controlplane.l2inc = options.l2inc
+            test_sys.controlplane.l3inc = options.l3inc
 
     return test_sys
 

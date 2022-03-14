@@ -273,9 +273,22 @@ def scriptCheckpoints(options, maxtick, cptdir):
 
     return exit_event
 
-def benchCheckpoints(options, maxtick, cptdir):
+def benchCheckpoints(testsys, options, maxtick, cptdir):
     exit_event = m5.simulate(maxtick - m5.curTick())
     exit_cause = exit_event.getCause()
+    if exit_cause != "core 0 warmup done":
+        return exit_event
+
+    cpu_period = testsys.cpu_clk_domain.clock[0].getValue()
+    testsys.controlplane.startQoS()
+
+    for i in range(3):
+        testsys.controlplane.startTTI()
+        exit_event = m5.simulate(1_000_000*cpu_period)
+        testsys.controlplane.endTTI()
+        testsys.controlplane.tuning()
+        m5.stats.dump()
+        m5.stats.reset()
 
     num_checkpoints = 0
     max_checkpoints = options.max_checkpoints
@@ -496,6 +509,8 @@ def repeatJobs(testsys, maxtick):
             eve.schedule_out(job_clk)
         if job_clk == 100:
             testsys.controlplane.startQoS()
+            m5.stats.dump()
+            m5.stats.reset()
         next_event_cycle = job_eq.peek_cycle()
 
         if maxtick <= next_event_cycle*job_clk_period:
@@ -848,7 +863,7 @@ def run(options, root, testsys, cpu_class):
         elif options.job_benchmark:
             exit_event = repeatJobs(testsys, maxtick)
         else:
-            exit_event = benchCheckpoints(options, maxtick, cptdir)
+            exit_event = benchCheckpoints(testsys, options, maxtick, cptdir)
 
     print('Exiting @ tick %i because %s' %
           (m5.curTick(), exit_event.getCause()))

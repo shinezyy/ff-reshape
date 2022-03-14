@@ -13,17 +13,19 @@
 #include "params/ControlPlane.hh"
 
 namespace LvNATasks {
+    // 0~7 for low priv
+    // 8~15 for high priv task
+    // 16~31 are bypassIdx of 0~15
     enum JobId {
         MaxLowPrivId = 7,
-        JobIdStart = 8,
-        NumId = 16
+        MaxCtxId = 7,
+        QosIdStart = 8,
+        NumId = 16,
+        NumBuckets = 32,
     };
     const int NumJobs = 5;
-    static inline uint32_t job2TaskId(uint32_t job_id){
-      return job_id + JobIdStart;
-    }
-    static inline uint32_t task2JobId(uint32_t task_id){
-      return task_id - JobIdStart;
+    static inline uint32_t job2QosId(uint32_t job_id){
+      return job_id + QosIdStart;
     }
 }
 
@@ -85,12 +87,17 @@ class ControlPlane: public BasicPioDevice
     std::map<int,FgJobMeta*> FgJobMap;
     std::map<int,BgCpuMeta*> BgCpuMap;
     void resetTTIMeta();
+    //this is used to record contextID to QoS ID map
+    std::map<uint32_t, uint32_t> context2QosIDMap;
+    std::map<uint32_t, uint32_t> QosIDAlterMap;
 
   public:
     std::vector<DerivO3CPU *> cpus;
     std::vector<Cache *> l2s;
     Cache * l3;
     int np;
+    uint32_t l2inc, l3inc;
+    double mixIpc;
     //these are used to record performance in one TTI
     std::vector<double> JobIpc;
     std::vector<double> CPUBackgroundIpc;
@@ -105,12 +112,16 @@ class ControlPlane: public BasicPioDevice
     void startTraining();
     //clean up stats, start real QoS simulation
     void startQoS();
+    // adjust params after a TTI
+    void tuning();
     //tell cp a TTI start
     void startTTI();
     //tell cp the TTI is end
     void endTTI();
 
     void setJob(int job_id, int cpu_id, bool status);
+
+    void setContextQosId(uint32_t ctx_id, uint32_t qos_id);
 
   public:
     struct ControlPlaneStats : public Stats::Group
