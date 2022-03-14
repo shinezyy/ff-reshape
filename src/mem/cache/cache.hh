@@ -53,6 +53,7 @@
 #include "base/types.hh"
 #include "dev/controlplane.hh"
 #include "mem/cache/base.hh"
+#include "mem/cache/set_bypass_logic.hh"
 #include "mem/packet.hh"
 #include "mem/token_bucket.hh"
 
@@ -61,6 +62,7 @@ struct CacheParams;
 class MSHR;
 class Token_Bucket;
 
+class SetBypassLogic;
 
 /**
  * A coherent cache that can be arranged in flexible topologies.
@@ -84,6 +86,7 @@ class Cache : public BaseCache
     /* Luoshan: Add tokenbucket here */
     std::vector <Token_Bucket *> buckets;
     const uint32_t numSets;
+    SetBypassLogic* set_bypass_logic;
     void handleStalledPkt(PacketPtr pkt);
 
   protected:

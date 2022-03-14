@@ -13,11 +13,15 @@ void
 FgJobMeta::jobUp(int job_id, int cpu_id,uint64_t now_cycle, uint64_t now_insts)
 {
   cp->setContextQosId(cpu_id, LvNATasks::job2QosId(job_id));
+  uint32_t qos_id = LvNATasks::job2QosId(job_id);
+  cp->runningJobQos.insert(qos_id);
   up(now_cycle,now_insts);
 }
 void
 FgJobMeta::jobDown(int job_id, int cpu_id,uint64_t now_cycle, uint64_t now_insts)
 {
+  uint32_t qos_id = LvNATasks::job2QosId(job_id);
+  cp->runningJobQos.erase(qos_id);
   down(now_cycle,now_insts);
   cp->cpStat.JobCycles[job_id] += total_cycle;
   cp->cpStat.JobInsts[job_id] += total_insts;
@@ -75,14 +79,18 @@ ControlPlane::ControlPlane(const ControlPlaneParams *p) :
 
   for (size_t i = 0; i < LvNATasks::NumId; i++)
   {
-    uint32_t alt_id = i + LvNATasks::NumId;
-    QosIDAlterMap[i] = alt_id;
-    for (const auto &c:l2s)
-    {
-      c->QosIDAlterMap[i] = i + alt_id;
-    }
-    l3->QosIDAlterMap[i] = alt_id;
+    QosIDAlterMap[i] = i + LvNATasks::NumId;
   }
+
+  for (const auto &c:l2s)
+  {
+    c->context2QosIDMapPtr = &context2QosIDMap;
+    c->QosIDAlterMapPtr = &QosIDAlterMap;
+    c->runningJobQosPtr = &runningJobQos;
+  }
+  l3->context2QosIDMapPtr = &context2QosIDMap;
+  l3->QosIDAlterMapPtr = &QosIDAlterMap;
+  l3->runningJobQosPtr = &runningJobQos;
 
   resetTTIMeta();
 
@@ -98,11 +106,6 @@ void
 ControlPlane::setContextQosId(uint32_t ctx_id, uint32_t qos_id)
 {
   context2QosIDMap[ctx_id]=qos_id;
-  for (const auto &c:l2s)
-  {
-    c->context2QosIDMap[ctx_id] = qos_id;
-  }
-  l3->context2QosIDMap[ctx_id] = qos_id;
 }
 
 void ControlPlane::resetTTIMeta()
@@ -123,6 +126,12 @@ void
 ControlPlane::startTraining()
 {
   //mark auto tuning start
+
+  for (const auto &c:l2s)
+  {
+    c->set_bypass_logic->trainingStarted = true;
+  }
+  l3->set_bypass_logic->trainingStarted = true;
 }
 
 void
@@ -132,6 +141,11 @@ ControlPlane::startQoS()
   cpStat.resetStats();
   inform("start real QoS\n");
   // this->schedule();
+  for (const auto &c:l2s)
+  {
+    c->set_bypass_logic->QosStarted = true;
+  }
+  l3->set_bypass_logic->QosStarted = true;
 }
 void
 ControlPlane::startTTI()
@@ -195,6 +209,12 @@ ControlPlane::endTTI()
   //   cpStat.CPUBackgroundCycles[i] += CPUBackgroundCycles[i];
   //   cpStat.CPUBackgroundInsts[i] += CPUBackgroundInsts[i];
   // }
+
+  for (const auto &c:l2s)
+  {
+    c->set_bypass_logic->recordLastTTI();
+  }
+  l3->set_bypass_logic->recordLastTTI();
 }
 
 ControlPlane::ControlPlaneStats::ControlPlaneStats(ControlPlane &cp)

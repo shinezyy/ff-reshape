@@ -1548,7 +1548,7 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
         pkt->req->hasContextId() &&
         pkt->req->contextId() <= LvNATasks::MaxCtxId)
     {
-        int index = context2QosIDMap[pkt->req->contextId()];
+        int index = (*context2QosIDMapPtr)[pkt->req->contextId()];
         victim = tags->findVictim(addr, is_secure, blk_size_bits,
                                         evict_blks,waymasks[index]);
     }

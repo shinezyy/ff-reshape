@@ -38,6 +38,7 @@ Source('mshr_queue.cc')
 Source('noncoherent_cache.cc')
 Source('write_queue.cc')
 Source('write_queue_entry.cc')
+Source('set_bypass_logic.cc')
 
 DebugFlag('Cache')
 DebugFlag('CacheComp')

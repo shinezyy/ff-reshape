@@ -59,6 +59,7 @@
 #include "mem/cache/cache_blk.hh"
 #include "mem/cache/mshr.hh"
 #include "mem/cache/tags/base.hh"
+#include "mem/cache/tags/indexing_policies/base.hh"
 #include "mem/cache/write_queue_entry.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
@@ -80,6 +81,7 @@ Cache::Cache(const CacheParams &p)
         //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, true, &cross_queue, this);
         //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, false, &cross_queue, this);
     }
+    set_bypass_logic = new SetBypassLogic(this,numSets);
 }
 
 void
@@ -488,7 +490,11 @@ Cache::recvTimingReq(PacketPtr pkt)
             BaseCache::recvTimingReq(pkt);
             return;
         }
-        int index = context2QosIDMap[ctx_id];
+        uint32_t set_i = tags->indexingPolicy->extractSet(pkt->getAddr());
+        uint32_t qos_id = (*context2QosIDMapPtr)[ctx_id];
+        bool is_alt = set_bypass_logic->couldBypass(qos_id,set_i);
+        uint32_t index = is_alt ? (*QosIDAlterMapPtr)[ctx_id] : qos_id;
+
         bool ok_to_pass = buckets[index]->checkPassPkt(pkt);
         if (ok_to_pass)
         {

@@ -97,6 +97,8 @@ class ControlPlane: public BasicPioDevice
     std::vector<double> JobIpc;
     std::vector<double> CPUBackgroundIpc;
 
+    std::set<uint32_t> runningJobQos;
+
     typedef ControlPlaneParams Params;
     ControlPlane(const Params *p);
 
