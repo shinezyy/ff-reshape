@@ -99,6 +99,10 @@ class BaseTags : public ClockedObject
     /** The data blocks, 1 per cache block. */
     std::unique_ptr<uint8_t[]> dataBlks;
 
+    bool isMemoryCache;
+
+    bool dumpCachelineFlag;
+
     /**
      * TODO: It would be good if these stats were acquired after warmup.
      */
@@ -347,6 +351,10 @@ class BaseTags : public ClockedObject
      */
     virtual bool anyBlk(std::function<bool(CacheBlk &)> visitor) = 0;
 
+    void startup() override;
+
+    void cacheDumpVisitor(const CacheBlk &blk, std::stringstream &ss) const;
+
   private:
     /**
      * Update the reference stats using data from the input block
@@ -361,6 +369,9 @@ class BaseTags : public ClockedObject
      * @param blk The input block
      */
     void computeStatsVisitor(CacheBlk &blk);
+
+    virtual void dumpCachelines() const;
+
 };
 
 #endif //__MEM_CACHE_TAGS_BASE_HH__

@@ -71,6 +71,11 @@ class BaseTags(ClockedObject):
     entry_size = Param.Int(Parent.cache_line_size,
                            "Indexing entry size in bytes")
 
+    is_memory_cache = Param.Bool(Parent.is_memory_cache,
+        "Is normal memory cache (L1~L3), not TLB or I/O cache")
+
+    dump_cachelines = Param.Bool(Parent.dump_cachelines , "Whether dump cache lines on exiting")
+
 class BaseSetAssoc(BaseTags):
     type = 'BaseSetAssoc'
     cxx_header = "mem/cache/tags/base_set_assoc.hh"

@@ -245,6 +245,8 @@ class BaseSetAssoc : public BaseTags
         }
         return false;
     }
+
+    void dumpCachelines() const override;
 };
 
 #endif //__MEM_CACHE_TAGS_BASE_SET_ASSOC_HH__

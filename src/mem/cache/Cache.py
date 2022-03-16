@@ -148,6 +148,10 @@ class BaseCache(ClockedObject):
     # data cache.
     write_allocator = Param.WriteAllocator(NULL, "Write allocator")
 
+    is_memory_cache = Param.Bool(False, "Is normal memory cache (L1~L3), not TLB or I/O cache")
+
+    dump_cachelines = Param.Bool(False, "Whether dump cache lines on exiting")
+
 class Cache(BaseCache):
     type = 'Cache'
     cxx_header = 'mem/cache/cache.hh'

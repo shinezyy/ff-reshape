@@ -45,6 +45,8 @@
 
 #include "mem/cache/tags/base_set_assoc.hh"
 
+#include <fstream>
+#include <iostream>
 #include <string>
 
 #include "base/intmath.hh"
@@ -104,4 +106,31 @@ BaseSetAssoc::moveBlock(CacheBlk *src_blk, CacheBlk *dest_blk)
     // the one that is being moved.
     replacementPolicy->invalidate(src_blk->replacementData);
     replacementPolicy->reset(dest_blk->replacementData);
+}
+
+
+void
+BaseSetAssoc::dumpCachelines() const
+{
+    warn("%s: Dumping cache on Exit\n", name().c_str());
+    std::ofstream ofs;
+    ofs.open((name() + ".hex.txt").c_str());
+    std::stringstream ss;
+    for (Addr probe_addr = 0; probe_addr < numBlocks * blkSize; probe_addr += blkSize) {
+        // Get possible entries to be "victimized"
+        const std::vector<ReplaceableEntry *> entries =
+            indexingPolicy->getPossibleEntries(probe_addr);
+
+        // Choose replacement victim from replacement candidates
+        CacheBlk *victim = static_cast<CacheBlk *>(replacementPolicy->getVictim(
+            entries));
+
+        // Here it is "MRU", print it
+        cacheDumpVisitor(*victim, ss);
+
+        // Now we move it from "MRU" to "LRU" by touch this block
+        replacementPolicy->touch(victim->replacementData);
+    }
+    ofs << ss.rdbuf();
+    ofs.close();
 }
