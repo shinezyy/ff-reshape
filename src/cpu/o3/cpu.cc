@@ -1609,58 +1609,56 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
             ;
         }
     }
-    if (enable_xgroup_mem_dep){
-        if (theinstnum%256==1){
-            for (int j=0;j<256;j++){
-                if (theinstnum==1){
+    const int groupSize = 512;
+    if (enable_xgroup_mem_dep) {
+        if (theinstnum % groupSize == 1) {
+            for (int j = 0; j < groupSize; j++) {
+                if (theinstnum == 1) {
                     current_reg[j] = 0;
                     current_size[j] = 0;
                     last_reg[j] = 0;
                     last_size[j] = 0;
-                }
-                else{
+                } else {
                     last_reg[j] = current_reg[j];
                     last_size[j] = current_size[j];
                 }
             }
-        current_num = 0;
+            current_num = 0;
         }
-        if (inst->isStore()){
+        if (inst->isStore()) {
             current_reg[current_num] = inst->physEffAddr;
             current_size[current_num] = inst->effSize;
             current_num++;
-          //  aaaa = inst->physEffAddr;
-          //   bbbb = inst->effSize;
         }
-         if (inst->isLoad()){
+        if (inst->isLoad()) {
+            bool hit_in_current_group = false;
+
             Addr inst_addr1 = inst->physEffAddr;
-            Addr inst_addr2 = inst->physEffAddr+inst->effSize;
-            for (int i=0;i<current_num;i++){
+            Addr inst_addr2 = inst->physEffAddr + inst->effSize;
+            for (int i = 0; i < current_num; i++) {
                 Addr inst_reg1 = current_reg[i];
-                Addr inst_reg2 = current_reg[i]+current_size[i]-1;
+                Addr inst_reg2 = current_reg[i] + current_size[i] - 1;
 
-                if (((inst_reg1<=inst_addr1)&&(inst_addr1<inst_reg2))||
-                ((inst_reg1< inst_addr2)&&(inst_addr2<=inst_reg2))){
+                if (((inst_reg1 <= inst_addr1) && (inst_addr1 < inst_reg2)) ||
+                    ((inst_reg1 < inst_addr2) && (inst_addr2 <= inst_reg2))) {
                     cpuStats.intra_num++;
+                    hit_in_current_group = true;
                     break;
-
                 }
             }
 
-            if (theinstnum>256){
-            for (int k=0;k<256;k++){
-                Addr inst_reg3 = last_reg[k];
-                Addr inst_reg4 = last_reg[k]+current_size[k]-1;
+            if (!hit_in_current_group) {
+                for (int k = 0; k < groupSize; k++) {
+                    Addr inst_reg3 = last_reg[k];
+                    Addr inst_reg4 = last_reg[k] + current_size[k] - 1;
 
-                if (((inst_reg3<=inst_addr1)&&(inst_addr1<inst_reg4))||
-                ((inst_reg3<inst_addr2)&&(inst_addr2<=inst_reg4))){
-                    cpuStats.inter_num++;
-                    break;
-
+                    if (((inst_reg3 <= inst_addr1) && (inst_addr1 < inst_reg4)) ||
+                        ((inst_reg3 < inst_addr2) && (inst_addr2 <= inst_reg4))) {
+                        cpuStats.inter_num++;
+                        break;
+                    }
                 }
             }
-            }
-
         }
         theinstnum++;
     }

@@ -788,11 +788,12 @@ class FullO3CPU : public BaseO3CPU
     void htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
                             HtmFailureFaultCause cause);
 
-    Addr current_reg[256];
-    unsigned current_size[256];
+    static const int groupSize = 512;
+    Addr current_reg[groupSize];
+    unsigned current_size[groupSize];
     uint64_t current_num;
-    Addr last_reg[256];
-    unsigned last_size[256];
+    Addr last_reg[groupSize];
+    unsigned last_size[groupSize];
   //  uint64_t intra_num;
   //  uint64_t inter_num;
     uint64_t theinstnum;
