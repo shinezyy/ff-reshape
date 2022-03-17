@@ -250,6 +250,8 @@ def build_test_system(np):
             test_sys.controlplane.l3 = test_sys.l3
             test_sys.controlplane.l2inc = options.l2inc
             test_sys.controlplane.l3inc = options.l3inc
+            test_sys.controlplane.l2_tb_size = options.l2_tb_size
+            test_sys.controlplane.l3_tb_size = options.l3_tb_size
 
     return test_sys
 

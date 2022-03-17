@@ -60,6 +60,8 @@ ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     np(cpus.size()),
     l2inc(p->l2inc),
     l3inc(p->l3inc),
+    l2_tb_size(p->l2_tb_size),
+    l3_tb_size(p->l3_tb_size),
     cpStat(*this)
 {
   for (size_t i = 0; i < LvNATasks::NumJobs; i++)
@@ -139,11 +141,14 @@ ControlPlane::startQoS()
   for (int i = 0; i < LvNATasks::QosIdStart; i++)
   {
     l3->buckets[i]->set_bypass(false);
-    int l3accesses = l3->buckets[i]->get_accesses();
-    l3->buckets[i]->reset_accesses();
-    l3->buckets[i]->set_inc(l3accesses/2);
+    l3->buckets[i]->set_inc(l3inc);
+    l3->buckets[i]->set_size(l3_tb_size);
+    // int l3accesses = l3->buckets[i]->get_accesses();
+    // l3->buckets[i]->reset_accesses();
+    // l3->buckets[i]->set_inc(l3accesses/2);
   }
-  printf("l2inc %d l3inc %d\n",l2inc,l3inc);
+  l3->buckets[0]->set_bypass(true);
+  // printf("l2inc %d l3inc %d\n",l2inc,l3inc);
   // this->schedule();
 }
 
