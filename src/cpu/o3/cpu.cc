@@ -1529,9 +1529,12 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
         thread[tid]->comInstEventQueue.serviceEvents(thread[tid]->numInst);
 
         if (this->nextDumpInstCount
-                && totalInsts() == this->nextDumpInstCount) {
+                && totalInsts() == this->nextDumpInstCount
+                && cpuId() == 0 ) {
             fprintf(stderr, "Will trigger stat dump and reset\n");
             Stats::schedStatEvent(true, true, curTick(), 0);
+
+            scheduleInstStop(0,1,"core 0 warmup done");
 
             if (this->repeatDumpInstCount) {
                 this->nextDumpInstCount += this->repeatDumpInstCount;

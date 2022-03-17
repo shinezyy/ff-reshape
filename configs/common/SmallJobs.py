@@ -8,6 +8,10 @@ from heapq import heappop, heappush
 class ActOp(Enum):
     wakeup = auto()
     stop = auto()
+    getPriority = auto()
+    releasePriority = auto()
+    startTTI = auto()
+    endTTIBarrier = auto()
 
 
 class EventQueue():
@@ -67,6 +71,8 @@ class SmallActionMeta:
 class SmallJob():
     wakeup_list = []
     stop_list = []
+    priority_list = []
+    release_list = []
 
     def stop_action(self, now_cycle):
         print("Job[%d] %s stop at %dw"% (self.job_id, self.name, now_cycle))
@@ -82,14 +88,47 @@ class SmallJob():
             eve = a.create_event(now_cycle)
             self.event_queue.add_event(eve, eve.work_cycle)
 
-    def __init__(self, job_id: int, name: str, event_queue: EventQueue, test_sys) -> None:
+    def get_priority_action(self, now_cycle):
+        print("Job[%d] %s get priority at %dw"% (self.job_id, self.name, now_cycle))
+        self.test_sys.controlplane.setJob(self.job_id,self.cpu_id,True)
+        for a in self.priority_list:
+            eve = a.create_event(now_cycle)
+            self.event_queue.add_event(eve, eve.work_cycle)
+
+    def release_priority_action(self, now_cycle):
+        print("Job[%d] %s release priority at %dw"% (self.job_id, self.name, now_cycle))
+        self.test_sys.controlplane.setJob(self.job_id,self.cpu_id,False)
+        for a in self.release_list:
+            eve = a.create_event(now_cycle)
+            self.event_queue.add_event(eve, eve.work_cycle)
+
+    def startTTI_action(self, now_cycle):
+        self.test_sys.controlplane.startTTI()
+        for a in self.startTTI_actions:
+            eve = a.create_event(now_cycle)
+            self.event_queue.add_event(eve, eve.work_cycle)
+    def endTTIBarrier_action(self, now_cycle):
+        self.endTTI_BarrierNum += 1
+        if self.endTTI_BarrierNum == self.endTTI_BarrierMax :
+            self.endTTI_BarrierNum = 0
+            self.test_sys.controlplane.endTTI()
+            for a in self.endTTI_actions:
+                eve = a.create_event(now_cycle)
+                self.event_queue.add_event(eve, eve.work_cycle)
+
+    def __init__(self, job_id: int, cpu_id: int, name: str, event_queue: EventQueue, test_sys) -> None:
         self.job_id = job_id
+        self.cpu_id = cpu_id
         self.name = name
         self.event_queue = event_queue
         self.test_sys = test_sys
         self.act_map = {
             ActOp.wakeup: self.wakeup_action,
             ActOp.stop: self.stop_action,
+            ActOp.getPriority: self.get_priority_action,
+            ActOp.releasePriority: self.release_priority_action,
+            ActOp.startTTI:self.startTTI_action,
+            ActOp.endTTIBarrier:self.endTTIBarrier_action,
         }
 
     def act(self, opcode, now_cycle) -> None:
@@ -104,3 +143,13 @@ class SmallJob():
     def set_stop_action(self, act_list: List[SmallActionMeta]):
         #temporarily unused
         self.stop_list = act_list
+
+    def set_priority_action(self, act_list: List[SmallActionMeta]):
+        'usually used to record the next release event of itself '\
+        'and the next priority events of other jobs'
+        self.priority_list = act_list
+
+    def set_release_action(self, act_list: List[SmallActionMeta]):
+        'used to record the next events of other jobs which needs'\
+        'strong sequence consistency'
+        self.priority_list = act_list

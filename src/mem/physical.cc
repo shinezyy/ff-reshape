@@ -452,10 +452,17 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
 {
     const uint32_t chunk_size = 16384;
 
-    // mmap memoryfile
-    gzFile compressed_mem = gzopen(filepath.c_str(), "rb");
-    if (compressed_mem == NULL)
-        fatal("Can't open physical memory checkpoint file '%s'", filepath.c_str());
+    // parse gcpt path string
+    istringstream ss(filepath);
+    string gcptFile;
+    vector<string> gcptFiles;
+    while (getline(ss, gcptFile, ';')){
+        gcptFiles.push_back(gcptFile);
+    }
+
+    if (gcptFiles.size() != 1 && gcptFiles.size() != nohypeNum)
+        fatal("Gcpt num %d not the same as cpu num %d",
+                gcptFiles.size(), nohypeNum);
 
     // we've already got the actual backing store mapped
     uint8_t* pmem = backingStore[store_id].pmem;
@@ -476,6 +483,12 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
 
     for (size_t i = 0; i < nohypeNum; i++)
     {
+        // mmap memoryfile
+        gcptFile = gcptFiles.size() == 1 ? gcptFiles[0] : gcptFiles[i];
+        gzFile compressed_mem = gzopen(gcptFile.c_str(), "rb");
+        if (compressed_mem == NULL)
+            fatal("Can't open physical memory checkpoint file '%s'", filepath.c_str());
+
         uint8_t* pmem_part_start = pmem + i * partSize;
         uint64_t curr_size = 0;
         long* temp_page = new long[chunk_size];
@@ -499,7 +512,10 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
             curr_size += bytes_read;
         }
 
-        gzrewind(compressed_mem);
+        if (gzclose(compressed_mem))
+            fatal("Close failed on physical memory checkpoint file '%s'\n",
+                filepath.c_str());
+
         delete[] temp_page;
 
         if (restoreFromGCpt && !gCptRestorerPath.empty()) {
@@ -521,9 +537,6 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
         }
     }
 
-    if (gzclose(compressed_mem))
-        fatal("Close failed on physical memory checkpoint file '%s'\n",
-              filepath.c_str());
 }
 
 bool PhysicalMemory::tryRestoreFromGCpt() {
