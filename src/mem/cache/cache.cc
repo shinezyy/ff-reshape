@@ -67,16 +67,40 @@
 
 Cache::Cache(const CacheParams &p)
     : BaseCache(p, p.system->cacheLineSize()),
-      doFastWrites(true)
+      doFastWrites(true),
+      numSets(p.size / (p.system->cacheLineSize() * p.assoc))
 {
     assert(p.tags);
     assert(p.replacement_policy);
     /* Luoshan: initialize token buckets */
-    int init_size = 60, init_freq = 10000000, init_inc = 2;
-    for (int i = 0; i < num_core; i++){
-        //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, p.cache_level!=3, &cross_queue, this);
-        buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, true, &cross_queue, this);
-        //buckets[i] = new Token_Bucket(this, init_size, init_freq, init_inc, false, &cross_queue, this);
+    // index 2 for L2 cache, index 3 for L3 cache
+    // ptb_walker_cache and iocache at level 0 (in configs/common/Cache.py)
+    int init_size[4] = {10000, 10000, 10000, 10000};
+    int init_freq[4] = {1000, 1000, 10000, 100000};
+    int init_inc[4]  = {10000, 10000, 1, 1};
+    bool bypass[4]   = {true, true, true, true};
+
+    int level = p.cache_level;
+
+    // // core 0 at higher prior
+    // buckets.push_back(new Token_Bucket(
+    //     this, init_size[level], init_freq[level], init_inc[level], true, this));
+    // for (int i = 1; i < LvNATasks::NumId; i++){
+    //      buckets.push_back(new Token_Bucket(
+    //          this, init_size[level], init_freq[level], init_inc[level], bypass[level], this));
+    // }
+    // for (int i = LvNATasks::NumId; i < LvNATasks::NumBuckets; i++){
+    //     buckets.push_back(new Token_Bucket(
+    //         this, init_size[level], init_freq[level], init_inc[level], true, this));
+    // }
+
+    for (int i = 0; i < LvNATasks::QosIdStart; i++){
+         buckets.push_back(new Token_Bucket(
+             this, init_size[level], init_freq[level], init_inc[level], bypass[level], this));
+    }
+    for (int i = LvNATasks::QosIdStart; i < LvNATasks::NumBuckets; i++){
+        buckets.push_back(new Token_Bucket(
+            this, init_size[level], init_freq[level], init_inc[level], true, this));
     }
 }
 
@@ -477,41 +501,28 @@ Cache::recvTimingReq(PacketPtr pkt)
     }
 
     if (pkt->isRequest()){
-        /* Luoshan: Add Tokenbucket port */
-        allocReq2Bucket(pkt, buckets, num_core);
-        /* fetch one packet from tokenbuckets */
-        OrderedReq *earliest_req = nullptr;
-        int index;
-        for (int i = 0; i < num_core; i++){
-            OrderedReq *req = buckets[i]->get_waitq_front();
-            int token = buckets[i]->get_tokens();
-            if (req && token>0){
-                if (earliest_req==nullptr || req->time_arrive < earliest_req->time_arrive)
-                {
-                    earliest_req = req;
-                    index = i;
-                }
-            }
+        if (!pkt->req->hasContextId()){
+            BaseCache::recvTimingReq(pkt);
+            return;
         }
-        if (earliest_req) {
-            buckets[index]->dequeue_request();
-            cross_queue.push(earliest_req->pkt);
-        }else{
-            //fprintf(stderr,"use tokens out, bucket %d\n",bucket_num);
+        int ctx_id = pkt->req->contextId();
+        if (ctx_id >= LvNATasks::NumId){
+            BaseCache::recvTimingReq(pkt);
+            return;
         }
-        if (!cross_queue.empty()){
-            PacketPtr cross_pkt = cross_queue.front();
-            BaseCache::recvTimingReq(cross_pkt);
-            cross_queue.pop();
+        int index = context2QosIDMap[ctx_id];
+        bool ok_to_pass = buckets[index]->checkPassPkt(pkt);
+        if (ok_to_pass)
+        {
+            BaseCache::recvTimingReq(pkt);
         }
     }else{
         BaseCache::recvTimingReq(pkt);
     }
 }
 
-void
-Cache::sendOrderedReq(PacketPtr pkt)
-{ // Luoshan: for BaseCache::recvTimingReq
+void Cache::handleStalledPkt(PacketPtr pkt)
+{
     BaseCache::recvTimingReq(pkt);
 }
 
@@ -1396,25 +1407,6 @@ Cache::isCachedAbove(PacketPtr pkt, bool is_timing)
     } else {
         cpuSidePort.sendAtomicSnoop(pkt);
         return pkt->isBlockCached();
-    }
-}
-
-/* Luoshan:  */
-int
-Cache::allocReq2Bucket(PacketPtr pkt, Token_Bucket **buckets, int num_core)
-{
-    if (pkt->isRequest()){
-        RequestPtr req = pkt->req;
-        int index;
-        if (req->hasContextId())
-            index = req->contextId() % num_core;
-        else
-            index = 0;
-        OrderedReq *ordered_req = new OrderedReq(pkt, curTick());
-        buckets[index]->enqueue_request(ordered_req,false);
-        return index;
-    }else{
-        return -1;
     }
 }
 

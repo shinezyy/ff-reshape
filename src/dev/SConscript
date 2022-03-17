@@ -56,3 +56,6 @@ DebugFlag('Intel8254Timer')
 DebugFlag('MC146818')
 
 GTest('reg_bank.test', 'reg_bank.test.cc')
+
+SimObject('ControlPlane.py')
+Source('controlplane.cc')
