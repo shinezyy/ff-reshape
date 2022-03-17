@@ -280,15 +280,20 @@ def benchCheckpoints(testsys, options, maxtick, cptdir):
         return exit_event
 
     cpu_period = testsys.cpu_clk_domain.clock[0].getValue()
-    testsys.controlplane.startQoS()
 
-    for i in range(3):
-        testsys.controlplane.startTTI()
+    if options.nohype:
+        testsys.controlplane.startQoS()
+
+        for i in range(3):
+            testsys.controlplane.startTTI()
+            exit_event = m5.simulate(1_000_000*cpu_period)
+            testsys.controlplane.endTTI()
+            # testsys.controlplane.tuning()
+            m5.stats.dump()
+            m5.stats.reset()
+    else:
         exit_event = m5.simulate(1_000_000*cpu_period)
-        testsys.controlplane.endTTI()
-        testsys.controlplane.tuning()
-        m5.stats.dump()
-        m5.stats.reset()
+    return exit_event
 
     num_checkpoints = 0
     max_checkpoints = options.max_checkpoints
