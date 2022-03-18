@@ -46,6 +46,7 @@
 #include "mem/cache/tags/base.hh"
 
 #include <cassert>
+#include <numeric>
 
 #include "base/bitfield.hh"
 #include "base/intmath.hh"
@@ -204,6 +205,26 @@ BaseTags::computeStats()
         stats.sliceSetAccessUnique[i] = accessTagSets[i].size();
         accessTagSets[i].clear();
     }
+    std::vector<uint64_t> tmp_set_cnt;
+    for (size_t i = 0; i < num_slices; i++)
+    {
+        tmp_set_cnt.push_back((uint64_t)stats.sliceSetAccesses[i].value());
+    }
+
+    uint64_t sum_acc =
+        std::accumulate(tmp_set_cnt.begin(),tmp_set_cnt.end(),0);
+    uint64_t sum80_threshold = sum_acc*0.8;
+    std::sort(tmp_set_cnt.begin(),tmp_set_cnt.end(),std::greater<uint64_t>());
+    uint64_t tmp_acc = 0;
+    for (size_t i = 0; i < num_slices; i++)
+    {
+        tmp_acc += tmp_set_cnt[i];
+        if (tmp_acc >= sum80_threshold)
+        {
+            stats.sliceSetAcc80 = i+1;
+            break;
+        }
+    }
 }
 
 std::string
@@ -248,8 +269,18 @@ BaseTags::BaseTagStats::BaseTagStats(BaseTags &_tags)
                       "Percentage of cache occupancy per task id"),
     sliceSetAccesses(this, "slice_set_accesses",
                 "Total number of sets accessed in a slice"),
+    sliceSetAccessesAvg(this, "slice_set_accesses_avg",
+                "Average number of sets accessed in a slice"),
+    sliceSetAccessesVar(this, "slice_set_accesses_var",
+                "Varaiance of number of sets accessed in a slice"),
+    sliceSetAcc80(this, "slice_set_accesses_80",
+                "number of sets which contains 80\% of accesses"),
     sliceSetAccessUnique(this, "slice_set_accesses_unique",
                 "Total number of unique tag&set access in a slice"),
+    sliceSetAccessUniqueAvg(this, "slice_set_accesses_unique_avg",
+                "Average number of unique tag&set accessed in a slice"),
+    sliceSetAccessUniqueVar(this, "slice_set_accesses_unique_var",
+                "Varaiance of number of unique tag&set accessed in a slice"),
     tagAccesses(this, "tag_accesses", "Number of tag accesses"),
     dataAccesses(this, "data_accesses", "Number of data accesses")
 {
@@ -293,6 +324,14 @@ BaseTags::BaseTagStats::regStats()
 
     sliceSetAccesses.init(tags.num_slices);
     sliceSetAccessUnique.init(tags.num_slices);
+
+    sliceSetAccessesAvg = sum(sliceSetAccesses) / Stats::constant(tags.num_slices);
+    sliceSetAccessesVar = sum((sliceSetAccesses-sliceSetAccessesAvg)
+    *(sliceSetAccesses-sliceSetAccessesAvg)) / Stats::constant(tags.num_slices);
+
+    sliceSetAccessUniqueAvg = sum(sliceSetAccessUnique) / Stats::constant(tags.num_slices);
+    sliceSetAccessUniqueVar = sum((sliceSetAccessUnique-sliceSetAccessUniqueAvg)
+    *(sliceSetAccessUnique-sliceSetAccessUniqueAvg)) / Stats::constant(tags.num_slices);
 
     percentOccsTaskId.flags(nozero);
 

@@ -144,7 +144,8 @@ class BaseSetAssoc : public BaseTags
         {
             stats.sliceSetAccesses[bits<Addr>(
                 indexingPolicy->extractSet(addr),slice_bits-1,0)]++;
-            accessTagSets[indexingPolicy->extractSet(addr)].insert(
+            accessTagSets[bits<Addr>(
+                indexingPolicy->extractSet(addr),slice_bits-1,0)].insert(
                 indexingPolicy->extractTag(addr));
         }
         else

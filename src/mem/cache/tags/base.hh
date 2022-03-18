@@ -156,9 +156,14 @@ class BaseTags : public ClockedObject
 
         /** Total number of sets accessed in each slice */
         Stats::Vector sliceSetAccesses;
+        Stats::Formula sliceSetAccessesAvg;
+        Stats::Formula sliceSetAccessesVar;
+        Stats::Scalar sliceSetAcc80;
 
         /** Total number of different tags in sets accessed in each slice */
         Stats::Vector sliceSetAccessUnique;
+        Stats::Formula sliceSetAccessUniqueAvg;
+        Stats::Formula sliceSetAccessUniqueVar;
 
         /** Number of tags consulted over all accesses. */
         Stats::Scalar tagAccesses;
