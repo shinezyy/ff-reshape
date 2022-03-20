@@ -809,27 +809,25 @@ class FullO3CPU : public BaseO3CPU
     int cpuID{0};
     FFBPredUnit *ffBranchPred;
     struct FFBranchPredHistory {
-        FFBranchPredHistory(Addr _pc, InstSeqNum _seqNum, ThreadID _tid, Addr _predDBB,
-                            const StaticInstPtr &_staticInst,
-                            const DynInstPtr &_dynInst)
-            : pc(_pc),
-              seqNum(_seqNum),
+        FFBranchPredHistory(InstSeqNum _seqNum, ThreadID _tid, Addr _predDBB,
+                            const DynInstPtr &_dynInst,
+                            FFBPredUnit::Info *_bp_info)
+            : seqNum(_seqNum),
               tid(_tid),
               predDBB(_predDBB),
-              staticInst(_staticInst),
-              dynInst(_dynInst)
+              dynInst(_dynInst),
+              bp_info(_bp_info)
         {}
-        Addr pc;
         InstSeqNum seqNum;
         ThreadID tid;
         Addr predDBB;
-        StaticInstPtr staticInst;
         DynInstPtr dynInst;
+        FFBPredUnit::Info *bp_info;
     };
     std::vector<std::deque<FFBranchPredHistory>> committedInsts;
 
     struct DBB {
-        TheISA::PCState exitPC;
+        Addr exitPC;
         InstSeqNum exitSeqNum;
     };
     std::vector<std::deque<DBB>> committedDBBs;

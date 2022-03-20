@@ -31,11 +31,28 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <algorithm>
+
 #include "arch/utility.hh"
 #include "base/random.hh"
 #include "config/the_isa.hh"
 #include "debug/FFTrivialBP.hh"
 #include "ff_trivial.hh"
+
+FFTrivialBP::FFTrivialBPStats::FFTrivialBPStats(Stats::Group *parent)
+        : Stats::Group(parent, "ff_trivial_bp"),
+          ADD_STAT(icache_lookups, "Number of dummy icache lookups"),
+          ADD_STAT(btb_lookups, "Number of BTB lookups"),
+          ADD_STAT(icache_hits, "Number of dummy icache hits"),
+          ADD_STAT(btb_hits, "Number of BTB hits"),
+          ADD_STAT(icache_hit_ratio, "dummy icache hit ratio",
+              icache_hits / icache_lookups),
+          ADD_STAT(btb_hit_ratio, "BTB hit ratio",
+              btb_hits / btb_lookups)
+{
+    icache_hit_ratio.precision(4);
+    btb_hit_ratio.precision(4);
+}
 
 FFTrivialBP::FFTrivialBP(const FFTrivialBPParams &params)
         : FFBPredUnit(params),
@@ -44,91 +61,259 @@ FFTrivialBP::FFTrivialBP(const FFTrivialBPParams &params)
           BTB(params.BTBEntries,
               params.BTBTagSize,
               params.instShiftAmt,
-              params.numThreads)
+              params.numThreads),
+          icache(params.ICEntries,
+              params.instShiftAmt,
+              params.numThreads),
+          stats(this)
 {
+    state.preRunCount = 0;
+}
+
+void FFTrivialBP::specLookup(int numInst, ThreadID tid)
+{
+    for (int i=0; i<numInst; i++) {
+        StaticInstPtr ci(nullptr);
+        ++stats.icache_lookups;
+        if (icache.valid(state.pc.pc(), tid)) {
+            auto ret = icache.lookup(state.pc.pc(), tid);
+            ci = ret.first;
+            state.pc = ret.second;
+            ++stats.icache_hits;
+        }
+
+        TAGEState *bi = new TAGEState(*tage);
+
+        // predicate the direction
+        bool taken = false;
+        if (ci && ci->isControl()) {
+            taken = tage->tagePredict(tid, state.pc.pc(), !ci->isUncondCtrl(), bi->info);
+            if (ci->isUncondCtrl()) {
+                taken = true;
+            }
+            tage->updateHistories(tid, state.pc.pc(), taken, bi->info, true);
+        }
+
+        // predicate the target
+        if (taken)
+            ++stats.btb_lookups;
+        if (taken && BTB.valid(state.pc.pc(), tid)) {
+            ++stats.btb_hits;
+            state.pc = BTB.lookup(state.pc.pc(), tid);
+        } else {
+            state.pc.advance();
+        }
+
+        bi->taken = taken;
+        bi->predPC = state.pc.pc();
+        state.inflight.push_front(bi);
+    }
+}
+
+void FFTrivialBP::resetSpecLookup(const TheISA::PCState &pc0) {
+    state.pc = pc0;
 }
 
 Addr FFTrivialBP::lookup(ThreadID tid, const TheISA::PCState &instPC, const StaticInstPtr &inst, void * &bp_history) {
-    BPState tstate(*tage);
-    BPState *bi[2] = {new BPState(*tage), &tstate};
-    int ind = 0;
-    Addr ret = 0;
+    auto bps = new BPState(state);
+    bp_history = bps;
 
-    TheISA::PCState pc(instPC);
+    icache.update(instPC.pc(), inst, instPC, tid);
 
-    for (int numDBB=0; numDBB<numLookAhead; ) {
-        bool isControl;
-        if (BTB.valid(pc.pc(), tid)) {
-            TheISA::PCState test(pc);
-            test.npc(BTB.lookup(pc.pc(), tid).pc());
-            isControl = test.branching();
-        } else {
-            isControl = true;
-        }
+    if (state.preRunCount == 0) {
+        resetSpecLookup(instPC);
+        specLookup(numLookAhead, tid);
+        state.preRunCount += numLookAhead;
 
-        // predicate direction
-        bool taken = tage->tagePredict(tid, pc.pc(), isControl, bi[ind]->info);
-
-        tage->updateHistories(tid, pc.pc(), taken, bi[ind]->info, true);
-
-        // predicate target
-        if (taken) {
-            if (BTB.valid(pc.pc(), tid)) {
-                pc = BTB.lookup(pc.pc(), tid);
-            } else {
-                taken = false;
-            }
-        }
-        if (!taken) {
-            TheISA::advancePC(pc, inst);
-        }
-
-        if (isControl) {
-            if (++numDBB == numLookAhead)
-                ret = pc.pc();
-        }
-
-        ind = 1;
+    } else {
+        specLookup(1, tid);
     }
-    bp_history = bi[0];
 
-    return ret;
+    return state.inflight.front()->predPC;
 }
 
 void FFTrivialBP::update(ThreadID tid, const TheISA::PCState &pc,
                          void *bp_history, bool squashed,
                          const StaticInstPtr &inst,
-                         const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) {
+                         Addr pred_DBB, Addr corr_DBB) {
 
-    BPState *bi = static_cast<BPState*>(bp_history);
-    TAGEBase::BranchInfo *tage_bi = bi->info;
+    BPState *bps = static_cast<BPState*>(bp_history);
+
+    assert(!state.inflight.empty());
+    TAGEState *ts = state.inflight.back();
+    TAGEBase::BranchInfo *tage_bi = ts->info;
+    bool tageMispred = (pc.npc() != ts->predPC);
     bool taken = pc.branching();
 
-    if (squashed) {
+    if (inst->isControl()) {
+        if (taken)
+            BTB.update(pc.pc(), pc.npc(), tid);
+
+        int nrand = random_mt.random<int>() & 3;
+        if (tage_bi->condBranch) {
+            tage->updateStats(taken, tage_bi);
+            tage->condBranchUpdate(tid, pc.pc(), taken, tage_bi, nrand,
+                                pc.npc(), tage_bi->tagePred);
+        }
+
+        // optional non speculative update of the histories
+        tage->updateHistories(tid, pc.pc(), taken, tage_bi, false, inst,
+                            pc.npc());
+    }
+
+    if (tageMispred) {
         // This restores the global history, then update it
         // and recomputes the folded histories.
         tage->squash(tid, taken, tage_bi, pc.npc());
-        return;
+        ts->predPC = pc.npc();
+
+        TheISA::PCState npcState(pc.npc());
+#if THE_ISA == RISCV_ISA
+        // use the PC status of the preceding inst as a guess.
+        // if the dummy icache hits, the status will be updated to the correct value.
+        if (pc.compressed())
+            npcState.npc(pc.npc() + 2);
+        else
+            npcState.npc(pc.npc() + 4);
+#endif
+        resetSpecLookup(npcState);
+
+        // Rerun in-flight predictions
+        int oldSize = state.inflight.size();
+        int toRerun = oldSize - 1;
+        state.inflight.erase(state.inflight.begin(), state.inflight.end() - 1);
+        assert(state.inflight.size() == 1);
+        specLookup(toRerun, tid);
+        assert(state.inflight.size() == oldSize);
     }
 
-    int nrand = random_mt.random<int>() & 3;
-    if (tage_bi->condBranch) {
-        tage->updateStats(taken, tage_bi);
-        tage->condBranchUpdate(tid, pc.pc(), taken, tage_bi, nrand,
-                               pc.npc(), tage_bi->tagePred);
+    delete ts;
+    state.inflight.pop_back();
+
+    if (!squashed) {
+        delete bps;
     }
-
-    // optional non speculative update of the histories
-    tage->updateHistories(tid, pc.pc(), taken, tage_bi, false, inst,
-                          pc.npc());
-
-    BTB.update(pc.pc(), pc.npc(), tid);
-
-    delete bi;
 }
 
 void FFTrivialBP::squash(ThreadID tid, void *bp_history) {
-    auto bi = static_cast<BPState *>(bp_history);
-    // Nothing to do
-    delete bi;
+    auto bps = static_cast<BPState *>(bp_history);
+
+    if (!bps->inflight.empty()) {
+        auto ts = bps->inflight.front();
+        tage->squash(tid, ts->taken, ts->info, ts->predPC);
+
+    } else {
+        assert(bps->preRunCount == 0);
+    }
+
+    state = *bps;
+    delete bps;
+}
+
+//---------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------
+// **** FFTrivial::ICache ****
+//---------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------
+
+// The ICache is brought from cpu/pred/btb.cc
+
+FFTrivialBP::ICache::ICache(unsigned _numEntries,
+                       unsigned _instShiftAmt,
+                       unsigned _num_threads)
+    : numEntries(_numEntries),
+      instShiftAmt(_instShiftAmt),
+      log2NumThreads(floorLog2(_num_threads))
+{
+    if (!isPowerOf2(numEntries)) {
+        fatal("Temporary ICache entries is not a power of 2!");
+    }
+
+    set.resize(numEntries);
+
+    for (unsigned i = 0; i < numEntries; ++i) {
+        set[i].valid = false;
+    }
+
+    idxMask = numEntries - 1;
+
+    tagShiftAmt = instShiftAmt + floorLog2(numEntries);
+}
+
+void
+FFTrivialBP::ICache::reset()
+{
+    for (unsigned i = 0; i < numEntries; ++i) {
+        set[i].valid = false;
+    }
+}
+
+inline
+unsigned
+FFTrivialBP::ICache::getIndex(Addr instPC, ThreadID tid)
+{
+    // Need to shift PC over by the word offset.
+    return ((instPC >> instShiftAmt)
+            ^ (tid << (tagShiftAmt - instShiftAmt - log2NumThreads)))
+            & idxMask;
+}
+
+inline
+Addr
+FFTrivialBP::ICache::getTag(Addr instPC)
+{
+    return (instPC >> tagShiftAmt);
+}
+
+bool
+FFTrivialBP::ICache::valid(Addr instPC, ThreadID tid)
+{
+    unsigned set_idx = getIndex(instPC, tid);
+
+    Addr inst_tag = getTag(instPC);
+
+    assert(set_idx < numEntries);
+
+    if (set[set_idx].valid
+        && inst_tag == set[set_idx].tag
+        && set[set_idx].tid == tid) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+// @todo Create some sort of return struct that has both whether or not the
+// address is valid, and also the address.  For now will just use addr = 0 to
+// represent invalid entry.
+std::pair<StaticInstPtr, TheISA::PCState>
+FFTrivialBP::ICache::lookup(Addr instPC, ThreadID tid)
+{
+    unsigned set_idx = getIndex(instPC, tid);
+
+    Addr inst_tag = getTag(instPC);
+
+    assert(set_idx < numEntries);
+
+    if (set[set_idx].valid
+        && inst_tag == set[set_idx].tag
+        && set[set_idx].tid == tid) {
+        return std::make_pair(set[set_idx].inst, set[set_idx].pcState);
+    } else {
+        return std::make_pair(nullptr, 0);
+    }
+}
+
+void
+FFTrivialBP::ICache::update(Addr instPC, StaticInstPtr inst, const TheISA::PCState &pcState, ThreadID tid)
+{
+    unsigned set_idx = getIndex(instPC, tid);
+
+    assert(set_idx < numEntries);
+
+    set[set_idx].tid = tid;
+    set[set_idx].valid = true;
+    set[set_idx].inst = inst;
+    set[set_idx].pcState = pcState;
+    set[set_idx].tag = getTag(instPC);
 }

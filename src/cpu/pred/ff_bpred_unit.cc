@@ -55,7 +55,7 @@ FFBPredUnit::FFBPredUnitStats::FFBPredUnitStats(Stats::Group *parent)
           ADD_STAT(incorrect, "Number of FF BP incorrect predictions"),
           ADD_STAT(squashed, "Number of FF BP squashed predictions"),
           ADD_STAT(correctRatio, "FF BP prediction correct ratio",
-                1 - incorrect / (lookups - squashed))
+                1 - incorrect / lookups)
 {
     correctRatio.precision(4);
 }
@@ -64,173 +64,60 @@ FFBPredUnit::FFBPredUnit(const Params &p)
     : SimObject(p),
       numThreads(p.numThreads),
       numLookAhead(p.numLookAhead),
-      predHist(p.numThreads),
       stats(this)
 {
 }
 
 Addr
-FFBPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
-                   const TheISA::PCState &pc, ThreadID tid)
+FFBPredUnit::predict(const StaticInstPtr &inst,
+                   const TheISA::PCState &pc, Info *&bp_info, ThreadID tid)
 {
     Addr nextK_pc;
     void *bp_history = nullptr;
 
     ++stats.lookups;
-    nextK_pc = lookup(tid, pc.instAddr(), inst, bp_history);
+    nextK_pc = lookup(tid, pc, inst, bp_history);
 
-    DPRINTF(Branch, "[tid:%i] [sn:%llu] "
-                "Branch predictor predicted next-K PC=%#x for PC %s\n",
-                tid, seqNum,  nextK_pc, pc);
+    DPRINTF(Branch, "[tid:%i] Branch predictor predicted next-K PC=%#x for PC %s\n",
+                tid,  nextK_pc, pc);
 
-    DPRINTF(Branch, "[tid:%i] [sn:%llu] "
-                "Creating prediction history "
-                "for PC %s\n", tid, seqNum, pc);
+    DPRINTF(Branch, "[tid:%i] Creating prediction history "
+                "for PC %s\n", tid, pc);
 
-    PredictorHistory predict_record(seqNum, pc.instAddr(), bp_history,
-                                    nextK_pc, tid, inst);
-    predHist[tid].push_front(predict_record);
-
+    bp_info = new Info(pc, bp_history,
+                        nextK_pc, tid, inst);
     return nextK_pc;
 }
 
 void
-FFBPredUnit::update(const InstSeqNum &done_sn, const TheISA::PCState &pc, ThreadID tid)
+FFBPredUnit::update(Info *bp_info, Addr npc, Addr cpc, bool squashed)
 {
-    DPRINTF(Branch, "[tid:%i] Committing branches until "
-            "sn:%llu]\n", tid, done_sn);
+    DPRINTF(Branch, "[tid:%i] Committing branch\n", bp_info->tid);
 
-    while (!predHist[tid].empty() &&
-           predHist[tid].back().seqNum <= done_sn) {
-        // Update the branch predictor with the correct results.
-        DPRINTF(Branch, "Committing branch [sn:%lli].\n",
-                predHist[tid].back().seqNum);
+    bp_info->pc.npc(npc);
 
-        update(tid, pc,
-                    predHist[tid].back().bpHistory, false,
-                    predHist[tid].back().inst,
-                    predHist[tid].back().nextK_PC, predHist[tid].back().nextK_PC);
+    update(bp_info->tid, bp_info->pc,
+                bp_info->bpHistory, squashed,
+                bp_info->inst,
+                bp_info->predPC, cpc);
 
-        predHist[tid].pop_back();
+    if (bp_info->predPC != cpc) {
+        ++stats.incorrect;
     }
 }
 
 void
-FFBPredUnit::squash(const InstSeqNum &squashed_sn, ThreadID tid)
+FFBPredUnit::squash(Info *bp_info)
 {
-    History &pred_hist = predHist[tid];
+    // This call should delete the bpHistory.
+    ++stats.squashed;
+    squash(bp_info->tid, bp_info->bpHistory);
 
-    while (!pred_hist.empty() &&
-           pred_hist.front().seqNum > squashed_sn) {
-        // This call should delete the bpHistory.
-        ++stats.squashed;
-        squash(tid, pred_hist.front().bpHistory);
-
-        DPRINTF(Branch, "[tid:%i] [squash sn:%llu] "
-                "Removing history for [sn:%llu] "
-                "PC %#x\n", tid, squashed_sn, pred_hist.front().seqNum,
-                pred_hist.front().pc);
-
-        pred_hist.pop_front();
-
-        DPRINTF(Branch, "[tid:%i] [squash sn:%llu] predHist.size(): %i\n",
-                tid, squashed_sn, predHist[tid].size());
-    }
-}
-
-void
-FFBPredUnit::squash(const InstSeqNum &squashed_sn,
-                  const TheISA::PCState &pc,
-                  const TheISA::PCState &corr_DBB,
-                  ThreadID tid)
-{
-    // Now that we know that a branch was mispredicted, we need to undo
-    // all the branches that have been seen up until this branch and
-    // fix up everything.
-    // NOTE: This should be call conceivably in 2 scenarios:
-    // (1) After an branch is executed, it updates its status in the ROB
-    //     The commit stage then checks the ROB update and sends a signal to
-    //     the fetch stage to squash history after the mispredict
-    // (2) In the decode stage, you can find out early if a unconditional
-    //     PC-relative, branch was predicted incorrectly. If so, a signal
-    //     to the fetch stage is sent to squash history after the mispredict
-
-    History &pred_hist = predHist[tid];
-
-    ++stats.incorrect;
-
-    DPRINTF(Branch, "[tid:%i] Squashing from sequence number %i, "
-            "setting correct next-K PC to %s\n", tid, squashed_sn, corr_DBB);
-
-    // Squash All Branches AFTER this mispredicted branch
-    squash(squashed_sn, tid);
-
-    // If there's a squash due to a syscall, there may not be an entry
-    // corresponding to the squash.  In that case, don't bother trying to
-    // fix up the entry.
-    if (!pred_hist.empty()) {
-
-        //auto hist_it = pred_hist.begin();
-        //HistoryIt hist_it = find(pred_hist.begin(), pred_hist.end(),
-        //                       squashed_sn);
-
-        //assert(hist_it != pred_hist.end());
-        if (pred_hist.front().seqNum != squashed_sn) {
-            DPRINTF(Branch, "Front sn %i != Squash sn %i\n",
-                    pred_hist.front().seqNum, squashed_sn);
-
-            assert(pred_hist.front().seqNum == squashed_sn);
-        }
-
-
-        // There are separate functions for in-order and out-of-order
-        // branch prediction, but not for update. Therefore, this
-        // call should take into account that the mispredicted branch may
-        // be on the wrong path (i.e., OoO execution), and that the counter
-        // counter table(s) should not be updated. Thus, this call should
-        // restore the state of the underlying predictor, for instance the
-        // local/global histories. The counter tables will be updated when
-        // the branch actually commits.
-
-        update(tid, pc,
-               pred_hist.front().bpHistory, true,
-               pred_hist.front().inst,
-               pred_hist.front().nextK_PC, corr_DBB);
-
-    } else {
-        DPRINTF(Branch, "[tid:%i] [sn:%llu] pred_hist empty, can't "
-                "update\n", tid, squashed_sn);
-    }
-}
-
-void
-FFBPredUnit::dump()
-{
-    int i = 0;
-    for (const auto& ph : predHist) {
-        if (!ph.empty()) {
-            auto pred_hist_it = ph.begin();
-
-            cprintf("predHist[%i].size(): %i\n", i++, ph.size());
-
-            while (pred_hist_it != ph.end()) {
-                cprintf("sn:%llu], PC:%#x, tid:%i, next-K PC:%s, "
-                        "\n",
-                        pred_hist_it->seqNum, pred_hist_it->pc,
-                        pred_hist_it->tid, pred_hist_it->nextK_PC);
-                pred_hist_it++;
-            }
-
-            cprintf("\n");
-        }
-    }
+    DPRINTF(Branch, "[tid:%i] Removing history "
+            "PC %#x\n", bp_info->tid, bp_info->pc);
 }
 
 void
 FFBPredUnit::drainSanityCheck() const
 {
-    // We shouldn't have any outstanding requests when we resume from
-    // a drained system.
-    for (M5_VAR_USED const auto& ph : predHist)
-        assert(ph.empty());
 }

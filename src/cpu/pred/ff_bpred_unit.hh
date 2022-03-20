@@ -63,6 +63,35 @@ class FFBPredUnit : public SimObject
       typedef FFBranchPredictorParams Params;
     FFBPredUnit(const Params &p);
 
+    struct Info {
+        /**
+         * Makes a predictor history struct that contains any
+         * information needed to update the predictor.
+         */
+        Info(const TheISA::PCState &instPC,
+                         void *bp_history, Addr _predPC, ThreadID _tid,
+                         const StaticInstPtr & inst)
+            : pc(instPC),
+              tid(_tid),
+              bpHistory(bp_history),
+              predPC(_predPC),
+              inst(inst)
+        {}
+
+        /** The PC associated with the sequence number. */
+        TheISA::PCState pc;
+
+        /** The thread id. */
+        ThreadID tid;
+
+        void *bpHistory;
+
+        Addr predPC;
+
+        /** The branch instrction */
+        const StaticInstPtr inst;
+    };
+
     /**
      * Predicts next-K PC
      * @param inst The branch instruction.
@@ -70,17 +99,19 @@ class FFBPredUnit : public SimObject
      * @param tid The thread id.
      * @return Predicted next-K PC.
      */
-    Addr predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
-                 const TheISA::PCState &pc, ThreadID tid);
+    Addr predict(const StaticInstPtr &inst,
+                   const TheISA::PCState &pc, Info *&bp_info, ThreadID tid);
 
     /**
      * Tells the branch predictor to commit any updates until the given
      * sequence number.
      * @param done_sn The sequence number to commit any older updates up until.
      * @param pc PC state with correct npc value.
+     * @param npc Correct next PC
+     * @param cpc Correct target PC
      * @param tid The thread id.
      */
-    void update(const InstSeqNum &done_sn, const TheISA::PCState &pc, ThreadID tid);
+    void update(Info *bp_info, Addr npc, Addr cpc, bool squashed);
 
     /**
      * Squashes all outstanding updates until a given sequence number.
@@ -88,23 +119,8 @@ class FFBPredUnit : public SimObject
      * until.
      * @param tid The thread id.
      */
-    void squash(const InstSeqNum &squashed_sn, ThreadID tid);
+    void squash(Info *bp_info);
 
-    /**
-     * Squashes all outstanding updates until a given sequence number, and
-     * corrects that sn's update with the proper address and taken/not taken.
-     * @param squashed_sn The sequence number to squash any younger updates up
-     * until.
-     * @param pc PC state with correct npc value.
-     * @param corr_DBB The correct next-K DBB PC.
-     * @param tid The thread id.
-     */
-    void squash(const InstSeqNum &squashed_sn,
-                const TheISA::PCState &pc,
-                const TheISA::PCState &corr_DBB,
-                ThreadID tid);
-
-    void dump();
 
     inline unsigned getNumThreads() const { return numThreads; }
     inline unsigned getNumLookAhead() const { return numLookAhead; }
@@ -142,7 +158,7 @@ class FFBPredUnit : public SimObject
     virtual void update(ThreadID tid, const TheISA::PCState &pc,
                    void *bp_history, bool squashed,
                    const StaticInstPtr &inst,
-                   const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) = 0;
+                   Addr pred_DBB, Addr corr_DBB) = 0;
 
     virtual void syncStoreConditional(bool lrValid, ThreadID tid) {}
 
@@ -153,57 +169,10 @@ class FFBPredUnit : public SimObject
     virtual bool isOracle() const { return false; }
 
   private:
-    int squashWorker(const InstSeqNum &squashed_sn, ThreadID tid);
-
-    struct PredictorHistory {
-        /**
-         * Makes a predictor history struct that contains any
-         * information needed to update the predictor.
-         */
-        PredictorHistory(const InstSeqNum &seq_num, Addr instPC,
-                         void *bp_history, Addr _nextK_PC, ThreadID _tid,
-                         const StaticInstPtr & inst)
-            : seqNum(seq_num), pc(instPC),
-              tid(_tid),
-              bpHistory(bp_history),
-              nextK_PC(_nextK_PC),
-              inst(inst)
-        {}
-
-        bool operator==(const PredictorHistory &entry) const {
-            return this->seqNum == entry.seqNum;
-        }
-
-        /** The sequence number for the predictor history entry. */
-        InstSeqNum seqNum;
-
-        /** The PC associated with the sequence number. */
-        Addr pc;
-
-        /** The thread id. */
-        ThreadID tid;
-
-        void *bpHistory;
-
-        TheISA::PCState nextK_PC;
-
-        /** The branch instrction */
-        const StaticInstPtr inst;
-    };
-
-    typedef std::deque<PredictorHistory> History;
-
     /** Number of the threads for which the branch history is maintained. */
     const unsigned numThreads;
 
     const unsigned numLookAhead;
-
-    /**
-     * The per-thread predictor history. This is used to update the predictor
-     * as instructions are committed, or restore it to the proper state after
-     * a squash.
-     */
-    std::vector<History> predHist;
 
     struct FFBPredUnitStats : public Stats::Group
     {
