@@ -120,7 +120,7 @@ Addr FFOracleBP::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticIns
 void FFOracleBP::update(ThreadID tid, const TheISA::PCState &pc,
                         void *bp_history, bool squashed,
                         const StaticInstPtr &inst,
-                        const TheISA::PCState &pred_nextK_PC, const TheISA::PCState &corr_nextK_PC) {
+                        Addr pred_DBB, Addr corr_DBB) {
 
     auto history_state = static_cast<BPState *>(bp_history);
 
@@ -128,7 +128,7 @@ void FFOracleBP::update(ThreadID tid, const TheISA::PCState &pc,
                                 squashed ? " squashed" : " ", pc.pc(),
                                 history_state->front_iid);
 
-    if (squashed) {
+    if (pred_DBB != corr_DBB) {
         // Am I a perfect predictor?
         if (std::fabs(presetAccuracy - 1.0) < std::numeric_limits<double>::epsilon()) {
             if (!history_state->scInFlight)
@@ -138,8 +138,9 @@ void FFOracleBP::update(ThreadID tid, const TheISA::PCState &pc,
 
         if (history_state->scInFlight)
             ++stats.incorrectAfterSC;
+    }
 
-    } else {
+    if (!squashed) {
         DPRINTF(FFOracleBP_misc, "Committing iid %u\n", history_state->front_iid + 1);
         DPRINTF(FFOracleBP_misc, "Back iid = %u\n",
                 orderedOracleEntries.back().iid);
@@ -153,9 +154,9 @@ void FFOracleBP::update(ThreadID tid, const TheISA::PCState &pc,
 
         state.commit_iid++;
         dumpState();
-    }
 
-    delete history_state;
+        delete history_state;
+    }
 }
 
 void FFOracleBP::squash(ThreadID tid, void *bp_history)
@@ -224,7 +225,7 @@ void FFOracleBP::lookAheadInsts(unsigned len, bool record)
             StaticInstPtr staticInst = decoder->decode(pcState);
 
             pcState.npc(diff.nemu_this_pc);
-            if (pcState.branching()) { // entering new basic block
+            if (1 || pcState.branching()) { // entering new basic block
                 ++numDBB, exitDBB = true;
             }
 

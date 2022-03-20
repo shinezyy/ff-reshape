@@ -1647,16 +1647,16 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
     //
     // dummy frontend
     //
+    FFBPredUnit::Info *bp_info;
     Addr nextK_PC = ffBranchPred->predict(inst->staticInst,
-                                            inst->seqNum,
                                             inst->pcState(),
+                                            bp_info,
                                             tid);
 
-    FFBranchPredHistory hist {inst->instAddr(),
-                                inst->seqNum, tid, nextK_PC, inst->staticInst, inst};
+    FFBranchPredHistory hist {inst->seqNum, tid, nextK_PC, inst, bp_info};
     committedInsts[tid].push_front(hist);
 
-    if (inst->pcState().branching()) { // Entering new dynamic basic block
+    if (1 || inst->pcState().branching()) { // Entering new dynamic basic block
         committedDBBs[tid].front().exitPC = inst->instAddr();
         committedDBBs[tid].front().exitSeqNum = inst->seqNum;
         committedDBBs[tid].emplace_front();
@@ -1675,40 +1675,27 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
             if (corrDBB.exitSeqNum == 0)
                 continue; // the DBB is unresolved
 
-            // This instr could be committed now
+
+            // **** Begin of BP updating ****
 
             if (hist.back().dynInst->isStoreConditional()) {
                 ffBranchPred->syncStoreConditional(hist.back().dynInst->lockedWriteSuccess(),
                                                     hist.back().tid);
             }
 
-            if (hist.back().predDBB == corrDBB.exitPC.pc()) {
-                // prediction is correct
-                ffBranchPred->update(hist.back().seqNum,
-                                    hist.back().dynInst->pcState().npc(),
-                                    hist.back().tid);
+            Addr npc = hist.back().dynInst->pcState().npc();
+            Addr cpc = corrDBB.exitPC;
+            //printf("%lx\n", hist.back().dynInst->pcState().pc());
+            //bool correct = (cpc == hist.back().predDBB);
 
-            } else {
-                // prediction is incorrect
-                ffBranchPred->squash(hist.back().seqNum,
-                                    hist.back().dynInst->pcState(),
-                                    corrDBB.exitPC.pc(),
-                                    hist.back().tid);
+            ffBranchPred->update(hist.back().bp_info, npc, cpc, false);
 
-                // Simulate the behavior of real FF after pipeline squashing:
-                // Re-run prediction as if these insts were squashed.
-                for (int i=hist.size()-2; i>=0; i--) {
-                    hist[i].predDBB = ffBranchPred->predict(hist[i].staticInst,
-                                            hist[i].seqNum,
-                                            hist[i].pc,
-                                            hist[i].tid);
-                }
-            }
+            // **** End of BP updating ****
+
 
             if (DBBlist.back().exitSeqNum == hist.back().seqNum) {
                 DBBlist.pop_back();
             }
-
             hist.pop_back();
         }
     }

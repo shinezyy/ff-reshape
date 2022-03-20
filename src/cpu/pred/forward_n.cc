@@ -93,11 +93,11 @@ Addr ForwardN::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstP
 void ForwardN::update(ThreadID tid, const TheISA::PCState &pc,
                       void *bp_history, bool squashed,
                       const StaticInstPtr &inst,
-                      const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) {
+                     Addr pred_DBB, Addr corr_DBB) {
 
     auto bp_hist = static_cast<BPState *>(bp_history);
 
-    if (squashed) {
+    if (pred_DBB != corr_DBB) {
         // prediction is incorrect
 
         // restore global histories, then recompute them
@@ -107,12 +107,12 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &pc,
         // update and/or allocate banks
         if (bp_hist->bank >= 0) {
             int indice = bp_hist->computedInd[bp_hist->bank];
-            gtabBanks[bp_hist->bank](indice).pc = corr_DBB.pc();
+            gtabBanks[bp_hist->bank](indice).pc = corr_DBB;
         } else {
-            btabBank(btabHash(pc.pc())).pc = corr_DBB.pc();
+            btabBank(btabHash(pc.pc())).pc = corr_DBB;
         }
 
-        allocEntry(bp_hist->bank, pc.pc(), corr_DBB.pc(),
+        allocEntry(bp_hist->bank, pc.pc(), corr_DBB,
                     bp_hist->computedInd, bp_hist->computedTag);
 
         if (bp_hist->bank >= 0) {
@@ -127,31 +127,33 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &pc,
         if (bp_hist->bank >= 0) {
             int indice = bp_hist->computedInd[bp_hist->bank];
 
-            gtabBanks[bp_hist->bank](indice).pc = corr_DBB.pc();
+            gtabBanks[bp_hist->bank](indice).pc = corr_DBB;
 
             gtabBanks[bp_hist->bank](indice).useful = true;
             btabBank(btabHash(pc.pc())).meta = true;
 
         } else {
-            btabBank(btabHash(pc.pc())).pc = corr_DBB.pc();
+            btabBank(btabHash(pc.pc())).pc = corr_DBB;
         }
     }
 
-    if (squashed) {
+    if (pred_DBB != corr_DBB) {
         static int c = 0;
         if (c >= traceStart && c < traceStart + traceCount) {
             DPRINTF(ForwardN, "Mispred: pred=0x%016lX, act=0x%016lX, off=%d\n",
-                    pred_DBB.pc(),
-                    corr_DBB.pc(),
-                    corr_DBB.pc() > pred_DBB.pc() ?
-                        (signed int)(corr_DBB.pc() - pred_DBB.pc()) :
-                        -(signed int)(pred_DBB.pc() - corr_DBB.pc())
+                    pred_DBB,
+                    corr_DBB,
+                    corr_DBB > pred_DBB ?
+                        (signed int)(corr_DBB - pred_DBB) :
+                        -(signed int)(pred_DBB - corr_DBB)
                     );
         }
         c++;
     }
 
-    delete bp_hist;
+    if (!squashed) {
+        delete bp_hist;
+    }
 }
 
 void ForwardN::foldedXOR(Addr &dst, Addr src, int srcLen, int dstLen) {

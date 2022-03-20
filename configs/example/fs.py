@@ -422,6 +422,8 @@ if options.ff_bp_type != 'none':
 
         elif options.ff_bp_type == 'trivial':
             cpu.ffBranchPred = m5.objects.FFTrivialBP()
+            cpu.ffBranchPred.tage.speculativeHistUpdate = True
+
             if options.ff_trivial_BTBEntries:
                 cpu.ffBranchPred.BTBEntries = \
                     int(options.ff_trivial_BTBEntries)
@@ -431,6 +433,8 @@ if options.ff_bp_type != 'none':
             if options.ff_trivial_instShiftAmt:
                 cpu.ffBranchPred.instShiftAmt = \
                     int(options.ff_trivial_instShiftAmt)
+
+        cpu.ffBranchPred.numLookAhead = 64
 
 if len(bm) == 2:
     drive_sys = build_drive_system(np)

@@ -39,7 +39,7 @@ public:
     void update(ThreadID tid, const TheISA::PCState &pc,
                 void *bp_history, bool squashed,
                 const StaticInstPtr &inst,
-                const TheISA::PCState &pred_DBB, const TheISA::PCState &corr_DBB) override;
+                Addr pred_DBB, Addr corr_DBB) override;
 
     void squash(ThreadID tid, void *bp_history) override;
 
