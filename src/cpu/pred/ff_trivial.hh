@@ -32,6 +32,8 @@ public:
 
     void squash(ThreadID tid, void *bp_history) override;
 
+    void commit(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst) override;
+
 private:
     TAGEBase *tage;
 

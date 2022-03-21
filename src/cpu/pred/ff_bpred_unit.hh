@@ -160,6 +160,8 @@ class FFBPredUnit : public SimObject
                    const StaticInstPtr &inst,
                    Addr pred_DBB, Addr corr_DBB) = 0;
 
+    virtual void commit(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst) {}
+
     virtual void syncStoreConditional(bool lrValid, ThreadID tid) {}
 
     virtual void syncArchState(Addr resetPC, uint64_t pmemAddr, void *pmemPtr, size_t pmemSize, const void *regs) {}

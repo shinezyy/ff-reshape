@@ -139,6 +139,12 @@ void FFTrivialBP::update(ThreadID tid, const TheISA::PCState &pc,
 
     BPState *bps = static_cast<BPState*>(bp_history);
 
+    if (!squashed) {
+        delete bps;
+    }
+}
+
+void FFTrivialBP::commit(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst) {
     assert(!state.inflight.empty());
     TAGEState *ts = state.inflight.back();
     TAGEBase::BranchInfo *tage_bi = ts->info;
@@ -189,10 +195,6 @@ void FFTrivialBP::update(ThreadID tid, const TheISA::PCState &pc,
 
     delete ts;
     state.inflight.pop_back();
-
-    if (!squashed) {
-        delete bps;
-    }
 }
 
 void FFTrivialBP::squash(ThreadID tid, void *bp_history) {

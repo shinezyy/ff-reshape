@@ -1653,6 +1653,8 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
                                             bp_info,
                                             tid);
 
+    ffBranchPred->commit(tid, inst->pcState(), inst->staticInst);
+
     FFBranchPredHistory hist {inst->seqNum, tid, nextK_PC, inst, bp_info};
     committedInsts[tid].push_front(hist);
 
