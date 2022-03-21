@@ -292,6 +292,10 @@ def benchCheckpoints(testsys, options, maxtick, cptdir):
             m5.stats.dump()
             m5.stats.reset()
     else:
+        for i in range(2):
+            exit_event = m5.simulate(1_000_000*cpu_period)
+            m5.stats.dump()
+            m5.stats.reset()
         exit_event = m5.simulate(1_000_000*cpu_period)
     return exit_event
 

@@ -105,6 +105,7 @@ class BaseTags : public ClockedObject
     std::unique_ptr<uint8_t[]> dataBlks;
 
     std::vector<std::set<Addr>> accessTagSets;
+    std::set<int> lastTSetAccess80;
     /**
      * TODO: It would be good if these stats were acquired after warmup.
      */
@@ -159,6 +160,8 @@ class BaseTags : public ClockedObject
         Stats::Formula sliceSetAccessesAvg;
         Stats::Formula sliceSetAccessesVar;
         Stats::Scalar sliceSetAcc80;
+        Stats::Scalar sliceSetAcc80LastT;
+        Stats::Scalar sliceSetAcc80IntNum;
 
         /** Total number of different tags in sets accessed in each slice */
         Stats::Vector sliceSetAccessUnique;

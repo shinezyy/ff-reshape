@@ -205,26 +205,44 @@ BaseTags::computeStats()
         stats.sliceSetAccessUnique[i] = accessTagSets[i].size();
         accessTagSets[i].clear();
     }
-    std::vector<uint64_t> tmp_set_cnt;
-    for (size_t i = 0; i < num_slices; i++)
+    std::vector<std::pair<uint64_t,int>> tmp_set_cnt;
+    for (int i = 0; i < num_slices; i++)
     {
-        tmp_set_cnt.push_back((uint64_t)stats.sliceSetAccesses[i].value());
+        tmp_set_cnt.push_back(std::make_pair((uint64_t)stats.sliceSetAccesses[i].value(),i));
     }
 
-    uint64_t sum_acc =
-        std::accumulate(tmp_set_cnt.begin(),tmp_set_cnt.end(),0);
-    uint64_t sum80_threshold = sum_acc*0.8;
-    std::sort(tmp_set_cnt.begin(),tmp_set_cnt.end(),std::greater<uint64_t>());
-    uint64_t tmp_acc = 0;
-    for (size_t i = 0; i < num_slices; i++)
+    uint64_t sum_acc = 0;
+    for (auto &&i : tmp_set_cnt)
     {
-        tmp_acc += tmp_set_cnt[i];
-        if (tmp_acc >= sum80_threshold)
-        {
-            stats.sliceSetAcc80 = i+1;
-            break;
-        }
+        sum_acc += i.first;
     }
+
+    uint64_t sum80_threshold = sum_acc*0.8;
+    std::sort(tmp_set_cnt.begin(),tmp_set_cnt.end(),std::greater_equal<>());
+    std::set<int> currentTSetAccess80;
+    uint64_t tmp_acc = 0;
+    for (int i = 0; i < num_slices; i++)
+    {
+        tmp_acc += tmp_set_cnt[i].first;
+        currentTSetAccess80.insert(tmp_set_cnt[i].second);
+        if (tmp_acc >= sum80_threshold)
+            break;
+    }
+    stats.sliceSetAcc80 = currentTSetAccess80.size();
+    stats.sliceSetAcc80LastT = lastTSetAccess80.size();
+    std::vector<int> tmp_int;
+    std::set_intersection(
+        currentTSetAccess80.begin(),currentTSetAccess80.end(),
+        lastTSetAccess80.begin(),lastTSetAccess80.end(),
+        std::inserter(tmp_int,tmp_int.begin())
+    );
+    stats.sliceSetAcc80IntNum = tmp_int.size();
+    lastTSetAccess80.clear();
+    std::copy(
+        currentTSetAccess80.begin(),currentTSetAccess80.end(),
+        std::inserter(lastTSetAccess80,lastTSetAccess80.begin())
+    );
+
 }
 
 std::string
@@ -275,6 +293,11 @@ BaseTags::BaseTagStats::BaseTagStats(BaseTags &_tags)
                 "Varaiance of number of sets accessed in a slice"),
     sliceSetAcc80(this, "slice_set_accesses_80",
                 "number of sets which contains 80\% of accesses"),
+    sliceSetAcc80LastT(this, "slice_set_accesses_80_lastT",
+        "number of sets which contains 80\% of accesses in lastT"),
+    sliceSetAcc80IntNum(this, "slice_set_accesses_80_intersect",
+        "number of sets which contains 80\% of accesses in both lastT "
+        "and currentT"),
     sliceSetAccessUnique(this, "slice_set_accesses_unique",
                 "Total number of unique tag&set access in a slice"),
     sliceSetAccessUniqueAvg(this, "slice_set_accesses_unique_avg",
