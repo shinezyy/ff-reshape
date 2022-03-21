@@ -90,13 +90,11 @@ private:
 
     struct ForwardNStats : public Stats::Group
     {
-        ForwardNStats(Stats::Group *parent);
+        ForwardNStats(Stats::Group *parent, const ForwardNParams &params);
 
         Stats::Scalar lookups;
 
-        Stats::Scalar gtabHit;
-
-        Stats::Formula gtabHitRate;
+        Stats::Vector gtabHit;
 
         Stats::Scalar coldStart;
     } stats;

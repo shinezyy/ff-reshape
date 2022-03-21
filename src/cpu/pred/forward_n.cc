@@ -7,20 +7,18 @@
 #include "debug/ForwardN.hh"
 #include "forward_n.hh"
 
-ForwardN::ForwardNStats::ForwardNStats(Stats::Group *parent)
+ForwardN::ForwardNStats::ForwardNStats(Stats::Group *parent, const ForwardNParams &params)
         : Stats::Group(parent, "forward_n"),
           ADD_STAT(lookups, "Number of ForwardN lookups"),
           ADD_STAT(gtabHit, "Number of ForwardN global table hit"),
-          ADD_STAT(gtabHitRate, "ForwardN prediction global table hit rate",
-                   gtabHit / lookups),
           ADD_STAT(coldStart, "Number of cold-start lookups")
 {
-    gtabHitRate.precision(4);
+    gtabHit.init(params.numGTabBanks);
 }
 
 ForwardN::ForwardN(const ForwardNParams &params)
         : FFBPredUnit(params),
-          stats(this),
+          stats(this, params),
           traceStart(params.traceStart),
           traceCount(params.traceCount),
           btabBank(params.numBTabEntries),
@@ -73,7 +71,7 @@ Addr ForwardN::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstP
         if (hist->computedTag[i] == gtabBanks[i](hist->computedInd[i]).tag) {
             hist->bank = i;
             hist->predPC = gtabBanks[i](hist->computedInd[i]).pc;
-            ++stats.gtabHit;
+            ++stats.gtabHit[i];
             break;
         }
     }
@@ -175,7 +173,8 @@ Addr ForwardN::bankHash(Addr PC, Addr pathHist, uint64_t histTaken, const GTabBa
 
 Addr ForwardN::tagHash(Addr PC, uint64_t histTaken, const GTabBank &bank) {
     Addr hash = 0;
-    foldedXOR(hash, PC, sizeof(PC)*8, bank.getLogNumEntries());
+    unsigned midBits = sizeof(PC)*4;
+    foldedXOR(hash, (PC<<midBits) | ((PC>>midBits) & ((1UL<<midBits)-1)), sizeof(PC)*8, bank.getLogNumEntries());
     foldedXOR(hash, histTaken, bank.getHistLen(), bank.getLogNumEntries());
     assert(hash < (1<<bank.getLogNumEntries()));
     return hash;
