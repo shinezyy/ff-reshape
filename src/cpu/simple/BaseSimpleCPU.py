@@ -51,3 +51,4 @@ class BaseSimpleCPU(BaseCPU):
             exit(1)
 
     branchPred = Param.BranchPredictor(NULL, "Branch Predictor")
+    dumpBranch = Param.Int(Parent.dumpBranch, "branch inst number");
