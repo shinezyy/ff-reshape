@@ -212,6 +212,7 @@ def build_test_system(np):
                     test_sys.cpu[i].branchPred.indirectBranchPred = \
                         IndirectBPClass()
             test_sys.cpu[i].createThreads()
+            test_sys.cpu[i].dumpBranch = options.dumpBranch
 
         # If elastic tracing is enabled when not restoring from checkpoint and
         # when not fast forwarding using the atomic cpu, then check that the

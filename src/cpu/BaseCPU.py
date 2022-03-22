@@ -179,6 +179,8 @@ class BaseCPU(ClockedObject):
     icache_port = RequestPort("Instruction Port")
     dcache_port = RequestPort("Data Port")
 
+    dumpBranch = Param.Int(0, "branch inst number")
+
     #commitTraceInterval = Param.Unsigned(19, 'commitTraceInterval')
     commitTraceInterval = Param.Unsigned(49, 'commitTraceInterval')
 

@@ -42,6 +42,11 @@
 #ifndef __CPU_SIMPLE_BASE_HH__
 #define __CPU_SIMPLE_BASE_HH__
 
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <queue>
+
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
 #include "cpu/base.hh"
@@ -82,6 +87,7 @@ class BaseSimpleCPU : public BaseCPU
   protected:
     ThreadID curThread;
     BPredUnit *branchPred;
+    int dumpBranch;
 
     void checkPcEventQueue();
     void swapActiveThread();
@@ -190,6 +196,12 @@ class BaseSimpleCPU : public BaseCPU
      * memory subsystem to be in a stable, i.e. pre-speculative, state as
      * well. */
     virtual void htmSendAbortSignal(HtmFailureFaultCause cause) = 0;
+
+  public:
+    std::queue<TheISA::PCState> branchQueue;
+    void startup() override;
+    void dumpBranchStat(int number);
+
 };
 
 #endif // __CPU_SIMPLE_BASE_HH__

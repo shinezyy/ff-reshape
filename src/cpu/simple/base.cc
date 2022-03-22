@@ -84,6 +84,7 @@ BaseSimpleCPU::BaseSimpleCPU(const BaseSimpleCPUParams &p)
     : BaseCPU(p),
       curThread(0),
       branchPred(p.branchPred),
+      dumpBranch(p.dumpBranch),
       traceData(NULL),
       inst(),
       _status(Idle)
@@ -464,6 +465,16 @@ BaseSimpleCPU::postExecute()
         traceData = NULL;
     }
 
+    if ((curStaticInst->isControl()) ||
+        (curStaticInst->isCall()) ||
+        (curStaticInst->isReturn()) ||
+        (curStaticInst->isDirectCtrl()) ||
+        (curStaticInst->isIndirectCtrl()) ||
+        (curStaticInst->isCondCtrl()) ||
+        (curStaticInst->isUncondCtrl())){
+        branchQueue.push(pc);
+    }
+
     // Call CPU instruction commit probes
     probeInstCommit(curStaticInst, instAddr);
 }
@@ -506,4 +517,33 @@ BaseSimpleCPU::advancePC(const Fault &fault)
             ++t_info.execContextStats.numBranchMispred;
         }
     }
+}
+
+void
+BaseSimpleCPU::dumpBranchStat(int number)
+{
+    warn("%s: Dumping Branch on Exit\n", name().c_str());
+    std::ofstream ofs;
+    ofs.open((name() + ".branch.txt").c_str());
+    std::stringstream ss;
+    while (branchQueue.size() > 0){
+        TheISA::PCState pc = branchQueue.front();
+
+        ss<<std::hex<<"0x"<<setfill(' ')<<setw(10)<<std::left<<pc.instAddr();
+        ss<<std::hex<<"0x"<<setfill(' ')<<setw(10)<<std::left<<pc.nextInstAddr();
+        ss<<pc.branching()<<'('<<(pc.branching() ? "Taken" : "not Taken")<<')'<<'\n';
+
+        branchQueue.pop();
+        number--;
+        if (number == 0)
+            break;
+    }
+    ofs << ss.rdbuf();
+    ofs.close();
+}
+
+void
+BaseSimpleCPU::startup()
+{
+    registerExitCallback([this]() { dumpBranchStat(dumpBranch); });
 }

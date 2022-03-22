@@ -161,6 +161,9 @@ def addNoISAOptions(parser):
              "Direct parameters of the root object are not accessible, "
              "only parameters of its children.")
 
+    # Branch Options
+    parser.add_option("--dumpBranch", type="int", default=None)
+
 
 def addSpec2006Options(parser):
     parser.add_option("-b", "--benchmark",\
