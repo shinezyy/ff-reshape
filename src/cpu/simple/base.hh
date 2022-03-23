@@ -87,7 +87,7 @@ class BaseSimpleCPU : public BaseCPU
   protected:
     ThreadID curThread;
     BPredUnit *branchPred;
-    int dumpBranch;
+    int dumpRecentNBranches;
 
     void checkPcEventQueue();
     void swapActiveThread();
