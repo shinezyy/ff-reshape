@@ -162,7 +162,7 @@ def addNoISAOptions(parser):
              "only parameters of its children.")
 
     # Branch Options
-    parser.add_option("--dumpBranch", type="int", default=None)
+    parser.add_option("--dump-branch", type="int", default=0)
 
 
 def addSpec2006Options(parser):

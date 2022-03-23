@@ -212,7 +212,11 @@ def build_test_system(np):
                     test_sys.cpu[i].branchPred.indirectBranchPred = \
                         IndirectBPClass()
             test_sys.cpu[i].createThreads()
-            test_sys.cpu[i].dumpBranch = options.dumpBranch
+
+            if options.cpu_type == 'TimingSimpleCPU':
+                test_sys.cpu[i].dumpBranch = options.dump_branch
+            elif options.dump_branch != 0:
+                warn('dump_branch option is ignored for non-TimingSimpleCPU')
 
         # If elastic tracing is enabled when not restoring from checkpoint and
         # when not fast forwarding using the atomic cpu, then check that the

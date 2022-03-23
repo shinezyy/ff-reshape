@@ -465,9 +465,8 @@ BaseSimpleCPU::postExecute()
         traceData = NULL;
     }
 
-    if ((curStaticInst->isControl()) ||
-        (curStaticInst->isCall()) ||
-        (curStaticInst->isReturn())){
+    if (dumpRecentNBranches &&
+        (curStaticInst->isControl() || curStaticInst->isCall() || curStaticInst->isReturn())) {
         branchQueue.push(pc);
         if (branchQueue.size() > dumpRecentNBranches) { // in case the queue
             branchQueue.pop();
