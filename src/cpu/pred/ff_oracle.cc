@@ -225,7 +225,7 @@ void FFOracleBP::lookAheadInsts(unsigned len, bool record)
             StaticInstPtr staticInst = decoder->decode(pcState);
 
             pcState.npc(diff.nemu_this_pc);
-            if (1 || pcState.branching()) { // entering new basic block
+            if (!isPredDBB() || pcState.branching()) { // entering new basic block
                 ++numDBB, exitDBB = true;
             }
 

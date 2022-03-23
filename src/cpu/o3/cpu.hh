@@ -810,18 +810,22 @@ class FullO3CPU : public BaseO3CPU
     FFBPredUnit *ffBranchPred;
     struct FFBranchPredHistory {
         FFBranchPredHistory(InstSeqNum _seqNum, ThreadID _tid, Addr _predDBB,
-                            const DynInstPtr &_dynInst,
+                            const DynInstPtr &dynInst,
                             FFBPredUnit::Info *_bp_info)
             : seqNum(_seqNum),
               tid(_tid),
               predDBB(_predDBB),
-              dynInst(_dynInst),
+              pcState(dynInst->pcState()),
+              isStoreConditional(dynInst->isStoreConditional()),
+              lockedWriteSuccess(dynInst->lockedWriteSuccess()),
               bp_info(_bp_info)
         {}
         InstSeqNum seqNum;
         ThreadID tid;
         Addr predDBB;
-        DynInstPtr dynInst;
+        TheISA::PCState pcState;
+        bool isStoreConditional;
+        bool lockedWriteSuccess;
         FFBPredUnit::Info *bp_info;
     };
     std::vector<std::deque<FFBranchPredHistory>> committedInsts;

@@ -781,6 +781,7 @@ class FFBranchPredictor(SimObject):
 
     numThreads = Param.Unsigned(Parent.numThreads, "Number of threads")
     numLookAhead = Param.Unsigned(64, "Number of look-ahead insts")
+    predDBB = Param.Bool(True, "True: predicate forward-N DBB. False: predicate forward-N instruction.")
 
 class FFOracleBP(FFBranchPredictor):
     type = 'FFOracleBP'

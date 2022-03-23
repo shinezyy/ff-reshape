@@ -1658,7 +1658,7 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
     FFBranchPredHistory hist {inst->seqNum, tid, nextK_PC, inst, bp_info};
     committedInsts[tid].push_front(hist);
 
-    if (1 || inst->pcState().branching()) { // Entering new dynamic basic block
+    if (!ffBranchPred->isPredDBB() || inst->pcState().branching()) { // Entering new dynamic basic block
         committedDBBs[tid].front().exitPC = inst->instAddr();
         committedDBBs[tid].front().exitSeqNum = inst->seqNum;
         committedDBBs[tid].emplace_front();
@@ -1680,15 +1680,13 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
 
             // **** Begin of BP updating ****
 
-            if (hist.back().dynInst->isStoreConditional()) {
-                ffBranchPred->syncStoreConditional(hist.back().dynInst->lockedWriteSuccess(),
+            if (hist.back().isStoreConditional) {
+                ffBranchPred->syncStoreConditional(hist.back().lockedWriteSuccess,
                                                     hist.back().tid);
             }
 
-            Addr npc = hist.back().dynInst->pcState().npc();
+            Addr npc = hist.back().pcState.npc();
             Addr cpc = corrDBB.exitPC;
-            //printf("%lx\n", hist.back().dynInst->pcState().pc());
-            //bool correct = (cpc == hist.back().predDBB);
 
             ffBranchPred->update(hist.back().bp_info, npc, cpc, false);
 

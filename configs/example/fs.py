@@ -315,7 +315,10 @@ SSOptions.addO3Options(parser)
 
 parser.add_option("--ff-bp-type", type="choice", default="none",
                       choices=['none', 'forwardN', 'oracle', 'trivial'],
-                      help = "type of FF branch predictor");
+                      help = "type of FF branch predictor")
+parser.add_option("--ff-bp-pred", type="choice", default="dbb",
+                      choices=['dbb', 'inst'],
+                      help = "predicate forward-N DBB/instruction.");
 
 # Options for forwardN BP
 parser.add_option("--trace-forward-n")
@@ -434,6 +437,7 @@ if options.ff_bp_type != 'none':
                 cpu.ffBranchPred.instShiftAmt = \
                     int(options.ff_trivial_instShiftAmt)
 
+        cpu.ffBranchPred.predDBB = (options.ff_bp_pred == 'dbb')
         cpu.ffBranchPred.numLookAhead = 64
 
 if len(bm) == 2:

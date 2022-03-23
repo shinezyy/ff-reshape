@@ -64,7 +64,8 @@ FFBPredUnit::FFBPredUnit(const Params &p)
     : SimObject(p),
       numThreads(p.numThreads),
       numLookAhead(p.numLookAhead),
-      stats(this)
+      stats(this),
+      predDBB(p.predDBB)
 {
 }
 

@@ -170,6 +170,8 @@ class FFBPredUnit : public SimObject
 
     virtual bool isOracle() const { return false; }
 
+    bool isPredDBB() const { return predDBB; }
+
   private:
     /** Number of the threads for which the branch history is maintained. */
     const unsigned numThreads;
@@ -188,6 +190,8 @@ class FFBPredUnit : public SimObject
 
         Stats::Formula correctRatio;
     } stats;
+
+    bool predDBB;
 
 };
 
