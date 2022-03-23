@@ -84,7 +84,7 @@ BaseSimpleCPU::BaseSimpleCPU(const BaseSimpleCPUParams &p)
     : BaseCPU(p),
       curThread(0),
       branchPred(p.branchPred),
-      dumpBranch(p.dumpBranch),
+      dumpRecentNBranches(p.dumpBranch),
       traceData(NULL),
       inst(),
       _status(Idle)
@@ -467,12 +467,11 @@ BaseSimpleCPU::postExecute()
 
     if ((curStaticInst->isControl()) ||
         (curStaticInst->isCall()) ||
-        (curStaticInst->isReturn()) ||
-        (curStaticInst->isDirectCtrl()) ||
-        (curStaticInst->isIndirectCtrl()) ||
-        (curStaticInst->isCondCtrl()) ||
-        (curStaticInst->isUncondCtrl())){
+        (curStaticInst->isReturn())){
         branchQueue.push(pc);
+        if (branchQueue.size() > dumpRecentNBranches) { // in case the queue
+            branchQueue.pop();
+        }
     }
 
     // Call CPU instruction commit probes
@@ -526,12 +525,12 @@ BaseSimpleCPU::dumpBranchStat(int number)
     std::ofstream ofs;
     ofs.open((name() + ".branch.txt").c_str());
     std::stringstream ss;
-    while (branchQueue.size() > 0){
+    while (branchQueue.size() > 0) {
         TheISA::PCState pc = branchQueue.front();
 
-        ss<<std::hex<<"0x"<<setfill(' ')<<setw(10)<<std::left<<pc.instAddr();
-        ss<<std::hex<<"0x"<<setfill(' ')<<setw(10)<<std::left<<pc.nextInstAddr();
-        ss<<pc.branching()<<'('<<(pc.branching() ? "Taken" : "not Taken")<<')'<<'\n';
+        ss << std::hex << "0x" << pc.instAddr() << ",";
+        ss << std::hex << "0x" << pc.nextInstAddr() << ",";
+        ss << (pc.branching() ? "T" : "NT") << '\n';
 
         branchQueue.pop();
         number--;
@@ -545,5 +544,5 @@ BaseSimpleCPU::dumpBranchStat(int number)
 void
 BaseSimpleCPU::startup()
 {
-    registerExitCallback([this]() { dumpBranchStat(dumpBranch); });
+    registerExitCallback([this]() { dumpBranchStat(dumpRecentNBranches); });
 }
