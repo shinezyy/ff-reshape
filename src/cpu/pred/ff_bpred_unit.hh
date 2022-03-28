@@ -123,7 +123,12 @@ class FFBPredUnit : public SimObject
 
 
     inline unsigned getNumThreads() const { return numThreads; }
-    inline unsigned getNumLookAhead() const { return numLookAhead; }
+    virtual unsigned getNumLookAhead() const {
+        if (predDBB)
+            assert(0); // must overwrite this
+        else
+            return numLookAheadInsts;
+    }
 
     /** Perform sanity checks after a drain. */
     void drainSanityCheck() const;
@@ -176,7 +181,7 @@ class FFBPredUnit : public SimObject
     /** Number of the threads for which the branch history is maintained. */
     const unsigned numThreads;
 
-    const unsigned numLookAhead;
+    const unsigned numLookAheadInsts;
 
     struct FFBPredUnitStats : public Stats::Group
     {

@@ -63,7 +63,7 @@ FFBPredUnit::FFBPredUnitStats::FFBPredUnitStats(Stats::Group *parent)
 FFBPredUnit::FFBPredUnit(const Params &p)
     : SimObject(p),
       numThreads(p.numThreads),
-      numLookAhead(p.numLookAhead),
+      numLookAheadInsts(p.numLookAheadInsts),
       stats(this),
       predDBB(p.predDBB)
 {
@@ -74,10 +74,11 @@ FFBPredUnit::predict(const StaticInstPtr &inst,
                    const TheISA::PCState &pc, Info *&bp_info, ThreadID tid)
 {
     Addr nextK_pc;
+    unsigned numLookAhead;
     void *bp_history = nullptr;
 
     ++stats.lookups;
-    nextK_pc = lookup(tid, pc, inst, bp_history);
+    nextK_pc = lookup(tid, pc, inst, bp_history, numLookAhead);
 
     DPRINTF(Branch, "[tid:%i] Branch predictor predicted next-K PC=%#x for PC %s\n",
                 tid,  nextK_pc, pc);
@@ -86,7 +87,7 @@ FFBPredUnit::predict(const StaticInstPtr &inst,
                 "for PC %s\n", tid, pc);
 
     bp_info = new Info(pc, bp_history,
-                        nextK_pc, tid, inst);
+                        nextK_pc, tid, inst, numLookAhead);
     return nextK_pc;
 }
 

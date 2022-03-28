@@ -42,6 +42,9 @@ public:
 
     void squash(ThreadID tid, void *bp_history) override;
 
+    void commit(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst);
+
+    unsigned getNumLookAhead() const override;
 
 private:
     class GTabBank {
@@ -118,7 +121,15 @@ private:
 
         Addr pathHist;
         uint64_t histTaken;
+
+        uint64_t dbbCount;
+        uint64_t dbbTotalSize;
+        uint64_t instCount;
+        uint64_t lastDBBsize;
     } state;
+
+    unsigned numLookAheadInst;
+    unsigned dbbAverageWindowsSize;
 
 private:
     void foldedXOR(Addr &dst, Addr src, int srcLen, int dstLen);
@@ -129,6 +140,7 @@ private:
                     const std::vector<Addr> &computedInd, const std::vector<Addr> &computedTag);
     void updateHistory(bool isControl, bool taken, Addr pc);
     void restoreHistory(BPState *bp_hist);
+    void adaptNumLookAhead(const TheISA::PCState &pc);
 
 };
 

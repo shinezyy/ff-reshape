@@ -51,6 +51,8 @@ public:
 
     bool isOracle() const override { return true; }
 
+    unsigned getNumLookAhead() const override { return numLookAhead; }
+
   private:
     void nemuStep();
 

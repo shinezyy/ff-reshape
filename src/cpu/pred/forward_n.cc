@@ -22,15 +22,17 @@ ForwardN::ForwardN(const ForwardNParams &params)
           traceStart(params.traceStart),
           traceCount(params.traceCount),
           btabBank(params.numBTabEntries),
-          randGen(params.randNumSeed)
+          randGen(params.randNumSeed),
+          numLookAheadInst(params.numLookAheadInst),
+          dbbAverageWindowsSize(params.dbbAverageWindowsSize)
 {
-    DPRINTF(ForwardN, "ForwardN, N=%u, "
+    DPRINTF(ForwardN, "ForwardN, N=%u/DBBsize, "
                       "numGTabBanks=%u, "
                       "numGTabEntries=%u, "
                       "numBTabEntries=%u, "
                       "histLenInitial=%u, "
                       "histLenGrowth=%f\n",
-                      getNumLookAhead(),
+                      params.numLookAheadInst,
                       params.numGTabBanks,
                       params.numGTabEntries,
                       params.numBTabEntries,
@@ -53,6 +55,10 @@ ForwardN::ForwardN(const ForwardNParams &params)
 
     state.pathHist = 0;
     state.histTaken = 0;
+
+    state.dbbCount = 0;
+    state.dbbTotalSize = 0;
+    state.instCount = 0;
 }
 
 Addr ForwardN::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst, void * &bp_history) {
@@ -238,6 +244,37 @@ void ForwardN::restoreHistory(BPState *bp_hist)
 {
     state.pathHist = bp_hist->pathHist;
     state.histTaken = bp_hist->histTaken;
+}
+
+void ForwardN::commit(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst)
+{
+    adaptNumLookAhead(pc);
+}
+
+void ForwardN::adaptNumLookAhead(const TheISA::PCState &pc)
+{
+    ++state.instCount;
+
+    if (pc.branching()) {
+        if (state.dbbCount < dbbAverageWindowsSize) {
+            state.dbbTotalSize += state.instCount;
+            ++state.dbbCount;
+
+        } else {
+            state.dbbTotalSize -= state.lastDBBsize;
+            state.dbbTotalSize += state.instCount;
+        }
+        state.lastDBBsize = state.instCount;
+        state.instCount = 0;
+    }
+}
+
+unsigned ForwardN::getNumLookAhead()
+{
+    if (state.dbbCount == 0)
+        return 1U;
+    else
+        return std::max(1U, unsigned(float(numLookAheadInst) / (state.dbbTotalSize / state.dbbCount)));
 }
 
 //---------------------------------------------------------------------------------

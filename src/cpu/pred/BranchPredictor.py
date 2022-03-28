@@ -780,7 +780,8 @@ class FFBranchPredictor(SimObject):
     abstract = True
 
     numThreads = Param.Unsigned(Parent.numThreads, "Number of threads")
-    numLookAhead = Param.Unsigned(64, "Number of look-ahead insts")
+    numLookAheadInsts = Param.Unsigned(64, "Number of look-ahead insts")
+    dbbAverageWindowsSize = Param.Unsigned(64, "Size of average window for DBB profiling")
     predDBB = Param.Bool(True, "True: predicate forward-N DBB. False: predicate forward-N instruction.")
 
 class FFOracleBP(FFBranchPredictor):

@@ -34,6 +34,8 @@ public:
 
     void commit(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst) override;
 
+    unsigned getNumLookAhead() const override { return numLookAhead; }
+
 private:
     TAGEBase *tage;
 
