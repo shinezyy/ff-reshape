@@ -74,11 +74,12 @@ FFBPredUnit::predict(const StaticInstPtr &inst,
                    const TheISA::PCState &pc, Info *&bp_info, ThreadID tid)
 {
     Addr nextK_pc;
-    unsigned numLookAhead;
+    unsigned stride;
     void *bp_history = nullptr;
 
     ++stats.lookups;
-    nextK_pc = lookup(tid, pc, inst, bp_history, numLookAhead);
+    stride = getStride();
+    nextK_pc = lookup(tid, pc, inst, bp_history, stride);
 
     DPRINTF(Branch, "[tid:%i] Branch predictor predicted next-K PC=%#x for PC %s\n",
                 tid,  nextK_pc, pc);
@@ -87,7 +88,7 @@ FFBPredUnit::predict(const StaticInstPtr &inst,
                 "for PC %s\n", tid, pc);
 
     bp_info = new Info(pc, bp_history,
-                        nextK_pc, tid, inst, numLookAhead);
+                        nextK_pc, tid, inst, stride);
     return nextK_pc;
 }
 
@@ -101,7 +102,7 @@ FFBPredUnit::update(Info *bp_info, Addr npc, Addr cpc, bool squashed)
     update(bp_info->tid, bp_info->pc,
                 bp_info->bpHistory, squashed,
                 bp_info->inst,
-                bp_info->predPC, cpc);
+                bp_info->predPC, cpc, bp_info->stride);
 
     if (bp_info->predPC != cpc) {
         ++stats.incorrect;

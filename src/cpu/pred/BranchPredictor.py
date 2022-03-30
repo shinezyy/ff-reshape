@@ -817,5 +817,6 @@ class ForwardN(FFBranchPredictor):
     numBTabEntries = Param.Unsigned(4096, "Number of base table entries")
     histLenInitial = Param.Unsigned(10, "Initial history length series")
     histLenGrowth = Param.Float(2, "Growth factor for history length series")
+    pcSetSize = Param.Unsigned(4, "Size of PC set")
 
     randNumSeed = Param.Unsigned(0, "Random number seed")

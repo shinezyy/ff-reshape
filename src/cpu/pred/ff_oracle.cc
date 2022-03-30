@@ -30,7 +30,7 @@ FFOracleBP::FFOracleBPStats::FFOracleBPStats(Stats::Group *parent)
 
 FFOracleBP::FFOracleBP(const FFOracleBPParams &params)
     : FFBPredUnit(params),
-        numLookAhead(getNumLookAhead()),
+        numLookAhead(params.numLookAheadInsts),
         presetAccuracy(params.presetAccuracy),
         proxy(nullptr),
         oracleIID(0),
@@ -88,7 +88,8 @@ void FFOracleBP::syncArchState(Addr resetPC, paddr_t pmemAddr, void *pmemPtr, si
     DPRINTF(FFOracleBP_misc, "reset PC = %#x.\n", resetPC);
 }
 
-Addr FFOracleBP::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst, void * &bp_history) {
+Addr FFOracleBP::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst,
+                        void * &bp_history, unsigned numLookAhead) {
     Addr predPC;
     assert(tid == 0);
 
@@ -120,7 +121,7 @@ Addr FFOracleBP::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticIns
 void FFOracleBP::update(ThreadID tid, const TheISA::PCState &pc,
                         void *bp_history, bool squashed,
                         const StaticInstPtr &inst,
-                        Addr pred_DBB, Addr corr_DBB) {
+                        Addr pred_DBB, Addr corr_DBB, unsigned numLookAhead) {
 
     auto history_state = static_cast<BPState *>(bp_history);
 

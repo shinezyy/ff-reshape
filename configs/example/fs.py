@@ -438,7 +438,7 @@ if options.ff_bp_type != 'none':
                     int(options.ff_trivial_instShiftAmt)
 
         cpu.ffBranchPred.predDBB = (options.ff_bp_pred == 'dbb')
-        cpu.ffBranchPred.numLookAhead = 64
+        cpu.ffBranchPred.numLookAheadInsts = 64
 
 if len(bm) == 2:
     drive_sys = build_drive_system(np)

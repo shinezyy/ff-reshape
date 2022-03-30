@@ -21,9 +21,9 @@ ForwardN::ForwardN(const ForwardNParams &params)
           stats(this, params),
           traceStart(params.traceStart),
           traceCount(params.traceCount),
-          btabBank(params.numBTabEntries),
+          btabBank(params.numBTabEntries, params.pcSetSize, params.randNumSeed),
           randGen(params.randNumSeed),
-          numLookAheadInst(params.numLookAheadInst),
+          numLookAheadInst(params.numLookAheadInsts),
           dbbAverageWindowsSize(params.dbbAverageWindowsSize)
 {
     DPRINTF(ForwardN, "ForwardN, N=%u/DBBsize, "
@@ -32,7 +32,7 @@ ForwardN::ForwardN(const ForwardNParams &params)
                       "numBTabEntries=%u, "
                       "histLenInitial=%u, "
                       "histLenGrowth=%f\n",
-                      params.numLookAheadInst,
+                      params.numLookAheadInsts,
                       params.numGTabBanks,
                       params.numGTabEntries,
                       params.numBTabEntries,
@@ -42,7 +42,7 @@ ForwardN::ForwardN(const ForwardNParams &params)
 
     int histLen = params.histLenInitial;
     for (int i = 0; i < params.numGTabBanks; i++) {
-        gtabBanks.emplace_back(GTabBank(params.numGTabEntries, histLen));
+        gtabBanks.emplace_back(GTabBank(params.numGTabEntries, histLen, params.pcSetSize, params.randNumSeed));
         histTakenMaxLength = histLen;
         DPRINTF(ForwardN, "GTab Bank #%d: histLen=%d\n", i, histLen);
 
@@ -61,7 +61,8 @@ ForwardN::ForwardN(const ForwardNParams &params)
     state.instCount = 0;
 }
 
-Addr ForwardN::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst, void * &bp_history) {
+Addr ForwardN::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst,
+                      void * &bp_history, unsigned stride) {
     auto hist = new BPState(state);
     bp_history = hist;
 
@@ -74,16 +75,21 @@ Addr ForwardN::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstP
         hist->computedInd[i] = bankHash(pc.pc(), state.pathHist, state.histTaken, gtabBanks[i]);
         hist->computedTag[i] = tagHash(pc.pc(), state.histTaken, gtabBanks[i]);
 
-        if (hist->computedTag[i] == gtabBanks[i](hist->computedInd[i]).tag) {
-            hist->bank = i;
-            hist->predPC = gtabBanks[i](hist->computedInd[i]).pc;
-            ++stats.gtabHit[i];
-            break;
+        const auto &gEntry = gtabBanks[i](hist->computedInd[i]);
+        if (hist->computedTag[i] == gEntry.tag) {
+            auto ret = gtabBanks[i](hist->computedInd[i]).st.query(stride);
+            if (ret.second) {
+                hist->bank = i;
+                hist->predPC = ret.first;
+                ++stats.gtabHit[i];
+                break;
+            }
         }
     }
     // Look up base predictor
     if (hist->bank == -1) {
-        hist->predPC = btabBank(btabHash(pc.pc())).pc;
+        auto ret = btabBank(btabHash(pc.pc())).st.query(stride);
+        hist->predPC = ret.first;
     }
 
     if (hist->bank != gtabBanks.size() - 1)
@@ -97,7 +103,7 @@ Addr ForwardN::lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstP
 void ForwardN::update(ThreadID tid, const TheISA::PCState &pc,
                       void *bp_history, bool squashed,
                       const StaticInstPtr &inst,
-                     Addr pred_DBB, Addr corr_DBB) {
+                     Addr pred_DBB, Addr corr_DBB, unsigned stride) {
 
     auto bp_hist = static_cast<BPState *>(bp_history);
 
@@ -111,12 +117,12 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &pc,
         // update and/or allocate banks
         if (bp_hist->bank >= 0) {
             int indice = bp_hist->computedInd[bp_hist->bank];
-            gtabBanks[bp_hist->bank](indice).pc = corr_DBB;
+            gtabBanks[bp_hist->bank](indice).st.update(corr_DBB, stride);
         } else {
-            btabBank(btabHash(pc.pc())).pc = corr_DBB;
+            btabBank(btabHash(pc.pc())).st.update(corr_DBB, stride);
         }
 
-        allocEntry(bp_hist->bank, pc.pc(), corr_DBB,
+        allocEntry(bp_hist->bank, pc.pc(), corr_DBB, stride,
                     bp_hist->computedInd, bp_hist->computedTag);
 
         if (bp_hist->bank >= 0) {
@@ -131,13 +137,13 @@ void ForwardN::update(ThreadID tid, const TheISA::PCState &pc,
         if (bp_hist->bank >= 0) {
             int indice = bp_hist->computedInd[bp_hist->bank];
 
-            gtabBanks[bp_hist->bank](indice).pc = corr_DBB;
+            gtabBanks[bp_hist->bank](indice).st.update(corr_DBB, stride);
 
             gtabBanks[bp_hist->bank](indice).useful = true;
             btabBank(btabHash(pc.pc())).meta = true;
 
         } else {
-            btabBank(btabHash(pc.pc())).pc = corr_DBB;
+            btabBank(btabHash(pc.pc())).st.update(corr_DBB, stride);
         }
     }
 
@@ -190,18 +196,21 @@ Addr ForwardN::btabHash(Addr PC) {
     return PC % btabBank.entries.size();
 }
 
-void ForwardN::allocEntry(int bank, Addr PC, Addr corrDBB,
+void ForwardN::allocEntry(int bank, Addr PC, Addr corrDBB, unsigned stride,
                           const std::vector<Addr> &computedInd, const std::vector<Addr> &computedTag) {
 
-    auto reinit = [PC, corrDBB, this](int n, Addr indice, Addr tag) {
+    auto reinit = [PC, corrDBB, stride, this](int n, Addr indice, Addr tag) {
         gtabBanks[n](indice).tag = tag;
         gtabBanks[n](indice).useful = false;
 
         const auto &baseEntry = btabBank(btabHash(PC));
         if (baseEntry.meta) {
-            gtabBanks[n](indice).pc = corrDBB;
+            gtabBanks[n](indice).st.update(corrDBB, stride);
         } else {
-            gtabBanks[n](indice).pc = baseEntry.pc;
+            auto lc = baseEntry.st.query(stride);
+            if (!lc.second)
+                lc.first = corrDBB;
+            gtabBanks[n](indice).st.update(lc.first, stride);
         }
     };
 
@@ -215,7 +224,7 @@ void ForwardN::allocEntry(int bank, Addr PC, Addr corrDBB,
         }
         if (allUseful) {
             std::uniform_int_distribution<size_t> u(bank + 1, gtabBanks.size() - 1);
-            int n = u(randGen);
+            size_t n = u(randGen);
             reinit(n, computedInd[n], computedTag[n]);
         }
     }
@@ -269,8 +278,9 @@ void ForwardN::adaptNumLookAhead(const TheISA::PCState &pc)
     }
 }
 
-unsigned ForwardN::getNumLookAhead()
+unsigned ForwardN::getStride() const
 {
+    return numLookAheadInst;
     if (state.dbbCount == 0)
         return 1U;
     else
@@ -279,16 +289,94 @@ unsigned ForwardN::getNumLookAhead()
 
 //---------------------------------------------------------------------------------
 //---------------------------------------------------------------------------------
+// **** ForwardN::PCset ****
+//---------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------
+
+ForwardN::PCset::PCset(unsigned setSize, unsigned randSeed)
+    : s(setSize),
+      randGen(randSeed)
+{
+}
+
+void ForwardN::PCset::update(Addr pc, unsigned stride)
+{
+    bool hit = false;
+    size_t freeIdx = (size_t)-1;
+
+    for (size_t i=0;i<s.size();i++) {
+        if (s[i].valid && s[i].pc == pc && s[i].stride == stride) {
+            hit = true;
+            break;
+        }
+        if (!s[i].valid)
+            freeIdx = i;
+    }
+
+    if (!hit) {
+        if (freeIdx == (size_t)-1) { // replace
+            int minCount = INT_MAX;
+            for (size_t i=0;i<s.size();i++) {
+                assert(s[i].valid);
+                if (minCount > s[i].count) {
+                    freeIdx = i, minCount = s[i].count;
+                }
+            }
+        }
+        s[freeIdx].valid = true;
+        s[freeIdx].pc = pc;
+        s[freeIdx].stride = stride;
+        s[freeIdx].count = 0;
+    }
+
+    // update the saturated counter
+    for (size_t i=0;i<s.size();i++) {
+        if (s[i].valid && s[i].stride == stride) {
+            if (s[i].pc == pc)
+                s[i].up();
+            else
+                s[i].down();
+        }
+    }
+
+}
+
+std::pair<Addr, bool> ForwardN::PCset::query(unsigned stride) const
+{
+    int maxCount = INT_MIN;
+    size_t maxIdx;
+    for (size_t i=0;i<s.size();i++) {
+        if (s[i].valid && s[i].stride == stride) {
+            if (s[i].count > maxCount) {
+                maxCount = s[i].count;
+                maxIdx = i;
+            }
+        }
+    }
+    if (maxCount == INT_MIN) {
+        for (size_t i=0;i<s.size();i++) {
+            if (s[i].valid)
+                return std::make_pair(s[i].pc, false);
+        }
+        return std::make_pair(s[0].pc, false);
+    }
+    return std::make_pair(s[maxIdx].pc, true);
+}
+
+//---------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------
 // **** ForwardN::GTabBank ****
 //---------------------------------------------------------------------------------
 //---------------------------------------------------------------------------------
 
-ForwardN::GTabBank::GTabBank(int numEntries, int histLen)
+ForwardN::GTabBank::GTabBank(int numEntries, int histLen, unsigned pcSetSize, unsigned randSeed)
     : histLen(histLen)
 {
     assert(!(numEntries & 1));
     logNumEntries = std::log2(numEntries);
-    entries.resize(numEntries);
+    for (size_t i=0;i<numEntries;i++) {
+        entries.emplace_back(Entry(pcSetSize, randSeed));
+    }
 }
 
 //---------------------------------------------------------------------------------
@@ -297,8 +385,10 @@ ForwardN::GTabBank::GTabBank(int numEntries, int histLen)
 //---------------------------------------------------------------------------------
 //---------------------------------------------------------------------------------
 
-ForwardN::BTabBank::BTabBank(int numEntries) {
+ForwardN::BTabBank::BTabBank(int numEntries, unsigned pcSetSize, unsigned randSeed) {
     assert(!(numEntries & 1));
     logNumEntries = std::log2(numEntries);
-    entries.resize(numEntries);
+    for (size_t i=0;i<numEntries;i++) {
+        entries.emplace_back(Entry(pcSetSize, randSeed));
+    }
 }

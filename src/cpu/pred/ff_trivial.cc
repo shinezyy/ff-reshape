@@ -57,7 +57,7 @@ FFTrivialBP::FFTrivialBPStats::FFTrivialBPStats(Stats::Group *parent)
 FFTrivialBP::FFTrivialBP(const FFTrivialBPParams &params)
         : FFBPredUnit(params),
           tage(params.tage),
-          numLookAhead(params.numLookAhead),
+          numLookAhead(params.numLookAheadInsts),
           BTB(params.BTBEntries,
               params.BTBTagSize,
               params.instShiftAmt,
@@ -114,7 +114,8 @@ void FFTrivialBP::resetSpecLookup(const TheISA::PCState &pc0) {
     state.pc = pc0;
 }
 
-Addr FFTrivialBP::lookup(ThreadID tid, const TheISA::PCState &instPC, const StaticInstPtr &inst, void * &bp_history) {
+Addr FFTrivialBP::lookup(ThreadID tid, const TheISA::PCState &instPC, const StaticInstPtr &inst,
+                         void * &bp_history, unsigned numLookAhead) {
     auto bps = new BPState(state);
     bp_history = bps;
 
@@ -135,7 +136,7 @@ Addr FFTrivialBP::lookup(ThreadID tid, const TheISA::PCState &instPC, const Stat
 void FFTrivialBP::update(ThreadID tid, const TheISA::PCState &pc,
                          void *bp_history, bool squashed,
                          const StaticInstPtr &inst,
-                         Addr pred_DBB, Addr corr_DBB) {
+                         Addr pred_DBB, Addr corr_DBB, unsigned numLookAhead) {
 
     BPState *bps = static_cast<BPState*>(bp_history);
 

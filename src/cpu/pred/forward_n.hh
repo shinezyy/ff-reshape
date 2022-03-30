@@ -33,31 +33,56 @@ public:
 
     ForwardN(const ForwardNParams &params);
 
-    Addr lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst, void * &bp_history) override;
+    Addr lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst,
+                void * &bp_history, unsigned stride) override;
 
     void update(ThreadID tid, const TheISA::PCState &pc,
                 void *bp_history, bool squashed,
                 const StaticInstPtr &inst,
-                Addr pred_DBB, Addr corr_DBB) override;
+                Addr pred_DBB, Addr corr_DBB, unsigned stride) override;
 
     void squash(ThreadID tid, void *bp_history) override;
 
     void commit(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst);
 
-    unsigned getNumLookAhead() const override;
+    unsigned getStride() const override;
 
 private:
+    class PCset {
+    public:
+        PCset(unsigned setSize, unsigned randSeed);
+        void update(Addr pc, unsigned stride);
+        std::pair<Addr, bool> query(unsigned stride) const;
+    private:
+        struct Counter {
+            bool valid;
+            Addr pc;
+            unsigned stride;
+            int count;
+
+            const int MAXC=127;
+            const int MINC=-128;
+
+            Counter() : valid(false), count(0) {}
+            void up() { if (count < MAXC) ++count; }
+            void down() { if (count > MINC) --count; }
+        };
+        std::vector<Counter> s;
+        std::default_random_engine randGen;
+    };
+
     class GTabBank {
     public:
-        GTabBank(int numEntries, int histLen);
+        GTabBank(int numEntries, int histLen, unsigned pcSetSize, unsigned randSeed);
 
         inline int getLogNumEntries() const { return logNumEntries; }
         inline int getHistLen() const { return histLen; }
 
     public:
         struct Entry {
-            Entry() : useful(false) {}
-            Addr pc;
+            Entry(unsigned pcSetSize, unsigned randSeed) : st(pcSetSize, randSeed), useful(false) {}
+            Entry() : st(0, 0), useful(false) {}
+            PCset st;
             Addr tag;
             bool useful;
         };
@@ -73,11 +98,12 @@ private:
 
     class BTabBank {
     public:
-        BTabBank(int numEntries);
+        BTabBank(int numEntries, unsigned pcSetSize, unsigned randSeed);
 
         struct Entry {
-            Entry() : meta(false) {}
-            Addr pc;
+            Entry(unsigned pcSetSize, unsigned randSeed) : st(pcSetSize, randSeed), meta(false) {}
+            Entry() : st(0, 0), meta(false) {}
+            PCset st;
             bool meta;
         };
 
@@ -136,7 +162,7 @@ private:
     Addr bankHash(Addr PC, Addr pathHist, uint64_t histTaken, const GTabBank &bank);
     Addr tagHash(Addr PC, uint64_t histTaken, const GTabBank &bank);
     Addr btabHash(Addr PC);
-    void allocEntry(int bank, Addr PC, Addr corrDBB,
+    void allocEntry(int bank, Addr PC, Addr corrDBB, unsigned stride,
                     const std::vector<Addr> &computedInd, const std::vector<Addr> &computedTag);
     void updateHistory(bool isControl, bool taken, Addr pc);
     void restoreHistory(BPState *bp_hist);

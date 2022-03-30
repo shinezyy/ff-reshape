@@ -1672,8 +1672,9 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
         auto &hist = committedInsts[tid];
         auto &DBBlist = committedDBBs[tid];
 
-        if (DBBlist.size() > ffBranchPred->getNumLookAhead()) {
-            const auto &corrDBB = DBBlist[DBBlist.size() - 1 - ffBranchPred->getNumLookAhead()];
+        unsigned stride = hist.back().bp_info->stride;
+        if (DBBlist.size() > stride) {
+            const auto &corrDBB = DBBlist[DBBlist.size() - 1 - stride];
             if (corrDBB.exitSeqNum == 0)
                 continue; // the DBB is unresolved
 

@@ -23,18 +23,19 @@ public:
 
     FFTrivialBP(const FFTrivialBPParams &params);
 
-    Addr lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst, void * &bp_history) override;
+    Addr lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst,
+                void * &bp_history, unsigned numLookAhead) override;
 
     void update(ThreadID tid, const TheISA::PCState &pc,
                 void *bp_history, bool squashed,
                 const StaticInstPtr &inst,
-                Addr pred_DBB, Addr corr_DBB) override;
+                Addr pred_DBB, Addr corr_DBB, unsigned numLookAhead) override;
 
     void squash(ThreadID tid, void *bp_history) override;
 
     void commit(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst) override;
 
-    unsigned getNumLookAhead() const override { return numLookAhead; }
+    unsigned getStride() const override { return numLookAhead; }
 
 private:
     TAGEBase *tage;

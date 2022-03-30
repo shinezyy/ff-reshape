@@ -70,12 +70,13 @@ class FFBPredUnit : public SimObject
          */
         Info(const TheISA::PCState &instPC,
                          void *bp_history, Addr _predPC, ThreadID _tid,
-                         const StaticInstPtr & inst)
+                         const StaticInstPtr & inst, unsigned _stride)
             : pc(instPC),
               tid(_tid),
               bpHistory(bp_history),
               predPC(_predPC),
-              inst(inst)
+              inst(inst),
+              stride(_stride)
         {}
 
         /** The PC associated with the sequence number. */
@@ -90,6 +91,8 @@ class FFBPredUnit : public SimObject
 
         /** The branch instrction */
         const StaticInstPtr inst;
+
+        unsigned stride;
     };
 
     /**
@@ -123,7 +126,7 @@ class FFBPredUnit : public SimObject
 
 
     inline unsigned getNumThreads() const { return numThreads; }
-    virtual unsigned getNumLookAhead() const {
+    virtual unsigned getStride() const {
         if (predDBB)
             assert(0); // must overwrite this
         else
@@ -147,7 +150,8 @@ class FFBPredUnit : public SimObject
      * has the branch predictor state associated with the lookup.
      * @return next-K PC
      */
-    virtual Addr lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst, void * &bp_history) = 0;
+    virtual Addr lookup(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst,
+                        void * &bp_history, unsigned numLookAhead) = 0;
 
     /**
      * Updates the BP with taken/not taken information.
@@ -163,7 +167,7 @@ class FFBPredUnit : public SimObject
     virtual void update(ThreadID tid, const TheISA::PCState &pc,
                    void *bp_history, bool squashed,
                    const StaticInstPtr &inst,
-                   Addr pred_DBB, Addr corr_DBB) = 0;
+                   Addr pred_DBB, Addr corr_DBB, unsigned numLookAhead) = 0;
 
     virtual void commit(ThreadID tid, const TheISA::PCState &pc, const StaticInstPtr &inst) {}
 
