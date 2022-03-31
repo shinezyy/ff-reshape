@@ -444,7 +444,8 @@ FullO3CPUStats::FullO3CPUStats(FullO3CPU *cpu)
       ADD_STAT(ccRegfileWrites, "number of cc regfile writes"),
       ADD_STAT(miscRegfileReads, "number of misc regfile reads"),
       ADD_STAT(miscRegfileWrites, "number of misc regfile writes"),
-      ADD_STAT(lastCommitTick, "lastCommitTick")
+      ADD_STAT(lastCommitTick, "lastCommitTick"),
+      ADD_STAT(ffbpStrideErr, "ffbpStrideErr")
 {
     // Register any of the O3CPU's stats here.
     timesIdled
@@ -1657,11 +1658,14 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
 
     FFBranchPredHistory hist {inst->seqNum, tid, nextK_PC, inst, bp_info};
     committedInsts[tid].push_front(hist);
+    instCount++;
 
     if (!ffBranchPred->isPredDBB() || inst->pcState().branching()) { // Entering new dynamic basic block
         committedDBBs[tid].front().exitPC = inst->instAddr();
         committedDBBs[tid].front().exitSeqNum = inst->seqNum;
+        committedDBBs[tid].front().instCount = instCount;
         committedDBBs[tid].emplace_front();
+        instCount = 0;
     }
 
 
@@ -1693,6 +1697,14 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
 
             // **** End of BP updating ****
 
+
+            // update stats
+            int64_t insts = 0;
+            for (size_t i=DBBlist.size() - 1 - stride; i<DBBlist.size(); i++)
+                insts += DBBlist[i].instCount;
+            strideErrSum += std::pow(insts - ffBranchPred->getNumLookAheadInsts(), 2);
+            predCount++;
+            cpuStats.ffbpStrideErr = std::sqrt(strideErrSum / predCount);
 
             if (DBBlist.back().exitSeqNum == hist.back().seqNum) {
                 DBBlist.pop_back();

@@ -126,6 +126,15 @@ private:
         Stats::Vector gtabHit;
 
         Stats::Scalar coldStart;
+
+        Stats::Scalar dbbCount;
+
+        Stats::StandardDeviation dbbSizeSD;
+
+        Stats::Scalar dbbSizeSum;
+
+        Stats::Formula averageDBBsize;
+
     } stats;
 
     unsigned int histTakenMaxLength;
@@ -151,7 +160,7 @@ private:
         uint64_t dbbCount;
         uint64_t dbbTotalSize;
         uint64_t instCount;
-        uint64_t lastDBBsize;
+        std::deque<uint64_t> instCountQue;
     } state;
 
     unsigned numLookAheadInst;

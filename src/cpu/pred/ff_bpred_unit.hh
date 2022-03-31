@@ -132,6 +132,7 @@ class FFBPredUnit : public SimObject
         else
             return numLookAheadInsts;
     }
+    inline unsigned getNumLookAheadInsts() const { return numLookAheadInsts; }
 
     /** Perform sanity checks after a drain. */
     void drainSanityCheck() const;

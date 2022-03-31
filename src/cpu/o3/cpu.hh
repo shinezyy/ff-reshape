@@ -778,6 +778,8 @@ class FullO3CPU : public BaseO3CPU
         Stats::Scalar miscRegfileWrites;
 
         Stats::Scalar lastCommitTick;
+
+        Stats::Scalar ffbpStrideErr;
     } cpuStats;
 
   public:
@@ -829,10 +831,14 @@ class FullO3CPU : public BaseO3CPU
         FFBPredUnit::Info *bp_info;
     };
     std::vector<std::deque<FFBranchPredHistory>> committedInsts;
+    uint64_t instCount{0};
+    double strideErrSum{0};
+    uint64_t predCount{0};
 
     struct DBB {
         Addr exitPC;
         InstSeqNum exitSeqNum;
+        uint64_t instCount;
     };
     std::vector<std::deque<DBB>> committedDBBs;
 

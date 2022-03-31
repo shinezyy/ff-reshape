@@ -781,7 +781,6 @@ class FFBranchPredictor(SimObject):
 
     numThreads = Param.Unsigned(Parent.numThreads, "Number of threads")
     numLookAheadInsts = Param.Unsigned(64, "Number of look-ahead insts")
-    dbbAverageWindowsSize = Param.Unsigned(64, "Size of average window for DBB profiling")
     predDBB = Param.Bool(True, "True: predicate forward-N DBB. False: predicate forward-N instruction.")
 
 class FFOracleBP(FFBranchPredictor):
@@ -803,6 +802,7 @@ class FFTrivialBP(FFBranchPredictor):
     BTBTagSize = Param.Unsigned(16, "Size of the BTB tags, in bits")
     ICEntries = Param.Unsigned(1024 * 1024, "Number of dummy icache entries")
     instShiftAmt = Param.Unsigned(1, "Number of bits to shift instructions by")
+    RASSize = Param.Unsigned(64, "RAS size")
 
 class ForwardN(FFBranchPredictor):
     type = 'ForwardN'
@@ -818,5 +818,6 @@ class ForwardN(FFBranchPredictor):
     histLenInitial = Param.Unsigned(10, "Initial history length series")
     histLenGrowth = Param.Float(2, "Growth factor for history length series")
     pcSetSize = Param.Unsigned(4, "Size of PC set")
+    dbbAverageWindowsSize = Param.Unsigned(64, "Size of average window for DBB profiling")
 
     randNumSeed = Param.Unsigned(0, "Random number seed")

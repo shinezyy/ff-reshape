@@ -11,7 +11,10 @@ ForwardN::ForwardNStats::ForwardNStats(Stats::Group *parent, const ForwardNParam
         : Stats::Group(parent, "forward_n"),
           ADD_STAT(lookups, "Number of ForwardN lookups"),
           ADD_STAT(gtabHit, "Number of ForwardN global table hit"),
-          ADD_STAT(coldStart, "Number of cold-start lookups")
+          ADD_STAT(coldStart, "Number of cold-start lookups"),
+          ADD_STAT(dbbSizeSD, "Standard deviation of DBB size"),
+          ADD_STAT(averageDBBsize, "Average inst count of dynamic basic blocks.",
+                    dbbSizeSum / dbbCount)
 {
     gtabHit.init(params.numGTabBanks);
 }
@@ -26,13 +29,14 @@ ForwardN::ForwardN(const ForwardNParams &params)
           numLookAheadInst(params.numLookAheadInsts),
           dbbAverageWindowsSize(params.dbbAverageWindowsSize)
 {
-    DPRINTF(ForwardN, "ForwardN, N=%u/DBBsize, "
+    DPRINTF(ForwardN, "ForwardN, N=%u%s, "
                       "numGTabBanks=%u, "
                       "numGTabEntries=%u, "
                       "numBTabEntries=%u, "
                       "histLenInitial=%u, "
                       "histLenGrowth=%f\n",
                       params.numLookAheadInsts,
+                      isPredDBB() ? "/DBBsize" : "",
                       params.numGTabBanks,
                       params.numGTabEntries,
                       params.numBTabEntries,
@@ -265,26 +269,38 @@ void ForwardN::adaptNumLookAhead(const TheISA::PCState &pc)
     ++state.instCount;
 
     if (pc.branching()) {
+        state.dbbTotalSize += state.instCount;
+        state.instCountQue.push_front(state.instCount);
         if (state.dbbCount < dbbAverageWindowsSize) {
-            state.dbbTotalSize += state.instCount;
             ++state.dbbCount;
 
         } else {
-            state.dbbTotalSize -= state.lastDBBsize;
-            state.dbbTotalSize += state.instCount;
+            state.dbbTotalSize -= state.instCountQue.back();
+            state.instCountQue.pop_back();
         }
-        state.lastDBBsize = state.instCount;
+        assert(state.instCountQue.size() == state.dbbCount);
+
+        // update stats
+        stats.dbbSizeSum += state.instCount;
+        stats.dbbCount++;
+        stats.dbbSizeSD.sample(state.instCount);
+
         state.instCount = 0;
     }
 }
 
 unsigned ForwardN::getStride() const
 {
-    return numLookAheadInst;
-    if (state.dbbCount == 0)
-        return 1U;
-    else
-        return std::max(1U, unsigned(float(numLookAheadInst) / (state.dbbTotalSize / state.dbbCount)));
+    if (isPredDBB()) {
+        if (state.dbbCount == 0)
+            return 1U;
+        else {
+            return std::max(1U, unsigned(float(numLookAheadInst) / (state.dbbTotalSize / state.dbbCount) + 0.5));
+        }
+
+    } else {
+        return numLookAheadInst;
+    }
 }
 
 //---------------------------------------------------------------------------------

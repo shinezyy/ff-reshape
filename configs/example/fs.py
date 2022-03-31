@@ -328,6 +328,8 @@ parser.add_option("--forward-n-numBTabEntries", type='int')
 parser.add_option("--forward-n-histLenInitial", type='int')
 parser.add_option("--forward-n-histLenGrowth", type='float')
 parser.add_option("--forward-n-randNumSeed", type='int')
+parser.add_option("--forward-n-pcSetSize", type='int')
+parser.add_option("--forward-n-dbbAverageWindowsSize", type='int')
 
 # Options for oracle BP
 parser.add_option("--ff-oracle-preset-accuracy", type='float', default=1.0)
@@ -417,6 +419,12 @@ if options.ff_bp_type != 'none':
             if options.forward_n_randNumSeed:
                 cpu.ffBranchPred.randNumSeed = \
                     int(options.forward_n_randNumSeed)
+            if options.forward_n_pcSetSize:
+                cpu.ffBranchPred.pcSetSize = \
+                    int(options.forward_n_pcSetSize)
+            if options.forward_n_dbbAverageWindowsSize:
+                cpu.ffBranchPred.dbbAverageWindowsSize = \
+                    int(options.forward_n_dbbAverageWindowsSize)
 
         elif options.ff_bp_type == 'oracle':
             assert(options.generic_rv_cpt is not None)
