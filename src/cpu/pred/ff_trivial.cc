@@ -48,7 +48,13 @@ FFTrivialBP::FFTrivialBPStats::FFTrivialBPStats(Stats::Group *parent)
           ADD_STAT(icache_hit_ratio, "dummy icache hit ratio",
               icache_hits / icache_lookups),
           ADD_STAT(btb_hit_ratio, "BTB hit ratio",
-              btb_hits / btb_lookups)
+              btb_hits / btb_lookups),
+          ADD_STAT(mispredAffectedByCacheMiss, "mispredAffectedByCacheMiss"),
+          ADD_STAT(correctAffectedByCacheMiss, "correctAffectedByCacheMiss"),
+          ADD_STAT(mispredAffectedByBTBMiss, "mispredAffectedByBTBMiss"),
+          ADD_STAT(correctAffectedByBTBMiss, "correctAffectedByBTBMiss"),
+          ADD_STAT(RASUsed, "Number of times the RAS was used to get a target."),
+          ADD_STAT(RASIncorrect, "Number of incorrect RAS predictions.")
 {
     icache_hit_ratio.precision(4);
     btb_hit_ratio.precision(4);
@@ -67,6 +73,7 @@ FFTrivialBP::FFTrivialBP(const FFTrivialBPParams &params)
               params.numThreads),
           stats(this)
 {
+    RAS.init(params.RASSize);
     state.preRunCount = 0;
 }
 
@@ -80,6 +87,8 @@ void FFTrivialBP::specLookup(int numInst, ThreadID tid)
             ci = ret.first;
             state.pc = ret.second;
             ++stats.icache_hits;
+        } else {
+            state.affectedByCacheMiss = true;
         }
 
         TAGEState *bi = new TAGEState(*tage);
@@ -95,23 +104,58 @@ void FFTrivialBP::specLookup(int numInst, ThreadID tid)
         }
 
         // predicate the target
-        if (taken)
-            ++stats.btb_lookups;
-        if (taken && BTB.valid(state.pc.pc(), tid)) {
-            ++stats.btb_hits;
-            state.pc = BTB.lookup(state.pc.pc(), tid);
+        if (taken) {
+            if (ci && ci->isReturn()) {
+                ++stats.RASUsed;
+                bi->wasReturn = true;
+                // If it's a function return call, then look up the address
+                // in the RAS.
+                TheISA::PCState rasTop = RAS.top();
+                state.pc = TheISA::buildRetPC(state.pc, rasTop);
+
+                // Record the top entry of the RAS, and its index.
+                bi->usedRAS = true;
+                bi->RASIndex = RAS.topIdx();
+                bi->RASTarget = rasTop;
+
+                RAS.pop();
+
+            } else {
+                if (ci && ci->isCall()) {
+                    RAS.push(state.pc);
+                    bi->pushedRAS = true;
+
+                    // Record that it was a call so that the top RAS entry can
+                    // be popped off if the speculation is incorrect.
+                    bi->wasCall = true;
+
+                }
+
+                ++stats.btb_lookups;
+                if (BTB.valid(state.pc.pc(), tid)) {
+                    ++stats.btb_hits;
+                    state.pc = BTB.lookup(state.pc.pc(), tid);
+                } else {
+                    state.affectedByBTBMiss = true;
+                    state.pc.advance();
+                }
+            }
         } else {
             state.pc.advance();
         }
 
         bi->taken = taken;
         bi->predPC = state.pc.pc();
+        bi->affectedByCacheMiss = state.affectedByCacheMiss;
+        bi->affectedByBTBMiss = state.affectedByBTBMiss;
         state.inflight.push_front(bi);
     }
 }
 
 void FFTrivialBP::resetSpecLookup(const TheISA::PCState &pc0) {
     state.pc = pc0;
+    state.affectedByCacheMiss = false;
+    state.affectedByBTBMiss = false;
 }
 
 Addr FFTrivialBP::lookup(ThreadID tid, const TheISA::PCState &instPC, const StaticInstPtr &inst,
@@ -149,13 +193,25 @@ void FFTrivialBP::commit(ThreadID tid, const TheISA::PCState &pc, const StaticIn
     assert(!state.inflight.empty());
     TAGEState *ts = state.inflight.back();
     TAGEBase::BranchInfo *tage_bi = ts->info;
-    bool tageMispred = (pc.npc() != ts->predPC);
+    bool tsMispred = (pc.npc() != ts->predPC);
     bool taken = pc.branching();
 
-    if (inst->isControl()) {
-        if (taken)
-            BTB.update(pc.pc(), pc.npc(), tid);
+    // update stats
+    if (tsMispred) {
+        if (ts->usedRAS)
+            stats.RASIncorrect++;
+        if (ts->affectedByCacheMiss)
+            stats.mispredAffectedByCacheMiss++;
+        if (ts->affectedByBTBMiss)
+            stats.mispredAffectedByBTBMiss++;
+    } else {
+        if (ts->affectedByCacheMiss)
+            stats.correctAffectedByCacheMiss++;
+        if (ts->affectedByBTBMiss)
+            stats.correctAffectedByBTBMiss++;
+    }
 
+    if (inst->isControl()) {
         int nrand = random_mt.random<int>() & 3;
         if (tage_bi->condBranch) {
             tage->updateStats(taken, tage_bi);
@@ -166,9 +222,29 @@ void FFTrivialBP::commit(ThreadID tid, const TheISA::PCState &pc, const StaticIn
         // optional non speculative update of the histories
         tage->updateHistories(tid, pc.pc(), taken, tage_bi, false, inst,
                             pc.npc());
+
+        if (taken) {
+            if (ts->wasReturn && !ts->usedRAS) {
+                 RAS.pop();
+                 ts->usedRAS = true;
+            }
+            BTB.update(pc.pc(), pc.npc(), tid);
+
+        } else {
+            //Actually not Taken
+            if (ts->usedRAS) {
+                RAS.restore(ts->RASIndex, ts->RASTarget);
+                ts->usedRAS = false;
+
+            } else if (ts->wasCall && ts->pushedRAS) {
+                //Was a Call but predicated false. Pop RAS here
+                RAS.pop();
+                ts->pushedRAS = false;
+            }
+        }
     }
 
-    if (tageMispred) {
+    if (tsMispred) {
         // This restores the global history, then update it
         // and recomputes the folded histories.
         tage->squash(tid, taken, tage_bi, pc.npc());
@@ -192,6 +268,7 @@ void FFTrivialBP::commit(ThreadID tid, const TheISA::PCState &pc, const StaticIn
         assert(state.inflight.size() == 1);
         specLookup(toRerun, tid);
         assert(state.inflight.size() == oldSize);
+
     }
 
     delete ts;
@@ -204,9 +281,11 @@ void FFTrivialBP::squash(ThreadID tid, void *bp_history) {
     if (!bps->inflight.empty()) {
         auto ts = bps->inflight.front();
         tage->squash(tid, ts->taken, ts->info, ts->predPC);
+        RAS.restore(ts->RASIndex, ts->RASTarget);
 
     } else {
         assert(bps->preRunCount == 0);
+        RAS.reset();
     }
 
     state = *bps;

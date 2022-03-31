@@ -12,6 +12,7 @@
 #include "cpu/inst_seq.hh"
 #include "cpu/pred/btb.hh"
 #include "cpu/pred/ff_bpred_unit.hh"
+#include "cpu/pred/ras.hh"
 #include "cpu/pred/tage_base.hh"
 #include "cpu/static_inst.hh"
 #include "params/FFTrivialBP.hh"
@@ -50,12 +51,21 @@ private:
         TAGEBase::BranchInfo *info;
         bool taken;
         Addr predPC;
+        bool affectedByCacheMiss;
+        bool affectedByBTBMiss;
+        bool wasCall{false}, wasReturn{false};
+        bool usedRAS{false};
+        bool pushedRAS{false};
+        unsigned RASIndex{0};
+        TheISA::PCState RASTarget;
     };
 
     struct BPState {
         unsigned int preRunCount;
         TheISA::PCState pc;
         std::deque<TAGEState *> inflight;
+        bool affectedByCacheMiss;
+        bool affectedByBTBMiss;
     } state;
 
 private:
@@ -66,6 +76,7 @@ private:
     unsigned int numLookAhead;
 
     DefaultBTB BTB;
+    ReturnAddrStack RAS;
 
     // ICache is brought from cpu/pred/btb.cc
     class ICache
@@ -176,6 +187,18 @@ private:
         Stats::Formula icache_hit_ratio;
 
         Stats::Formula btb_hit_ratio;
+
+        Stats::Scalar mispredAffectedByCacheMiss;
+
+        Stats::Scalar correctAffectedByCacheMiss;
+
+        Stats::Scalar mispredAffectedByBTBMiss;
+
+        Stats::Scalar correctAffectedByBTBMiss;
+
+        Stats::Scalar RASUsed;
+
+        Stats::Scalar RASIncorrect;
 
     } stats;
 };
