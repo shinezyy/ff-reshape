@@ -125,8 +125,14 @@ void
 ControlPlane::startTraining()
 {
   //mark auto tuning start
+  for (int i = 0; i < 4; i++)
+  {
+    l2s[i/2]->buckets[i]->reset_accesses();
+    l3->buckets[i]->reset_accesses();
+  }
 }
 
+// #define INPUT_INC
 void
 ControlPlane::startQoS()
 {
@@ -136,50 +142,99 @@ ControlPlane::startQoS()
   cpStat.CPUBackgroundIpc.result(bgIpcs);
   mixIpc = bgIpcs[0];
 
+#ifdef INPUT_INC
   for (int i = 0; i < LvNATasks::QosIdStart; i++)
   {
     l3->buckets[i]->set_bypass(false);
-    int l3accesses = l3->buckets[i]->get_accesses();
+    l3->buckets[i]->set_inc(l3inc);
+    l3->buckets[i]->set_tokens(l3inc);
+    printf("%d tokens %d accesses %d\n",i,l3->buckets[i]->get_tokens(),l3->buckets[i]->get_accesses());
     l3->buckets[i]->reset_accesses();
-    l3->buckets[i]->set_inc(l3accesses/2);
   }
   printf("l2inc %d l3inc %d\n",l2inc,l3inc);
+  l3->buckets[0]->set_bypass(true);
+  l2s[0]->buckets[1]->set_bypass(false);
+  l2s[0]->buckets[1]->set_inc(l2inc);
+  l2s[0]->buckets[1]->set_tokens(l2inc);
   // this->schedule();
+#else
+  std::vector<int> l2acc, l3acc;
+
+  // get info
+  for (int i = 0; i < 4; i++)
+  {
+    l2acc.push_back(l2s[i/2]->buckets[i]->get_accesses());
+    l3acc.push_back(l3->buckets[i]->get_accesses());
+    l2s[i/2]->buckets[i]->reset_accesses();
+    l3->buckets[i]->reset_accesses();
+    printf("core %d l2acc %d l3acc %d\n", i, l2acc[i], l3acc[i]);
+  }
+
+  // start QoS
+  l2s[0]->buckets[1]->set_bypass(false);
+  l2s[0]->buckets[1]->set_inc(20);
+  l2s[0]->buckets[1]->set_tokens(20);
+  for (int i = 1; i < 4; i++){
+    l3->buckets[i]->set_bypass(false);
+    l3->buckets[i]->set_inc(50);
+    l3->buckets[i]->set_tokens(50);
+  }
+#endif
 }
 
 void
 ControlPlane::tuning()
 {
+#ifndef INPUT_INC
   inform("start tuning\n");
   std::vector<double> bgIpcs;
   cpStat.CPUBackgroundIpc.result(bgIpcs);
-  double estimatedIpc = mixIpc * 1.10;
-  double diff = (estimatedIpc - bgIpcs[0])/mixIpc;
+  double speedup = bgIpcs[0]/mixIpc;
+  std::vector<int> l2acc, l3acc;
 
-  for (int i = 0; i < LvNATasks::QosIdStart; i++) 
+  // get info
+  for (int i = 0; i < 4; i++)
   {
-    int l3accesses = l3->buckets[i]->get_accesses();
+    l2acc.push_back(l2s[i/2]->buckets[i]->get_accesses());
+    l3acc.push_back(l3->buckets[i]->get_accesses());
+    l2s[i/2]->buckets[i]->reset_accesses();
     l3->buckets[i]->reset_accesses();
+
+    printf("cpu %d ipc: %.6f l2acc %d l3acc %d \n", i, bgIpcs[i], l2acc[i], l3acc[i]);
+  }
+  printf("cpu 0 speedup %.4f\n", speedup);
+
+  // start QoS
+  for (int i = 1; i < 4; i++)
+  {
     int l3inc = l3->buckets[i]->get_inc();
     // far from target
-    if (diff > 0.08)
+    if (speedup < 1.05)
     {
-      l3->buckets[i]->set_inc(l3accesses/2);
+      l3->buckets[i]->set_inc(l3inc/2);
     }// still needs adjustment
-    else if (diff > 0.02)
-    {
-      l3->buckets[i]->set_inc(l3inc-50);
+    else if (speedup < 1.095)
+    { //先按照百分比减少吧
+      l3->buckets[i]->set_inc(l3inc-(1.1 - speedup)*2*(l2acc[1]+l2acc[2]+l2acc[3])/100/3);
     }// relax a little
-    else if (diff < -0.02)
+    else if (speedup > 1.130)
     {
-      l3->buckets[i]->set_inc(l3inc+50);
+      // l3->buckets[i]->set_inc(l3inc+(speedup-1.1)*2*(l2acc[1]+l2acc[2]+l2acc[3])/100/3);
+      l3->buckets[i]->set_inc(l3inc+10);
     }
-  }  
+    else if (speedup > 1.110)
+    {
+      l3->buckets[i]->set_inc(l3inc+5);
+    }
+    printf("cpu %d new inc %d\n", i, l3->buckets[i]->get_inc());
+  }
+#endif
 }
 
 void
 ControlPlane::startTTI()
 {
+  inform("===============================================\n");
   inform("start a TTI\n");
   resetTTIMeta();
   // schedule auto tuning functions
