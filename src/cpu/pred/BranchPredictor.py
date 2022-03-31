@@ -803,6 +803,8 @@ class FFTrivialBP(FFBranchPredictor):
     ICEntries = Param.Unsigned(1024 * 1024, "Number of dummy icache entries")
     instShiftAmt = Param.Unsigned(1, "Number of bits to shift instructions by")
     RASSize = Param.Unsigned(64, "RAS size")
+    indirectBranchPred = Param.IndirectPredictor(SimpleIndirectPredictor(),
+      "Indirect branch predictor, set to NULL to disable indirect predictions")
 
 class ForwardN(FFBranchPredictor):
     type = 'ForwardN'

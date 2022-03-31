@@ -295,7 +295,7 @@ unsigned ForwardN::getStride() const
         if (state.dbbCount == 0)
             return 1U;
         else {
-            return std::max(1U, unsigned(float(numLookAheadInst) / (state.dbbTotalSize / state.dbbCount) + 0.5));
+            return std::max(1U, unsigned(float(numLookAheadInst) / (state.dbbTotalSize / state.dbbCount)));
         }
 
     } else {

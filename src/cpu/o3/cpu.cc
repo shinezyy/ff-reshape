@@ -445,7 +445,10 @@ FullO3CPUStats::FullO3CPUStats(FullO3CPU *cpu)
       ADD_STAT(miscRegfileReads, "number of misc regfile reads"),
       ADD_STAT(miscRegfileWrites, "number of misc regfile writes"),
       ADD_STAT(lastCommitTick, "lastCommitTick"),
-      ADD_STAT(ffbpStrideErr, "ffbpStrideErr")
+      ADD_STAT(ffbpStrideErr, "ffbpStrideErr"),
+      ADD_STAT(ffbpFailCount, "Count of failed predication making group overflow"),
+      ADD_STAT(ffbpAllowCount, "Count of allowable predication"),
+      ADD_STAT(ffbpFailRatio, "Ratio of failed predication.", ffbpFailCount / (ffbpFailCount + ffbpAllowCount))
 {
     // Register any of the O3CPU's stats here.
     timesIdled
@@ -1699,12 +1702,22 @@ FullO3CPU<Impl>::testFFBranchPred(const DynInstPtr &inst, ThreadID tid)
 
 
             // update stats
-            int64_t insts = 0;
+            int64_t actualInsts = 0;
             for (size_t i=DBBlist.size() - 1 - stride; i<DBBlist.size(); i++)
-                insts += DBBlist[i].instCount;
-            strideErrSum += std::pow(insts - ffBranchPred->getNumLookAheadInsts(), 2);
+                actualInsts += DBBlist[i].instCount;
+            strideErrSum += std::pow(actualInsts - ffBranchPred->getNumLookAheadInsts(), 2);
             predCount++;
             cpuStats.ffbpStrideErr = std::sqrt(strideErrSum / predCount);
+
+            // inter-group statistics
+            groupSize = ffBranchPred->getNumLookAheadInsts();
+            groupOffset = (groupOffset + 1) % groupSize;
+
+            if (groupOffset + actualInsts >= groupSize*2) { // overflow
+                ++cpuStats.ffbpFailCount;
+            } else {
+                ++cpuStats.ffbpAllowCount;
+            }
 
             if (DBBlist.back().exitSeqNum == hist.back().seqNum) {
                 DBBlist.pop_back();

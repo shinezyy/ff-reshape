@@ -12,6 +12,7 @@
 #include "cpu/inst_seq.hh"
 #include "cpu/pred/btb.hh"
 #include "cpu/pred/ff_bpred_unit.hh"
+#include "cpu/pred/indirect.hh"
 #include "cpu/pred/ras.hh"
 #include "cpu/pred/tage_base.hh"
 #include "cpu/static_inst.hh"
@@ -49,15 +50,17 @@ private:
             delete info;
         }
         TAGEBase::BranchInfo *info;
+        void *iPredInfo;
         bool taken;
         Addr predPC;
         bool affectedByCacheMiss;
         bool affectedByBTBMiss;
-        bool wasCall{false}, wasReturn{false};
+        bool wasCall{false}, wasReturn{false}, wasIndirect{false};
         bool usedRAS{false};
         bool pushedRAS{false};
         unsigned RASIndex{0};
         TheISA::PCState RASTarget;
+        InstSeqNum seqNum;
     };
 
     struct BPState {
@@ -66,17 +69,20 @@ private:
         std::deque<TAGEState *> inflight;
         bool affectedByCacheMiss;
         bool affectedByBTBMiss;
+        InstSeqNum seqNum;
     } state;
 
 private:
     void specLookup(int numInst, ThreadID tid);
-    void resetSpecLookup(const TheISA::PCState &pc0);
+    void resetSpecLookup(const TheISA::PCState &pc0, InstSeqNum seqNum);
+    void squashInflight(ThreadID tid);
 
 private:
     unsigned int numLookAhead;
 
     DefaultBTB BTB;
     ReturnAddrStack RAS;
+    IndirectPredictor *iPred;
 
     // ICache is brought from cpu/pred/btb.cc
     class ICache
@@ -199,6 +205,14 @@ private:
         Stats::Scalar RASUsed;
 
         Stats::Scalar RASIncorrect;
+
+        Stats::Scalar indirectLookups;
+
+        Stats::Scalar indirectHits;
+
+        Stats::Scalar indirectMisses;
+
+        Stats::Scalar indirectMispredicted;
 
     } stats;
 };

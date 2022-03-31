@@ -779,7 +779,11 @@ class FullO3CPU : public BaseO3CPU
 
         Stats::Scalar lastCommitTick;
 
+        /** Stat for FF-BP */
         Stats::Scalar ffbpStrideErr;
+        Stats::Scalar ffbpFailCount;
+        Stats::Scalar ffbpAllowCount;
+        Stats::Formula ffbpFailRatio;
     } cpuStats;
 
   public:
@@ -834,6 +838,8 @@ class FullO3CPU : public BaseO3CPU
     uint64_t instCount{0};
     double strideErrSum{0};
     uint64_t predCount{0};
+    unsigned groupSize{0};
+    unsigned groupOffset{0};
 
     struct DBB {
         Addr exitPC;
