@@ -152,4 +152,4 @@ class SmallJob():
     def set_release_action(self, act_list: List[SmallActionMeta]):
         'used to record the next events of other jobs which needs'\
         'strong sequence consistency'
-        self.priority_list = act_list
+        self.release_list = act_list
