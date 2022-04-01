@@ -2,7 +2,7 @@ from typing import List
 from enum import Enum, auto, unique
 import itertools
 from heapq import heappop, heappush
-
+import m5
 
 @unique
 class ActOp(Enum):
@@ -112,6 +112,14 @@ class SmallJob():
         if self.endTTI_BarrierNum == self.endTTI_BarrierMax :
             self.endTTI_BarrierNum = 0
             self.test_sys.controlplane.endTTI()
+            # start QoS at 100, then update inc at every TTI end
+            if now_cycle == 100:
+                self.test_sys.controlplane.startQoS()
+            else:
+                self.test_sys.controlplane.tuning()
+            # dump results for every TTI
+            m5.stats.dump()
+            m5.stats.reset()
             for a in self.endTTI_actions:
                 eve = a.create_event(now_cycle)
                 self.event_queue.add_event(eve, eve.work_cycle)

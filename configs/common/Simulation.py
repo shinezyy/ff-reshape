@@ -452,7 +452,7 @@ def repeatJobs(testsys, maxtick):
 
     # init jobs, every job cycle means 10000 cpu clock cycles
     # means tick period is 10000*cpu_period
-    job_clk_period = 10000*cpu_period
+    job_period = 10000*cpu_period
 
     sch_job1 = SmallJob(0, 0, "SCH_job1", job_eq, testsys)
     dp_job3  = SmallJob(1, 1, "DP_job3" , job_eq, testsys)
@@ -484,7 +484,7 @@ def repeatJobs(testsys, maxtick):
     ])
     usr_job2.set_release_action([
         #last job of a TTI calls end barrier when release
-        SmallActionMeta(fake_job, ActOp.endTTIBarrier,0),
+        SmallActionMeta(fake_job, ActOp.endTTIBarrier, 0),
     ])
 
     #next start TTI happens in the same cycle
@@ -502,27 +502,23 @@ def repeatJobs(testsys, maxtick):
     # init event
     job_clk = 0
     job_eq.add_event(SmallEvent(0, fake_job, ActOp.startTTI), 0)
-    maxtick = job_clk_period * 201
+    maxtick = job_period * 1001
 
     testsys.controlplane.startTraining()
 
-    while True:  # loop for clk
-        while (job_eq.peek_cycle() <= job_clk):  # loop for event in the same cycle
+    while True:  # loop for job_clk
+        # loop for event in the same cycle
+        while (job_eq.peek_cycle() <= job_clk):  
             eve = job_eq.pop_event()
             eve.schedule_out(job_clk)
-        if job_clk == 100:
-            testsys.controlplane.startQoS()
-            m5.stats.dump()
-            m5.stats.reset()
+            # print('current jobclk {} scheduleout event {} {}'.format(job_clk, eve.target_job.name, eve.target_action))
         next_event_cycle = job_eq.peek_cycle()
-
-        if maxtick <= next_event_cycle*job_clk_period:
-            exit_event = m5.simulate((next_event_cycle - job_clk)*job_clk_period)
-            return exit_event
-
-        exit_event = m5.simulate((next_event_cycle - job_clk)*job_clk_period)
+        
+        # simulate till the time of next event 
+        exit_event = m5.simulate((next_event_cycle - job_clk)*job_period)
         exit_cause = exit_event.getCause()
-        if exit_cause != "simulate() limit reached":
+        # if maxtick reached or simulation exit unexpectedly, return
+        if maxtick <= next_event_cycle*job_period or exit_cause != "simulate() limit reached":
             return exit_event
 
         job_clk = next_event_cycle
