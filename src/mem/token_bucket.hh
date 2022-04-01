@@ -40,15 +40,19 @@ class Token_Bucket
     inline void set_freq(int f) { freq = f; }
 
     inline int get_inc() { return inc; }
-    inline void set_inc(int i) { inc = std::min(std::max(1, i), size); }
+    inline void set_inc(int i) { inc = std::min(std::max(0, i), size); }
 
     inline bool get_bypass() { return bypass; }
     inline void set_bypass(bool b) { bypass = b; }
 
     inline int get_tokens() { return (bypass) ? 1 : tokens; }
     inline void set_tokens(int t) { tokens = std::min(std::max(0, t), size); }
-    inline int get_accesses() { return accesses; }
-    inline void reset_accesses() { accesses = 0; }
+    // get and reset accesses
+    inline int gar_acc() {
+       int tmp = accesses;
+       accesses = 0;
+       return tmp;
+    }
 
     /**
      * return true if the pkt passes (may modify tokens),

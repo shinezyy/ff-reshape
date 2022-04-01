@@ -13,9 +13,9 @@
 #include "params/ControlPlane.hh"
 
 namespace LvNATasks {
-    // 0~7 for low priv
-    // 8~15 for high priv task
-    // 16~31 are bypassIdx of 0~15
+    // 0~7 are job ids
+    // 8~15 are QosId for jobs
+    // 16~31 are bypassIdx of 0~15 (not used for now)
     enum JobId {
         MaxLowPrivId = 7,
         MaxCtxId = 7,
