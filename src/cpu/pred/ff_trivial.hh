@@ -61,6 +61,7 @@ private:
         unsigned RASIndex{0};
         TheISA::PCState RASTarget;
         InstSeqNum seqNum;
+        bool useTage{false};
     };
 
     struct BPState {
@@ -194,6 +195,10 @@ private:
 
         Stats::Formula btb_hit_ratio;
 
+        Stats::Scalar btb_mispredicted;
+
+        Stats::Formula btb_correctRatio;
+
         Stats::Scalar mispredAffectedByCacheMiss;
 
         Stats::Scalar correctAffectedByCacheMiss;
@@ -213,6 +218,12 @@ private:
         Stats::Scalar indirectMisses;
 
         Stats::Scalar indirectMispredicted;
+
+        Stats::Formula indirectCorrectRatio;
+
+        Stats::Scalar tageCommit;
+        Stats::Scalar tageIncorrect;
+        Stats::Formula tageCorrectRatio;
 
     } stats;
 };

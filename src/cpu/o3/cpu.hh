@@ -784,6 +784,7 @@ class FullO3CPU : public BaseO3CPU
         Stats::Scalar ffbpFailCount;
         Stats::Scalar ffbpAllowCount;
         Stats::Formula ffbpFailRatio;
+        Stats::StandardDeviation ffbpStrideSD;
     } cpuStats;
 
   public:

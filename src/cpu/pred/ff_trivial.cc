@@ -49,6 +49,8 @@ FFTrivialBP::FFTrivialBPStats::FFTrivialBPStats(Stats::Group *parent)
               icache_hits / icache_lookups),
           ADD_STAT(btb_hit_ratio, "BTB hit ratio",
               btb_hits / btb_lookups),
+          ADD_STAT(btb_correctRatio, "BTB correct ratio",
+              1 - btb_mispredicted / btb_lookups),
           ADD_STAT(mispredAffectedByCacheMiss, "mispredAffectedByCacheMiss"),
           ADD_STAT(correctAffectedByCacheMiss, "correctAffectedByCacheMiss"),
           ADD_STAT(mispredAffectedByBTBMiss, "mispredAffectedByBTBMiss"),
@@ -59,7 +61,13 @@ FFTrivialBP::FFTrivialBPStats::FFTrivialBPStats(Stats::Group *parent)
           ADD_STAT(indirectHits, "Number of indirect target hits."),
           ADD_STAT(indirectMisses, "Number of indirect misses."),
           ADD_STAT(indirectMispredicted, "Number of mispredicted indirect"
-                " branches.")
+                " branches."),
+          ADD_STAT(indirectCorrectRatio, "Indirect predicator correct ratio",
+              1 - indirectMispredicted / indirectLookups),
+          ADD_STAT(tageCommit, "tageCommit"),
+          ADD_STAT(tageIncorrect, "tageIncorrect"),
+          ADD_STAT(tageCorrectRatio, "TAGE correct ratio",
+              1 - tageIncorrect / tageCommit)
 {
     icache_hit_ratio.precision(4);
     btb_hit_ratio.precision(4);
@@ -110,6 +118,8 @@ void FFTrivialBP::specLookup(int numInst, ThreadID tid)
             taken = tage->tagePredict(tid, state.pc.pc(), !ci->isUncondCtrl(), bi->info);
             if (ci->isUncondCtrl()) {
                 taken = true;
+            } else {
+                bi->useTage = true;
             }
             tage->updateHistories(tid, state.pc.pc(), taken, bi->info, true);
         }
@@ -185,7 +195,7 @@ void FFTrivialBP::specLookup(int numInst, ThreadID tid)
             state.pc.advance();
         }
 
-        if (iPred) {
+        if (iPred && ci && ci->isControl()) {
             iPred->updateDirectionInfo(tid, tage_taken);
         }
 
@@ -273,6 +283,8 @@ void FFTrivialBP::commit(ThreadID tid, const TheISA::PCState &pc, const StaticIn
     if (tsMispred) {
         if (ts->usedRAS)
             stats.RASIncorrect++;
+        if (ts->useTage)
+            stats.tageIncorrect++;
         if (ts->affectedByCacheMiss)
             stats.mispredAffectedByCacheMiss++;
         if (ts->affectedByBTBMiss)
@@ -282,6 +294,9 @@ void FFTrivialBP::commit(ThreadID tid, const TheISA::PCState &pc, const StaticIn
             stats.correctAffectedByCacheMiss++;
         if (ts->affectedByBTBMiss)
             stats.correctAffectedByBTBMiss++;
+    }
+    if (ts->useTage) {
+        stats.tageCommit++;
     }
 
     if (inst->isControl()) {
@@ -300,40 +315,39 @@ void FFTrivialBP::commit(ThreadID tid, const TheISA::PCState &pc, const StaticIn
     if (tsMispred) {
         squashInflight(tid);
 
-        if (inst->isControl()) {
-            if (iPred) {
-                iPred->changeDirectionPrediction(tid,
-                    ts->iPredInfo, taken);
+        if (taken) {
+            if (ts->wasReturn && !ts->usedRAS) {
+                RAS.pop();
+                ts->usedRAS = true;
             }
-
-            if (taken) {
-                if (ts->wasReturn && !ts->usedRAS) {
-                    RAS.pop();
-                    ts->usedRAS = true;
+            if (ts->wasIndirect) {
+                ++stats.indirectMispredicted;
+                if (iPred) {
+                    iPred->recordTarget(
+                        ts->seqNum, ts->iPredInfo,
+                        corrTarget, tid);
                 }
-                if (ts->wasIndirect) {
-                    ++stats.indirectMispredicted;
-                    if (iPred) {
-                        iPred->recordTarget(
-                            ts->seqNum, ts->iPredInfo,
-                            corrTarget, tid);
-                    }
-                } else {
-                    BTB.update(pc.pc(), pc.npc(), tid);
-                }
-
             } else {
-                //Actually not Taken
-                if (ts->usedRAS) {
-                    RAS.restore(ts->RASIndex, ts->RASTarget);
-                    ts->usedRAS = false;
-
-                } else if (ts->wasCall && ts->pushedRAS) {
-                    //Was a Call but predicated false. Pop RAS here
-                    RAS.pop();
-                    ts->pushedRAS = false;
-                }
+                stats.btb_mispredicted++;
+                BTB.update(pc.pc(), pc.npc(), tid);
             }
+
+        } else {
+            //Actually not Taken
+            if (ts->usedRAS) {
+                RAS.restore(ts->RASIndex, ts->RASTarget);
+                ts->usedRAS = false;
+
+            } else if (ts->wasCall && ts->pushedRAS) {
+                //Was a Call but predicated false. Pop RAS here
+                RAS.pop();
+                ts->pushedRAS = false;
+            }
+        }
+
+        if (iPred && inst->isControl()) {
+            iPred->changeDirectionPrediction(tid,
+                ts->iPredInfo, taken);
         }
 
         // This restores the global history, then update it
