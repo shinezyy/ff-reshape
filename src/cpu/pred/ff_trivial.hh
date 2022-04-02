@@ -62,6 +62,12 @@ private:
         TheISA::PCState RASTarget;
         InstSeqNum seqNum;
         bool useTage{false};
+        bool useUncond{false};
+        bool useBTB{false};
+        bool useIndir{false};
+        bool useNoTaken{false};
+        bool useNotCtrl{false};
+        bool tageTaken;
     };
 
     struct BPState {
@@ -195,10 +201,6 @@ private:
 
         Stats::Formula btb_hit_ratio;
 
-        Stats::Scalar btb_mispredicted;
-
-        Stats::Formula btb_correctRatio;
-
         Stats::Scalar mispredAffectedByCacheMiss;
 
         Stats::Scalar correctAffectedByCacheMiss;
@@ -206,10 +208,6 @@ private:
         Stats::Scalar mispredAffectedByBTBMiss;
 
         Stats::Scalar correctAffectedByBTBMiss;
-
-        Stats::Scalar RASUsed;
-
-        Stats::Scalar RASIncorrect;
 
         Stats::Scalar indirectLookups;
 
@@ -219,11 +217,32 @@ private:
 
         Stats::Scalar indirectMispredicted;
 
-        Stats::Formula indirectCorrectRatio;
-
         Stats::Scalar tageCommit;
         Stats::Scalar tageIncorrect;
         Stats::Formula tageCorrectRatio;
+
+        Stats::Scalar uncondCommit;
+        Stats::Scalar uncondIncorrect;
+        Stats::Formula uncondCorrectRatio;
+
+        Stats::Scalar btbCommit;
+        Stats::Scalar btbIncorrect;
+        Stats::Formula btbCorrectRatio;
+
+        Stats::Scalar indirCommit;
+        Stats::Scalar indirIncorrect;
+        Stats::Formula indirCorrectRatio;
+
+        Stats::Scalar noTakenCommit;
+        Stats::Scalar noTakenIncorrect;
+        Stats::Formula noTakenCorrectRatio;
+
+        Stats::Scalar RASCommit;
+        Stats::Scalar RASIncorrect;
+
+        Stats::Scalar notCtrlCommit;
+        Stats::Scalar notCtrlIncorrect;
+        Stats::Formula notCtrlCorrectRatio;
 
     } stats;
 };

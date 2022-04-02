@@ -49,25 +49,41 @@ FFTrivialBP::FFTrivialBPStats::FFTrivialBPStats(Stats::Group *parent)
               icache_hits / icache_lookups),
           ADD_STAT(btb_hit_ratio, "BTB hit ratio",
               btb_hits / btb_lookups),
-          ADD_STAT(btb_correctRatio, "BTB correct ratio",
-              1 - btb_mispredicted / btb_lookups),
           ADD_STAT(mispredAffectedByCacheMiss, "mispredAffectedByCacheMiss"),
           ADD_STAT(correctAffectedByCacheMiss, "correctAffectedByCacheMiss"),
           ADD_STAT(mispredAffectedByBTBMiss, "mispredAffectedByBTBMiss"),
           ADD_STAT(correctAffectedByBTBMiss, "correctAffectedByBTBMiss"),
-          ADD_STAT(RASUsed, "Number of times the RAS was used to get a target."),
-          ADD_STAT(RASIncorrect, "Number of incorrect RAS predictions."),
           ADD_STAT(indirectLookups, "Number of indirect predictor lookups."),
           ADD_STAT(indirectHits, "Number of indirect target hits."),
           ADD_STAT(indirectMisses, "Number of indirect misses."),
           ADD_STAT(indirectMispredicted, "Number of mispredicted indirect"
                 " branches."),
-          ADD_STAT(indirectCorrectRatio, "Indirect predicator correct ratio",
-              1 - indirectMispredicted / indirectLookups),
           ADD_STAT(tageCommit, "tageCommit"),
           ADD_STAT(tageIncorrect, "tageIncorrect"),
           ADD_STAT(tageCorrectRatio, "TAGE correct ratio",
-              1 - tageIncorrect / tageCommit)
+              1 - tageIncorrect / tageCommit),
+          ADD_STAT(uncondCommit, ""),
+          ADD_STAT(uncondIncorrect, ""),
+          ADD_STAT(uncondCorrectRatio, "",
+              1 - uncondIncorrect / uncondCommit),
+          ADD_STAT(btbCommit, ""),
+          ADD_STAT(btbIncorrect, ""),
+          ADD_STAT(btbCorrectRatio, "",
+              1 - btbIncorrect / btbCommit),
+          ADD_STAT(indirCommit, ""),
+          ADD_STAT(indirIncorrect, ""),
+          ADD_STAT(indirCorrectRatio, "",
+              1 - indirIncorrect / indirCommit),
+          ADD_STAT(noTakenCommit, ""),
+          ADD_STAT(noTakenIncorrect, ""),
+          ADD_STAT(noTakenCorrectRatio, "",
+              1 - noTakenIncorrect / noTakenCommit),
+          ADD_STAT(RASCommit, ""),
+          ADD_STAT(RASIncorrect, ""),
+          ADD_STAT(notCtrlCommit, ""),
+          ADD_STAT(notCtrlIncorrect, ""),
+          ADD_STAT(notCtrlCorrectRatio, "",
+              1 - notCtrlIncorrect / notCtrlCommit)
 {
     icache_hit_ratio.precision(4);
     btb_hit_ratio.precision(4);
@@ -118,10 +134,14 @@ void FFTrivialBP::specLookup(int numInst, ThreadID tid)
             taken = tage->tagePredict(tid, state.pc.pc(), !ci->isUncondCtrl(), bi->info);
             if (ci->isUncondCtrl()) {
                 taken = true;
+                bi->useUncond = true;
             } else {
                 bi->useTage = true;
+                bi->tageTaken = taken;
             }
             tage->updateHistories(tid, state.pc.pc(), taken, bi->info, true);
+        } else {
+            bi->useNotCtrl = true;
         }
         const bool tage_taken = taken;
 
@@ -136,7 +156,6 @@ void FFTrivialBP::specLookup(int numInst, ThreadID tid)
                 bi->wasCall = true;
             }
             if (ci && ci->isReturn()) {
-                ++stats.RASUsed;
                 bi->wasReturn = true;
                 // If it's a function return call, then look up the address
                 // in the RAS.
@@ -155,6 +174,7 @@ void FFTrivialBP::specLookup(int numInst, ThreadID tid)
                 if (BTB.valid(state.pc.pc(), tid)) {
                     ++stats.btb_hits;
                     state.pc = BTB.lookup(state.pc.pc(), tid);
+                    bi->useBTB = true;
                 } else {
                     // Alter the direction
                     taken = false;
@@ -167,6 +187,7 @@ void FFTrivialBP::specLookup(int numInst, ThreadID tid)
 
                     state.affectedByBTBMiss = true;
                     state.pc.advance();
+                    bi->useNoTaken = true;
                 }
 
             } else {
@@ -176,6 +197,7 @@ void FFTrivialBP::specLookup(int numInst, ThreadID tid)
                 TheISA::PCState target = state.pc;
                 if (iPred->lookup(state.pc.instAddr(), target, tid)) {
                     ++stats.indirectHits;
+                    bi->useIndir = true;
                 } else {
                     ++stats.indirectMisses;
                     // Alter the direction
@@ -185,6 +207,7 @@ void FFTrivialBP::specLookup(int numInst, ThreadID tid)
                         bi->pushedRAS = false;
                     }
                     target.advance();
+                    bi->useNoTaken = true;
                 }
                 iPred->recordIndirect(state.pc.instAddr(), target.instAddr(), state.seqNum,
                         tid);
@@ -193,11 +216,15 @@ void FFTrivialBP::specLookup(int numInst, ThreadID tid)
 
         } else {
             state.pc.advance();
+            bi->useNoTaken = true;
         }
 
         if (iPred && ci && ci->isControl()) {
             iPred->updateDirectionInfo(tid, tage_taken);
         }
+
+        assert(bi->useTage + bi->useUncond + bi->useNotCtrl == 1);
+        assert(bi->useBTB + bi->useIndir + bi->usedRAS + bi->useNoTaken == 1);
 
         bi->taken = taken;
         bi->predPC = state.pc.pc();
@@ -280,11 +307,28 @@ void FFTrivialBP::commit(ThreadID tid, const TheISA::PCState &pc, const StaticIn
     bool taken = pc.branching();
 
     // update stats
+    if (ts->useTage)
+        stats.tageCommit++;
+    if (ts->useUncond)
+        stats.uncondCommit++;
+    if (ts->useBTB)
+        stats.btbCommit++;
+    if (ts->useIndir)
+        stats.indirCommit++;
+    if (ts->useNoTaken)
+        stats.noTakenCommit++;
+    if (ts->usedRAS)
+        stats.RASCommit++;
+    if (ts->useNotCtrl)
+        stats.notCtrlCommit++;
+
     if (tsMispred) {
         if (ts->usedRAS)
             stats.RASIncorrect++;
-        if (ts->useTage)
-            stats.tageIncorrect++;
+        if (ts->useBTB)
+            stats.btbIncorrect++;
+        if (ts->useIndir)
+            stats.indirIncorrect++;
         if (ts->affectedByCacheMiss)
             stats.mispredAffectedByCacheMiss++;
         if (ts->affectedByBTBMiss)
@@ -295,9 +339,14 @@ void FFTrivialBP::commit(ThreadID tid, const TheISA::PCState &pc, const StaticIn
         if (ts->affectedByBTBMiss)
             stats.correctAffectedByBTBMiss++;
     }
-    if (ts->useTage) {
-        stats.tageCommit++;
-    }
+    if (ts->useTage && ts->tageTaken != taken)
+        stats.tageIncorrect++;
+    if (ts->useUncond && !inst->isUncondCtrl())
+        stats.uncondIncorrect++;
+    if (ts->useNoTaken && taken)
+        stats.noTakenIncorrect++;
+    if (ts->useNotCtrl && inst->isControl())
+        stats.notCtrlIncorrect++;
 
     if (inst->isControl()) {
         int nrand = random_mt.random<int>() & 3;
@@ -328,7 +377,6 @@ void FFTrivialBP::commit(ThreadID tid, const TheISA::PCState &pc, const StaticIn
                         corrTarget, tid);
                 }
             } else {
-                stats.btb_mispredicted++;
                 BTB.update(pc.pc(), pc.npc(), tid);
             }
 
