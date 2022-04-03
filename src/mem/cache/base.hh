@@ -1359,6 +1359,9 @@ class BaseCache : public ClockedObject
     void setWaymask(int idx, uint64_t mask){
         waymasks[idx] = mask;
     }
+    void setWaymaskEnable(bool flag){
+        enable_waymask = flag;
+    }
 };
 
 /**

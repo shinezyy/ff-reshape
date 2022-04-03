@@ -54,6 +54,7 @@ Tick ControlPlane::write(PacketPtr pkt) {
 
 ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     BasicPioDevice(*p, p->pio_size),
+    l3_waymask_set(p->l3_waymask_set),
     cpus(p->cpus),
     l2s(p->l2s),
     l3(p->l3),
@@ -138,18 +139,15 @@ ControlPlane::startQoS()
   cpStat.CPUBackgroundIpc.result(bgIpcs);
   mixIpc = bgIpcs[0];
 
-  for (int i = 0; i < LvNATasks::QosIdStart; i++)
+  //set l3 waymasks
+  if (!l3_waymask_set.empty())
   {
-    l3->buckets[i]->set_bypass(false);
-    l3->buckets[i]->set_inc(l3inc);
-    l3->buckets[i]->set_size(l3_tb_size);
-    // int l3accesses = l3->buckets[i]->get_accesses();
-    // l3->buckets[i]->reset_accesses();
-    // l3->buckets[i]->set_inc(l3accesses/2);
+    l3->setWaymaskEnable(true);
+    for (size_t i = 0; i < l3_waymask_set.size(); i++)
+    {
+      l3->setWaymask(i,l3_waymask_set[i]);
+    }
   }
-  l3->buckets[0]->set_bypass(true);
-  // printf("l2inc %d l3inc %d\n",l2inc,l3inc);
-  // this->schedule();
 }
 
 void
