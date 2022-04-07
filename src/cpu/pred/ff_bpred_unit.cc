@@ -107,6 +107,9 @@ FFBPredUnit::update(Info *bp_info, Addr npc, Addr cpc, bool squashed)
     if (bp_info->predPC != cpc) {
         ++stats.incorrect;
     }
+    if (!squashed) {
+        delete bp_info;
+    }
 }
 
 void
@@ -118,6 +121,7 @@ FFBPredUnit::squash(Info *bp_info)
 
     DPRINTF(Branch, "[tid:%i] Removing history "
             "PC %#x\n", bp_info->tid, bp_info->pc);
+    delete bp_info;
 }
 
 void
