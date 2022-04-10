@@ -55,6 +55,7 @@
 #include "base/logging.hh"
 #include "base/statistics.hh"
 #include "base/types.hh"
+#include "dev/lvnaTasks.hh"
 #include "mem/cache/cache_blk.hh"
 #include "mem/packet.hh"
 #include "params/BaseTags.hh"
@@ -104,8 +105,7 @@ class BaseTags : public ClockedObject
     /** The data blocks, 1 per cache block. */
     std::unique_ptr<uint8_t[]> dataBlks;
 
-    std::vector<std::set<Addr>> accessTagSets;
-    std::set<int> lastTSetAccess80;
+  public:
     /**
      * TODO: It would be good if these stats were acquired after warmup.
      */
@@ -156,17 +156,8 @@ class BaseTags : public ClockedObject
         Stats::Formula percentOccsTaskId;
 
         /** Total number of sets accessed in each slice */
-        Stats::Vector sliceSetAccesses;
-        Stats::Formula sliceSetAccessesAvg;
-        Stats::Formula sliceSetAccessesVar;
-        Stats::Scalar sliceSetAcc80;
-        Stats::Scalar sliceSetAcc80LastT;
-        Stats::Scalar sliceSetAcc80IntNum;
-
-        /** Total number of different tags in sets accessed in each slice */
-        Stats::Vector sliceSetAccessUnique;
-        Stats::Formula sliceSetAccessUniqueAvg;
-        Stats::Formula sliceSetAccessUniqueVar;
+        Stats::Vector2d sliceSetAccesses;
+        Stats::Vector sliceSetAcc80;
 
         /** Number of tags consulted over all accesses. */
         Stats::Scalar tagAccesses;
@@ -330,9 +321,11 @@ class BaseTags : public ClockedObject
      * @param addr The address to find.
      * @param is_secure True if the target memory space is secure.
      * @param lat The latency of the tag lookup.
+     * @param optional id is for lvna record
      * @return Pointer to the cache block if found.
      */
     virtual CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat) = 0;
+    virtual CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat, uint32_t id) = 0;
 
     /**
      * Generate the tag from the given address.

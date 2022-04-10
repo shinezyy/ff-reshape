@@ -67,7 +67,6 @@ BaseTags::BaseTags(const Params &p)
       warmupBound((p.warmup_percentage/100.0) * (p.size / p.block_size)),
       warmedUp(false), numBlocks(p.size / p.block_size),
       dataBlks(new uint8_t[p.size]), // Allocate data storage in one big chunk
-      accessTagSets(p.num_slices),
       stats(*this)
 {
     registerExitCallback([this]() { cleanupRefs(); });
@@ -200,48 +199,35 @@ BaseTags::computeStats()
 
     forEachBlk([this](CacheBlk &blk) { computeStatsVisitor(blk); });
 
-    for (size_t i = 0; i < num_slices; i++)
+    for (size_t qosid = 0; qosid < LvNATasks::NumId; qosid++)
     {
-        stats.sliceSetAccessUnique[i] = accessTagSets[i].size();
-        accessTagSets[i].clear();
-    }
-    std::vector<std::pair<uint64_t,int>> tmp_set_cnt;
-    for (int i = 0; i < num_slices; i++)
-    {
-        tmp_set_cnt.push_back(std::make_pair((uint64_t)stats.sliceSetAccesses[i].value(),i));
-    }
+        std::vector<std::pair<uint64_t,int>> tmp_set_cnt;
+        for (int i = 0; i < num_slices; i++)
+        {
+            tmp_set_cnt.push_back(std::make_pair(
+                (uint64_t)stats.sliceSetAccesses[qosid][i].value(),i));
+        }
 
-    uint64_t sum_acc = 0;
-    for (auto &&i : tmp_set_cnt)
-    {
-        sum_acc += i.first;
-    }
+        uint64_t sum_acc = 0;
+        for (auto &&i : tmp_set_cnt)
+        {
+            sum_acc += i.first;
+        }
 
-    uint64_t sum80_threshold = sum_acc*0.8;
-    std::sort(tmp_set_cnt.begin(),tmp_set_cnt.end(),std::greater_equal<>());
-    std::set<int> currentTSetAccess80;
-    uint64_t tmp_acc = 0;
-    for (int i = 0; i < num_slices; i++)
-    {
-        tmp_acc += tmp_set_cnt[i].first;
-        currentTSetAccess80.insert(tmp_set_cnt[i].second);
-        if (tmp_acc >= sum80_threshold)
-            break;
+        uint64_t sum80_threshold = sum_acc*0.8;
+        std::sort(tmp_set_cnt.begin(),tmp_set_cnt.end(),std::greater_equal<>());
+        uint64_t tmp_acc = 0;
+        int i = 0;
+        for (i = 0; i < num_slices; i++)
+        {
+            tmp_acc += tmp_set_cnt[i].first;
+            if (tmp_acc >= sum80_threshold){
+                i++;
+                break;
+            }
+        }
+        stats.sliceSetAcc80[qosid] = i;
     }
-    stats.sliceSetAcc80 = currentTSetAccess80.size();
-    stats.sliceSetAcc80LastT = lastTSetAccess80.size();
-    std::vector<int> tmp_int;
-    std::set_intersection(
-        currentTSetAccess80.begin(),currentTSetAccess80.end(),
-        lastTSetAccess80.begin(),lastTSetAccess80.end(),
-        std::inserter(tmp_int,tmp_int.begin())
-    );
-    stats.sliceSetAcc80IntNum = tmp_int.size();
-    lastTSetAccess80.clear();
-    std::copy(
-        currentTSetAccess80.begin(),currentTSetAccess80.end(),
-        std::inserter(lastTSetAccess80,lastTSetAccess80.begin())
-    );
 
 }
 
@@ -287,23 +273,8 @@ BaseTags::BaseTagStats::BaseTagStats(BaseTags &_tags)
                       "Percentage of cache occupancy per task id"),
     sliceSetAccesses(this, "slice_set_accesses",
                 "Total number of sets accessed in a slice"),
-    sliceSetAccessesAvg(this, "slice_set_accesses_avg",
-                "Average number of sets accessed in a slice"),
-    sliceSetAccessesVar(this, "slice_set_accesses_var",
-                "Varaiance of number of sets accessed in a slice"),
-    sliceSetAcc80(this, "slice_set_accesses_80",
+    sliceSetAcc80(this, "slice_set_accesses80",
                 "number of sets which contains 80\% of accesses"),
-    sliceSetAcc80LastT(this, "slice_set_accesses_80_lastT",
-        "number of sets which contains 80\% of accesses in lastT"),
-    sliceSetAcc80IntNum(this, "slice_set_accesses_80_intersect",
-        "number of sets which contains 80\% of accesses in both lastT "
-        "and currentT"),
-    sliceSetAccessUnique(this, "slice_set_accesses_unique",
-                "Total number of unique tag&set access in a slice"),
-    sliceSetAccessUniqueAvg(this, "slice_set_accesses_unique_avg",
-                "Average number of unique tag&set accessed in a slice"),
-    sliceSetAccessUniqueVar(this, "slice_set_accesses_unique_var",
-                "Varaiance of number of unique tag&set accessed in a slice"),
     tagAccesses(this, "tag_accesses", "Number of tag accesses"),
     dataAccesses(this, "data_accesses", "Number of data accesses")
 {
@@ -345,16 +316,11 @@ BaseTags::BaseTagStats::regStats()
         .flags(nozero | nonan)
         ;
 
-    sliceSetAccesses.init(tags.num_slices);
-    sliceSetAccessUnique.init(tags.num_slices);
+    sliceSetAccesses
+        .init(LvNATasks::NumId,tags.num_slices)
+        .flags(nozero);
 
-    sliceSetAccessesAvg = sum(sliceSetAccesses) / Stats::constant(tags.num_slices);
-    sliceSetAccessesVar = sum((sliceSetAccesses-sliceSetAccessesAvg)
-    *(sliceSetAccesses-sliceSetAccessesAvg)) / Stats::constant(tags.num_slices);
-
-    sliceSetAccessUniqueAvg = sum(sliceSetAccessUnique) / Stats::constant(tags.num_slices);
-    sliceSetAccessUniqueVar = sum((sliceSetAccessUnique-sliceSetAccessUniqueAvg)
-    *(sliceSetAccessUnique-sliceSetAccessUniqueAvg)) / Stats::constant(tags.num_slices);
+    sliceSetAcc80.init(LvNATasks::NumId).flags(nozero);
 
     percentOccsTaskId.flags(nozero);
 
