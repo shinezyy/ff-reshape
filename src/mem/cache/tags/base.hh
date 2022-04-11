@@ -165,6 +165,7 @@ class BaseTags : public ClockedObject
         Stats::Scalar dataAccesses;
     } stats;
 
+    std::set<uint32_t>* runningHighIds;
   public:
     typedef BaseTagsParams Params;
     BaseTags(const Params &p);

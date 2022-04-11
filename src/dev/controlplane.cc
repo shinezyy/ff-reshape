@@ -13,12 +13,14 @@ void
 FgJobMeta::jobUp(int job_id, int cpu_id,uint64_t now_cycle, uint64_t now_insts)
 {
   cp->setContextQosId(cpu_id, LvNATasks::job2QosId(job_id));
+  cp->registerRunningHighId(LvNATasks::job2QosId(job_id),true);
   up(now_cycle,now_insts);
 }
 void
 FgJobMeta::jobDown(int job_id, int cpu_id,uint64_t now_cycle, uint64_t now_insts)
 {
   down(now_cycle,now_insts);
+  cp->registerRunningHighId(LvNATasks::job2QosId(job_id),false);
   cp->cpStat.JobCycles[job_id] += total_cycle;
   cp->cpStat.JobInsts[job_id] += total_insts;
 }
@@ -108,6 +110,27 @@ ControlPlane::setContextQosId(uint32_t ctx_id, uint32_t qos_id)
     c->context2QosIDMap[ctx_id] = qos_id;
   }
   l3->context2QosIDMap[ctx_id] = qos_id;
+}
+
+void
+ControlPlane::registerRunningHighId(uint32_t qos_id, bool flag)
+{
+  if (flag)
+  {
+    for (const auto &c:l2s)
+    {
+      c->runningHighIds.insert(qos_id);
+    }
+    l3->runningHighIds.insert(qos_id);
+  }
+  else
+  {
+    for (const auto &c:l2s)
+    {
+      c->runningHighIds.erase(qos_id);
+    }
+    l3->runningHighIds.erase(qos_id);
+  }
 }
 
 void ControlPlane::resetTTIMeta()

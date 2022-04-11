@@ -108,6 +108,7 @@ class ControlPlane: public BasicPioDevice
     void setJob(int job_id, int cpu_id, bool status);
 
     void setContextQosId(uint32_t ctx_id, uint32_t qos_id);
+    void registerRunningHighId(uint32_t qos_id, bool flag);
 
   public:
     struct ControlPlaneStats : public Stats::Group
