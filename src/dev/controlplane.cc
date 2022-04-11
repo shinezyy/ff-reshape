@@ -123,6 +123,9 @@ void ControlPlane::resetTTIMeta()
 
 #define SMALLJOBS
 // #define INPUT_INC
+#define SUM(v) (std::accumulate(std::begin(v), std::end(v), 0.0))
+#define MAX(v) (*(std::max_elemet(std::begin(v), std::end(v)))
+#define MIN(v) (*(std::min_elemet(std::begin(v), std::end(v)))
 #define AVERAGE(v) (std::accumulate(std::begin(v), std::end(v), 0.0) / v.size() )
 #define l2b(i,id) l2s[i]->buckets[id]
 #define l3b(id) l3->buckets[id]
@@ -146,126 +149,69 @@ ControlPlane::startQoS()
 {
   //reset stats
   inform("start real QoS\n");
-#ifndef SMALLJOBS
-
-#ifndef INPUT_INC //AUTO_TUNE
-  l2inc = 20;
-  l3inc = 50;
-#endif // END_INPUT_INC_
-  std::vector<double> bgIpcs;
-  cpStat.CPUBackgroundIpc.result(bgIpcs);
-  mixIpc = bgIpcs[0];
-  std::vector<int> l2acc, l3acc;
-  // get info
-  for (int i = 0; i < 4; i++)
-  {
-    l2acc.push_back(l2s[i/2]->buckets[i]->gar_acc());
-    l3acc.push_back(l3->buckets[i]->gar_acc());
-    printf("core %d l2acc %d l3acc %d\n", i, l2acc[i], l3acc[i]);
+  // ======= Method 1 ========
+  uint64_t sumJobCycles = 0;
+  uint64_t sumJobInsts = 0;
+  for (int i = 0; i < 5; i++){
+    sumJobCycles += cpStat.JobCycles[i].value();
+    sumJobInsts  += cpStat.JobInsts[i].value();
   }
+  basicJobIpcTotal = double(sumJobInsts)/double(sumJobCycles);
+  // ======= Method 2 ========
+  cpStat.JobIpc.result(basicJobIpcs);
 
-  // start QoS
-  l2s[0]->buckets[0]->set_bypass(true);
-  l3->buckets[0]->set_bypass(true);
-
-  l2s[0]->buckets[1]->set_bypass(false);
-  l2s[0]->buckets[1]->set_inc(l2inc);
-  l2s[0]->buckets[1]->set_tokens(l2inc);
-  for (int i = 1; i < 4; i++){
-    l3->buckets[i]->set_bypass(false);
-    l3->buckets[i]->set_inc(l3inc);
-    l3->buckets[i]->set_tokens(l3inc);
-  }
-
-#else // WITH_SMALLJOBS_
-  std::vector<double> bgIpcs, jobIpcs;
-  cpStat.JobIpc.result(jobIpcs);
-  cpStat.CPUBackgroundIpc.result(bgIpcs);
-
-  mixIpc = AVERAGE(jobIpcs);
-
-  // lower prior tb
+  // restrict lower prior tb
+  // use INPUT_INC for the initial inc
   for (int id = 0; id < LvNATasks::QosIdStart; id++){
     l3b(id)->set_bypass(false);
-    l3b(id)->set_inc(50);
-    l3b(id)->set_tokens(50);
+    l3b(id)->set_inc(l3inc);
+    l3b(id)->set_tokens(l3inc);
   }
   // Qos guarantee tb
   for (int id = LvNATasks::QosIdStart; id < LvNATasks::NumId; id++){
     l3b(id)->set_bypass(true);
   }
-#endif // END_SMALLJOBS_
 }
 
 void
 ControlPlane::tuning()
 {
-#ifndef SMALLJOBS
-#ifndef INPUT_INC
-  inform("start tuning\n");
-  std::vector<double> bgIpcs;
-  cpStat.CPUBackgroundIpc.result(bgIpcs);
-  double speedup = bgIpcs[0]/mixIpc;
-  std::vector<int> l2acc, l3acc;
-
-  // get info
-  for (int i = 0; i < 4; i++)
-  {
-    l2acc.push_back(l2s[i/2]->buckets[i]->gar_acc());
-    l3acc.push_back(l3->buckets[i]->gar_acc());
-    printf("cpu %d ipc: %.6f l2acc %d l3acc %d \n", i, bgIpcs[i], l2acc[i], l3acc[i]);
-  }
-  printf("cpu 0 speedup %.4f\n", speedup);
-
-  // start QoS
-  for (int i = 1; i < 4; i++)
-  {
-    int l3inc = l3->buckets[i]->get_inc();
-    // far from target
-    if (speedup < 1.05)
-    {
-      l3->buckets[i]->set_inc(l3inc/2);
-    }// still needs adjustment
-    else if (speedup < 1.095)
-    { //先按照百分比减少吧
-      l3->buckets[i]->set_inc(l3inc-(1.1 - speedup)*2*(l2acc[1]+l2acc[2]+l2acc[3])/100/3);
-    }// relax a little
-    else if (speedup > 1.130)
-    {
-      // l3->buckets[i]->set_inc(l3inc+(speedup-1.1)*2*(l2acc[1]+l2acc[2]+l2acc[3])/100/3);
-      l3->buckets[i]->set_inc(l3inc+10);
-    }
-    else if (speedup > 1.110)
-    {
-      l3->buckets[i]->set_inc(l3inc+5);
-    }
-    printf("cpu %d new inc %d\n", i, l3->buckets[i]->get_inc());
-  }
-#endif // END_INPUT_INC_
-#else // WITH_SMALLJOBS
   // get QoS speedup
-  std::vector<double> bgIpcs, jobIpcs;
+  // ======= Method 1 ========
+  uint64_t sumJobCycles = 0;
+  uint64_t sumJobInsts = 0;
+  for (int i = 0; i < 5; i++){
+    sumJobCycles += cpStat.JobCycles[i].value();
+    sumJobInsts  += cpStat.JobInsts[i].value();
+  }
+  double avgJobIpc = double(sumJobInsts)/double(sumJobCycles);
+  double speedup_total = avgJobIpc/basicJobIpcTotal;
+  // ======= Method 2 ========
+  std::vector<double> jobIpcs, speedups;
   cpStat.JobIpc.result(jobIpcs);
-  cpStat.CPUBackgroundIpc.result(bgIpcs);
-  double speedup = AVERAGE(jobIpcs)/mixIpc;
-  printf("speedup %.4f\n", speedup);
+  for (int i = 0; i < 5; i++){
+    speedups.push_back(jobIpcs[i]/basicJobIpcs[i]);
+  }
+  double speedup_fair = AVERAGE(speedups);
+  printf("speedup total:%.4f fair:%.4f\n", speedup_total, speedup_fair);
 
   // get mem-access info for every job
-  // count bucket[id] and its QoS-bucket[id+LvNATasks::Qos]
+  // count bucket[id] and its bypass bucket[id+LvNATasks::NumBuckets]
   std::vector<int> l2acc, l3acc;
-  for (int id = 0; id <= LvNATasks::MaxCtxId; id++){
+  for (int id = 0; id <= LvNATasks::NumId; id++){
     l2acc.push_back(0.0);
     l3acc.push_back(0.0);
     for (int i = 0; i < np/2; i++){
       l2acc[id] += l2b(i, id)->gar_acc();
-      l2acc[id] += l2b(i, id+LvNATasks::QosIdStart)->gar_acc();
+      l2acc[id] += l2b(i, id+LvNATasks::NumBuckets)->gar_acc();
     }
     l3acc[id] += l3b(id)->gar_acc();
-    l3acc[id] += l3b(id+LvNATasks::QosIdStart)->gar_acc();
+    l3acc[id] += l3b(id+LvNATasks::NumBuckets)->gar_acc();
     printf("job id %d l2acc %d l3acc %d\n",id,l2acc[id],l3acc[id]);
   }
 
   // update tokens
+  double speedup = speedup_total;
   for (int i = 0; i < LvNATasks::QosIdStart; i++){
     int oldinc = l3->buckets[i]->get_inc();
     int newinc = oldinc;
@@ -282,7 +228,6 @@ ControlPlane::tuning()
     l3->buckets[i]->set_tokens(newinc);
     printf("old inc %d new inc %d\n", oldinc, newinc);
   }
-#endif // END_SMALLJOBS_
 }
 
 void

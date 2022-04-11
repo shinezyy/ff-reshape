@@ -97,7 +97,8 @@ class ControlPlane: public BasicPioDevice
     Cache * l3;
     int np;
     uint32_t l2inc, l3inc;
-    double mixIpc;
+    double basicJobIpcTotal;
+    std::vector<double> basicJobIpcs;
     //these are used to record performance in one TTI
     std::vector<double> JobIpc;
     std::vector<double> CPUBackgroundIpc;
