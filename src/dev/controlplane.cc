@@ -2,6 +2,11 @@
 // Created by zcq on 2022/2/11.
 //
 
+#include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+
 #include "controlplane.hh"
 #include "mem/packet_access.hh"
 
@@ -57,6 +62,7 @@ Tick ControlPlane::write(PacketPtr pkt) {
 ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     BasicPioDevice(*p, p->pio_size),
     l3_waymask_set(p->l3_waymask_set),
+    nowTTI(0),
     cpus(p->cpus),
     l2s(p->l2s),
     l3(p->l3),
@@ -148,9 +154,11 @@ void ControlPlane::resetTTIMeta()
 }
 
 void
-ControlPlane::startTraining()
+ControlPlane::startTraining(std::string top_dir)
 {
   //mark auto tuning start
+  //set data files top dir
+  top_dir_path = top_dir;
 }
 
 void
@@ -170,6 +178,19 @@ ControlPlane::startQoS()
     {
       l3->setWaymask(i,l3_waymask_set[i]);
     }
+    //TODO: lvna: now we judge high by using the most ways
+    int max_popc = 0;
+    int max_i = 0;
+    for (size_t i = 0; i < np; i++)
+    {
+      int tmp_popc = popCount(l3_waymask_set[i]);
+      if (tmp_popc > max_popc)
+      {
+        max_popc = tmp_popc;
+        max_i = i;
+      }
+    }
+    registerRunningHighId(max_i,true);
   }
 }
 
@@ -217,6 +238,17 @@ ControlPlane::startTTI()
     uint64_t now_cycle = cpus[i]->getNumCycles();
     uint64_t now_insts = cpus[i]->getCommittedInsts();
     BgCpuMap[i]->bgUp(i,now_cycle,now_insts);
+  }
+
+  //dump datas to l3 tags
+  for (size_t i = 0; i < np; i++)
+  {
+    std::ostringstream os;
+    os << top_dir_path << "/" << i << "/" <<nowTTI <<".csv";
+    std::string csv_path = os.str();
+    std::ifstream inputF(csv_path);
+    std::istream_iterator<int> iit(inputF),iend;
+    l3->tags->id_map_set_access_vecs[i].assign(iit,iend);
   }
   //tell l3 tags updatehot
   l3->tags->updateHotSets();
@@ -267,6 +299,7 @@ ControlPlane::endTTI()
   //   cpStat.CPUBackgroundCycles[i] += CPUBackgroundCycles[i];
   //   cpStat.CPUBackgroundInsts[i] += CPUBackgroundInsts[i];
   // }
+  nowTTI++;
 }
 
 ControlPlane::ControlPlaneStats::ControlPlaneStats(ControlPlane &cp)

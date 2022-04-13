@@ -560,3 +560,6 @@ def addFSOptions(parser):
     parser.add_option("--cycle_afterwarm", action="store", type="int",
         default=1_000_000,
         help="cycles after warmup cpt")
+    parser.add_option("--set_est_dir", action="store", type="string",
+        default=None,
+        help="topdir for set_est csv files")

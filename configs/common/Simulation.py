@@ -284,6 +284,7 @@ def benchCheckpoints(testsys, options, maxtick, cptdir):
     if options.nohype:
         testsys.controlplane.startQoS()
 
+        testsys.controlplane.startTraining(options.set_est_dir)
 
         run_n = options.cycle_afterwarm // 1_000_000
         for i in range(run_n):

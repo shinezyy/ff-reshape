@@ -76,6 +76,9 @@ class ControlPlane: public BasicPioDevice
     std::map<uint32_t, uint32_t> QosIDAlterMap;
     std::vector<uint64_t> l3_waymask_set;
 
+    std::string top_dir_path;
+    int nowTTI;
+
   public:
     std::vector<DerivO3CPU *> cpus;
     std::vector<Cache *> l2s;
@@ -95,7 +98,7 @@ class ControlPlane: public BasicPioDevice
     Tick write(PacketPtr pkt) override;
 
     //start QoS training
-    void startTraining();
+    void startTraining(std::string top_dir);
     //clean up stats, start real QoS simulation
     void startQoS();
     // adjust params after a TTI
