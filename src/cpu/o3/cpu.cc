@@ -1609,18 +1609,27 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
             ;
         }
     }
-    const int groupSize = 512;
+    const int groupSize = 256;
     if (enable_xgroup_mem_dep) {
         if (theinstnum % groupSize == 1) {
+           // printf("###########################################################################\n");
             for (int j = 0; j < groupSize; j++) {
                 if (theinstnum == 1) {
                     current_reg[j] = 0;
                     current_size[j] = 0;
                     last_reg[j] = 0;
                     last_size[j] = 0;
+                    last_num=0;
                 } else {
+                    last_num= current_num;
+                    if (j < current_num){
                     last_reg[j] = current_reg[j];
                     last_size[j] = current_size[j];
+                    }
+                    else{
+                    last_reg[j] = 0;
+                    last_size[j] = 0;
+                    }
                 }
             }
             current_num = 0;
@@ -1632,28 +1641,42 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
         }
         if (inst->isLoad()) {
             bool hit_in_current_group = false;
-
             Addr inst_addr1 = inst->physEffAddr;
             Addr inst_addr2 = inst->physEffAddr + inst->effSize;
             for (int i = 0; i < current_num; i++) {
                 Addr inst_reg1 = current_reg[i];
                 Addr inst_reg2 = current_reg[i] + current_size[i] - 1;
+                assert(current_reg[i] + current_size[i] !=0);
+              //  printf("the inter hit inst_reg1 is 0x%lx\n",inst_reg1);
+              //  printf("the inter hit inst_reg2 is 0x%lx\n",inst_reg2);
+              //  printf("the current_reg is 0x%lx\n",current_reg[i]);
+              //  printf("the current_size is 0x%x\n",current_size[i]);
+                assert( inst_reg1 <= inst_reg2 );
 
                 if (((inst_reg1 <= inst_addr1) && (inst_addr1 < inst_reg2)) ||
                     ((inst_reg1 < inst_addr2) && (inst_addr2 <= inst_reg2))) {
                     cpuStats.intra_num++;
+                   // printf("the intra hit is 0x%lx\n",inst_addr1);
                     hit_in_current_group = true;
                     break;
                 }
             }
 
             if (!hit_in_current_group) {
-                for (int k = 0; k < groupSize; k++) {
+                //for (int k = 0; k <groupSize ; k++) {
+                for (int k = 0; k < last_num; k++) {
                     Addr inst_reg3 = last_reg[k];
                     Addr inst_reg4 = last_reg[k] + current_size[k] - 1;
-
+                    assert(last_reg[k] + current_size[k]!=0);
+                    assert( inst_reg3 <= inst_reg4 );
                     if (((inst_reg3 <= inst_addr1) && (inst_addr1 < inst_reg4)) ||
                         ((inst_reg3 < inst_addr2) && (inst_addr2 <= inst_reg4))) {
+                     //    printf("the group num is %ld\n",theinstnum/groupSize);
+                     //    printf("the instnum is %ld\n",theinstnum);
+                     //    printf("the inter hit inst_addr1 is 0x%lx\n",inst_addr1);
+                      //   printf("the inter hit inst_addr2 is 0x%lx\n",inst_addr2);
+                      //   printf("the inter hit inst_reg3 is 0x%lx\n",inst_reg3);
+                      //   printf("the inter hit inst_reg4 is 0x%lx\n",inst_reg4);
                         cpuStats.inter_num++;
                         break;
                     }

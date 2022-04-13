@@ -792,6 +792,7 @@ class FullO3CPU : public BaseO3CPU
     Addr current_reg[groupSize];
     unsigned current_size[groupSize];
     uint64_t current_num;
+    uint64_t last_num;
     Addr last_reg[groupSize];
     unsigned last_size[groupSize];
   //  uint64_t intra_num;

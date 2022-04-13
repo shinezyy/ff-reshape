@@ -138,7 +138,7 @@ def load_all_gcpt(gcpt_path, json_path, state_filter=None, xs_path=None, sorted_
   else:
     return sorted(all_gcpt, key=sorted_by)
 
-tasks_dir = "SPEC06_EmuTasks_10_22_2021"
+tasks_dir = "SPEC06_EmuTasks_03_17_2022_256"
 
 def get_perf_base_path(xs_path):
   return os.path.join(xs_path, tasks_dir)
@@ -146,7 +146,7 @@ def get_perf_base_path(xs_path):
 def gem5_run(workloads, gem5_path,threads):
   emu_path = os.path.join(gem5_path, "./build/RISCV/gem5.opt")
   #nemu_so_path = os.path.join(xs_path, "ready-to-run/riscv64-nemu-interpreter-so")
-  base_arguments = ['configs/example/fs.py', '--l2cache', '--l3_cache', '--caches', \
+  base_arguments = ['configs/example/fs.py', '--l2cache', '--l3cache', '--caches', \
         '--xgroup_mem_dep' ,\
         '--branch-trace-file=useless_branch.protobuf.gz', \
         '--mem-type=DDR4_2400_16x4', \
@@ -154,10 +154,10 @@ def gem5_run(workloads, gem5_path,threads):
         '--l1d_size=32kB','--l1d_assoc=8','--l2_size=4MB','--l2_assoc=8', \
         '--cpu-type=DerivO3CPU','--num-ROB=192','--num-PhysReg=192', \
         '--num-IQ=192','--num-LQ=72','--num-SQ=48','--mem-size=16GB','--num-cpus=1', \
-        '--gcpt-restorer=/nfs/home/zhenhao/gcpt.bin','--maxinsts=300000','--gcpt-warmup=5000']
+        '--gcpt-restorer=/nfs/home/zhenhao/gcpt.bin','--maxinsts=600000','--gcpt-warmup=5000']
   # base_arguments = [emu_path, '-W', str(warmup), '-I', str(max_instr), '-i']
   proc_count, finish_count = 0, 0
-  max_pending_proc = 100 // threads
+  max_pending_proc = 40 // threads
   pending_proc, error_proc = [], []
   free_cores = list(range(max_pending_proc))
   # skip CI cores
