@@ -140,21 +140,6 @@ class BaseSetAssoc : public BaseTags
             stats.dataAccesses += allocAssoc;
         }
 
-        if (slice_bits)
-        {
-            stats.sliceSetAccesses[bits<Addr>(
-                indexingPolicy->extractSet(addr),slice_bits-1,0)]++;
-            accessTagSets[indexingPolicy->extractSet(addr)].insert(
-                indexingPolicy->extractTag(addr));
-        }
-        else
-        {
-            stats.sliceSetAccesses[0]++;
-            accessTagSets[0].insert(indexingPolicy->extractTag(addr));
-        }
-
-
-
         // If a cache hit
         if (blk != nullptr) {
             // Update number of references to accessed block
@@ -166,6 +151,26 @@ class BaseSetAssoc : public BaseTags
 
         // The tag lookup latency is the same for a hit or a miss
         lat = lookupLatency;
+
+        return blk;
+    }
+
+    CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat, uint32_t id) override
+    {
+        CacheBlk *blk = accessBlock(addr,is_secure,lat);
+
+        if (id < LvNATasks::NumId)
+        {
+            if (slice_bits)
+            {
+                stats.sliceSetAccesses[id][bits<Addr>(
+                    indexingPolicy->extractSet(addr),slice_bits-1,0)]++;
+            }
+            else
+            {
+                stats.sliceSetAccesses[id][0]++;
+            }
+        }
 
         return blk;
     }

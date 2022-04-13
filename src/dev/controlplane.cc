@@ -13,12 +13,14 @@ void
 FgJobMeta::jobUp(int job_id, int cpu_id,uint64_t now_cycle, uint64_t now_insts)
 {
   cp->setContextQosId(cpu_id, LvNATasks::job2QosId(job_id));
+  cp->registerRunningHighId(LvNATasks::job2QosId(job_id),true);
   up(now_cycle,now_insts);
 }
 void
 FgJobMeta::jobDown(int job_id, int cpu_id,uint64_t now_cycle, uint64_t now_insts)
 {
   down(now_cycle,now_insts);
+  cp->registerRunningHighId(LvNATasks::job2QosId(job_id),false);
   cp->cpStat.JobCycles[job_id] += total_cycle;
   cp->cpStat.JobInsts[job_id] += total_insts;
 }
@@ -54,12 +56,15 @@ Tick ControlPlane::write(PacketPtr pkt) {
 
 ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     BasicPioDevice(*p, p->pio_size),
+    l3_waymask_set(p->l3_waymask_set),
     cpus(p->cpus),
     l2s(p->l2s),
     l3(p->l3),
     np(cpus.size()),
     l2inc(p->l2inc),
     l3inc(p->l3inc),
+    l2_tb_size(p->l2_tb_size),
+    l3_tb_size(p->l3_tb_size),
     cpStat(*this)
 {
   for (size_t i = 0; i < LvNATasks::NumJobs; i++)
@@ -107,6 +112,27 @@ ControlPlane::setContextQosId(uint32_t ctx_id, uint32_t qos_id)
   l3->context2QosIDMap[ctx_id] = qos_id;
 }
 
+void
+ControlPlane::registerRunningHighId(uint32_t qos_id, bool flag)
+{
+  if (flag)
+  {
+    for (const auto &c:l2s)
+    {
+      c->runningHighIds.insert(qos_id);
+    }
+    l3->runningHighIds.insert(qos_id);
+  }
+  else
+  {
+    for (const auto &c:l2s)
+    {
+      c->runningHighIds.erase(qos_id);
+    }
+    l3->runningHighIds.erase(qos_id);
+  }
+}
+
 void ControlPlane::resetTTIMeta()
 {
   JobIpc.assign(LvNATasks::NumJobs,0.0);
@@ -123,10 +149,10 @@ void ControlPlane::resetTTIMeta()
 
 #define SMALLJOBS
 // #define INPUT_INC
-#define SUM(v) (std::accumulate(std::begin(v), std::end(v), 0.0))
-#define MAX(v) (*(std::max_elemet(std::begin(v), std::end(v)))
-#define MIN(v) (*(std::min_elemet(std::begin(v), std::end(v)))
-#define AVERAGE(v) (std::accumulate(std::begin(v), std::end(v), 0.0) / v.size() )
+#define CP_SUM(v) (std::accumulate(std::begin(v), std::end(v), 0.0))
+#define CP_MAX(v) (*(std::max_elemet(std::begin(v), std::end(v)))
+#define CP_MIN(v) (*(std::min_elemet(std::begin(v), std::end(v)))
+#define CP_AVERAGE(v) (std::accumulate(std::begin(v), std::end(v), 0.0) / v.size() )
 #define l2b(i,id) l2s[i]->buckets[id]
 #define l3b(id) l3->buckets[id]
 
@@ -171,6 +197,16 @@ ControlPlane::startQoS()
   for (int id = LvNATasks::QosIdStart; id < LvNATasks::NumId; id++){
     l3b(id)->set_bypass(true);
   }
+
+  //set l3 waymasks
+  if (!l3_waymask_set.empty())
+  {
+    l3->setWaymaskEnable(true);
+    for (size_t i = 0; i < l3_waymask_set.size(); i++)
+    {
+      l3->setWaymask(i,l3_waymask_set[i]);
+    }
+  }
 }
 
 void
@@ -192,7 +228,7 @@ ControlPlane::tuning()
   for (int i = 0; i < 5; i++){
     speedups.push_back(jobIpcs[i]/basicJobIpcs[i]);
   }
-  double speedup_fair = AVERAGE(speedups);
+  double speedup_fair = CP_AVERAGE(speedups);
   printf("speedup total:%.4f fair:%.4f\n", speedup_total, speedup_fair);
 
   // get mem-access info for every job
@@ -246,6 +282,8 @@ ControlPlane::startTTI()
     uint64_t now_insts = cpus[i]->getCommittedInsts();
     BgCpuMap[i]->bgUp(i,now_cycle,now_insts);
   }
+  //tell l3 tags updatehot
+  l3->tags->updateHotSets();
 }
 
 void

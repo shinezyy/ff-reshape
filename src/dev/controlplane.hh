@@ -9,25 +9,9 @@
 #include "base/statistics.hh"
 #include "cpu/o3/deriv.hh"
 #include "dev/io_device.hh"
+#include "dev/lvnaTasks.hh"
 #include "mem/cache/cache.hh"
 #include "params/ControlPlane.hh"
-
-namespace LvNATasks {
-    // 0~7 are job ids
-    // 8~15 are QosId for jobs
-    // 16~31 are bypassIdx of 0~15 (not used for now)
-    enum JobId {
-        MaxLowPrivId = 7,
-        MaxCtxId = 7,
-        QosIdStart = 8,
-        NumId = 16,
-        NumBuckets = 32,
-    };
-    const int NumJobs = 5;
-    static inline uint32_t job2QosId(uint32_t job_id){
-      return job_id + QosIdStart;
-    }
-}
 
 class ControlPlane;
 
@@ -90,6 +74,7 @@ class ControlPlane: public BasicPioDevice
     //this is used to record contextID to QoS ID map
     std::map<uint32_t, uint32_t> context2QosIDMap;
     std::map<uint32_t, uint32_t> QosIDAlterMap;
+    std::vector<uint64_t> l3_waymask_set;
 
   public:
     std::vector<DerivO3CPU *> cpus;
@@ -99,6 +84,8 @@ class ControlPlane: public BasicPioDevice
     uint32_t l2inc, l3inc;
     double basicJobIpcTotal;
     std::vector<double> basicJobIpcs;
+    uint32_t l2_tb_size, l3_tb_size;
+    double mixIpc;
     //these are used to record performance in one TTI
     std::vector<double> JobIpc;
     std::vector<double> CPUBackgroundIpc;
@@ -123,6 +110,7 @@ class ControlPlane: public BasicPioDevice
     void setJob(int job_id, int cpu_id, bool status);
 
     void setContextQosId(uint32_t ctx_id, uint32_t qos_id);
+    void registerRunningHighId(uint32_t qos_id, bool flag);
 
   public:
     struct ControlPlaneStats : public Stats::Group

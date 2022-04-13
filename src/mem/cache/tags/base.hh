@@ -55,6 +55,7 @@
 #include "base/logging.hh"
 #include "base/statistics.hh"
 #include "base/types.hh"
+#include "dev/lvnaTasks.hh"
 #include "mem/cache/cache_blk.hh"
 #include "mem/packet.hh"
 #include "params/BaseTags.hh"
@@ -104,7 +105,7 @@ class BaseTags : public ClockedObject
     /** The data blocks, 1 per cache block. */
     std::unique_ptr<uint8_t[]> dataBlks;
 
-    std::vector<std::set<Addr>> accessTagSets;
+  public:
     /**
      * TODO: It would be good if these stats were acquired after warmup.
      */
@@ -155,10 +156,8 @@ class BaseTags : public ClockedObject
         Stats::Formula percentOccsTaskId;
 
         /** Total number of sets accessed in each slice */
-        Stats::Vector sliceSetAccesses;
-
-        /** Total number of different tags in sets accessed in each slice */
-        Stats::Vector sliceSetAccessUnique;
+        Stats::Vector2d sliceSetAccesses;
+        Stats::Vector sliceSetAcc80;
 
         /** Number of tags consulted over all accesses. */
         Stats::Scalar tagAccesses;
@@ -166,6 +165,10 @@ class BaseTags : public ClockedObject
         Stats::Scalar dataAccesses;
     } stats;
 
+    std::map<uint32_t,std::vector<int>> id_map_set_access_vecs;
+    std::map<uint32_t,std::vector<bool>> id_map_set_hot;
+    std::map<uint32_t,std::vector<bool>> id_map_set_altflag;
+    std::set<uint32_t>* runningHighIds;
   public:
     typedef BaseTagsParams Params;
     BaseTags(const Params &p);
@@ -197,6 +200,18 @@ class BaseTags : public ClockedObject
      * Print all tags used
      */
     std::string print();
+
+    /**
+     * @brief update hot bools by some stats
+     *
+     */
+    void updateHotSets();
+
+    /**
+     * @brief check need alt policy
+     *
+     */
+    bool needAltPolicy(Addr addr, uint32_t id);
 
     /**
      * Finds the block in the cache without touching it.
@@ -322,9 +337,11 @@ class BaseTags : public ClockedObject
      * @param addr The address to find.
      * @param is_secure True if the target memory space is secure.
      * @param lat The latency of the tag lookup.
+     * @param optional id is for lvna record
      * @return Pointer to the cache block if found.
      */
     virtual CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat) = 0;
+    virtual CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat, uint32_t id) = 0;
 
     /**
      * Generate the tag from the given address.

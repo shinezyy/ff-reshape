@@ -338,9 +338,11 @@ class BaseCache : public ClockedObject
     /** Write/writeback buffer */
     WriteQueue writeBuffer;
 
+  public:
     /** Tag and data Storage */
     BaseTags *tags;
 
+  protected:
     /** Compression method being used. */
     Compressor::Base* compressor;
 
@@ -984,6 +986,7 @@ class BaseCache : public ClockedObject
     //this is used to record contextID to QoS ID map
     std::map<uint32_t, uint32_t> context2QosIDMap;
     std::map<uint32_t, uint32_t> QosIDAlterMap;
+    std::set<uint32_t> runningHighIds;
     /** System we are currently operating in. */
     System *system;
 
@@ -1358,6 +1361,9 @@ class BaseCache : public ClockedObject
 
     void setWaymask(int idx, uint64_t mask){
         waymasks[idx] = mask;
+    }
+    void setWaymaskEnable(bool flag){
+        enable_waymask = flag;
     }
 };
 

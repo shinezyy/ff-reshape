@@ -456,11 +456,11 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
     istringstream ss(filepath);
     string gcptFile;
     vector<string> gcptFiles;
-    while(getline(ss, gcptFile, ';')){
+    while (getline(ss, gcptFile, ';')){
         gcptFiles.push_back(gcptFile);
     }
 
-    if(gcptFiles.size() != 1 && gcptFiles.size() != nohypeNum)
+    if (gcptFiles.size() != 1 && gcptFiles.size() != nohypeNum)
         fatal("Gcpt num %d not the same as cpu num %d",
                 gcptFiles.size(), nohypeNum);
 

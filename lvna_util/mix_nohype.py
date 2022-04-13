@@ -14,6 +14,8 @@ parser.add_argument('--debug-flag',type=str)
 parser.add_argument('-C','--compile', action="store_true",help="compile Gem5 first")
 parser.add_argument('--l2inc',type=int,default=10000)
 parser.add_argument('--l3inc',type=int,default=10000)
+parser.add_argument('--l2_tb_size',type=int,default=1024)
+parser.add_argument('--l3_tb_size',type=int,default=2048)
 args = parser.parse_args()
 
 os.chdir(ff_base)
@@ -41,6 +43,7 @@ opt.append('--l1d_size=32kB --l1d_assoc=8')
 opt.append('--l2_size=768kB --l2_assoc=12')
 opt.append('--l3_size=2MB --l3_assoc=8')
 opt.append('--l2inc={} --l3inc={}'.format(args.l2inc, args.l3inc))
+opt.append('--l2_tb_size={} --l3_tb_size={}'.format(args.l2_tb_size, args.l3_tb_size))
 
 gcpt_all = [(benchmark_dir + benchmark_cpt_file[bm]) for bm in args.benchmark.split("-")]
 opt.append('--job-benchmark')

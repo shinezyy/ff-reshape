@@ -29,3 +29,7 @@ class ControlPlane(BasicPioDevice):
     l3 = Param.Cache(NULL,'l3 cache under control')
     l2inc = Param.UInt32(10000, 'l2 tb inc')
     l3inc = Param.UInt32(10000, 'l3 tb inc')
+    l2_tb_size = Param.UInt32(1000, 'l3 tb size')
+    l3_tb_size = Param.UInt32(1000, 'l3 tb size')
+
+    l3_waymask_set = VectorParam.UInt64([], 'l3_waymask_choose')

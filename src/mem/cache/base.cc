@@ -126,6 +126,7 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
     tempBlock = new TempCacheBlk(blkSize);
 
     tags->tagsInit();
+    tags->runningHighIds = &this->runningHighIds;
     if (prefetcher)
         prefetcher->setCache(this);
 
@@ -1148,7 +1149,13 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
 
     // Access block in the tags
     Cycles tag_latency(0);
-    blk = tags->accessBlock(pkt->getAddr(), pkt->isSecure(), tag_latency);
+    if (pkt->req->taskId() < LvNATasks::NumId){
+        uint32_t qosid = context2QosIDMap[pkt->req->taskId()];
+        blk = tags->accessBlock(pkt->getAddr(), pkt->isSecure(), tag_latency, qosid);
+    }
+    else {
+        blk = tags->accessBlock(pkt->getAddr(), pkt->isSecure(), tag_latency);
+    }
 
     DPRINTF(Cache, "%s for %s %s\n", __func__, pkt->print(),
             blk ? "hit " + blk->print() : "miss");
@@ -1545,10 +1552,12 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
     std::vector<CacheBlk*> evict_blks;
     CacheBlk *victim;
     if (enable_waymask &&
-        pkt->req->hasContextId() &&
-        pkt->req->contextId() <= LvNATasks::MaxCtxId)
+        pkt->req->taskId() < LvNATasks::NumId)
     {
-        int index = context2QosIDMap[pkt->req->contextId()];
+        int index = context2QosIDMap[pkt->req->taskId()];
+        bool use_alt = tags->needAltPolicy(addr,index);
+        if (use_alt)
+            index = QosIDAlterMap[index];
         victim = tags->findVictim(addr, is_secure, blk_size_bits,
                                         evict_blks,waymasks[index]);
     }

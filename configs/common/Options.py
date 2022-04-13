@@ -138,10 +138,14 @@ def addNoISAOptions(parser):
     parser.add_option("--l2_latency", type="int", default=5)
     parser.add_option("--l3_latency", type="int", default=7)
     parser.add_option("--l3_complex", action="store_true")
-    parser.add_option("--l2_slices", type="int", default=1)
-    parser.add_option("--l3_slices", type="int", default=1)
-    parser.add_option("--l2inc", type="int", default=10000)
-    parser.add_option("--l3inc", type="int", default=10000)
+    parser.add_option("--l2_slices", type="int", default=1024)
+    parser.add_option("--l3_slices", type="int", default=4096)
+    parser.add_option("--l2inc", type="int", default=1000)
+    parser.add_option("--l3inc", type="int", default=1000)
+    parser.add_option("--l2_tb_size", type="int", default=1000)
+    parser.add_option("--l3_tb_size", type="int", default=1000)
+    parser.add_option("--sharel2", action="store_true")
+    parser.add_option("--l3_waymask_set", type="string")
     parser.add_option("--cacheline_size", type="int", default=64)
 
     # Enable Ruby
@@ -553,3 +557,6 @@ def addFSOptions(parser):
 
     parser.add_option("--job-benchmark", action="store_true", default=False,
                       help="use small jobs benchmark")
+    parser.add_option("--cycle_afterwarm", action="store", type="int",
+        default=10_000_000,
+        help="cycles after warmup cpt")

@@ -180,12 +180,13 @@ class FALRU : public BaseTags
      * @return Pointer to the cache block.
      */
     CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat,
-                          CachesMask *in_cache_mask);
+                          CachesMask *in_cache_mask, uint32_t id);
 
     /**
      * Just a wrapper of above function to conform with the base interface.
      */
     CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat) override;
+    CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat, uint32_t id) override;
 
     /**
      * Find the block in the cache, do not update the replacement data.

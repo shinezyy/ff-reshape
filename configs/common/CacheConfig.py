@@ -113,6 +113,15 @@ def _get_cache_opts(level, options):
     if hasattr(options, waymasks_attr):
         opts['waymasks'] = getattr(options, waymasks_attr)
 
+    latency_attr = '{}_latency'.format(level)
+    if hasattr(options, latency_attr):
+        opts['tag_latency'] = getattr(options, latency_attr)
+        opts['data_latency'] = getattr(options, latency_attr)
+
+    waymasks_attr = '{}_waymasks'.format(level)
+    if hasattr(options, waymasks_attr):
+        opts['waymasks'] = getattr(options, waymasks_attr)
+
     return opts
 
 def config_cache(options, system):
@@ -186,23 +195,34 @@ def config_cache(options, system):
             system.tol3bus = L2XBar(clk_domain = system.cpu_clk_domain,
                     width=64)
 
-        system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)
-        system.l3.cpu_side = system.tol3bus.master
-        system.l3.mem_side = system.membus.slave
+        if options.l3_cache:
+            system.l3.tags.num_slices = options.l3_slices
+            if options.l3_complex:
+                system.l3.tags.indexing_policy = ComplexAssociative()
+                system.l3.tags.indexing_policy.num_slices = options.l3_slices
+                max_addr = 0
+                for m in system.mem_ranges:
+                    if max_addr < m.end:
+                        max_addr = m.end
+                system.l3.tags.indexing_policy.mem_size = str(max_addr+1) + "B"
+
+            system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)
+            system.l3.cpu_side = system.tol3bus.master
+            system.l3.mem_side = system.membus.slave
 
     if options.memchecker:
         system.memchecker = MemChecker()
 
-    if options.num_cpus == 1:
+    if options.sharel2:
         system.l2 = [ l2_cache_class(clk_domain=system.cpu_clk_domain, **_get_cache_opts('l2', options))
-                      for idx in range(options.num_cpus) ]
+                      for idx in range(options.num_cpus//2) ]
         system.tol2bus = [ L2XBar(clk_domain = system.cpu_clk_domain)
-                      for idx in range(options.num_cpus) ]
+                      for idx in range(options.num_cpus//2) ]
     else:
         system.l2 = [ l2_cache_class(clk_domain=system.cpu_clk_domain, **_get_cache_opts('l2', options))
-                      for idx in range(options.num_cpus//2) ]
+                      for idx in range(options.num_cpus) ]
         system.tol2bus = [ L2XBar(clk_domain = system.cpu_clk_domain)
-                      for idx in range(options.num_cpus//2) ]
+                      for idx in range(options.num_cpus) ]
     for i in range(options.num_cpus):
         if options.caches:
             icache = icache_class(**_get_cache_opts('l1i', options))
@@ -263,7 +283,7 @@ def config_cache(options, system):
         system.cpu[i].createInterruptController()
 
         # cls: change config for private l2cache and shared l3cache
-        if options.l2cache:
+        if options.l2cache and options.sharel2:
             system.cpu[i].connectAllPorts(system.tol2bus[i//2], system.membus)
             if i%2==0:
                 system.l2[i//2].tags.num_slices = options.l2_slices
@@ -272,6 +292,14 @@ def config_cache(options, system):
                     system.l2[i//2].mem_side = system.tol3bus.slave
                 else:
                     system.l2[i//2].mem_side = system.membus.slave
+        elif options.l2cache:
+            system.cpu[i].connectAllPorts(system.tol2bus[i], system.membus)
+            system.l2[i].tags.num_slices = options.l2_slices
+            system.l2[i].cpu_side = system.tol2bus[i].master
+            if options.l3_cache:
+                system.l2[i].mem_side = system.tol3bus.slave
+            else:
+                system.l2[i].mem_side = system.membus.slave
         elif options.external_memory_system:
             system.cpu[i].connectUncachedPorts(system.membus)
         else:
