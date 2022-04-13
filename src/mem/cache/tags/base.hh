@@ -165,6 +165,9 @@ class BaseTags : public ClockedObject
         Stats::Scalar dataAccesses;
     } stats;
 
+    std::map<uint32_t,std::vector<int>> id_map_set_access_vecs;
+    std::map<uint32_t,std::vector<bool>> id_map_set_hot;
+    std::map<uint32_t,std::vector<bool>> id_map_set_altflag;
     std::set<uint32_t>* runningHighIds;
   public:
     typedef BaseTagsParams Params;
@@ -197,6 +200,18 @@ class BaseTags : public ClockedObject
      * Print all tags used
      */
     std::string print();
+
+    /**
+     * @brief update hot bools by some stats
+     *
+     */
+    void updateHotSets();
+
+    /**
+     * @brief check need alt policy
+     *
+     */
+    bool needAltPolicy(Addr addr, uint32_t id);
 
     /**
      * Finds the block in the cache without touching it.

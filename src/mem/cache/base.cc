@@ -1555,6 +1555,9 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
         pkt->req->taskId() < LvNATasks::NumId)
     {
         int index = context2QosIDMap[pkt->req->taskId()];
+        bool use_alt = tags->needAltPolicy(addr,index);
+        if (use_alt)
+            index = QosIDAlterMap[index];
         victim = tags->findVictim(addr, is_secure, blk_size_bits,
                                         evict_blks,waymasks[index]);
     }

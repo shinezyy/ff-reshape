@@ -218,6 +218,8 @@ ControlPlane::startTTI()
     uint64_t now_insts = cpus[i]->getCommittedInsts();
     BgCpuMap[i]->bgUp(i,now_cycle,now_insts);
   }
+  //tell l3 tags updatehot
+  l3->tags->updateHotSets();
 }
 
 void
