@@ -284,7 +284,9 @@ def benchCheckpoints(testsys, options, maxtick, cptdir):
     if options.nohype:
         testsys.controlplane.startQoS()
 
-        for i in range(3):
+
+        run_n = options.cycle_afterwarm // 1_000_000
+        for i in range(run_n):
             testsys.controlplane.startTTI()
             exit_event = m5.simulate(1_000_000*cpu_period)
             testsys.controlplane.endTTI()

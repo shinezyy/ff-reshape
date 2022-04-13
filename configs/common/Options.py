@@ -557,3 +557,6 @@ def addFSOptions(parser):
 
     parser.add_option("--job-benchmark", action="store_true", default=False,
                       help="use small jobs benchmark")
+    parser.add_option("--cycle_afterwarm", action="store", type="int",
+        default=1_000_000,
+        help="cycles after warmup cpt")
