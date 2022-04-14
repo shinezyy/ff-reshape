@@ -2,6 +2,8 @@ import re
 import os
 import time
 from common import *
+import subprocess
+
 
 if __name__ == '__main__':
     os.chdir(ff_base)
@@ -13,12 +15,30 @@ if __name__ == '__main__':
     newinc = int((upper+lower)/2)
 
     for iter in range(10):
-        outdir = 'log/{}_{}_{}'.format(bm, name, iter)
-        os.system('mkdir '+outdir)
-        os.system('python3 lvna_util/mix_nohype.py -b={0} --l2inc=10000 --l3inc={2} \
-            -W=1000000 -D={1} > {1}/run_log 2>&1'.format(bm, outdir, newinc))
+        outdir_name = 'log/hwtest/{}_{}_{}'.format(bm, name, iter)
+        outdir = os.path.join(ff_base, outdir_name)
+        os.makedirs(outdir,exist_ok=True)
+        run_once_script = '/nfs/home/zhangchuanqi/lvna/5g/ff-reshape/lvna_util/mix_nohype.py'
+        cmd_base = ['python3', run_once_script]
+        addition_cmd = []
+        addition_cmd.append(f'-b={bm}')
+        addition_cmd.append(f'-W=20000000')
+        # addition_cmd.append(f'-W=1000000')
+        addition_cmd.append(f'-D={outdir}')
+        addition_cmd.append(f'--l2inc=10000')
+        addition_cmd.append(f'--l3inc={newinc}')
 
-        with open(outdir+'/run_log') as f:
+        stdout_file = os.path.join(outdir, "stdout.log")
+        stderr_file = os.path.join(outdir, "stderr.log")
+        with open(stdout_file, "w") as stdout, open(stderr_file, "w") as stderr:
+            run_cmd = cmd_base + addition_cmd
+            cmd_str = " ".join(run_cmd)
+            print(f"cmd: {cmd_str}")
+            proc = subprocess.run(
+                run_cmd, stdout=stdout, stderr=stderr, preexec_fn=os.setsid
+                ,env=my_env)
+
+        with open(os.path.join(outdir,'stderr.log')) as f:
             c = f.read()
         speedup = float(re.findall('speedup total:([0-9\.]+)', c)[0])
         oldinc = int(re.findall('old inc ([0-9\.]+)', c)[0])

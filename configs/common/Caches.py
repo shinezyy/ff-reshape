@@ -79,7 +79,7 @@ class L2Cache(Cache):
     tag_latency = 12
     data_latency = 12
     response_latency = 5
-    mshrs = 32
+    mshrs = 8
     tgts_per_mshr = 8
     write_buffers = 8
     replacement_policy = RRIPRP()
@@ -95,7 +95,7 @@ class L3Cache(Cache):
     tag_latency = 20
     data_latency = 20
     response_latency = 20
-    mshrs = 20
+    mshrs = 16
     tgts_per_mshr = 12
     write_buffers = 8
     replacement_policy = BRRIPRP()

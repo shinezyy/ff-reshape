@@ -513,7 +513,7 @@ def repeatJobs(testsys, maxtick):
     # init event
     job_clk = 0
     job_eq.add_event(SmallEvent(0, fake_job, ActOp.startTTI), 0)
-    maxtick = job_period * 1001
+    maxtick = job_period * 201
 
     testsys.controlplane.startTraining()
 
