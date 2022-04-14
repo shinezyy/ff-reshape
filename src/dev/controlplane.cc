@@ -229,21 +229,21 @@ ControlPlane::tuning()
     speedups.push_back(jobIpcs[i]/basicJobIpcs[i]);
   }
   double speedup_fair = CP_AVERAGE(speedups);
-  printf("speedup total:%.4f fair:%.4f\n", speedup_total, speedup_fair);
+  inform("speedup total:%.4f fair:%.4f\n", speedup_total, speedup_fair);
 
   // get mem-access info for every job
   // count bucket[id] and its bypass bucket[id+LvNATasks::NumBuckets]
   std::vector<int> l2acc, l3acc;
-  for (int id = 0; id <= LvNATasks::NumId; id++){
+  for (int id = 0; id < LvNATasks::NumId; id++){
     l2acc.push_back(0.0);
     l3acc.push_back(0.0);
     for (int i = 0; i < np/2; i++){
       l2acc[id] += l2b(i, id)->gar_acc();
-      l2acc[id] += l2b(i, id+LvNATasks::NumBuckets)->gar_acc();
+      l2acc[id] += l2b(i, id+LvNATasks::NumId)->gar_acc();
     }
     l3acc[id] += l3b(id)->gar_acc();
-    l3acc[id] += l3b(id+LvNATasks::NumBuckets)->gar_acc();
-    printf("job id %d l2acc %d l3acc %d\n",id,l2acc[id],l3acc[id]);
+    l3acc[id] += l3b(id+LvNATasks::NumId)->gar_acc();
+    inform("job id %d l2acc %d l3acc %d\n",id,l2acc[id],l3acc[id]);
   }
 
   // update tokens
@@ -262,7 +262,7 @@ ControlPlane::tuning()
     }
     l3->buckets[i]->set_inc(newinc);
     l3->buckets[i]->set_tokens(newinc);
-    printf("old inc %d new inc %d\n", oldinc, newinc);
+    inform("old inc %d new inc %d\n", oldinc, newinc);
   }
 }
 
