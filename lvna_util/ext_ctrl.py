@@ -23,9 +23,10 @@ def run_once(bm, outdir, inc):
         run_cmd = cmd_base + addition_cmd
         cmd_str = " ".join(run_cmd)
         print(f"cmd: {cmd_str}")
-        proc = subprocess.run(
-            run_cmd, stdout=stdout, stderr=stderr, preexec_fn=os.setsid,env=None)
-        #### communicate
+        proc = subprocess.Popen(
+            run_cmd, stdin=subprocess.PIPE, stdout=stdout, stderr=stderr, \
+                preexec_fn=os.setsid, env=None)
+    return proc
 
 def get_data(outdir):
     with open(os.path.join(outdir,'stderr.log')) as f:
@@ -41,28 +42,43 @@ if __name__ == '__main__':
     os.chdir(ff_base)
     bm = 'xal10-xal19-gcc10-gcc18'
     name = "bic"
+    epochs = 10
 
-    # get no-ctrl situation as base
-    outdir = 'log/hwtest/{}_{}_base'.format(bm, name)
-    run_once(bm, outdir, 10000)
-    initipc, _ = get_data(outdir)
+    # start batch warmup
+    procs = []
+    for i in range(epochs):
+        print(f"Start Warmup {i}")
+        outdir = f'log/hwtest/{bm}_{name}_{i}'
+        procs.append(run_once(bm, outdir, 10000))
 
-    # start 
+    # start QoS
     upper = 100
     lower = 0
     newinc = int((upper+lower)/2)
-    for iter in range(10):
-        outdir = 'log/hwtest/{}_{}_{}'.format(bm, name, iter)
-        run_once(bm, outdir, newinc)
-        ipc, oldinc = get_data(outdir)
-        speedup = ipc/initipc
+    initipc = 0
 
-        # binary search for proper inc
-        if speedup > 1.102: # more inc, in upper half
-            lower = oldinc
+    for iter in range(epochs):
+        print(f"Start Iter {iter}")
+        outdir = f'log/hwtest/{bm}_{name}_{iter}'
 
-        elif speedup < 1.098: # less inc, in lower half
-            upper = oldinc
+        # get no-ctrl situation as base
+        if iter == 0:
+            inputInc = b'10000'
+            # communicate will block until proc finishes
+            procs[iter].communicate(inputInc)
+            initipc, _ = get_data(outdir)
+        else:
+            inputInc = str(newinc).encode('UTF-8')
+            procs[iter].communicate(inputInc)
+            ipc, oldinc = get_data(outdir)
+            speedup = ipc/initipc
 
-        newinc = int((upper+lower)/2)
-        print(newinc)
+            # binary search for proper inc
+            if speedup > 1.102: # more inc, in upper half
+                lower = oldinc
+
+            elif speedup < 1.098: # less inc, in lower half
+                upper = oldinc
+
+            newinc = int((upper+lower)/2)
+            print(newinc)

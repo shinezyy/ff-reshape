@@ -257,23 +257,8 @@ ControlPlane::tuning()
   }
 
   // update tokens
-  double speedup = speedup_total;
-  for (int i = 0; i < LvNATasks::QosIdStart; i++){
-    int oldinc = l3->buckets[i]->get_inc();
-    int newinc = oldinc;
-    if (speedup < 1.075){
-      newinc = oldinc/2;
-    } else if (speedup < 1.095){
-      newinc = oldinc - oldinc*(1.1-speedup)*2;
-    } else if (speedup > 1.15){
-      newinc = oldinc + 10;
-    } else if (speedup > 1.11){
-      newinc = oldinc + 5;
-    }
-    l3->buckets[i]->set_inc(newinc);
-    l3->buckets[i]->set_tokens(newinc);
-    inform("old inc %d new inc %d\n", oldinc, newinc);
-  }
+  // THIS PART IS DONE IN lvna_util/ext_ctrl.py
+  inform("old inc %d\n", l3inc);
 }
 
 void
