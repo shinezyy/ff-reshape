@@ -76,7 +76,7 @@ Cache::Cache(const CacheParams &p)
     // index 2 for L2 cache, index 3 for L3 cache
     // ptb_walker_cache and iocache at level 0 (in configs/common/Cache.py)
     int init_size[4] = {10000, 10000, 10000, 10000};
-    int init_freq[4] = {1000, 1000, 10000, 100000};
+    int init_freq[4] = {1000, 1000, 10000, 10000};
     int init_inc[4]  = {10000, 10000, 1, 1};
     bool bypass[4]   = {true, true, true, true};
 
@@ -94,11 +94,11 @@ Cache::Cache(const CacheParams &p)
     //         this, init_size[level], init_freq[level], init_inc[level], true, this));
     // }
 
-    for (int i = 0; i < LvNATasks::QosIdStart; i++){
+    for (int i = 0; i < LvNATasks::NumId; i++){
          buckets.push_back(new Token_Bucket(
              this, init_size[level], init_freq[level], init_inc[level], bypass[level], this));
     }
-    for (int i = LvNATasks::QosIdStart; i < LvNATasks::NumBuckets; i++){
+    for (int i = LvNATasks::NumId; i < LvNATasks::NumBuckets; i++){
         buckets.push_back(new Token_Bucket(
             this, init_size[level], init_freq[level], init_inc[level], true, this));
     }

@@ -183,7 +183,6 @@ ControlPlane::startQoS()
     sumJobInsts  += cpStat.JobInsts[i].value();
   }
   basicJobIpcTotal = double(sumJobInsts)/double(sumJobCycles);
-  // ======= Method 2 ========
   cpStat.JobIpc.result(basicJobIpcs);
 
   // restrict lower prior tb
@@ -213,23 +212,26 @@ void
 ControlPlane::tuning()
 {
   // get QoS speedup
-  // ======= Method 1 ========
+  // compared with the no-ctrl first 100W cycle
   uint64_t sumJobCycles = 0;
   uint64_t sumJobInsts = 0;
+  uint64_t sumBgCycles = 0;
+  uint64_t sumBgInsts = 0;
   for (int i = 0; i < 5; i++){
     sumJobCycles += cpStat.JobCycles[i].value();
     sumJobInsts  += cpStat.JobInsts[i].value();
   }
-  double avgJobIpc = double(sumJobInsts)/double(sumJobCycles);
-  double speedup_total = avgJobIpc/basicJobIpcTotal;
-  // ======= Method 2 ========
-  std::vector<double> jobIpcs, speedups;
-  cpStat.JobIpc.result(jobIpcs);
-  for (int i = 0; i < 5; i++){
-    speedups.push_back(jobIpcs[i]/basicJobIpcs[i]);
+  for (int i = 0; i < np; i++){
+    sumBgCycles += cpStat.CPUBackgroundCycles[i].value();
+    sumBgInsts  += cpStat.CPUBackgroundInsts[i].value();
   }
-  double speedup_fair = CP_AVERAGE(speedups);
-  inform("speedup total:%.4f fair:%.4f\n", speedup_total, speedup_fair);
+  double totalJobIpc = double(sumJobInsts)/double(sumJobCycles);
+  double totalBgIpc = double(sumBgInsts)/double(sumBgCycles);
+  inform("jobIpcTotal:%.6f, bgIpcTotal:%.6f\n", totalJobIpc, totalBgIpc);
+
+  double speedup_total = totalJobIpc/basicJobIpcTotal;
+  inform("speedup total:%.4f\n", speedup_total);
+
 
   // get mem-access info for every job
   // count bucket[id] and its bypass bucket[id+LvNATasks::NumBuckets]
