@@ -81,7 +81,7 @@ class ControlPlane: public BasicPioDevice
     std::vector<Cache *> l2s;
     Cache * l3;
     int np;
-    uint32_t l2inc, l3inc;
+    int l2inc, l3inc;
     double basicJobIpcTotal;
     std::vector<double> basicJobIpcs;
     uint32_t l2_tb_size, l3_tb_size;
@@ -107,6 +107,7 @@ class ControlPlane: public BasicPioDevice
     //tell cp the TTI is end
     void endTTI();
 
+    void setInc(int l2inc, int l3inc);
     void setJob(int job_id, int cpu_id, bool status);
 
     void setContextQosId(uint32_t ctx_id, uint32_t qos_id);

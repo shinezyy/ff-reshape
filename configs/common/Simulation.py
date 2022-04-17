@@ -451,6 +451,10 @@ def repeatJobs(testsys, maxtick):
     if exit_cause != "core 0 warmup done":
         return exit_event
 
+    # stop and wait for input
+    l3inc = int(input("Input l3 inc:"))
+    testsys.controlplane.setInc(-1, l3inc)
+
     print("starting jobs loop")
 
     cpu_period = testsys.cpu_clk_domain.clock[0].getValue()

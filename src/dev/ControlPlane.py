@@ -18,6 +18,7 @@ class ControlPlane(BasicPioDevice):
         PyBindMethod("endTTI"),
         PyBindMethod("setJob"),
         PyBindMethod("tuning"),
+        PyBindMethod("setInc"),
     ]
 
     pio_addr = 0x20000
@@ -27,8 +28,8 @@ class ControlPlane(BasicPioDevice):
 
     l2s = VectorParam.Cache([],'l2 caches under control')
     l3 = Param.Cache(NULL,'l3 cache under control')
-    l2inc = Param.UInt32(10000, 'l2 tb inc')
-    l3inc = Param.UInt32(10000, 'l3 tb inc')
+    l2inc = Param.Int32(10000, 'l2 tb inc')
+    l3inc = Param.Int32(10000, 'l3 tb inc')
     l2_tb_size = Param.UInt32(1000, 'l3 tb size')
     l3_tb_size = Param.UInt32(1000, 'l3 tb size')
 

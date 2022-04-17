@@ -157,6 +157,14 @@ void ControlPlane::resetTTIMeta()
 #define l3b(id) l3->buckets[id]
 
 void
+ControlPlane::setInc(int newl2inc, int newl3inc)
+{
+  // if input is -1, then inc remain unchanged
+  l2inc = (newl2inc == -1)? l2inc : newl2inc;
+  l3inc = (newl3inc == -1)? l3inc : newl3inc;
+}
+
+void
 ControlPlane::startTraining()
 {
   //mark auto tuning start
@@ -175,7 +183,7 @@ ControlPlane::startQoS()
 {
   //reset stats
   inform("start real QoS\n");
-  // ======= Method 1 ========
+  inform("init inc: l2 %d; l3 %d;\n", l2inc, l3inc);
   uint64_t sumJobCycles = 0;
   uint64_t sumJobInsts = 0;
   for (int i = 0; i < 5; i++){
