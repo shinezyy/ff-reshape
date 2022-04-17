@@ -4,6 +4,10 @@ import time
 from common import *
 import subprocess
 
+my_env = os.environ.copy()
+my_env["LD_PRELOAD"] = '/nfs-nvme/home/share/debug/zhouyaoyang/libz.so.1.2.11.zlib-ng' \
++ os.pathsep + my_env.get("LD_PRELOAD","")
+
 def run_once(bm, outdir, inc, warmup):
     outdir = os.path.join(ff_base, outdir)
     os.makedirs(outdir,exist_ok=True)
@@ -25,7 +29,7 @@ def run_once(bm, outdir, inc, warmup):
         print(f"cmd: {cmd_str}")
         proc = subprocess.Popen(
             run_cmd, stdin=subprocess.PIPE, stdout=stdout, stderr=stderr, \
-                preexec_fn=os.setsid, env=None)
+                preexec_fn=os.setsid, env=my_env, text=True)
     return proc
 
 def get_data(outdir):
@@ -65,12 +69,12 @@ if __name__ == '__main__':
 
         # get no-ctrl situation as base
         if iter == 0:
-            inputInc = b'10000'
+            inputInc = '10000'
             # communicate will block until proc finishes
             procs[iter].communicate(inputInc)
             initipc, _ = get_data(outdir)
         else:
-            inputInc = str(newinc).encode('UTF-8')
+            inputInc = str(newinc)
             procs[iter].communicate(inputInc)
             ipc, oldinc = get_data(outdir)
             speedup = ipc/initipc
