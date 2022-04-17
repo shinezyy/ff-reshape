@@ -4,14 +4,14 @@ import time
 from common import *
 import subprocess
 
-def run_once(bm, outdir, inc):
+def run_once(bm, outdir, inc, warmup):
     outdir = os.path.join(ff_base, outdir)
     os.makedirs(outdir,exist_ok=True)
     run_once_script = '/nfs/home/chenxi/ff-reshape/lvna_util/mix_nohype.py'
     cmd_base = ['python3', run_once_script]
     addition_cmd = []
     addition_cmd.append(f'-b={bm}')
-    addition_cmd.append(f'-W=10000000')
+    addition_cmd.append(f'-W={warmup}')
     # addition_cmd.append(f'-W=1000000')
     addition_cmd.append(f'-D={outdir}')
     addition_cmd.append(f'--l2inc=10000')
@@ -40,8 +40,10 @@ def get_data(outdir):
 
 if __name__ == '__main__':
     os.chdir(ff_base)
-    bm = 'xal10-xal19-gcc10-gcc18'
-    name = "bic"
+    # bm = 'xal10-xal19-gcc10-gcc18'
+    bm = 'gcc13-xal8-xal10-xal19'
+    name = "bic_10M"
+    warmup = 10000000
     epochs = 10
 
     # start batch warmup
@@ -49,7 +51,7 @@ if __name__ == '__main__':
     for i in range(epochs):
         print(f"Start Warmup {i}")
         outdir = f'log/hwtest/{bm}_{name}_{i}'
-        procs.append(run_once(bm, outdir, 10000))
+        procs.append(run_once(bm, outdir, 10000, warmup))
 
     # start QoS
     upper = 100
