@@ -69,10 +69,10 @@ struct SimpleCPUPolicy
     typedef ::ROB<Impl> ROB;
 
     /** Typedef for the instruction queue/scheduler. */
-    // typedef InstructionQueue<Impl> IQ;
+    typedef InstructionQueue<Impl> IQ;
     // typedef InstructionQueueDist<Impl> IQ;
     // typedef InstructionQueueRand<Impl> IQ;
-    typedef InstructionQueueCirc<Impl> IQ;
+    // typedef InstructionQueueCirc<Impl> IQ;
 
     /** Typedef for the memory dependence unit. */
     typedef ::MemDepUnit<StoreSet, Impl> MemDepUnit;
