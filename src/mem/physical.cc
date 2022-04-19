@@ -108,6 +108,7 @@ PhysicalMemory::PhysicalMemory(const string& _name,
             fatal_if(addrMap.insert(m->getAddrRange(), m) == addrMap.end(),
                      "Memory address range for %s is overlapping\n",
                      m->name());
+            DPRINTF(AddrRanges, "Add memory range %s for %s\n", m->getAddrRange().to_string(), m->name());
         } else {
             // this type of memory is used e.g. as reference memory by
             // Ruby, and they also needs a backing store, but should

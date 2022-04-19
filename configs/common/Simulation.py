@@ -540,7 +540,8 @@ def run(options, root, testsys, cpu_class):
         if options.branch_trace_en:
             CpuConfig.config_branch_trace(cpu_class, cpu, options)
         # O3 Config
-        SSConfig.modifyO3CPUConfig(options, cpu)
+        if isinstance(cpu, DerivFFCPU) or isinstance(cpu, DerivO3CPU):
+            SSConfig.modifyO3CPUConfig(options, cpu)
 
     if cpu_class:
         switch_cpus = [cpu_class(switched_out=True, cpu_id=(i))
@@ -573,7 +574,8 @@ def run(options, root, testsys, cpu_class):
             if options.branch_trace_en:
                 CpuConfig.config_branch_trace(cpu_class, switch_cpus[i], options)
             # O3 Config
-            SSConfig.modifyO3CPUConfig(options, switch_cpus[i])
+            if isinstance(cpu, DerivFFCPU) or isinstance(cpu, DerivO3CPU):
+                SSConfig.modifyO3CPUConfig(options, switch_cpus[i])
 
         # If elastic tracing is enabled attach the elastic trace probe
         # to the switch CPUs
@@ -814,7 +816,7 @@ def run(options, root, testsys, cpu_class):
         if options.repeat_switch and maxtick > options.repeat_switch:
             exit_event = repeatSwitch(testsys, repeat_switch_cpu_list,
                                       maxtick, options.repeat_switch)
-        elif options.job_benchmark:
+        elif hasattr(options, 'job_benchmark') and options.job_benchmark:
             exit_event = repeatJobs(testsys, maxtick)
         else:
             exit_event = benchCheckpoints(options, maxtick, cptdir)

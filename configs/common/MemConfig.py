@@ -103,6 +103,7 @@ def create_mem_intf(intf, r, i, nbr_mem_ctrls, intlv_bits, intlv_size,
                                       xorHighBit = xor_high_bit,
                                       intlvBits = intlv_bits,
                                       intlvMatch = i)
+    print(f"Create mem interface [{hex(r.start)}, {hex(r.size())}]")
     return interface
 
 def config_mem(options, system):
@@ -229,6 +230,8 @@ def config_mem(options, system):
                                              static_frontend_latency = '4ns')
                 elif opt_mem_type == "SimpleMemory":
                     mem_ctrl = m5.objects.SimpleMemory()
+                    mem_ctrl.range = m5.objects.AddrRange(r.start, size = r.size())
+                    print(mem_ctrl.range)
                 elif opt_mem_type == "QoSMemSinkInterface":
                     mem_ctrl = m5.objects.QoSMemSinkCtrl()
                 else:

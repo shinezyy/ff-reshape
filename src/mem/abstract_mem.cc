@@ -65,6 +65,7 @@ AbstractMemory::AbstractMemory(const Params &p) :
     panic_if(!range.valid() || !range.size(),
              "Memory range %s must be valid with non-zero size.",
              range.to_string());
+    warn("AbstractMem: Adding range %s\n", range.to_string());
 }
 
 void

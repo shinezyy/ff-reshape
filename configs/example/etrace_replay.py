@@ -81,8 +81,11 @@ CPUClass.numThreads = numThreads
 
 system = System(cpu = CPUClass(cpu_id=0),
                 mem_mode = test_mem_mode,
-                mem_ranges = [AddrRange(options.mem_size)],
+                mem_ranges = [AddrRange(0x80000000, size=options.mem_size)],
                 cache_line_size = options.cacheline_size)
+print("Etrace system addr range:")
+for r in system.mem_ranges:
+    print(f"[{hex(r.start)}, {hex(r.end)}]")
 
 # Create a top-level voltage domain
 system.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
@@ -114,6 +117,11 @@ for cpu in system.cpu:
 # Assign input trace files to the Trace CPU
 system.cpu.instTraceFile=options.inst_trace_file
 system.cpu.dataTraceFile=options.data_trace_file
+
+if options.generic_rv_cpt is None:
+    system.gcpt_restorer_file = "/not/specified"
+else:
+    system.gcpt_restorer_file = options.gcpt_restorer
 
 # Configure the classic memory system options
 MemClass = Simulation.setMemClass(options)
