@@ -471,9 +471,19 @@ def addSEOptions(parser):
                       help="Wait for remote GDB to connect.")
 
 
+def addGCptOptions(parser):
+    parser.add_option("--generic-rv-cpt", action="store",
+                      default=None, type="string",
+                      help="The path of generic risc-v checkpoint")
+    parser.add_option("--gcpt-restorer", action="store",
+                      default=None, type="string",
+                      help="The path of generic risc-v checkpoint restorer")
+
 
 def addFSOptions(parser):
     from common.FSConfig import os_types
+
+    addGCptOptions(parser)
 
     # Simulation options
     parser.add_option("--timesync", action="store_true",
@@ -537,13 +547,6 @@ def addFSOptions(parser):
     parser.add_option("--command-line-file", action="store",
                       default=None, type="string",
                       help="File with a template for the kernel command line")
-
-    parser.add_option("--generic-rv-cpt", action="store",
-                      default=None, type="string",
-                      help="The path of generic risc-v checkpoint")
-    parser.add_option("--gcpt-restorer", action="store",
-                      default=None, type="string",
-                      help="The path of generic risc-v checkpoint restorer")
 
     parser.add_option("--nohype", action="store_true", default=False,
                       help="use nohype mode for risc-v system")

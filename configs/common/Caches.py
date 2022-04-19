@@ -64,10 +64,12 @@ class L1_ICache(L1Cache):
     is_read_only = True
     # Writeback clean lines as well
     writeback_clean = True
+    size = '64kB'
 
 class L1_DCache(L1Cache):
     write_buffers = 16
     data_latency = 4
+    size = '128kB'
 
 class L2Cache(Cache):
     writeback_clean = True
@@ -92,7 +94,7 @@ class L3Cache(Cache):
     mshrs = 20
     tgts_per_mshr = 12
     write_buffers = 8
-    size = '16MB'
+    size = '8MB'
     clusivity='mostly_excl'
     is_memory_cache = True
 

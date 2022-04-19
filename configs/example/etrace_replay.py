@@ -52,6 +52,7 @@ from common.Caches import *
 
 parser = optparse.OptionParser()
 Options.addCommonOptions(parser)
+Options.addGCptOptions(parser)
 
 if '--ruby' in sys.argv:
     print("This script does not support Ruby configuration, mainly"

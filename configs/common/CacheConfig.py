@@ -67,7 +67,8 @@ def _get_cache_opts(level, options):
         opts['assoc'] = getattr(options, assoc_attr)
 
     prefetcher_attr = '{}_hwp_type'.format(level)
-    if hasattr(options, prefetcher_attr):
+    if hasattr(options, prefetcher_attr) and getattr(options, prefetcher_attr) is not None:
+        print(f'Attribute of prefetcher {getattr(options, prefetcher_attr)}')
         opts['prefetcher'] = _get_hwp(getattr(options, prefetcher_attr))
 
     return opts
