@@ -511,6 +511,9 @@ Cache::recvTimingReq(PacketPtr pkt)
             return;
         }
         int index = context2QosIDMap[ctx_id];
+        bool use_alt = tags->needAltPolicy(pkt->getAddr(),index);
+        if (use_alt)
+            index = QosIDAlterMap[index];
         bool ok_to_pass = buckets[index]->checkPassPkt(pkt);
         if (ok_to_pass)
         {

@@ -75,6 +75,9 @@ class ControlPlane: public BasicPioDevice
     std::map<uint32_t, uint32_t> context2QosIDMap;
     std::map<uint32_t, uint32_t> QosIDAlterMap;
     std::vector<uint64_t> l3_waymask_set;
+    std::string est_top_dir_path;
+    bool qos_started;
+    double l3_hot_thereshold;
 
   public:
     std::vector<DerivO3CPU *> cpus;
@@ -98,6 +101,14 @@ class ControlPlane: public BasicPioDevice
 
     //start QoS training
     void startTraining();
+    //set sets estimate path
+    void setEstPath(std::string is){
+      est_top_dir_path = is;
+    }
+    //set l3 set hot threshold
+    void setL3HotThreshold(double th){
+      l3_hot_thereshold = th;
+    }
     //clean up stats, start real QoS simulation
     void startQoS();
     // adjust params after a TTI

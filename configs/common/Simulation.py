@@ -452,8 +452,14 @@ def repeatJobs(testsys, maxtick):
         return exit_event
 
     # stop and wait for input
-    l3inc = int(input("Input l3 inc:"))
+    tmp_opt = input("Input l3 inc & set_est path & hot threshold:")
+    myopts = tmp_opt.strip().split()
+    l3inc = int(myopts[0])
     testsys.controlplane.setInc(-1, l3inc)
+    if(len(myopts)>1):
+        testsys.controlplane.setEstPath(myopts[1])
+    if(len(myopts)>2):
+        testsys.controlplane.setL3HotThreshold(float(myopts[2]))
 
     print("starting jobs loop")
 

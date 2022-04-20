@@ -76,6 +76,7 @@ BaseTags::BaseTags(const Params &p)
         id_map_set_hot[i] = std::vector<bool>(num_slices,false);
         id_map_set_altflag[i] = std::vector<bool>(num_slices,false);
     }
+    hot_thereshold = 0.8;
 }
 
 void
@@ -96,7 +97,7 @@ BaseTags::updateHotSets()
             sum_acc += i.first;
         }
 
-        uint64_t sum80_threshold = sum_acc*0.8;
+        uint64_t sum80_threshold = sum_acc*hot_thereshold;
         std::sort(tmp_set_cnt.begin(),tmp_set_cnt.end(),std::greater_equal<>());
         uint64_t tmp_acc = 0;
         id_map_set_hot[qosid].assign(num_slices,false);
@@ -112,6 +113,10 @@ BaseTags::updateHotSets()
         }
     }
 
+}
+void
+BaseTags::updateHotPolicy()
+{
     //TODO: now we update policy here for gem5performance
     std::vector<bool> tmp_high(LvNATasks::NumId,false);
     for (size_t qosid = 0; qosid < LvNATasks::NumId; qosid++)
@@ -133,22 +138,7 @@ BaseTags::updateHotSets()
         }
         for (size_t qosid = 0; qosid < LvNATasks::NumId; qosid++)
         {
-            if (tmp_high[qosid])
-            {
-                //is high job
-                //TODO: lvna: now high job always stick to old waymasks
-                /*
-                if (tmp_hot[qosid]){
-                    if (need_cnt <= 1)
-                        id_map_set_altflag[qosid][i] = true;
-                }
-                else{
-                    if (need_cnt == 0)
-                        id_map_set_altflag[qosid][i] = true;
-                }
-                */
-            }
-            else
+            if (!tmp_high[qosid])
             {
                 //is low bg
                 if (need_cnt==0)

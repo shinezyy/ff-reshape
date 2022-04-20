@@ -52,6 +52,7 @@ opt.append('--l1i_size=64kB --l1i_assoc=4')
 opt.append('--l1d_size=32kB --l1d_assoc=8')
 
 opt.append('--l2_size=768kB --l2_assoc=12')
+opt.append('--sharel2')
 opt.append('--l3_size=2MB --l3_assoc=8')
 opt.append('--l2_slices=1024')
 opt.append('--l3_slices=4096')

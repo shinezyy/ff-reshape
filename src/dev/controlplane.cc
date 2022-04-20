@@ -57,6 +57,8 @@ Tick ControlPlane::write(PacketPtr pkt) {
 ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     BasicPioDevice(*p, p->pio_size),
     l3_waymask_set(p->l3_waymask_set),
+    qos_started(false),
+    l3_hot_thereshold(p->l3_hot_thereshold),
     cpus(p->cpus),
     l2s(p->l2s),
     l3(p->l3),
@@ -131,6 +133,9 @@ ControlPlane::registerRunningHighId(uint32_t qos_id, bool flag)
     }
     l3->runningHighIds.erase(qos_id);
   }
+  if (qos_started && !est_top_dir_path.empty()){
+    l3->tags->updateHotPolicy();
+  }
 }
 
 void ControlPlane::resetTTIMeta()
@@ -204,6 +209,10 @@ ControlPlane::startQoS()
   for (int id = LvNATasks::QosIdStart; id < LvNATasks::NumId; id++){
     l3b(id)->set_bypass(true);
   }
+  // alternative bypass tb
+  for (int id = LvNATasks::NumId; id < LvNATasks::NumBuckets; id++){
+    l3b(id)->set_bypass(true);
+  }
 
   //set l3 waymasks
   if (!l3_waymask_set.empty())
@@ -214,6 +223,25 @@ ControlPlane::startQoS()
       l3->setWaymask(i,l3_waymask_set[i]);
     }
   }
+
+  if (!est_top_dir_path.empty())
+  {
+    //dump datas to l3 tags
+    for (size_t i = 0; i < LvNATasks::NumId; i++)
+    {
+      std::ostringstream os;
+      os << est_top_dir_path << "/" << i << "/0.csv";
+      std::string csv_path = os.str();
+      std::ifstream inputF(csv_path);
+      std::istream_iterator<int> iit(inputF),iend;
+      assert(iit!=iend);
+      l3->tags->id_map_set_access_vecs[i].assign(iit,iend);
+    }
+    //tell l3 tags updatehot
+    l3->tags->hot_thereshold = l3_hot_thereshold;
+    l3->tags->updateHotSets();
+  }
+  qos_started = true;
 }
 
 void
@@ -277,8 +305,8 @@ ControlPlane::startTTI()
     uint64_t now_insts = cpus[i]->getCommittedInsts();
     BgCpuMap[i]->bgUp(i,now_cycle,now_insts);
   }
-  //tell l3 tags updatehot
-  l3->tags->updateHotSets();
+  //TODO: now only update hot in startQos
+  // l3->tags->updateHotSets();
 }
 
 void

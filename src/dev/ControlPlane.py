@@ -13,6 +13,8 @@ class ControlPlane(BasicPioDevice):
 
     cxx_exports = [
         PyBindMethod("startTraining"),
+        PyBindMethod("setEstPath"),
+        PyBindMethod("setL3HotThreshold"),
         PyBindMethod("startQoS"),
         PyBindMethod("startTTI"),
         PyBindMethod("endTTI"),
@@ -34,3 +36,5 @@ class ControlPlane(BasicPioDevice):
     l3_tb_size = Param.UInt32(1000, 'l3 tb size')
 
     l3_waymask_set = VectorParam.UInt64([], 'l3_waymask_choose')
+    l3_hot_thereshold = Param.Float(0.8, 'potion of accesses to decide\
+        hot sets')
