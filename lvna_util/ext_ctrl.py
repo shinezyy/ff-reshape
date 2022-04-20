@@ -16,6 +16,10 @@ parser.add_argument('--epoch',type=int,default=10)
 parser.add_argument('--hot',type=float,default=0.9)
 args = parser.parse_args()
 
+my_env = os.environ.copy()
+my_env["LD_PRELOAD"] = '/nfs-nvme/home/share/debug/zhouyaoyang/libz.so.1.2.11.zlib-ng'
++ os.pathsep + my_env.get("LD_PRELOAD","")
+
 def run_once(bm, outdir, inc, warmup):
     os.makedirs(outdir,exist_ok=True)
     run_once_script = '/nfs/home/zhangchuanqi/lvna/5g/hw-branch/lvna_util/mix_nohype.py'
@@ -91,7 +95,6 @@ if __name__ == '__main__':
         for iter in range(epochs):
             print(f"Start Iter {iter}")
             outdir = outdirs[iter]
-
             # get no-ctrl situation as base
             if iter == 0:
                 inputInc = '10000'
