@@ -192,20 +192,6 @@ def config_cache(options, system):
                         max_addr = m.end
                 system.l3.tags.indexing_policy.mem_size = str(max_addr+1) + "B"
 
-            system.tol3bus = L2XBar(clk_domain = system.cpu_clk_domain,
-                    width=64)
-
-        if options.l3_cache:
-            system.l3.tags.num_slices = options.l3_slices
-            if options.l3_complex:
-                system.l3.tags.indexing_policy = ComplexAssociative()
-                system.l3.tags.indexing_policy.num_slices = options.l3_slices
-                max_addr = 0
-                for m in system.mem_ranges:
-                    if max_addr < m.end:
-                        max_addr = m.end
-                system.l3.tags.indexing_policy.mem_size = str(max_addr+1) + "B"
-
             system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)
             system.l3.cpu_side = system.tol3bus.master
             system.l3.mem_side = system.membus.slave

@@ -6,10 +6,6 @@ import subprocess
 import signal
 import argparse
 
-my_env = os.environ.copy()
-my_env["LD_PRELOAD"] = '/nfs-nvme/home/share/debug/zhouyaoyang/libz.so.1.2.11.zlib-ng' \
-+ os.pathsep + my_env.get("LD_PRELOAD","")
-
 parser = argparse.ArgumentParser()
 # parser.add_argument('-W','--warmup',type=int,default=50_000_000)
 parser.add_argument('--epoch',type=int,default=10)
@@ -17,8 +13,8 @@ parser.add_argument('--hot',type=float,default=0.9)
 args = parser.parse_args()
 
 my_env = os.environ.copy()
-my_env["LD_PRELOAD"] = '/nfs-nvme/home/share/debug/zhouyaoyang/libz.so.1.2.11.zlib-ng'
-+ os.pathsep + my_env.get("LD_PRELOAD","")
+my_env["LD_PRELOAD"] = '/nfs-nvme/home/share/debug/zhouyaoyang/libz.so.1.2.11.zlib-ng' \
+    + os.pathsep + my_env.get("LD_PRELOAD","")
 
 def run_once(bm, outdir, inc, warmup):
     os.makedirs(outdir,exist_ok=True)
@@ -102,8 +98,8 @@ if __name__ == '__main__':
                 procs[iter].communicate(inputInc)
                 initipc, _ = get_data(outdir)
             else:
-                inputInc = ' '.join([str(newinc),last_out_est,str(hot)])
-                procs[iter].communicate(inputInc)
+                inputs = ' '.join([str(newinc),last_out_est,str(hot)])
+                procs[iter].communicate(inputs)
                 ipc, oldinc = get_data(outdir)
                 speedup = ipc/initipc
 

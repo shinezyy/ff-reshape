@@ -268,7 +268,6 @@ ControlPlane::tuning()
   double speedup_total = totalJobIpc/basicJobIpcTotal;
   inform("speedup total:%.4f\n", speedup_total);
 
-
   // get mem-access info for every job
   // count bucket[id] and its bypass bucket[id+LvNATasks::NumBuckets]
   std::vector<int> l2acc, l3acc;
