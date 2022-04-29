@@ -34,3 +34,4 @@ if env['TARGET_ISA'] == 'riscv':
     Source('lint.cc')
 
     # DebugFlag('Iob')
+    DebugFlag('Lint')

@@ -651,8 +651,9 @@ def makeBareMetalRiscvSystem(mem_mode, numCPUs=1, mdesc=None, cmdline=None, nohy
 
     self.system_port = self.membus.slave
 
+    self.intrctrl = IntrControl()
     if nohype:
-        self.lints = [Lint() for _ in range(0, numCPUs)]
+        self.lints = [Lint(lint_id = i) for i in range(0, numCPUs)]
         for i, x in enumerate(self.lints):
             x.set_addr_with_stride(x.pio_addr, i, io_stride_size)
             x.pio = self.iobus.master

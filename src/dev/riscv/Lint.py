@@ -13,3 +13,6 @@ class Lint(BasicPioDevice):
     time = Param.Time('01/01/2019', "System time to use ('Now' for real time)")
     pio_addr = 0x38000000
     pio_size = Param.Addr(0x10000, "Lint space size")
+    # core_intr = Param.BaseInterrupts(NULL, "core's interrupts")
+    lint_id = Param.Int(0, "lint's id")
+    intrctrl = Param.IntrControl(Parent.any, "interrupt controller")
