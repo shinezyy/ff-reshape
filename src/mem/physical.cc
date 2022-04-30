@@ -453,11 +453,6 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
 {
     const uint32_t chunk_size = 16384;
 
-    // mmap memoryfile
-    gzFile compressed_mem = gzopen(filepath.c_str(), "rb");
-    if (compressed_mem == NULL)
-        fatal("Can't open physical memory checkpoint file '%s'", filepath.c_str());
-
     // we've already got the actual backing store mapped
     uint8_t* pmem = backingStore[store_id].pmem;
     AddrRange range = backingStore[store_id].range;
@@ -477,6 +472,13 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
 
     for (size_t i = 0; i < nohypeNum; i++)
     {
+      // memory image file                // mis-indented
+      if (isGzFile(filepath.c_str())) {   // mis-indented
+
+        gzFile compressed_mem = gzopen(filepath.c_str(), "rb");
+        if (compressed_mem == NULL)
+            fatal("Can't open physical memory checkpoint file '%s'", filepath.c_str());
+
         uint8_t* pmem_part_start = pmem + i * partSize;
         uint64_t curr_size = 0;
         long* temp_page = new long[chunk_size];
@@ -502,6 +504,10 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
 
         gzrewind(compressed_mem);
         delete[] temp_page;
+
+      } else {  // mis-indented
+        assert(false && "Not implemented");
+      }
 
         if (restoreFromGCpt && !gCptRestorerPath.empty()) {
             warn("Overriding Gcpt restorer\n");

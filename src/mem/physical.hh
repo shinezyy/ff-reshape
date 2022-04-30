@@ -291,6 +291,13 @@ class PhysicalMemory : public Serializable
 
   public:
     bool tryRestoreFromGCpt();
+
+    static bool isGzFile(const char* filename) {
+      if (filename == NULL || strlen(filename) < 3) {
+        return false;
+      }
+      return !strcmp(filename + (strlen(filename) - 3), ".gz");
+    }
 };
 
 #endif //__MEM_PHYSICAL_HH__
