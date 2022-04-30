@@ -118,10 +118,14 @@ for cpu in system.cpu:
 system.cpu.instTraceFile=options.inst_trace_file
 system.cpu.dataTraceFile=options.data_trace_file
 
-if options.generic_rv_cpt is None:
-    system.gcpt_restorer_file = "/not/specified"
-else:
-    system.gcpt_restorer_file = options.gcpt_restorer
+system.gcpt_restorer_file = "/not/specified"
+system.gcpt_file = "/not/specified"
+if options.generic_rv_cpt is not None:
+    assert(buildEnv['TARGET_ISA'] == "riscv")
+    system.restore_from_gcpt = True
+    system.gcpt_file = options.generic_rv_cpt
+    if options.gcpt_restorer is not None:
+        system.gcpt_restorer_file = options.gcpt_restorer
 
 # Configure the classic memory system options
 MemClass = Simulation.setMemClass(options)
