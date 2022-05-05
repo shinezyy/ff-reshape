@@ -88,20 +88,24 @@ BaseTags::updateHotSets()
         for (int i = 0; i < num_slices; i++)
         {
             tmp_set_cnt.push_back(std::make_pair(
-                id_map_set_access_vecs[qosid][i],i));
+                id_map_set_access_vecs[qosid][i],i)); //acc[id][set], set
         }
 
+        // sum accesses of job[id] to cache
         uint64_t sum_acc = 0;
         for (auto &&i : tmp_set_cnt)
         {
             sum_acc += i.first;
         }
 
+        // sort in descending order
         uint64_t sum80_threshold = sum_acc*hot_thereshold;
         std::sort(tmp_set_cnt.begin(),tmp_set_cnt.end(),std::greater_equal<>());
         uint64_t tmp_acc = 0;
+        // set all sets as not hot
         id_map_set_hot[qosid].assign(num_slices,false);
         int i = 0;
+        // then mark sets that holds 80% of all accesses as hot sets
         for (i = 0; i < num_slices; i++)
         {
             tmp_acc += tmp_set_cnt[i].first;
@@ -119,25 +123,32 @@ BaseTags::updateHotPolicy()
 {
     //TODO: now we update policy here for gem5performance
     std::vector<bool> tmp_high(LvNATasks::NumId,false);
+    // if qosid in runningHighIds, then tmp_high[qosid] = true
     for (size_t qosid = 0; qosid < LvNATasks::NumId; qosid++)
     {
         if (runningHighIds->count(qosid))
             tmp_high[qosid] = true;
     }
     std::vector<bool> tmp_hot;
+    // enumerate for every set
     for (size_t i = 0; i < num_slices; i++)
     {
         tmp_hot.clear();
         int need_cnt = 0;
+        // then for every job
         for (size_t qosid = 0; qosid < LvNATasks::NumId; qosid++)
         {
             id_map_set_altflag[qosid][i] = false;
+            // count hot status for every job on this set
             tmp_hot.push_back(id_map_set_hot[qosid][i]);
+            // ++ for every high priv job taking this set as hot
             if (id_map_set_hot[qosid][i] && tmp_high[qosid])
                 need_cnt ++;
         }
         for (size_t qosid = 0; qosid < LvNATasks::NumId; qosid++)
         {
+            // if no high priv taking this set as hot,
+            // then it is free for low priv to access, set altflag to enable bypass
             if (!tmp_high[qosid])
             {
                 //is low bg

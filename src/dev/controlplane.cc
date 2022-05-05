@@ -77,18 +77,20 @@ ControlPlane::ControlPlane(const ControlPlaneParams *p) :
   {
     BgCpuMap[i] = new BgCpuMeta(this);
   }
+  // init qos id = context id
   for (size_t i = 0; i < np; i++)
   {
     setContextQosId(i,i);
   }
-
+  // init alter_id = i + LvNATasks::NumId
+  // to bypass token buckets
   for (size_t i = 0; i < LvNATasks::NumId; i++)
   {
     uint32_t alt_id = i + LvNATasks::NumId;
     QosIDAlterMap[i] = alt_id;
     for (const auto &c:l2s)
     {
-      c->QosIDAlterMap[i] = i + alt_id;
+      c->QosIDAlterMap[i] = alt_id;
     }
     l3->QosIDAlterMap[i] = alt_id;
   }

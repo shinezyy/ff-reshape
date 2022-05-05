@@ -18,7 +18,7 @@ my_env["LD_PRELOAD"] = '/nfs-nvme/home/share/debug/zhouyaoyang/libz.so.1.2.11.zl
 
 def run_once(bm, outdir, inc, warmup):
     os.makedirs(outdir,exist_ok=True)
-    run_once_script = '/nfs/home/zhangchuanqi/lvna/5g/hw-branch/lvna_util/mix_nohype.py'
+    run_once_script = os.path.join(ff_base, 'lvna_util/mix_nohype.py')
     cmd_base = ['python3', run_once_script]
     addition_cmd = []
     addition_cmd.append(f'-b={bm}')
@@ -53,10 +53,10 @@ def get_data(outdir):
 
 def gen_set_est(outdir):
     new_env = os.environ.copy()
-    new_env["PYTHONPATH"] = '/nfs/home/zhangchuanqi/lvna/5g/gem5_data_proc/'
+    new_env["PYTHONPATH"] = data_proc_base
     run_cmd = [
         'python3',
-        '/nfs/home/zhangchuanqi/lvna/5g/gem5_data_proc/utils/job_set_extract.py',
+        os.path.join(data_proc_base, 'utils/job_set_extract.py'),
         f'{outdir}',
         '2'
     ]
@@ -102,6 +102,7 @@ if __name__ == '__main__':
                 procs[iter].communicate(inputs)
                 ipc, oldinc = get_data(outdir)
                 speedup = ipc/initipc
+                print(f'{iter}:{speedup}')
 
                 # binary search for proper inc
                 if speedup > 1.102: # more inc, in upper half
