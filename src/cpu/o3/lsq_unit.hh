@@ -774,6 +774,9 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
             bool lower_load_has_store_part = req_s <= st_e;
             bool upper_load_has_store_part = req_e >= st_s;
 
+            bool req_overflow = req_s > req_e;
+            bool st_overflow = st_s > st_e;
+
             DPRINTF(LSQUnit, "(%d %d %d %d)\n",
                     store_has_lower_limit,
                     store_has_upper_limit,
@@ -787,7 +790,10 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
             // data), the store has all of the data needed, and
             // the load is not LLSC, then
             // we can forward data from the store to the load
-            if (!store_it->instruction()->isAtomic() &&
+            if (req_overflow || st_overflow) {
+                coverage = AddrRangeCoverage::NoAddrRangeCoverage;
+            }
+            else if (!store_it->instruction()->isAtomic() &&
                 store_has_lower_limit && store_has_upper_limit &&
                 !req->mainRequest()->isLLSC()) {
 
