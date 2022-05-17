@@ -376,6 +376,7 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
         diff.dynamic_config.ignore_illegal_mem_access = false;
         diff.dynamic_config.debug_difftest = false;
         proxy->update_config(&diff.dynamic_config);
+        diff.will_handle_intr = false;
     }
     else {
         hasCommit = true;
@@ -909,6 +910,14 @@ FullO3CPU<Impl>::getInterrupts()
 {
     // Check if there are any outstanding interrupts
     return this->interrupts[0]->getInterrupt();
+}
+
+template <class Impl>
+int
+FullO3CPU<Impl>::getInterruptsNO()
+{
+    // Check if there are any outstanding interrupts
+    return this->interrupts[0]->getInterruptNO();
 }
 
 template <class Impl>
@@ -1553,7 +1562,6 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
 
         if (scFenceInFlight) {
             assert(inst->isWriteBarrier() && inst->isReadBarrier());
-            DPRINTF(ValueCommit, "Skip diff fence generated from LR/SC\n");
             should_diff = false;
         }
     }
@@ -1562,23 +1570,24 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
     if (!inst->isLastMicroop() &&
             inst->isStoreConditional() && inst->isDelayedCommit()) {
         scFenceInFlight = true;
-        DPRINTF(ValueCommit, "Diff SC even if it is not the last Microop\n");
         should_diff = true;
     }
     if (enable_nemu_diff && should_diff) {
         auto [diff_at, npc_match] = diffWithNEMU(inst);
         if (diff_at != NoneDiff) {
             if (npc_match && diff_at == PCDiff) {
-                warn("Found PC mismatch, Let NEMU run one more instruction\n");
+                // warn("Found PC mismatch, Let NEMU run one more instruction\n");
                 std::tie(diff_at, npc_match) = diffWithNEMU(inst);
                 if (diff_at != NoneDiff) {
+                    proxy->isa_reg_display();
                     panic("Difftest failed again!\n");
                 } else {
-                    warn("Difftest matched again, NEMU seems to commit the failed mem instruction\n");
+                    // warn("Difftest matched again, NEMU seems to commit the failed mem instruction\n");
                 }
 
             }
             else {
+                proxy->isa_reg_display();
                 panic("Difftest failed!\n");
             }
         } else { // no diff
@@ -1586,7 +1595,8 @@ FullO3CPU<Impl>::instDone(ThreadID tid, const DynInstPtr &inst)
         }
     }
 
-    DPRINTF(ValueCommit, "commit_pc: %s\n", inst->pcState());
+    //     DPRINTF(ValueCommit, "commit_pc: %s  disass:%s\n", inst->pcState(),
+    //     inst->staticInst->disassemble(inst->instAddr()));
 
     thread[tid]->numOp++;
     thread[tid]->threadStats.numOps++;
@@ -1963,6 +1973,11 @@ FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
         proxy->update_config(&diff.dynamic_config);
     }
 
+    if (diff.will_handle_intr){
+        proxy->regcpy(diff.nemu_reg,REF_TO_DIFFTEST);
+        diff.nemu_this_pc = diff.nemu_reg[DIFFTEST_THIS_PC];
+        diff.will_handle_intr = false;
+    }
     //difftest step start
     proxy->exec(1);
     proxy->regcpy(diff.nemu_reg,REF_TO_DIFFTEST);
@@ -2002,8 +2017,8 @@ FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
 
     if (nemu_pc != gem5_pc) {
         // warn("NEMU store addr: %#lx\n", nemu_store_addr);
-        warn("Inst [sn:%lli]\n", inst->seqNum);
-        warn("Diff at %s, NEMU: %#lx, GEM5: %#lx\n",
+        DPRINTF(ValueCommit,"Inst [sn:%lli]\n", inst->seqNum);
+        DPRINTF(ValueCommit,"Diff at %s, NEMU: %#lx, GEM5: %#lx\n",
                 "PC", nemu_pc, gem5_pc
             );
         if (!diff_at) {
@@ -2015,16 +2030,16 @@ FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
     }
 
     if (diff.npc != inst->nextInstAddr()) {
-        warn("Inst [sn:%lli]\n", inst->seqNum);
-        warn("Diff at %s, NEMU: %#lx, GEM5: %#lx\n",
-                "NPC", diff.npc, inst->nextInstAddr()
-            );
+            DPRINTF(ValueCommit,"Inst [sn:%lli]\n", inst->seqNum);
+            DPRINTF(ValueCommit,"Diff at %s, NEMU: %#lx, GEM5: %#lx\n",
+                    "NPC", diff.npc, inst->nextInstAddr()
+                );
         if (!diff_at)
             diff_at = NPCDiff;
     } else {
         DPRINTF(ValueCommit, "Inst [sn:%lli] %s, NEMU: %#lx, GEM5: %#lx\n",
-                inst->seqNum, "NPC", diff.npc, inst->nextInstAddr()
-               );
+            inst->seqNum, "NPC", diff.npc, inst->nextInstAddr()
+        );
     }
 
     // if (nemu_inst_len != gem5_inst_len ||
@@ -2068,8 +2083,8 @@ FullO3CPU<Impl>::diffWithNEMU(const DynInstPtr &inst)
                     nemu_reg[dest_tag] = gem5_val;
                     proxy->regcpy(nemu_reg,DUT_TO_REF);
                 } else {
-                    warn("Inst [sn:%lli] pc:%s\n", inst->seqNum, inst->pcState());
-                    warn("Diff at %s Ref value: %#lx, GEM5 value: %#lx\n",
+                    DPRINTF(ValueCommit, "Inst [sn:%lli] pc:%s\n", inst->seqNum, inst->pcState());
+                    DPRINTF(ValueCommit, "Diff at %s Ref value: %#lx, GEM5 value: %#lx\n",
                             reg_name[dest_tag], nemu_val, gem5_val
                         );
                     if (!diff_at)

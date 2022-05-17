@@ -345,6 +345,13 @@ def template CSRExecute {{
             }
             break;
           }
+          case CSR_TIME: {
+                std::string error = csprintf(
+                    "force accessing to time CSR generate fault\n");
+                fault = make_shared<IllegalInstFault>(error, machInst);
+                olddata = 0;
+                break;
+          }
           default:
             if (CSRData.find(csr) != CSRData.end()) {
                 olddata = xc->readMiscReg(CSRData.at(csr).physIndex);

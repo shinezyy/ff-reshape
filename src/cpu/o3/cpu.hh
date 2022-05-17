@@ -309,6 +309,9 @@ class FullO3CPU : public BaseO3CPU
     /** Returns the Fault for any valid interrupt. */
     Fault getInterrupts();
 
+    /** Returns the Interrupt NO for any valid interrupt. */
+    int getInterruptsNO();
+
     /** Processes any an interrupt fault. */
     void processInterrupts(const Fault &interrupt);
 
@@ -794,9 +797,10 @@ class FullO3CPU : public BaseO3CPU
     uint64_t diff_wpc[DIFFTEST_WIDTH];
     uint64_t gem5_reg[DIFFTEST_NR_REG];
     uint64_t nemu_reg[DIFFTEST_NR_REG];
+  public:
     DiffState diff;
     NemuProxy* proxy;
-
+  private:
     bool enable_nemu_diff;
     bool hasCommit{false};
 

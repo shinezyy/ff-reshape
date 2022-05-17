@@ -41,12 +41,11 @@
 #ifndef __CPU_O3_COMMIT_IMPL_HH__
 #define __CPU_O3_COMMIT_IMPL_HH__
 
-#include "cpu/o3/commit.hh"
-
 #include <algorithm>
 #include <set>
 #include <string>
 
+#include "arch/riscv/faults.hh"
 #include "arch/utility.hh"
 #include "base/loader/symtab.hh"
 #include "base/logging.hh"
@@ -54,6 +53,7 @@
 #include "cpu/base.hh"
 #include "cpu/checker/cpu.hh"
 #include "cpu/exetrace.hh"
+#include "cpu/o3/commit.hh"
 #include "cpu/o3/thread_state.hh"
 #include "cpu/timebuf.hh"
 #include "debug/Activity.hh"
@@ -777,6 +777,10 @@ DefaultCommit<Impl>::handleInterrupt()
         // CPU will handle interrupt. Note that we ignore the local copy of
         // interrupt. This is because the local copy may no longer be the
         // interrupt that the interrupt controller thinks is being handled.
+        if (cpu->proxy){
+            cpu->diff.will_handle_intr = true;
+            cpu->proxy->raise_intr(cpu->getInterruptsNO() | (1ULL << 63));
+        }
         cpu->processInterrupts(cpu->getInterrupts());
 
         thread[0]->noSquashFromTC = false;
@@ -1353,7 +1357,7 @@ DefaultCommit<Impl>::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
         DPRINTFR(ValueCommit, "%llu VCommitting %llu instruction with sn:%lli PC:%s",
                 curTick(), commitAll, head_inst->seqNum, head_inst->pcState());
         if (head_inst->numDestRegs() > 0) {
-            DPRINTFR(ValueCommit, ", with wb value: %llu",
+            DPRINTFR(ValueCommit, ", with wb value: %llx",
                     head_inst->getResult().asIntegerNoAssert());
         } else {
             DPRINTFR(ValueCommit, ", with wb value: none");

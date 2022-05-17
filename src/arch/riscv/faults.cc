@@ -129,7 +129,10 @@ RiscvFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
         }
         tc->setMiscReg(cause, _cause);
         tc->setMiscReg(epc, tc->instAddr());
-        tc->setMiscReg(tval, trap_value());
+        if (_cause == INST_ILLEGAL)
+            tc->setMiscReg(tval, 0);
+        else
+            tc->setMiscReg(tval, trap_value());
         tc->setMiscReg(MISCREG_PRV, prv);
         tc->setMiscReg(MISCREG_STATUS, status);
 
