@@ -777,7 +777,7 @@ DefaultCommit<Impl>::handleInterrupt()
         // CPU will handle interrupt. Note that we ignore the local copy of
         // interrupt. This is because the local copy may no longer be the
         // interrupt that the interrupt controller thinks is being handled.
-        if (cpu->proxy){
+        if (cpu->enable_nemu_diff){
             cpu->diff.will_handle_intr = true;
             cpu->proxy->raise_intr(cpu->getInterruptsNO() | (1ULL << 63));
         }

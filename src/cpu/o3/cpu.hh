@@ -800,8 +800,8 @@ class FullO3CPU : public BaseO3CPU
   public:
     DiffState diff;
     NemuProxy* proxy;
-  private:
     bool enable_nemu_diff;
+  private:
     bool hasCommit{false};
 
     void readGem5Regs();
