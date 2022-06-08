@@ -16,3 +16,4 @@ class Lint(BasicPioDevice):
     # core_intr = Param.BaseInterrupts(NULL, "core's interrupts")
     lint_id = Param.Int(0, "lint's id")
     intrctrl = Param.IntrControl(Parent.any, "interrupt controller")
+    int_enable = Param.Bool(False,"enable interrupt of this Lint")

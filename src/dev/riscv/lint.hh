@@ -25,7 +25,7 @@ class Lint: public BasicPioDevice
     int lint_id;
     /** Pointer to the interrupt controller */
     IntrControl *intrctrl;
-    bool started;//timer addition will start after the first read/write
+    bool int_enable;
     uint64_t freq,inc,mtime;
     uint64_t msip,mtimecmp;
     EventFunctionWrapper update_lint_event;

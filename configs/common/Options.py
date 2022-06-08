@@ -560,3 +560,5 @@ def addFSOptions(parser):
     parser.add_option("--cycle_afterwarm", action="store", type="int",
         default=1_000_000,
         help="cycles after warmup cpt")
+    parser.add_option("--enable-clint-sets", type="string",
+    default=None)

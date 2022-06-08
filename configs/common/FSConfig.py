@@ -662,11 +662,11 @@ def makeBareMetalRiscvSystem(mem_mode, numCPUs=1, mdesc=None, cmdline=None, nohy
             x.set_addr_with_stride(x.pio_addr, i, io_stride_size)
             x.pio = self.iobus.master
     else:
-        self.lint = Lint()
-        self.lint.pio = self.iobus.master
+        self.lints = [Lint()]
+        self.lints[0].pio = self.iobus.master
 
-        self.uartlite = UartLite()
-        self.uartlite.pio = self.iobus.master
+        self.uartlites = [UartLite()]
+        self.uartlites[0].pio = self.iobus.master
 
     return self
 

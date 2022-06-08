@@ -256,6 +256,11 @@ def build_test_system(np):
                 ways = options.l3_waymask_set.split('-')
                 test_sys.controlplane.l3_waymask_set = [int(x,base=16) for x in ways]
 
+        if options.enable_clint_sets:
+            elinst_set = set([int(x) for x in options.enable_clint_sets.split('-')])
+            for s in elinst_set:
+                test_sys.lints[s].int_enable = True
+
     return test_sys
 
 def build_drive_system(np):

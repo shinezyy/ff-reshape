@@ -68,7 +68,7 @@ Tick Lint::write(PacketPtr pkt) {
 }
 
 void Lint::update_mtip(void) {
-  if (mtime >= mtimecmp){
+  if (int_enable && mtime >= mtimecmp){
     DPRINTF(Lint,"post mtip! time:%x cmp:%x\n",mtime,mtimecmp);
     intrctrl->post(lint_id,INT_TIMER_MACHINE,0);
   }
@@ -84,7 +84,7 @@ Lint::Lint(const LintParams *p) :
     BasicPioDevice(*p, p->pio_size),
     lint_id(p->lint_id),
     intrctrl(p->intrctrl),
-    started(true),
+    int_enable(p->int_enable),
     freq(0),inc(0),mtime(0),
     msip(0),mtimecmp(999999),
     update_lint_event([this]{update_time();},"update clint time")
