@@ -80,6 +80,8 @@ def modifyO3CPUConfig(options, cpu):
 
     if options.nemu_diff:
         cpu.nemuDiff = True
+    if options.nemu_trace:
+        cpu.nemuTrace = True
 
     if options.cpu_type == 'DerivFFCPU':
 

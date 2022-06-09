@@ -178,4 +178,7 @@ def addO3Options(parser):
     parser.add_option("--nemu-diff",
             action='store_true',
             help="use NEMU as ref to do difftest")
+    parser.add_option("--nemu-trace",
+            action='store_true',
+            help="make NEMU ref print trace")
 

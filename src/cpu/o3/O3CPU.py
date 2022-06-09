@@ -198,6 +198,7 @@ class DerivO3CPU(BaseCPU):
                           "Enable TSO Memory model")
 
     nemuDiff = Param.Bool(False,"use NEMU as ref to difftest")
+    nemuTrace = Param.Bool(False,"make NEMU ref print trace")
 
     branchTrace = Param.BranchTrace(BranchTrace())
 

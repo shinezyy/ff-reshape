@@ -374,7 +374,7 @@ FullO3CPU<Impl>::FullO3CPU(const DerivO3CPUParams &params)
         proxy = new NemuProxy(params.cpu_id,true);
         proxy->regcpy(gem5_reg, REF_TO_DUT);
         diff.dynamic_config.ignore_illegal_mem_access = false;
-        diff.dynamic_config.debug_difftest = false;
+        diff.dynamic_config.debug_difftest = params.nemuTrace;
         proxy->update_config(&diff.dynamic_config);
         diff.will_handle_intr = false;
     }
