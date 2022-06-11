@@ -314,7 +314,7 @@ TLB::doTranslate(const RequestPtr &req, ThreadContext *tc,
 
     Addr paddr = e->paddr << PageShift | (vaddr & mask(e->logBytes));
     if (paddr < 0x80000000UL) {
-        req->setFlags(Request::UNCACHEABLE);
+        req->setFlags(Request::UNCACHEABLE | Request::STRICT_ORDER);
         if (nohypeIoStride != 0) {
             paddr += tc->contextId() * nohypeIoStride;
         }
@@ -361,7 +361,7 @@ TLB::translate(const RequestPtr &req, ThreadContext *tc,
              */
             Addr paddr = req->getVaddr();
             if (paddr < 0x80000000UL) {
-                req->setFlags(Request::UNCACHEABLE);
+                req->setFlags(Request::UNCACHEABLE | Request::STRICT_ORDER);
                 if (nohypeIoStride != 0) {
                     paddr += tc->contextId() * nohypeIoStride;
                 }

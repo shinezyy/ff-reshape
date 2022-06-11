@@ -503,7 +503,7 @@ Walker::WalkerState::recvPacket(PacketPtr pkt)
             vaddr &= (static_cast<Addr>(1) << VADDR_BITS) - 1;
             Addr paddr = walker->tlb->translateWithTLB(vaddr, satp.asid, mode);
             if (paddr < 0x80000000UL) {
-                req->setFlags(Request::UNCACHEABLE);
+                req->setFlags(Request::UNCACHEABLE | Request::STRICT_ORDER);
                 if (walker->nohypeIoStride != 0) {
                     paddr += tc->contextId() * walker->nohypeIoStride;
                 }
