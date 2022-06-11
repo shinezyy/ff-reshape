@@ -181,21 +181,9 @@ def config_cache(options, system):
 
         if options.l3_cache:
             system.l3 = L3Cache(clk_domain=system.cpu_clk_domain, **_get_cache_opts('l3', options))
+            if options.incll3:
+                system.l3.clusivity = 'mostly_incl'
 
-            system.l3.tags.num_slices = options.l3_slices
-            if options.l3_complex:
-                system.l3.tags.indexing_policy = ComplexAssociative()
-                system.l3.tags.indexing_policy.num_slices = options.l3_slices
-                max_addr = 0
-                for m in system.mem_ranges:
-                    if max_addr < m.end:
-                        max_addr = m.end
-                system.l3.tags.indexing_policy.mem_size = str(max_addr+1) + "B"
-
-            system.tol3bus = L2XBar(clk_domain = system.cpu_clk_domain,
-                    width=64)
-
-        if options.l3_cache:
             system.l3.tags.num_slices = options.l3_slices
             if options.l3_complex:
                 system.l3.tags.indexing_policy = ComplexAssociative()
@@ -214,12 +202,14 @@ def config_cache(options, system):
         system.memchecker = MemChecker()
 
     if options.sharel2:
-        system.l2 = [ l2_cache_class(clk_domain=system.cpu_clk_domain, **_get_cache_opts('l2', options))
+        system.l2 = [ l2_cache_class(clk_domain=system.cpu_clk_domain,
+            writeback_clean=not options.incll3, **_get_cache_opts('l2', options))
                       for idx in range(options.num_cpus//2) ]
         system.tol2bus = [ L2XBar(clk_domain = system.cpu_clk_domain)
                       for idx in range(options.num_cpus//2) ]
     else:
-        system.l2 = [ l2_cache_class(clk_domain=system.cpu_clk_domain, **_get_cache_opts('l2', options))
+        system.l2 = [ l2_cache_class(clk_domain=system.cpu_clk_domain,
+            writeback_clean=not options.incll3, **_get_cache_opts('l2', options))
                       for idx in range(options.num_cpus) ]
         system.tol2bus = [ L2XBar(clk_domain = system.cpu_clk_domain)
                       for idx in range(options.num_cpus) ]
@@ -262,6 +252,7 @@ def config_cache(options, system):
                 # Make sure connectAllPorts connects the right objects.
                 system.cpu[i].dcache = dcache_real
                 system.cpu[i].dcache_mon = dcache_mon
+            system.cpu[i].dcache.prefetcher_id = i
 
         elif options.external_memory_system:
             # These port names are presented to whatever 'external' system
@@ -296,6 +287,7 @@ def config_cache(options, system):
             system.cpu[i].connectAllPorts(system.tol2bus[i], system.membus)
             system.l2[i].tags.num_slices = options.l2_slices
             system.l2[i].cpu_side = system.tol2bus[i].master
+            system.l2[i].prefetcher_id = i
             if options.l3_cache:
                 system.l2[i].mem_side = system.tol3bus.slave
             else:
