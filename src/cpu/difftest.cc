@@ -78,6 +78,9 @@ NemuProxy::NemuProxy(int coreid) {
     nemu_difftest_set_mhartid(coreid);
   }
 
+  sdcard_init = (void (*)(const char *,const char *))dlsym(handle,"difftest_sdcard_init");
+  assert(sdcard_init);
+
   auto nemu_init = (void (*)(void))dlsym(handle, "difftest_init");
   assert(nemu_init);
 
@@ -116,6 +119,9 @@ NemuProxy::NemuProxy(int tid, bool nohype) {
 
   isa_reg_display = (void (*)(void))dlsym(handle, "isa_reg_display");
   assert(isa_reg_display);
+
+  sdcard_init = (void (*)(const char *,const char *))dlsym(handle,"difftest_sdcard_init");
+  assert(sdcard_init);
 
   auto nemu_nohype_init = (void (*)(int))dlsym(handle, "difftest_nohype_init");
   assert(nemu_nohype_init);

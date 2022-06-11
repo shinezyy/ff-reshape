@@ -642,11 +642,14 @@ def makeBareMetalRiscvSystem(mem_mode, numCPUs=1, mdesc=None, cmdline=None, nohy
         self.bridge.ranges = [AddrRange(io_stride_size * i + 0x38000000, io_stride_size * i + 0x38010000 - 1)
             for i in range(0, numCPUs)] + [AddrRange(io_stride_size * i + 0x40600000,
             io_stride_size * i + 0x4060000d - 1) for i in range(0, numCPUs)
+            ] + [AddrRange(io_stride_size * i + 0x40002000,
+            io_stride_size * i + 0x40002080 - 1) for i in range(0, numCPUs)
             ] + [AddrRange(IO_address_space_base, Addr.max)]
     else:
         self.bridge.ranges = [
             AddrRange(0x38000000, 0x38010000 - 1),
             AddrRange(0x40600000, 0x4060000d - 1),
+            AddrRange(0x40002000, 0x40002080 - 1),
             AddrRange(IO_address_space_base, Addr.max),]
 
     self.system_port = self.membus.slave
@@ -661,12 +664,19 @@ def makeBareMetalRiscvSystem(mem_mode, numCPUs=1, mdesc=None, cmdline=None, nohy
         for i, x in enumerate(self.uartlites):
             x.set_addr_with_stride(x.pio_addr, i, io_stride_size)
             x.pio = self.iobus.master
+        self.mmcs = [NemuMMC() for _ in range(0,numCPUs)]
+        for i, x in enumerate(self.mmcs):
+            x.set_addr_with_stride(x.pio_addr, i, io_stride_size)
+            x.pio = self.iobus.master
     else:
         self.lints = [Lint()]
         self.lints[0].pio = self.iobus.master
 
         self.uartlites = [UartLite()]
         self.uartlites[0].pio = self.iobus.master
+
+        self.mmcs = [NemuMMC()]
+        self.mmcs[0].pio = self.iobus.master
 
     return self
 

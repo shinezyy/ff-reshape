@@ -199,6 +199,8 @@ class DerivO3CPU(BaseCPU):
 
     nemuDiff = Param.Bool(False,"use NEMU as ref to difftest")
     nemuTrace = Param.Bool(False,"make NEMU ref print trace")
+    nemuSDimg = Param.String("","Nemu MMC img path for diff")
+    nemuSDCptBin = Param.String("","Nemu MMC cpt bin path for diff")
 
     branchTrace = Param.BranchTrace(BranchTrace())
 

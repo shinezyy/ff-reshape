@@ -260,6 +260,28 @@ def build_test_system(np):
             elinst_set = set([int(x) for x in options.enable_clint_sets.split('-')])
             for s in elinst_set:
                 test_sys.lints[s].int_enable = True
+        if options.mmc_img:
+            cpts = options.generic_rv_cpt.split(';')
+            imgs = options.mmc_img.split(';')
+            if (len(cpts) == 1):
+                for mmc,cpu in zip(test_sys.mmcs,test_sys.cpu):
+                    mmc.cpt_bin_path = cpts[0].rsplit('/',1)[0]+'/sdcard.bin'
+                    mmc.img_path = options.mmc_img
+                    cpu.nemuSDCptBin = mmc.cpt_bin_path
+                    cpu.nemuSDimg = mmc.img_path
+            else:
+                for mmc,cpt,cpu in zip(test_sys.mmcs,cpts,test_sys.cpu):
+                    mmc.cpt_bin_path = cpt.rsplit('/',1)[0]+'/sdcard.bin'
+                    cpu.nemuSDCptBin = mmc.cpt_bin_path
+                if (len(imgs)==1):
+                    for mmc in test_sys.mmcs:
+                        mmc.img_path = options.mmc_img
+                        cpu.nemuSDimg = mmc.img_path
+                else:
+                    for mmc,img in zip(test_sys.mmcs,imgs):
+                        mmc.img_path = img
+                        cpu.nemuSDimg = mmc.img_path
+
 
     return test_sys
 

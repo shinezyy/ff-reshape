@@ -35,3 +35,7 @@ if env['TARGET_ISA'] == 'riscv':
 
     # DebugFlag('Iob')
     DebugFlag('Lint')
+
+    SimObject('NemuMMC.py')
+    Source('nemu_mmc.cc')
+    DebugFlag('NemuMMC')
