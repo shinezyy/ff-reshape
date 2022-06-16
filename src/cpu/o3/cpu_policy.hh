@@ -33,6 +33,7 @@
 #include "cpu/o3/comm.hh"
 #include "cpu/o3/commit.hh"
 #include "cpu/o3/decode.hh"
+#include "cpu/o3/decoupled_fetch.hh"
 #include "cpu/o3/fetch.hh"
 #include "cpu/o3/free_list.hh"
 #include "cpu/o3/iew.hh"
@@ -82,7 +83,8 @@ struct SimpleCPUPolicy
     typedef ::LSQUnit<Impl> LSQUnit;
 
     /** Typedef for fetch. */
-    typedef DefaultFetch<Impl> Fetch;
+    // typedef DefaultFetch<Impl> Fetch;
+    typedef DecoupledFetch<Impl> Fetch;
     /** Typedef for decode. */
     typedef DefaultDecode<Impl> Decode;
     /** Typedef for rename. */
