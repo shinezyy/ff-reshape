@@ -12,7 +12,7 @@ class TimedPredictor: public SimObject {
     public:
     virtual void tickStart() = 0;
     virtual void tick() = 0;
-    virtual void putPCHistory(Addr pc, const boost::dynamic_bitset<> &history);
+    virtual void putPCHistory(Addr pc, const boost::dynamic_bitset<> &history) = 0;
 
     virtual unsigned getDelay() = 0;
 

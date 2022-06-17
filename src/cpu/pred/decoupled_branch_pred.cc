@@ -8,15 +8,15 @@ void DecoupledBranchPred::tick()
 {
     // s2
     // get stream from UBTB
-    s2Pred = s1BackingPred;
 
     bool inconsistent = check_prediction(s1BackingPred, s1UbtbPred);
+    bool overriding = false;
     if (inconsistent) {
         overrideStream();
         overrideUpdateUBTB();  // do we update it after override?
-    } else {
-        add2FTQ(s2Pred);
     }
+    add2FTQ(s1BackingPred);
+    s2Pred = s1BackingPred;
 
     // s1
     // get stream prediction initated XX cycles before
@@ -37,6 +37,9 @@ void DecoupledBranchPred::tick()
     // s0
     streamPred.putPCHistory(s0CtrlPC, s0History);
     streamUBTB.putPCHistory(s0CtrlPC, s0History);
-    s0CtrlPC = s2Pred.nextStream;
     s0UbtbPred = streamUBTB.getStream();
+    s0CtrlPC = s0UbtbPred.nextStream;
+    if (overriding) {
+        s0CtrlPC = s2Pred.nextStream;
+    }
 }
