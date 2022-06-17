@@ -318,3 +318,8 @@ ff-bp:
   status: maintained
   maintainers:
     - Zibo Gao <diyer175@hotmail.com>
+
+cpu-pred:
+  status: maintained
+  maintainers:
+    - Yaoyang Zhou <shinezyy@qq.com>

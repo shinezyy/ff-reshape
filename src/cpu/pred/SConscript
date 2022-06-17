@@ -68,6 +68,13 @@ Source('mem_dep_pred.cc')
 Source('ff_bpred_unit.cc')
 Source('ff_oracle.cc')
 
+Source('decoupled_branch_pred.cc')
+Source('decoupled_branch_pred.hh')
+Source('stream_pred.cc')
+Source('stream_pred.hh')
+Source('stream_struct.hh')
+Source('timed_pred.hh')
+Source('ubtb.hh')
 
 DebugFlag('FreeList')
 DebugFlag('Branch')
@@ -87,3 +94,4 @@ DebugFlag('FFOracleBP_squash')
 DebugFlag('FFOracleBP_misc')
 CompoundFlag('FFOracleBP', [ 'FFOracleBP_lookup', 'FFOracleBP_update', 'FFOracleBP_squash',
                                 'FFOracleBP_misc'])
+
