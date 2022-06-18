@@ -771,3 +771,28 @@ class OracleBP(BranchPredictor):
 
     checkAddr = Param.Bool(True, "check addr of branch inst before return")
     outcomePath = Param.String('None', 'The branch outcome file')
+
+class TimedPredictor(SimObject):
+    type = 'TimedPredictor'
+    cxx_class = 'TimedPredictor'
+    cxx_header = "cpu/pred/timed_pred.hh"
+
+class StreamPredictor(TimedPredictor):
+    type = 'StreamPredictor'
+    cxx_class = 'StreamPredictor'
+    cxx_header = "cpu/pred/stream_pred.hh"
+
+class StreamUBTB(TimedPredictor):
+    type = 'StreamUBTB'
+    cxx_class = 'StreamUBTB'
+    cxx_header = "cpu/pred/ubtb.hh"
+
+class DecoupledBranchPred(SimObject):
+    type = 'DecoupledBranchPred'
+    cxx_class = 'DecoupledBranchPred'
+    cxx_header = "cpu/pred/decoupled_branch_pred.hh"
+
+    stream_pred = Param.StreamPredictor(StreamPredictor(), "backing stream predictor")
+    stream_ubtb = Param.StreamUBTB(StreamUBTB(), "fast stream predictor")
+
+

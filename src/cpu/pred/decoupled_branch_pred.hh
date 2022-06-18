@@ -15,17 +15,25 @@
 #include "cpu/pred/stream_struct.hh"
 #include "cpu/pred/ubtb.hh"
 #include "cpu/static_inst.hh"
+#include "params/DecoupledBranchPred.hh"
 #include "sim/sim_object.hh"
 
+struct BPHistory {
+    boost::dynamic_bitset<> history;
+};
+
 class DecoupledBranchPred : public SimObject {
+    public:
+    typedef DecoupledBranchPredParams Params;
+
     private:
     std::deque<FetchStream> fetchStreamQueue;
 
     std::string _name;
 
-    StreamPredictor streamPred;
+    StreamPredictor *streamPred;
 
-    StreamUBTB streamUBTB;
+    StreamUBTB *streamUBTB;
 
     ReturnAddrStack ras;
 
@@ -63,7 +71,7 @@ class DecoupledBranchPred : public SimObject {
     public:
     // const std::string name() const {return _name};
 
-    DecoupledBranchPred();
+    DecoupledBranchPred(const Params &params);
 
     // perform state update
     void tick();
@@ -85,7 +93,7 @@ class DecoupledBranchPred : public SimObject {
      * @param actually_taken The correct branch direction.
      */
     void controlSquash(const InstSeqNum, const TheISA::PCState control_pc, const TheISA::PCState &corr_target,
-                       bool isConditional, bool isIndirect, bool actually_taken);
+                       bool isConditional, bool isIndirect, bool actually_taken, std::shared_ptr<void> bp_history);
     /**
      * Squashes all outstanding updates until a given sequence number.
      * @param squashed_sn The sequence number to squash any younger updates up
@@ -94,10 +102,10 @@ class DecoupledBranchPred : public SimObject {
     void nonControlSquash(const InstSeqNum squashed_sn);
 
     void commitConditional(const InstSeqNum inst_sn, const TheISA::PCState &pc,
-                           bool actually_taken, const TheISA::PCState &target);
+                           bool actually_taken, const TheISA::PCState &target, std::shared_ptr<void> bp_history);
 
     void commitUnconditional(const InstSeqNum inst_sn, const TheISA::PCState &pc,
-                           const TheISA::PCState &target);
+                           const TheISA::PCState &target, std::shared_ptr<void> bp_history);
 
     boost::dynamic_bitset<> getCurrentGHR() const;
 

@@ -1,6 +1,9 @@
 #include "cpu/pred/decoupled_branch_pred.hh"
 
-DecoupledBranchPred::DecoupledBranchPred()
+DecoupledBranchPred::DecoupledBranchPred(const Params &params)
+    : SimObject(params),
+    streamPred(params.stream_pred),
+    streamUBTB(params.stream_ubtb)
 {
 }
 
@@ -20,7 +23,7 @@ void DecoupledBranchPred::tick()
 
     // s1
     // get stream prediction initated XX cycles before
-    auto [branch_pc, stream_payload] = streamPred.getStreamS1();
+    auto [branch_pc, stream_payload] = streamPred->getStreamS1();
     // sanity check
     if (branch_pc) {  // pc = 0 indicates no valid prediction
         // the pc of return predicton must be sent X cycle ago
@@ -35,11 +38,29 @@ void DecoupledBranchPred::tick()
     s1UbtbPred = s0UbtbPred;
 
     // s0
-    streamPred.putPCHistory(s0CtrlPC, s0History);
-    streamUBTB.putPCHistory(s0CtrlPC, s0History);
-    s0UbtbPred = streamUBTB.getStream();
+    streamPred->putPCHistory(s0CtrlPC, s0History);
+    streamUBTB->putPCHistory(s0CtrlPC, s0History);
+    s0UbtbPred = streamUBTB->getStream();
     s0CtrlPC = s0UbtbPred.nextStream;
     if (overriding) {
         s0CtrlPC = s2Pred.nextStream;
     }
+}
+
+void DecoupledBranchPred::add2FTQ(const StreamPrediction &fetchStream)
+{
+}
+
+bool DecoupledBranchPred::check_prediction(const StreamPrediction &ubtb_prediction,
+                                           const StreamPrediction &main_predictor_prediction)
+{
+    return false;
+}
+
+void DecoupledBranchPred::overrideStream()
+{
+}
+
+void DecoupledBranchPred::overrideUpdateUBTB()
+{
 }

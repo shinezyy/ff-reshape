@@ -11,19 +11,29 @@
 #include "cpu/pred/stream_struct.hh"
 #include "cpu/pred/timed_pred.hh"
 #include "cpu/static_inst.hh"
+#include "params/StreamPredictor.hh"
 #include "sim/sim_object.hh"
 
 class StreamPredictor : public TimedPredictor {
+    public:
+    typedef StreamPredictorParams Params;
+
     private:
     const unsigned delay{2};
 
     public:
+    StreamPredictor(const Params &p);
+
     void tickStart() override;
     void tick() override;
     void putPCHistory(Addr pc, const boost::dynamic_bitset<> &history) override;
     unsigned getDelay() override { return delay; }
 
     std::pair<Addr, StreamPrediction> getStreamS1();
+
+    void update(const InstSeqNum sn, Addr control_pc, Addr target, bool is_conditional, bool is_indirect,
+                        bool actually_taken, std::shared_ptr<void> bp_history) override;
+
 };
 
 
