@@ -50,7 +50,16 @@ void DecoupledBranchPred::tick()
 std::pair<bool, TheISA::PCState>
 DecoupledBranchPred::willTaken(Addr pc)
 {
+    // if taken, store prediction history here
     return std::make_pair(false, TheISA::PCState(0));
+}
+
+void
+DecoupledBranchPred::notifyStreamSeq(const InstSeqNum seq)
+{
+    // Update bpHistory with seq
+    assert(bpHistory.find(seq) == bpHistory.end());
+    bpHistory[seq] = BPHistory();  // TODO: fix here with last predicted taken
 }
 
 void DecoupledBranchPred::add2FTQ(const StreamPrediction &fetchStream)

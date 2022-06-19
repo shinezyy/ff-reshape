@@ -85,7 +85,7 @@ class DecoupledBranchPred : public SimObject {
 
     std::pair<bool, TheISA::PCState> willTaken(Addr cpc);
 
-    void update(const InstSeqNum);
+    void notifyStreamSeq(const InstSeqNum seq);
 
     /**
      * Squashes all outstanding updates until a given sequence number, and

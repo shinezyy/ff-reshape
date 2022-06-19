@@ -531,7 +531,8 @@ DecoupledFetch<Impl>::lookupAndUpdateNextPC(
     // this function updates it.
 
     // decoupled frontend does not assume known inst type, guess only with PC
-    auto [predict_taken, taken_pc] = branchPred->willTaken(nextPC.instAddr());
+    auto current_pc = nextPC;
+    auto [predict_taken, taken_pc] = branchPred->willTaken(current_pc.instAddr());
 
     if (!predict_taken) {
         DPRINTF(Fetch, "Advancing PC from %s", nextPC);
@@ -545,28 +546,21 @@ DecoupledFetch<Impl>::lookupAndUpdateNextPC(
     ThreadID tid = inst->threadNumber;
     Addr ctrl_pc = nextPC.pc();
 
-    // In tightly-coupled frontend, branch predictor updates nextPC when predicting
+    // now ``nextPC'' becomes real ``next_pc''
     nextPC = taken_pc;
 
     if (lbuf->enable) {
         lbuf->probe(ctrl_pc, nextPC.pc(), predict_taken);
     }
 
-    if (predict_taken) {
-        DPRINTF(Fetch, "[tid:%i] [sn:%llu] Branch at PC %#x "
-                "predicted to be taken to %s\n",
-                tid, inst->seqNum, inst->pcState().instAddr(), nextPC);
-    } else {
-        DPRINTF(Fetch, "[tid:%i] [sn:%llu] Branch at PC %#x "
-                "predicted to be not taken\n",
-                tid, inst->seqNum, inst->pcState().instAddr());
-    }
-
     DPRINTF(Fetch, "[tid:%i] [sn:%llu] Branch at PC %#x "
             "predicted to go to %s\n",
             tid, inst->seqNum, inst->pcState().instAddr(), nextPC);
+
     inst->setPredTarg(nextPC);
     inst->setPredTaken(predict_taken);
+
+    branchPred->notifyStreamSeq(inst->seqNum);
 
     ++fetchStats.branches;
 
