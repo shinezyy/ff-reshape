@@ -47,7 +47,7 @@
 #include "config/the_isa.hh"
 #include "cpu/o3/loop_buffer.hh"
 #include "cpu/pc_event.hh"
-#include "cpu/pred/bpred_unit.hh"
+#include "cpu/pred/decoupled_branch_pred.hh"
 #include "cpu/timebuf.hh"
 #include "cpu/translation.hh"
 #include "enums/SMTFetchPolicy.hh"
@@ -422,7 +422,7 @@ class DecoupledFetch
     typename TimeBuffer<FetchStruct>::wire toDecode;
 
     /** BPredUnit. */
-    BPredUnit *branchPred;
+    DecoupledBranchPred *branchPred;
 
     TheISA::PCState pc[Impl::MaxThreads];
 

@@ -10,6 +10,10 @@ struct FetchStream {
     Addr streamEnd;
 };
 
+struct FetchingStream: public FetchStream {
+    Addr curPC;
+};
+
 struct IdealStreamStorage {
     Addr tag;  // addr of the taken branch?
     Addr bbStart;

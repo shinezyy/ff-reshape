@@ -131,7 +131,7 @@ DecoupledFetch<Impl>::DecoupledFetch(O3CPU *_cpu, const DerivO3CPUParams &params
         issuePipelinedIfetch[i] = false;
     }
 
-    branchPred = params.branchPred;
+    branchPred = params.decoupledBranchPred;
     lbuf = params.loopBuffer;
 
     for (ThreadID tid = 0; tid < numThreads; tid++) {
@@ -422,7 +422,6 @@ DecoupledFetch<Impl>::drainSanityCheck() const
         assert(fetchStatus[i] == Idle || stalls[i].drain);
     }
 
-    branchPred->drainSanityCheck();
 }
 
 template <class Impl>
@@ -528,32 +527,29 @@ DecoupledFetch<Impl>::lookupAndUpdateNextPC(
         const DynInstPtr &inst, TheISA::PCState &nextPC)
 {
     // Do branch prediction check here.
-    // A bit of a misnomer...next_PC is actually the current PC until
+    // NOTE: A bit of a misnomer...next_PC is actually the current PC until
     // this function updates it.
-    bool predict_taken;
-    bool cpc_compressed = nextPC.compressed();
 
-    if (!inst->isControl()) {
+    // decoupled frontend does not assume known inst type, guess only with PC
+    auto [predict_taken, taken_pc] = branchPred->willTaken(nextPC.instAddr());
+
+    if (!predict_taken) {
         DPRINTF(Fetch, "Advancing PC from %s", nextPC);
         TheISA::advancePC(nextPC, inst->staticInst);
         DPRINTFR(Fetch, " to %s\n", nextPC);
-
         inst->setPredTarg(nextPC);
         inst->setPredTaken(false);
         return false;
     }
 
     ThreadID tid = inst->threadNumber;
-    Addr branch_pc = nextPC.pc();
-    predict_taken = branchPred->predict(inst->staticInst, inst->seqNum,
-                                        nextPC, tid);
+    Addr ctrl_pc = nextPC.pc();
 
-    bool real_pred_taken = cpc_compressed ?
-        branch_pc + 2 != nextPC.pc() :
-        branch_pc + 4 != nextPC.pc();
+    // In tightly-coupled frontend, branch predictor updates nextPC when predicting
+    nextPC = taken_pc;
 
     if (lbuf->enable) {
-        lbuf->probe(branch_pc, nextPC.pc(), real_pred_taken);
+        lbuf->probe(ctrl_pc, nextPC.pc(), predict_taken);
     }
 
     if (predict_taken) {
@@ -1011,22 +1007,21 @@ DecoupledFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
         // If it was a branch mispredict on a control instruction, update the
         // branch predictor with that instruction, otherwise just kill the
         // invalid state we generated in after sequence number
-        if (fromCommit->commitInfo[tid].mispredictInst &&
-            fromCommit->commitInfo[tid].mispredictInst->isControl()) {
-            branchPred->squash(fromCommit->commitInfo[tid].doneSeqNum,
-                              fromCommit->commitInfo[tid].pc,
-                              fromCommit->commitInfo[tid].branchTaken,
-                              tid);
+        auto mispred_inst = fromCommit->commitInfo[tid].mispredictInst;
+        if (mispred_inst && mispred_inst->isControl()) {
+            branchPred->controlSquash(fromCommit->commitInfo[tid].doneSeqNum,
+                                      mispred_inst->pcState(),  fromCommit->commitInfo[tid].pc,
+                                      mispred_inst->isCondCtrl(), mispred_inst->isIndirectCtrl(),
+                                      fromCommit->commitInfo[tid].branchTaken);
         } else {
-            branchPred->squash(fromCommit->commitInfo[tid].doneSeqNum,
-                              tid);
+            branchPred->nonControlSquash(fromCommit->commitInfo[tid].doneSeqNum);
         }
 
         return true;
     } else if (fromCommit->commitInfo[tid].doneSeqNum) {
         // Update the branch predictor if it wasn't a squashed instruction
         // that was broadcasted.
-        branchPred->update(fromCommit->commitInfo[tid].doneSeqNum, tid);
+        branchPred->commitInst(fromCommit->commitInfo[tid].doneSeqNum);
     }
 
     // Check squash signals from decode.
@@ -1034,15 +1029,15 @@ DecoupledFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
         DPRINTF(Fetch, "[tid:%i] Squashing instructions due to squash "
                 "from decode.\n",tid);
 
+        auto mispred_inst = fromDecode->decodeInfo[tid].mispredictInst;
         // Update the branch predictor.
         if (fromDecode->decodeInfo[tid].branchMispredict) {
-            branchPred->squash(fromDecode->decodeInfo[tid].doneSeqNum,
-                              fromDecode->decodeInfo[tid].nextPC,
-                              fromDecode->decodeInfo[tid].branchTaken,
-                              tid);
+            branchPred->controlSquash(fromDecode->decodeInfo[tid].doneSeqNum,
+                                      mispred_inst->pcState(), fromDecode->decodeInfo[tid].nextPC,
+                                      mispred_inst->isCondCtrl(), mispred_inst->isIndirectCtrl(),
+                                      fromDecode->decodeInfo[tid].branchTaken);
         } else {
-            branchPred->squash(fromDecode->decodeInfo[tid].doneSeqNum,
-                              tid);
+            branchPred->nonControlSquash(fromDecode->decodeInfo[tid].doneSeqNum);
         }
 
         if (fetchStatus[tid] != Squashing) {
@@ -1423,9 +1418,6 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
             bool this_is_branch = thisPC.branching() ||
                 lookupAndUpdateNextPC(instruction, nextPC);
             predictedBranch = this_is_branch;
-
-            if (thisPC.compressed()) {
-            }
 
             if (this_is_branch) {
                 // predicted backward branch

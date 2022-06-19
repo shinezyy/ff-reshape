@@ -184,10 +184,10 @@ class DerivO3CPU(BaseCPU):
 
     #branchPred = Param.BranchPredictor(TournamentBP(numThreads =
     #                                                   Parent.numThreads),
-    branchPred = Param.BranchPredictor(TAGE(numThreads =
-                                                       Parent.numThreads),
-                                       "Branch Predictor")
-    loopBuffer = Param.LoopBuffer(LoopBuffer(), "Loopo Buffer")
+    branchPred = Param.BranchPredictor(TAGE(numThreads = Parent.numThreads), "TAGE branch predictor")
+    decoupledBranchPred = Param.DecoupledBranchPred(DecoupledBranchPred(), "Decoupled branch predictor")
+
+    loopBuffer = Param.LoopBuffer(LoopBuffer(), "Loop Buffer")
     needsTSO = Param.Bool(buildEnv['TARGET_ISA'] == 'x86',
                           "Enable TSO Memory model")
 
