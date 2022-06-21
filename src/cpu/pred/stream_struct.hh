@@ -36,6 +36,7 @@ struct StreamPrediction {
     Addr bbStart;
     Addr bbEnd;
     Addr nextStream;
+    uint16_t streamLength;
     bool endIsRet;
     bool rasUpdated;
 };

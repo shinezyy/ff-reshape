@@ -89,6 +89,9 @@ DebugFlag('FFOracleBP_lookup')
 DebugFlag('FFOracleBP_update')
 DebugFlag('FFOracleBP_squash')
 DebugFlag('FFOracleBP_misc')
+
+DebugFlag('DecoupleBP')
+
 CompoundFlag('FFOracleBP', [ 'FFOracleBP_lookup', 'FFOracleBP_update', 'FFOracleBP_squash',
                                 'FFOracleBP_misc'])
 

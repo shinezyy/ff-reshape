@@ -39,4 +39,6 @@ typedef uint64_t InstSeqNum;
 // inst tag type, used to tag an operation instance in the IQ
 typedef unsigned int InstTag;
 
+using PredictionID = unsigned;
+
 #endif // __STD_TYPES_HH__

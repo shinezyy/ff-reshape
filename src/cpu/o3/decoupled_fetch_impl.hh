@@ -1003,7 +1003,7 @@ DecoupledFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
         // invalid state we generated in after sequence number
         auto mispred_inst = fromCommit->commitInfo[tid].mispredictInst;
         if (mispred_inst && mispred_inst->isControl()) {
-            branchPred->controlSquash(fromCommit->commitInfo[tid].doneSeqNum,
+            branchPred->controlSquash(mispred_inst->getStreamPredictionID(),
                                       mispred_inst->pcState(),  fromCommit->commitInfo[tid].pc,
                                       mispred_inst->isCondCtrl(), mispred_inst->isIndirectCtrl(),
                                       fromCommit->commitInfo[tid].branchTaken);
@@ -1026,7 +1026,7 @@ DecoupledFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
         auto mispred_inst = fromDecode->decodeInfo[tid].mispredictInst;
         // Update the branch predictor.
         if (fromDecode->decodeInfo[tid].branchMispredict) {
-            branchPred->controlSquash(fromDecode->decodeInfo[tid].doneSeqNum,
+            branchPred->controlSquash(mispred_inst->getStreamPredictionID(),
                                       mispred_inst->pcState(), fromDecode->decodeInfo[tid].nextPC,
                                       mispred_inst->isCondCtrl(), mispred_inst->isIndirectCtrl(),
                                       fromDecode->decodeInfo[tid].branchTaken);
@@ -1126,6 +1126,8 @@ DecoupledFetch<Impl>::buildInst(ThreadID tid, StaticInstPtr staticInst,
 
     // Keep track of if we can take an interrupt at this boundary
     delayedCommit[tid] = instruction->isDelayedCommit();
+
+    instruction->setStreamPredictionID(currentPredID);
 
     return instruction;
 }

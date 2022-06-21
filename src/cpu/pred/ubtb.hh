@@ -25,7 +25,7 @@ class StreamUBTB : public TimedPredictor {
 
     StreamPrediction getStream();
 
-    void update(const InstSeqNum sn, Addr control_pc, Addr target, bool is_conditional, bool is_indirect,
+    void update(const PredictionID pred_id, Addr control_pc, Addr target, bool is_conditional, bool is_indirect,
                         bool actually_taken, std::shared_ptr<void> bp_history) override;
 };
 

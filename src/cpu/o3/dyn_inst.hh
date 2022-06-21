@@ -435,6 +435,20 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     }
 
     int iqIndex;
+
+  private:
+    PredictionID streamPredictionID;
+
+  public:
+    void setStreamPredictionID(PredictionID id)
+    {
+        streamPredictionID = id;
+    }
+
+    PredictionID getStreamPredictionID() const
+    {
+        return streamPredictionID;
+    }
 };
 
 #endif // __CPU_O3_ALPHA_DYN_INST_HH__

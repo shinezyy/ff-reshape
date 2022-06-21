@@ -2,6 +2,7 @@
 #define __CPU_PRED_DECOUPLEDBRANCHPRED_HH__
 
 #include <deque>
+#include <limits>
 #include <map>
 #include <queue>
 #include <vector>
@@ -19,8 +20,13 @@
 #include "params/DecoupledBranchPred.hh"
 #include "sim/sim_object.hh"
 
+using StreamLen = uint16_t;
+
 struct BPHistory {
     boost::dynamic_bitset<> history;
+    Addr streamStart;
+    StreamLen predStreamLength;
+    Addr nextStream;
 };
 
 class DecoupledBranchPred : public SimObject {
@@ -32,6 +38,11 @@ class DecoupledBranchPred : public SimObject {
 
     std::string _name;
 
+    const unsigned historyBits{128};
+
+    boost::dynamic_bitset<> commitHistory;
+    boost::dynamic_bitset<> speculativeHistory;
+
     StreamPredictor *streamPred;
 
     StreamUBTB *streamUBTB;
@@ -39,10 +50,24 @@ class DecoupledBranchPred : public SimObject {
     ReturnAddrStack ras;
 
     // std::queue<Addr> pcSent;
+    const StreamLen unlimitedStreamLen{std::numeric_limits<StreamLen>::max()};
 
     std::queue<StreamPrediction> uBTBHistory;
 
-    std::map<InstSeqNum, BPHistory> bpHistory;
+    std::map<PredictionID, BPHistory> bpHistory;
+
+    PredictionID predictionID{0};
+
+    PredictionID maxInflightPrediction{128};
+
+    PredictionID incPredictionID() {
+        auto old_predict_id = predictionID;
+        predictionID++;
+        if (predictionID == maxInflightPrediction * 4) {
+            predictionID = 0;
+        }
+        return old_predict_id;
+    }
 
     Addr s0CtrlPC;
     StreamPrediction s0UbtbPred;
@@ -52,6 +77,7 @@ class DecoupledBranchPred : public SimObject {
     Addr s1CtrlPC;
     StreamPrediction s1BackingPred, s1UbtbPred;
     boost::dynamic_bitset<> s1History;
+    void updateS1Hist();
 
     Addr s2CtrlPC;
     StreamPrediction s2Pred;
@@ -69,7 +95,10 @@ class DecoupledBranchPred : public SimObject {
 
     void stopDecoupledPrediction();
 
-    public:
+    void recordPrediction(Addr stream_start, StreamLen stream_len, Addr next_stream,
+                          const boost::dynamic_bitset<> &history);
+
+  public:
     // const std::string name() const {return _name};
 
     DecoupledBranchPred(const Params &params);
@@ -95,7 +124,7 @@ class DecoupledBranchPred : public SimObject {
      * @param corr_target The correct branch target.
      * @param actually_taken The correct branch direction.
      */
-    void controlSquash(const InstSeqNum control_sn, const TheISA::PCState control_pc,
+    void controlSquash(const PredictionID pred_id, const TheISA::PCState control_pc,
                        const TheISA::PCState &corr_target, bool isConditional, bool isIndirect, bool actually_taken);
     /**
      * Squashes all outstanding updates until a given sequence number.
