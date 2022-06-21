@@ -1401,17 +1401,19 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
 #endif
 
             nextPC = thisPC;
+            // In fact, nextPC is thisPC yet
 
-            // If we're branching after this instruction, quit fetching
+            // If predcited taken after this instruction, quit fetching
             // from the same block.
 
             DPRINTF(Fetch, "Compressed: %i, This PC: 0x%x, NPC: 0x%x\n",
                     thisPC.compressed(),
                     thisPC.pc(),
                     thisPC.npc());
-            bool this_is_branch = thisPC.branching() ||
-                lookupAndUpdateNextPC(instruction, nextPC);
-            predictedBranch = this_is_branch;
+
+            // decoupled frontend do not assume knowing instruciont type when fetching,
+            // anything is speculated
+            predicted_taken_branch = lookupAndUpdateNextPC(instruction, nextPC);
 
             if (predicted_taken_branch) {
                 // predicted backward branch
