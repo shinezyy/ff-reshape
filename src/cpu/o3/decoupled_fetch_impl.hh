@@ -1158,8 +1158,8 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
     DPRINTF(Fetch, "Attempting to fetch from [tid:%i] PC: %s\n",
             tid, thisPC);
 
-    Addr pcOffset = fetchOffset[tid];
-    Addr fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
+    Addr pc_offset = fetchOffset[tid];
+    Addr fetchAddr = (thisPC.instAddr() + pc_offset) & BaseCPU::PCMask;
 
     bool inRom = isRomMicroPC(thisPC.microPC());
 
@@ -1242,7 +1242,7 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
 
     // Need to keep track of whether or not a predicted branch
     // ended this fetch block.
-    bool predictedBranch = false;
+    bool predicted_taken_branch = false;
 
     // Need to halt fetch if quiesce instruction detected
     bool quiesce = false;
@@ -1261,13 +1261,13 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
     // Keep issuing while fetchWidth is available and branch is not
     // predicted taken
     while (numInst < fetchWidth && fetchQueue[tid].size() < fetchQueueSize
-           && !(predictedBranch && fetchSource != LoopBuf) && !quiesce) {
+           && !(predicted_taken_branch && fetchSource != LoopBuf) && !quiesce) {
         // We need to process more memory if we aren't going to get a
         // StaticInst from the rom, the current macroop, or what's already
         // in the decoder.
         bool needMem = !inRom && !curMacroop &&
             !decoder[tid]->instReady();
-        fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
+        fetchAddr = (thisPC.instAddr() + pc_offset) & BaseCPU::PCMask;
 
         Addr fetchBufferBlockPC = bufferAlignPC(fetchAddr, fetchBufferMask);
 
@@ -1312,7 +1312,7 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
             if (decoder[tid]->needMoreBytes()) {
                 blkOffset++;
                 fetchAddr += instSize;
-                pcOffset += instSize;
+                pc_offset += instSize;
             }
         }
 
@@ -1336,7 +1336,7 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
                     if (staticInst->isMacroop()) {
                         curMacroop = staticInst;
                     } else {
-                        pcOffset = 0;
+                        pc_offset = 0;
                     }
                 } else {
                     // We need more bytes for this instruction so blkOffset and
@@ -1413,7 +1413,7 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
                 lookupAndUpdateNextPC(instruction, nextPC);
             predictedBranch = this_is_branch;
 
-            if (this_is_branch) {
+            if (predicted_taken_branch) {
                 // predicted backward branch
                 DPRINTF(Fetch, "Taken branch detected with PC : 0x%x => 0x%x\n",
                         thisPC.pc(),
@@ -1429,7 +1429,7 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
             if (newMacro) {
                 fetchAddr = thisPC.instAddr() & BaseCPU::PCMask;
                 blkOffset = (fetchAddr - fetchBufferPC[tid]) / instSize;
-                pcOffset = 0;
+                pc_offset = 0;
                 curMacroop = NULL;
             }
 
@@ -1451,29 +1451,29 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
 
         Addr npc = nextPC.instAddr();
         if (cpc != npc) {
-        if (lbuf->enable && fetchSource == LoopBuf) {
-            if (!lbuf->canContinueOnNPC(cpc, npc, predictedBranch)) {
-                if (!lbuf->canProvide(npc)) {
-                    fetchSource = CacheLine;
-                    DPRINTF(LoopBuffer, "Will switch to fetch from cache line\n");
-                    break;
-                } else {
-                    DPRINTF(LoopBuffer, "Will switch to Another loop\n");
+            if (lbuf->enable && fetchSource == LoopBuf) {
+                if (!lbuf->canContinueOnNPC(cpc, npc, predicted_taken_branch)) {
+                    if (!lbuf->canProvide(npc)) {
+                        fetchSource = CacheLine;
+                        DPRINTF(LoopBuffer, "Will switch to fetch from cache line\n");
+                        break;
+                    } else {
+                        DPRINTF(LoopBuffer, "Will switch to Another loop\n");
+                    }
+                }
+            } else {  // from cache line
+                if (lbuf->enable && predicted_taken_branch && lbuf->canProvide(npc)) {
+                    DPRINTF(LoopBuffer, "Will switch to fetch from lbuf\n");
+                    fetchSource = LoopBuf;
                 }
             }
-        } else { // from cache line
-            if (lbuf->enable && predictedBranch && lbuf->canProvide(npc)) {
-                DPRINTF(LoopBuffer, "Will switch to fetch from lbuf\n");
-                fetchSource = LoopBuf;
-            }
-        }
         }
     }
 
     if (fetchSource == LoopBuf) {
         DPRINTF(Fetch, "[tid:%i] Done fetching, still in lbuf.\n", tid);
 
-    } else if (predictedBranch) {
+    } else if (predicted_taken_branch) {
         DPRINTF(Fetch, "[tid:%i] Done fetching, predicted branch "
                 "instruction encountered.\n", tid);
 
@@ -1486,7 +1486,7 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
     }
 
     macroop[tid] = curMacroop;
-    fetchOffset[tid] = pcOffset;
+    fetchOffset[tid] = pc_offset;
 
     if (numInst > 0) {
         wroteToTimeBuffer = true;
@@ -1496,7 +1496,7 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
 
     // pipeline a fetch if we're crossing a fetch buffer boundary and not in
     // a state that would preclude fetching
-    fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
+    fetchAddr = (thisPC.instAddr() + pc_offset) & BaseCPU::PCMask;
     Addr fetchBufferBlockPC = bufferAlignPC(fetchAddr, fetchBufferMask);
     issuePipelinedIfetch[tid] =
         fetchSource == CacheLine &&
@@ -1701,8 +1701,8 @@ DecoupledFetch<Impl>::pipelineIcacheAccesses(ThreadID tid)
         return;
     }
 
-    Addr pcOffset = fetchOffset[tid];
-    Addr fetchAddr = (thisPC.instAddr() + pcOffset) & BaseCPU::PCMask;
+    Addr pc_offset = fetchOffset[tid];
+    Addr fetchAddr = (thisPC.instAddr() + pc_offset) & BaseCPU::PCMask;
 
     // Align the fetch PC so its at the start of a fetch buffer segment.
     Addr fetchBufferBlockPC = bufferAlignPC(fetchAddr, fetchBufferMask);
