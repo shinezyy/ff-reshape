@@ -8,7 +8,16 @@
 
 struct FetchStream {
     Addr streamStart;
+    bool ended;
     Addr streamEnd;
+    // TODO: use PCState for target(gem5 specific)
+    Addr target;
+    Addr branchAddr;
+    int branchType;
+
+    // TODO: remove signals below
+    bool hasEnteredFtq;
+
 };
 
 struct FetchingStream: public FetchStream {
@@ -51,5 +60,30 @@ struct StreamPredictionWithID: public StreamPrediction {
 
 using StreamLen = uint16_t;
 #define unlimitedStreamLen (std::numeric_limits<StreamLen>::max())
+
+// each entry corrsponds to a cache line
+struct FtqEntry {
+    Addr startPC;
+    Addr endPC; // TODO: use PCState and it can be included in takenPC
+    Addr takenPC; // TODO: use PCState
+    bool taken;
+    Addr target; // TODO: use PCState
+};
+
+struct FetchStreamWithID: public FetchStream {
+    PredictionID id;
+    bool operator==(const FetchStreamWithID &other) const {
+        return id == other.id;
+    }
+    FetchStreamWithID(const FetchStream &stream, PredictionID id) : FetchStream(stream), id(id) {}
+}
+
+struct FtqEntryWithID: public FtqEntry {
+    PredictionID id;
+    bool operator==(const FtqEntryWithID &other) const {
+        return id == other.id;
+    }
+    FtqEntryWithID(const FtqEntry &entry, PredictionID id) : FtqEntry(entry), id(id) {}
+}
 
 #endif // __CPU_PRED_STREAM_STRUCT_HH__

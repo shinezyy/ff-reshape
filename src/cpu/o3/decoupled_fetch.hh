@@ -187,7 +187,8 @@ class DecoupledFetch
         IcacheWaitResponse,
         IcacheWaitRetry,
         IcacheAccessComplete,
-        NoGoodAddr
+        NoGoodAddr,
+        FtqWait
     };
 
   private:

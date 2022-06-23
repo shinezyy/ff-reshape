@@ -635,6 +635,7 @@ DecoupledFetch<Impl>::finishTranslation(const Fault &fault,
     // Wake up CPU if it was idle
     cpu->wakeCPU();
 
+    // If this request is not the one we're waiting for, ignore it.
     if (fetchStatus[tid] != ItlbWait || mem_req != memReq[tid] ||
         mem_req->getVaddr() != memReq[tid]->getVaddr()) {
         DPRINTF(Fetch, "[tid:%i] Ignoring itlb completed after squash\n",

@@ -41,7 +41,17 @@ class DecoupledBranchPred : public SimObject {
     typedef DecoupledBranchPredParams Params;
 
     private:
-    std::deque<FetchStream> fetchStreamQueue;
+    std::deque<FetchStreamWithID> fetchStreamQueue;
+    int fetchStreamQueueSize;
+    PredictionID fsqID{0}; // this is a queue ptr for fsq itself
+    Addr ftqEnqPC;
+    PredictionID ftqEnqFsqID{0}; // this is a queue ptr for ftq to read from fsq
+    
+
+    std::deque<FtqEntryWithID> ftq;
+    int ftqSize;
+    PredictionID ftqID{0}; // this is a queue ptr for ftq itself
+    PredictionID fetchFtqID{0}; // this is a queue ptr for fetch to read from ftq
 
     std::string _name;
 
@@ -78,6 +88,8 @@ class DecoupledBranchPred : public SimObject {
         return old_predict_id;
     }
 
+    // an identifier of stream predictor at a miss condition
+    bool streamMiss;
 
     Addr s0StreamPC;
     StreamPrediction s0UbtbPred;
