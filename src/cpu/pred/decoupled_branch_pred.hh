@@ -10,6 +10,7 @@
 #include <boost/dynamic_bitset.hpp>
 
 #include "base/statistics.hh"
+#include "base/trace.hh"
 #include "base/types.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/pred/ras.hh"
@@ -17,16 +18,22 @@
 #include "cpu/pred/stream_struct.hh"
 #include "cpu/pred/ubtb.hh"
 #include "cpu/static_inst.hh"
+#include "debug/DecoupleBP.hh"
 #include "params/DecoupledBranchPred.hh"
 #include "sim/sim_object.hh"
 
-using StreamLen = uint16_t;
+
+enum PredcitionSource {
+    STREAM_PRED = 0,
+    UBTB_PRED,
+};
 
 struct BPHistory {
     boost::dynamic_bitset<> history;
     Addr streamStart;
     StreamLen predStreamLength;
     Addr nextStream;
+    // PredcitionSource predSource;
 };
 
 class DecoupledBranchPred : public SimObject {
@@ -50,11 +57,12 @@ class DecoupledBranchPred : public SimObject {
     ReturnAddrStack ras;
 
     // std::queue<Addr> pcSent;
-    const StreamLen unlimitedStreamLen{std::numeric_limits<StreamLen>::max()};
 
     std::queue<StreamPrediction> uBTBHistory;
 
     std::map<PredictionID, BPHistory> bpHistory;
+
+    std::map<PredictionID, StreamPredictionWithID> ftq;
 
     PredictionID predictionID{0};
 
@@ -63,18 +71,20 @@ class DecoupledBranchPred : public SimObject {
     PredictionID incPredictionID() {
         auto old_predict_id = predictionID;
         predictionID++;
+        DPRINTF(DecoupleBP, "inc predictionID: %lu -> %lu\n", old_predict_id, predictionID);
         if (predictionID == maxInflightPrediction * 4) {
             predictionID = 0;
         }
         return old_predict_id;
     }
 
-    Addr s0CtrlPC;
+
+    Addr s0StreamPC;
     StreamPrediction s0UbtbPred;
     boost::dynamic_bitset<> s0History;
     void updateS0Hist();
 
-    Addr s1CtrlPC;
+    Addr s1StreamPC;
     StreamPrediction s1BackingPred, s1UbtbPred;
     boost::dynamic_bitset<> s1History;
     void updateS1Hist();
@@ -84,7 +94,7 @@ class DecoupledBranchPred : public SimObject {
     boost::dynamic_bitset<> s2History;
     void updateS2Hist();
 
-    void add2FTQ(const StreamPrediction &fetchStream);
+    void add2FTQ(const StreamPrediction &fetchStream, PredictionID id);
 
     void overrideStream();
 
@@ -96,7 +106,7 @@ class DecoupledBranchPred : public SimObject {
     void stopDecoupledPrediction();
 
     void recordPrediction(Addr stream_start, StreamLen stream_len, Addr next_stream,
-                          const boost::dynamic_bitset<> &history);
+                          const boost::dynamic_bitset<> &history, PredictionID id);
 
   public:
     // const std::string name() const {return _name};
@@ -156,6 +166,9 @@ class DecoupledBranchPred : public SimObject {
     }
     virtual bool canPredictLoop() {
         return false;
+    }
+    PredictionID getFTQHeadPredictionID() {
+        return ftq.begin()->first;  // the prediction ID of the head of FTQ
     }
 
 };

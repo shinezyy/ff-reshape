@@ -29,8 +29,9 @@ StreamPredictor::getStreamS1()
     return std::make_pair(0, StreamPrediction());
 }
 
-void StreamPredictor::update(const PredictionID pred_id, Addr control_pc, Addr target, bool is_conditional,
-                             bool is_indirect, bool actually_taken, std::shared_ptr<void> bp_history)
+void StreamPredictor::update(const PredictionID pred_id, Addr stream_start_pc, Addr control_pc, Addr target,
+                             bool is_conditional, bool is_indirect, bool actually_taken,
+                             const boost::dynamic_bitset<> &history)
 {
 
 }

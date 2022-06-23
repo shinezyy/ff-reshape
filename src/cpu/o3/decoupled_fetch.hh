@@ -615,8 +615,6 @@ class DecoupledFetch
     FetchSource fetchSource;
 
     bool isFirstUop{true};
-
-    PredictionID currentPredID{0};
 };
 
 #endif //__CPU_O3_FETCH_HH__

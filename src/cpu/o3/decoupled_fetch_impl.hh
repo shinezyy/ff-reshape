@@ -59,6 +59,7 @@
 #include "cpu/o3/decoupled_fetch.hh"
 #include "cpu/o3/isa_specific.hh"
 #include "debug/Activity.hh"
+#include "debug/DecoupleBP.hh"
 #include "debug/Drain.hh"
 #include "debug/Fetch.hh"
 #include "debug/LoopBuffer.hh"
@@ -971,6 +972,9 @@ DecoupledFetch<Impl>::tick()
 
     // Reset the number of the instruction we've fetched.
     numInst = 0;
+
+    // step branch predictor
+    branchPred->tick();
 }
 
 template <class Impl>
@@ -1127,7 +1131,9 @@ DecoupledFetch<Impl>::buildInst(ThreadID tid, StaticInstPtr staticInst,
     // Keep track of if we can take an interrupt at this boundary
     delayedCommit[tid] = instruction->isDelayedCommit();
 
-    instruction->setStreamPredictionID(currentPredID);
+    instruction->setStreamPredictionID(branchPred->getFTQHeadPredictionID());
+    DPRINTF(DecoupleBP, "Instruction [sn:%lli] stream prediction ID is %i.\n", seq,
+            instruction->getStreamPredictionID());
 
     return instruction;
 }

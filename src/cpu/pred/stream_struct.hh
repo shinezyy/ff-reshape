@@ -1,6 +1,7 @@
 #ifndef __CPU_PRED_STREAM_STRUCT_HH__
 #define __CPU_PRED_STREAM_STRUCT_HH__
 
+#include <boost/dynamic_bitset.hpp>
 
 #include "base/types.hh"
 #include "cpu/inst_seq.hh"
@@ -15,12 +16,12 @@ struct FetchingStream: public FetchStream {
 };
 
 struct IdealStreamStorage {
-    Addr tag;  // addr of the taken branch?
+    // Addr tag;  // addr of the taken branch?
     Addr bbStart;
     Addr bbEnd;
     Addr nextStream;
     unsigned length;
-    unsigned instCount;
+    // unsigned instCount;
     unsigned hysteresis;
     bool endIsRet;
 };
@@ -37,9 +38,18 @@ struct StreamPrediction {
     Addr bbEnd;
     Addr nextStream;
     uint16_t streamLength;
+    bool valid;
     bool endIsRet;
     bool rasUpdated;
 };
 
+struct StreamPredictionWithID: public StreamPrediction {
+    PredictionID id;
+
+    StreamPredictionWithID(const StreamPrediction &pred, PredictionID id) : StreamPrediction(pred), id(id) {}
+};
+
+using StreamLen = uint16_t;
+#define unlimitedStreamLen (std::numeric_limits<StreamLen>::max())
 
 #endif // __CPU_PRED_STREAM_STRUCT_HH__

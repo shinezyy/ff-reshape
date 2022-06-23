@@ -22,8 +22,9 @@ class TimedPredictor: public SimObject {
 
     virtual unsigned getDelay() {return 0;}
 
-    virtual void update(const PredictionID pred_id, Addr control_pc, Addr target, bool is_conditional,
-                        bool is_indirect, bool actually_taken, std::shared_ptr<void> bp_history)
+    virtual void update(const PredictionID pred_id, Addr stream_start_pc, Addr control_pc, Addr target,
+                        bool is_conditional, bool is_indirect, bool actually_taken,
+                        const boost::dynamic_bitset<> &history)
     {
     }
 };

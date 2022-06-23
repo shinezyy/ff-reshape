@@ -9,7 +9,7 @@ DecoupledBranchPred::DecoupledBranchPred(const Params &params)
     commitHistory.resize(historyBits, 0);
     speculativeHistory.resize(historyBits, 0);
     s2CtrlPC = 0x80000000;
-    recordPrediction(0x80000000, unlimitedStreamLen, 0, speculativeHistory);
+    recordPrediction(0x80000000, unlimitedStreamLen, predictionID, speculativeHistory, 0);
 }
 
 void DecoupledBranchPred::tick()
@@ -23,10 +23,14 @@ void DecoupledBranchPred::tick()
         overrideStream();
         overrideUpdateUBTB();  // do we update it after override?
     }
-    add2FTQ(s1BackingPred);
-    recordPrediction(s1BackingPred.bbStart, s1BackingPred.bbEnd - s1BackingPred.bbStart, s1BackingPred.nextStream,
-                     s1History);
+    if (s1BackingPred.valid) {
+        incPredictionID();
+        add2FTQ(s1BackingPred, predictionID);
+        recordPrediction(s1BackingPred.bbStart, s1BackingPred.streamLength, s1BackingPred.nextStream,
+                         s1History, predictionID);
+    }
     s2Pred = s1BackingPred;
+    s1BackingPred.valid = false;
     updateS2Hist();
 
     // s1
@@ -35,35 +39,47 @@ void DecoupledBranchPred::tick()
     // sanity check
     if (branch_pc) {  // pc = 0 indicates no valid prediction
         // the pc of return predicton must be sent X cycle ago
-        assert(branch_pc == s1CtrlPC);
+        assert(branch_pc == s1StreamPC);
     }
-    if (stream_payload.endIsRet) {
+    if (stream_payload.endIsRet && !ras.empty()) {
         stream_payload.nextStream = ras.top().instAddr();
         stream_payload.rasUpdated = true;
     }
-    s1CtrlPC = s0CtrlPC;
-    s1BackingPred = stream_payload;
+    s1StreamPC = s0StreamPC;
+
+    // s1BackingPred = stream_payload;
+    // temporarily s1BackingPred = s0ubtbPred;
+    if (s0UbtbPred.valid) {
+        s1BackingPred = s0UbtbPred;
+        DPRINTF(DecoupleBP, "Forward s0 ubtb pred (%#lx..%u) to s1 backing pred\n", s0UbtbPred.bbStart,
+                s0UbtbPred.streamLength);
+    }
+
     s1UbtbPred = s0UbtbPred;
     updateS1Hist();
 
     // s0
-    streamPred->putPCHistory(s0CtrlPC, s0History);
-    streamUBTB->putPCHistory(s0CtrlPC, s0History);
+    streamPred->putPCHistory(s0StreamPC, s0History);
+    streamUBTB->putPCHistory(s0StreamPC, s0History);
+
     s0UbtbPred = streamUBTB->getStream();
-    s0CtrlPC = s0UbtbPred.nextStream;
+    if (s0UbtbPred.valid) {
+        s0StreamPC = s0UbtbPred.nextStream;
+        DPRINTF(DecoupleBP, "Update s0 stream (%#lx..%u) with ubtb\n", s0UbtbPred.bbStart,
+                s0UbtbPred.streamLength);
+    }
     if (overriding) {
-        s0CtrlPC = s2Pred.nextStream;
+        s0StreamPC = s2Pred.nextStream;
     }
     updateS0Hist();
 }
 
 void DecoupledBranchPred::recordPrediction(Addr stream_start, StreamLen stream_len, Addr next_stream,
-                                           const boost::dynamic_bitset<> &history)
+                                           const boost::dynamic_bitset<> &history, PredictionID id)
 {
-    DPRINTF(DecoupleBP, "Make prediction: stream=0x%lx, length=%u\n", stream_start, stream_len);
-    assert(bpHistory.find(predictionID) == bpHistory.end());
-    bpHistory[predictionID] = BPHistory{history, stream_start, stream_len, next_stream};
-    incPredictionID();
+    DPRINTF(DecoupleBP, "Make prediction: id: %u, stream=0x%lx, length=%u\n", id, stream_start, stream_len);
+    assert(bpHistory.find(id) == bpHistory.end());
+    bpHistory[id] = BPHistory{history, stream_start, stream_len, next_stream};
 }
 
 void DecoupledBranchPred::updateS0Hist()
@@ -92,8 +108,10 @@ DecoupledBranchPred::notifyStreamSeq(const InstSeqNum seq)
     // when make a prediction.
 }
 
-void DecoupledBranchPred::add2FTQ(const StreamPrediction &fetchStream)
+void DecoupledBranchPred::add2FTQ(const StreamPrediction &fetchStream, PredictionID id)
 {
+    DPRINTF(DecoupleBP, "Add prediction %u to FTQ, start: %lx\n", id, fetchStream.bbStart);
+    ftq.emplace(id, StreamPredictionWithID{fetchStream, id});
 }
 
 bool DecoupledBranchPred::check_prediction(const StreamPrediction &ubtb_prediction,
@@ -124,13 +142,21 @@ void DecoupledBranchPred::controlSquash(const PredictionID pred_id, const TheISA
             pred_id, control_pc.instAddr(), corr_target.instAddr(), is_conditional, is_indirect, actually_taken);
 
     auto it = bpHistory.find(pred_id);
-    if (it != bpHistory.end()) {
-        // BP already knows it is a control
-    } else {
-        // BP treats it as a non-control or not-taken branch
-        streamUBTB->update(pred_id, control_pc.instAddr(), corr_target.instAddr(), is_conditional, is_indirect,
-                           actually_taken, std::shared_ptr<void>(nullptr));
-    }
+    assert(it != bpHistory.end());
+
+    DPRINTF(DecoupleBP, "Found prediction %u (start: %#lx) in bpHistory\n", pred_id, it->second.streamStart);
+
+    streamUBTB->update(pred_id, it->second.streamStart, control_pc.instAddr(), corr_target.instAddr(), is_conditional,
+                       is_indirect, actually_taken, it->second.history);
+
+    streamPred->update(pred_id, it->second.streamStart, control_pc.instAddr(), corr_target.instAddr(), is_conditional,
+                       is_indirect, actually_taken, it->second.history);
+    s0StreamPC = corr_target.instAddr();
+
+    bpHistory.erase(pred_id);
+    ftq.erase(pred_id);
+    DPRINTF(DecoupleBP, "bpHistory size: %u, ftp size: %u\n", bpHistory.size(), ftq.size());
+    // here, in fact we make another prediction
 }
 
 void DecoupledBranchPred::nonControlSquash(const InstSeqNum squashed_sn)
