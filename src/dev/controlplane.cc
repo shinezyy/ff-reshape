@@ -56,7 +56,9 @@ Tick ControlPlane::write(PacketPtr pkt) {
 
 ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     BasicPioDevice(*p, p->pio_size),
+    l2_waymask_set(p->l2_waymask_set),
     l3_waymask_set(p->l3_waymask_set),
+    _system(p->system),
     cpus(p->cpus),
     l2s(p->l2s),
     l3(p->l3),
@@ -75,9 +77,14 @@ ControlPlane::ControlPlane(const ControlPlaneParams *p) :
   {
     BgCpuMap[i] = new BgCpuMeta(this);
   }
-  for (size_t i = 0; i < np; i++)
+  // for (size_t i = 0; i < np; i++)
+  // {
+  //   setContextQosId(i,15);
+  // }
+  const auto max_requestors = getSystem()->maxRequestors();
+  for (size_t i = 0; i < max_requestors; i++)
   {
-    setContextQosId(i,i);
+    setContextQosId(i,15);
   }
 
   for (size_t i = 0; i < LvNATasks::NumId; i++)
@@ -158,10 +165,49 @@ ControlPlane::startQoS()
 {
   //reset stats
   inform("start real QoS\n");
+  if (np == 1){
+    auto iid = getSystem()->lookupRequestorId(".cpu.inst");
+    fatal_if(iid == Request::invldRequestorId,"can't find cpu inst id");
+    setContextQosId(iid,0);
+    auto did = getSystem()->lookupRequestorId(".cpu.data");
+    fatal_if(did == Request::invldRequestorId,"can't find cpu data id");
+    setContextQosId(did,1);
+    auto dpid = getSystem()->lookupRequestorId(".cpu.dcache.prefetcher");
+    // fatal_if(dpid == Request::invldRequestorId,"can't find cpu data hwp id");
+    setContextQosId(dpid,1);
+  }
+  else{
+    for (size_t i = 0; i < np; i++)
+    {
+      auto iid = getSystem()->lookupRequestorId(".cpu"+std::to_string(i)+".inst");
+      fatal_if(iid == Request::invldRequestorId,"can't find cpu inst id");
+      setContextQosId(iid,2*i);
+      auto did = getSystem()->lookupRequestorId(".cpu"+std::to_string(i)+".data");
+      fatal_if(did == Request::invldRequestorId,"can't find cpu data id");
+      setContextQosId(did,2*i+1);
+      auto dpid = getSystem()->lookupRequestorId(".cpu"+std::to_string(i)+".dcache.prefetcher");
+      // fatal_if(dpid == Request::invldRequestorId,"can't find cpu data hwp id");
+      setContextQosId(dpid,2*i+1);
+    }
+  }
+
+
   std::vector<double> bgIpcs;
   cpStat.CPUBackgroundIpc.result(bgIpcs);
   mixIpc = bgIpcs[0];
 
+  //set l2 waymasks
+  if (!l2_waymask_set.empty())
+  {
+    for (const auto &c:l2s)
+    {
+      c->setWaymaskEnable(true);
+      for (size_t i = 0; i < l2_waymask_set.size(); i++)
+      {
+        c->setWaymask(i,l2_waymask_set[i]);
+      }
+    }
+  }
   //set l3 waymasks
   if (!l3_waymask_set.empty())
   {

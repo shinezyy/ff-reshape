@@ -12,6 +12,7 @@
 #include "dev/lvnaTasks.hh"
 #include "mem/cache/cache.hh"
 #include "params/ControlPlane.hh"
+#include "sim/system.hh"
 
 class ControlPlane;
 
@@ -74,7 +75,11 @@ class ControlPlane: public BasicPioDevice
     //this is used to record contextID to QoS ID map
     std::map<uint32_t, uint32_t> context2QosIDMap;
     std::map<uint32_t, uint32_t> QosIDAlterMap;
+    std::vector<uint64_t> l2_waymask_set;
     std::vector<uint64_t> l3_waymask_set;
+
+    /** Pointer to the System object */
+    System* _system;
 
   public:
     std::vector<DerivO3CPU *> cpus;
@@ -109,6 +114,10 @@ class ControlPlane: public BasicPioDevice
 
     void setContextQosId(uint32_t ctx_id, uint32_t qos_id);
     void registerRunningHighId(uint32_t qos_id, bool flag);
+
+    /** read the system pointer
+     * @return pointer to the system object */
+    System* getSystem() const { return _system; }
 
   public:
     struct ControlPlaneStats : public Stats::Group

@@ -1551,13 +1551,12 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
     // Find replacement victim
     std::vector<CacheBlk*> evict_blks;
     CacheBlk *victim;
-    if (enable_waymask &&
-        pkt->req->taskId() < LvNATasks::NumId)
+    if (enable_waymask)
     {
-        int index = context2QosIDMap[pkt->req->taskId()];
-        bool use_alt = tags->needAltPolicy(addr,index);
-        if (use_alt)
-            index = QosIDAlterMap[index];
+        int index = context2QosIDMap[pkt->req->requestorId()];
+        // bool use_alt = tags->needAltPolicy(addr,index);
+        // if (use_alt)
+        //     index = QosIDAlterMap[index];
         victim = tags->findVictim(addr, is_secure, blk_size_bits,
                                         evict_blks,waymasks[index]);
     }

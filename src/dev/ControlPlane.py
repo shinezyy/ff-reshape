@@ -32,4 +32,7 @@ class ControlPlane(BasicPioDevice):
     l2_tb_size = Param.UInt32(1000, 'l3 tb size')
     l3_tb_size = Param.UInt32(1000, 'l3 tb size')
 
+    system = Param.System(Parent.any, "System that the control plane belongs to.")
+
+    l2_waymask_set = VectorParam.UInt64([], 'l2_waymask_choose')
     l3_waymask_set = VectorParam.UInt64([], 'l3_waymask_choose')

@@ -255,6 +255,9 @@ def build_test_system(np):
             if options.l3_waymask_set:
                 ways = options.l3_waymask_set.split('-')
                 test_sys.controlplane.l3_waymask_set = [int(x,base=16) for x in ways]
+            if options.l2_waymask_set:
+                ways = options.l2_waymask_set.split('-')
+                test_sys.controlplane.l2_waymask_set = [int(x,base=16) for x in ways]
 
         if options.enable_clint_sets:
             elinst_set = set([int(x) for x in options.enable_clint_sets.split('-')])
