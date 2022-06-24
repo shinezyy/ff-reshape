@@ -291,8 +291,9 @@ class DecoupledFetch
      * the next PC will be.
      * @param next_NPC Used for ISAs which use delay slots.
      * @return Whether or not a branch was predicted as taken.
+     *         and that should end fetching this cycle due to end of ftq entry
      */
-    bool lookupAndUpdateNextPC(const DynInstPtr &inst, TheISA::PCState &pc);
+    std::pair<bool, bool> lookupAndUpdateNextPC(const DynInstPtr &inst, TheISA::PCState &pc);
 
     /**
      * Fetches the cache line that contains the fetch PC.  Returns any
@@ -538,6 +539,11 @@ class DecoupledFetch
 
     /** Event used to delay fault generation of translation faults */
     FinishTranslationEvent finishTranslationEvent;
+
+    /** Set to true if an ftq entry is consumed this cycle, and
+     * then stop fetching.
+     */
+    bool doneWithAnFtqEntry;
 
   protected:
     struct FetchStatGroup : public Stats::Group

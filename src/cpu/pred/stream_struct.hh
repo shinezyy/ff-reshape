@@ -8,19 +8,36 @@
 
 struct FetchStream {
     Addr streamStart;
-    bool ended;
-    Addr streamEnd;
+    bool pred_ended;
+    Addr pred_streamEnd;
     // TODO: use PCState for target(gem5 specific)
-    Addr target;
-    Addr branchAddr;
-    int branchType;
+    Addr pred_target;
+    Addr pred_branchAddr;
+    int pred_branchType;
 
+    // for commit, write at redirect or fetch
+    InstSeqNum branchSeq;
+    bool exe_ended;
+    Addr exe_streamEnd;
+    // TODO: use PCState for target(gem5 specific)
+    Addr exe_target;
+    Addr exe_branchAddr;
+    int exe_branchType;
     // TODO: remove signals below
     bool hasEnteredFtq;
 
-    FetchStream(): streamStart(0), ended(false), streamEnd(0), target(0),
-        branchAddr(0), branchType(0){}
+    FetchStream(): streamStart(0), pred_ended(false), pred_streamEnd(0), pred_target(0),
+        pred_branchAddr(0), pred_branchType(0), branchSeq(-1), exe_ended(false), exe_streamEnd(0), exe_target(0),
+        exe_branchAddr(0), exe_branchType(0), hasEnteredFtq(0) {}
 
+    // the default exe result should be consistent with prediction
+    void set_exe_with_pred() {
+        exe_ended = pred_ended;
+        exe_streamEnd = pred_streamEnd;
+        exe_target = pred_target;
+        exe_branchAddr = pred_branchAddr;
+        exe_branchType = pred_branchType;
+    }
 };
 
 struct FetchingStream: public FetchStream {

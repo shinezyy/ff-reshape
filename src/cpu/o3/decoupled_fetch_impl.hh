@@ -132,6 +132,9 @@ DecoupledFetch<Impl>::DecoupledFetch(O3CPU *_cpu, const DerivO3CPUParams &params
         issuePipelinedIfetch[i] = false;
     }
 
+
+    doneWithAnFtqEntry = true;
+
     branchPred = params.decoupledBranchPred;
     lbuf = params.loopBuffer;
 
@@ -523,7 +526,7 @@ DecoupledFetch<Impl>::deactivateThread(ThreadID tid)
 }
 
 template <class Impl>
-bool
+std::pair<bool, bool>
 DecoupledFetch<Impl>::lookupAndUpdateNextPC(
         const DynInstPtr &inst, TheISA::PCState &nextPC)
 {
@@ -533,7 +536,7 @@ DecoupledFetch<Impl>::lookupAndUpdateNextPC(
 
     // decoupled frontend does not assume known inst type, guess only with PC
     auto current_pc = nextPC;
-    auto [predict_taken, taken_pc, empty] = branchPred->willTaken(nextPC);
+    auto [predict_taken, taken_pc, doneFtqEntry] = branchPred->willTaken(nextPC);
 
     if (!predict_taken) {
         DPRINTF(Fetch, "Advancing PC from %s", nextPC);
@@ -541,7 +544,7 @@ DecoupledFetch<Impl>::lookupAndUpdateNextPC(
         DPRINTFR(Fetch, " to %s\n", nextPC);
         inst->setPredTarg(nextPC);
         inst->setPredTaken(false);
-        return false;
+        return std::make_pair(false, doneFtqEntry);
     }
 
     ThreadID tid = inst->threadNumber;
@@ -569,7 +572,7 @@ DecoupledFetch<Impl>::lookupAndUpdateNextPC(
         ++fetchStats.predictedBranches;
     }
 
-    return predict_taken;
+    return std::make_pair(predict_taken, doneFtqEntry);
 }
 
 template <class Impl>
@@ -784,6 +787,8 @@ DecoupledFetch<Impl>::doSquash(const TheISA::PCState &newPC,
     fetchSource = CacheLine;
 
     isFirstUop = true;
+
+    doneWithAnFtqEntry = true;
 }
 
 template<class Impl>
@@ -887,6 +892,7 @@ DecoupledFetch<Impl>::tick()
         issuePipelinedIfetch[i] = false;
     }
 
+
     while (threads != end) {
         ThreadID tid = *threads++;
 
@@ -974,8 +980,12 @@ DecoupledFetch<Impl>::tick()
     // Reset the number of the instruction we've fetched.
     numInst = 0;
 
+
     // step branch predictor
     branchPred->tick();
+
+    // check if ftq has valid entry to fetch
+    doneWithAnFtqEntry = !branchPred->tryToFillFtqEntryBuffer();
 }
 
 template <class Impl>
@@ -1008,12 +1018,18 @@ DecoupledFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
         // invalid state we generated in after sequence number
         auto mispred_inst = fromCommit->commitInfo[tid].mispredictInst;
         if (mispred_inst && mispred_inst->isControl()) {
-            branchPred->controlSquash(mispred_inst->getStreamPredictionID(),
+            branchPred->controlSquash(mispred_inst->getFtqID(), mispred_inst->getFsqID(),
                                       mispred_inst->pcState(),  fromCommit->commitInfo[tid].pc,
                                       mispred_inst->isCondCtrl(), mispred_inst->isIndirectCtrl(),
-                                      fromCommit->commitInfo[tid].branchTaken);
+                                      fromCommit->commitInfo[tid].branchTaken, mispred_inst->seqNum);
         } else {
-            branchPred->nonControlSquash(fromCommit->commitInfo[tid].doneSeqNum);
+            // TODO: what if exception?
+            auto squashed_inst = fromCommit->commitInfo[tid].squashInst;
+            if (squashed_inst) {
+                branchPred->nonControlSquash(squashed_inst->getFtqID(), squashed_inst->getFsqID(),
+                                             squashed_inst->pcState(), squashed_inst->seqNum);
+            }
+            
         }
 
         return true;
@@ -1031,12 +1047,16 @@ DecoupledFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
         auto mispred_inst = fromDecode->decodeInfo[tid].mispredictInst;
         // Update the branch predictor.
         if (fromDecode->decodeInfo[tid].branchMispredict) {
-            branchPred->controlSquash(mispred_inst->getStreamPredictionID(),
+            branchPred->controlSquash(mispred_inst->getFtqID(), mispred_inst->getFsqID(),
                                       mispred_inst->pcState(), fromDecode->decodeInfo[tid].nextPC,
                                       mispred_inst->isCondCtrl(), mispred_inst->isIndirectCtrl(),
-                                      fromDecode->decodeInfo[tid].branchTaken);
+                                      fromDecode->decodeInfo[tid].branchTaken, mispred_inst->seqNum);
         } else {
-            branchPred->nonControlSquash(fromDecode->decodeInfo[tid].doneSeqNum);
+            // TODO: there are no non-control squashed instructions in decode...right?
+            // // TODO: what if exception?
+            // auto squashed_inst = fromDecode->commitInfo[tid].squashInst;
+            // branchPred->nonControlSquash(squashed_inst->getFtqID(), squashed_inst->getFsqID(),
+            //                              squashed_inst->pcState(), squashed_inst->seqNum);
         }
 
         if (fetchStatus[tid] != Squashing) {
@@ -1134,10 +1154,13 @@ DecoupledFetch<Impl>::buildInst(ThreadID tid, StaticInstPtr staticInst,
 
     // instruction->setStreamPredictionID(branchPred->getFTQHeadPredictionID());
     instruction->setFsqID(branchPred->getFsqIDFromFtqHead());
+    instruction->setFtqID(branchPred->getFtqIDFromHead());
     // DPRINTF(DecoupleBP, "Instruction [sn:%lli] stream prediction ID is %i.\n", seq,
     //         instruction->getStreamPredictionID());
     DPRINTF(DecoupleBP, "Instruction [sn:%lli] fsq ID is %i.\n", seq,
             instruction->getFsqID());
+    DPRINTF(DecoupleBP, "Instruction [sn:%lli] ftq ID is %i.\n", seq,
+            instruction->getFtqID());
     return instruction;
 }
 
@@ -1205,8 +1228,8 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
         // If buffer is no longer valid or fetchAddr has moved to point
         // to the next cache block, AND we have no remaining ucode
         // from a macro-op, then start fetch from icache.
-        if (!(fetchBufferValid[tid] && fetchBufferBlockPC == fetchBufferPC[tid])
-            && !inRom && !macroop[tid] && fetchSource != LoopBuf) {
+        if (!(fetchBufferValid[tid] && fetchBufferBlockPC == fetchBufferPC[tid]) &&
+            !doneWithAnFtqEntry && !inRom && !macroop[tid] && fetchSource != LoopBuf) {
             DPRINTF(Fetch, "[tid:%i] Attempting to translate and read "
                     "instruction, starting at PC %s.\n", tid, thisPC);
 
@@ -1272,7 +1295,8 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
     // Keep issuing while fetchWidth is available and branch is not
     // predicted taken
     while (numInst < fetchWidth && fetchQueue[tid].size() < fetchQueueSize
-           && !(predicted_taken_branch && fetchSource != LoopBuf) && !quiesce) {
+           && !(predicted_taken_branch && fetchSource != LoopBuf) && !quiesce &&
+           !doneWithAnFtqEntry) {
         // We need to process more memory if we aren't going to get a
         // StaticInst from the rom, the current macroop, or what's already
         // in the decoder.
@@ -1424,8 +1448,9 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
 
             // decoupled frontend do not assume knowing instruciont type when fetching,
             // anything is speculated
-            predicted_taken_branch = lookupAndUpdateNextPC(instruction, nextPC);
+            auto [predicted_taken_branch, doneFtqEntry] = lookupAndUpdateNextPC(instruction, nextPC);
 
+            doneWithAnFtqEntry = doneFtqEntry;
             if (predicted_taken_branch) {
                 // predicted backward branch
                 DPRINTF(Fetch, "Taken branch detected with PC : 0x%x => 0x%x\n",
@@ -1456,7 +1481,8 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
             }
         } while ((curMacroop || decoder[tid]->instReady()) &&
                  numInst < fetchWidth &&
-                 fetchQueue[tid].size() < fetchQueueSize);
+                 fetchQueue[tid].size() < fetchQueueSize &&
+                 !doneWithAnFtqEntry);
 
         // Re-evaluate whether the next instruction to fetch is in micro-op ROM
         // or not.
@@ -1512,6 +1538,7 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
     fetchAddr = (thisPC.instAddr() + pc_offset) & BaseCPU::PCMask;
     Addr fetchBufferBlockPC = bufferAlignPC(fetchAddr, fetchBufferMask);
     issuePipelinedIfetch[tid] =
+        !doneWithAnFtqEntry &&
         fetchSource == CacheLine &&
         fetchBufferBlockPC != fetchBufferPC[tid] &&
         fetchStatus[tid] != IcacheWaitResponse &&

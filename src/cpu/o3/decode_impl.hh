@@ -702,7 +702,8 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
         // Ensure that if it was predicted as a branch, it really is a
         // branch.
         if (inst->readPredTaken() && !inst->isControl()) {
-            panic("Instruction predicted as a branch!");
+            // under current design, this could happen, so we do not panic
+            // panic("Instruction predicted as a branch!");
 
             ++stats.controlMispred;
 
