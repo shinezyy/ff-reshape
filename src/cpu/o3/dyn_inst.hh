@@ -438,6 +438,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
   private:
     PredictionID streamPredictionID;
+    FsqID fsqID;
 
   public:
     void setStreamPredictionID(PredictionID id)
@@ -448,6 +449,15 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     PredictionID getStreamPredictionID() const
     {
         return streamPredictionID;
+    }
+
+    void setFsqID(FsqID id)
+    {
+        fsqID = id;
+    }
+    FsqID getFsqID() const
+    {
+        return fsqID;
     }
 };
 

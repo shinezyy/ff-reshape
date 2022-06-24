@@ -533,7 +533,7 @@ DecoupledFetch<Impl>::lookupAndUpdateNextPC(
 
     // decoupled frontend does not assume known inst type, guess only with PC
     auto current_pc = nextPC;
-    auto [predict_taken, taken_pc] = branchPred->willTaken(current_pc.instAddr());
+    auto [predict_taken, taken_pc, empty] = branchPred->willTaken(nextPC);
 
     if (!predict_taken) {
         DPRINTF(Fetch, "Advancing PC from %s", nextPC);
@@ -1132,10 +1132,12 @@ DecoupledFetch<Impl>::buildInst(ThreadID tid, StaticInstPtr staticInst,
     // Keep track of if we can take an interrupt at this boundary
     delayedCommit[tid] = instruction->isDelayedCommit();
 
-    instruction->setStreamPredictionID(branchPred->getFTQHeadPredictionID());
-    DPRINTF(DecoupleBP, "Instruction [sn:%lli] stream prediction ID is %i.\n", seq,
-            instruction->getStreamPredictionID());
-
+    // instruction->setStreamPredictionID(branchPred->getFTQHeadPredictionID());
+    instruction->setFsqID(branchPred->getFsqIDFromFtqHead());
+    // DPRINTF(DecoupleBP, "Instruction [sn:%lli] stream prediction ID is %i.\n", seq,
+    //         instruction->getStreamPredictionID());
+    DPRINTF(DecoupleBP, "Instruction [sn:%lli] fsq ID is %i.\n", seq,
+            instruction->getFsqID());
     return instruction;
 }
 

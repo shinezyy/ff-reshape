@@ -41,17 +41,19 @@ class DecoupledBranchPred : public SimObject {
     typedef DecoupledBranchPredParams Params;
 
     private:
-    std::deque<FetchStreamWithID> fetchStreamQueue;
+    std::map<FsqID, FetchStreamWithID> fetchStreamQueue;
     int fetchStreamQueueSize;
-    PredictionID fsqID{0}; // this is a queue ptr for fsq itself
+    FsqID fsqID{0}; // this is a queue ptr for fsq itself
     Addr ftqEnqPC;
-    PredictionID ftqEnqFsqID{0}; // this is a queue ptr for ftq to read from fsq
+    FsqID ftqEnqFsqID{0}; // this is a queue ptr for ftq to read from fsq
     
 
-    std::deque<FtqEntryWithID> ftq;
+    std::map<FtqID, FtqEntryWithID> ftq;
     int ftqSize;
-    PredictionID ftqID{0}; // this is a queue ptr for ftq itself
-    PredictionID fetchFtqID{0}; // this is a queue ptr for fetch to read from ftq
+    FtqID ftqID{0}; // this is a queue ptr for ftq itself
+    FtqID fetchFtqID{0}; // this is a queue ptr for fetch to read from ftq
+    std::pair<FtqID, FtqEntry> fetchReadFtqEntryBuffer;
+    bool fetchReadFtqEntryBufferValid;
 
     std::string _name;
 
@@ -72,7 +74,7 @@ class DecoupledBranchPred : public SimObject {
 
     std::map<PredictionID, BPHistory> bpHistory;
 
-    std::map<PredictionID, StreamPredictionWithID> ftq;
+    // std::map<PredictionID, StreamPredictionWithID> ftq;
 
     PredictionID predictionID{0};
 
@@ -181,6 +183,11 @@ class DecoupledBranchPred : public SimObject {
     }
     PredictionID getFTQHeadPredictionID() {
         return ftq.begin()->first;  // the prediction ID of the head of FTQ
+    }
+    // when building inst, fetchReadFtqEntryBuffer should contain the ftq entry being fetched
+    FsqID getFsqIDFromFtqHead() {
+        assert(fetchReadFtqEntryBufferValid);
+        return fetchReadFtqEntryBuffer.fsqID;
     }
 
 };

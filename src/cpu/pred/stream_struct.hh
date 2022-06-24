@@ -18,6 +18,9 @@ struct FetchStream {
     // TODO: remove signals below
     bool hasEnteredFtq;
 
+    FetchStream(): streamStart(0), ended(false), streamEnd(0), target(0),
+        branchAddr(0), branchType(0){}
+
 };
 
 struct FetchingStream: public FetchStream {
@@ -68,22 +71,24 @@ struct FtqEntry {
     Addr takenPC; // TODO: use PCState
     bool taken;
     Addr target; // TODO: use PCState
+    FsqID fsqID;
+    FtqEntry(): startPC(0), endPC(0), takenPC(0), taken(false), target(0), fsqID(0) {}
 };
 
-struct FetchStreamWithID: public FetchStream {
-    PredictionID id;
-    bool operator==(const FetchStreamWithID &other) const {
-        return id == other.id;
-    }
-    FetchStreamWithID(const FetchStream &stream, PredictionID id) : FetchStream(stream), id(id) {}
-}
+// struct FetchStreamWithID: public FetchStream {
+//     FsqID id;
+//     bool operator==(const FetchStreamWithID &other) const {
+//         return id == other.id;
+//     }
+//     FetchStreamWithID(const FetchStream &stream, FsqID id) : FetchStream(stream), id(id) {}
+// }
 
-struct FtqEntryWithID: public FtqEntry {
-    PredictionID id;
-    bool operator==(const FtqEntryWithID &other) const {
-        return id == other.id;
-    }
-    FtqEntryWithID(const FtqEntry &entry, PredictionID id) : FtqEntry(entry), id(id) {}
-}
+// struct FtqEntryWithID: public FtqEntry {
+//     FtqID id;
+//     bool operator==(const FtqEntryWithID &other) const {
+//         return id == other.id;
+//     }
+//     FtqEntryWithID(const FtqEntry &entry, FtqID id) : FtqEntry(entry), id(id) {}
+// }
 
 #endif // __CPU_PRED_STREAM_STRUCT_HH__

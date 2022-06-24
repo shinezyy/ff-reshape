@@ -40,5 +40,7 @@ typedef uint64_t InstSeqNum;
 typedef unsigned int InstTag;
 
 using PredictionID = unsigned;
+using FtqID = uint64_t;
+using FsqID = uint64_t;
 
 #endif // __STD_TYPES_HH__
