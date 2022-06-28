@@ -130,7 +130,7 @@ void DecoupledBranchPred::tick()
                         ftqEnqPC = alignToCacheLine(ftqEntry.startPC + 0x40);
                     } else {
                         ftqEntry.startPC = ftqEnqPC;
-                        ftqEnqPC += 0x40;
+                        ftqEnqPC += alignToCacheLine(ftqEntry.startPC + 0x40);
                     }
                     // check if this is the last cache line of the stream
                     bool end_is_within_line = streamToEnq.pred_streamEnd - alignToCacheLine(ftqEntry.startPC) <= 0x40;
