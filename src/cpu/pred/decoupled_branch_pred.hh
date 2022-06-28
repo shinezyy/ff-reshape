@@ -132,10 +132,10 @@ class DecoupledBranchPred : public SimObject {
             e.startPC, e.endPC, e.takenPC, e.taken, e.target, e.fsqID);
     }
     void printFsqEntry(FetchStream e){
-        DPRINTF(DecoupleBP, "fsq entry start: %x, pred_ended: %d, pred_end: %x, pred_target: %x, pred_branchAddr: %x, pred_branchType: %x, hasEnteredFtq: %d\n\
-            exe_ended: %d, exe_end: %x, exe_target: %x, exe_branchAddr: %x, exe_branchType: %x\n",
-            e.streamStart, e.pred_ended, e.pred_streamEnd, e.pred_target, e.pred_branchAddr, e.pred_branchType, e.hasEnteredFtq,
-            e.exe_ended, e.exe_streamEnd, e.exe_target, e.exe_branchAddr, e.exe_branchType);
+        DPRINTF(DecoupleBP, "fsq entry start: %x, predEnded: %d, predEnd: %x, predTarget: %x, predBranchAddr: %x, predBranchType: %x, hasEnteredFtq: %d\n\
+            exeEnded: %d, exeEnd: %x, exeTarget: %x, exeBranchAddr: %x, exeBranchType: %x\n",
+            e.streamStart, e.predEnded, e.predStreamEnd, e.predTarget, e.predBranchAddr, e.predBranchType, e.hasEnteredFtq,
+            e.exeEnded, e.exeStreamEnd, e.exeTarget, e.exeBranchAddr, e.exeBranchType);
     }
 
   public:
