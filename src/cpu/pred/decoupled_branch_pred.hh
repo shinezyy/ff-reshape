@@ -46,6 +46,8 @@ class DecoupledBranchPred : public SimObject {
     FsqID fsqID{0}; // this is a queue ptr for fsq itself
     Addr ftqEnqPC;
     FsqID ftqEnqFsqID{0}; // this is a queue ptr for ftq to read from fsq
+
+    void tryToEnqFsq();
     
 
     std::map<FtqID, FtqEntry> ftq;
@@ -54,6 +56,8 @@ class DecoupledBranchPred : public SimObject {
     FtqID fetchFtqID{0}; // this is a queue ptr for fetch to read from ftq
     std::pair<FtqID, FtqEntry> fetchReadFtqEntryBuffer;
     bool fetchReadFtqEntryBufferValid;
+
+    void tryToEnqFtq();
 
 
     Addr alignToCacheLine(Addr addr) {
