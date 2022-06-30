@@ -48,6 +48,8 @@ class DecoupledBranchPred : public SimObject {
     FsqID ftqEnqFsqID{0}; // this is a queue ptr for ftq to read from fsq
 
     void tryToEnqFsq();
+
+    void makeNewPredictionAndInsertFsq(FetchStream &fetchStream);
     
 
     std::map<FtqID, FtqEntry> ftq;

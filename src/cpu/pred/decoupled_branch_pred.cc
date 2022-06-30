@@ -32,63 +32,44 @@ void DecoupledBranchPred::tryToEnqFtq()
             auto it = fetchStreamQueue.find(ftqEnqFsqID);
             if (it != fetchStreamQueue.end()) {
                 auto streamToEnq = it->second;
-                if (!streamToEnq.predEnded) {
-                    assert(ftqEnqPC <= s0StreamPC); // TODO: this may break
-                    auto ftqEntry = FtqEntry();
-                    if (!streamToEnq.hasEnteredFtq) {
-                        ftqEntry.startPC = streamToEnq.streamStart;
-                        streamToEnq.hasEnteredFtq = true;
-                        it->second = streamToEnq;
-                    } else {
-                        ftqEntry.startPC = ftqEnqPC;
-                    }
-                    ftqEnqPC = alignToCacheLine(ftqEntry.startPC + 0x40);
+                assert((ftqEnqPC <= s0StreamPC && !streamToEnq.predEnded) ||
+                    (ftqEnqPC < streamToEnq.predStreamEnd && streamToEnq.predEnded)); // TODO: this may break
+                auto ftqEntry = FtqEntry();
+                if (!streamToEnq.hasEnteredFtq) {
+                    ftqEntry.startPC = streamToEnq.streamStart;
+                    streamToEnq.hasEnteredFtq = true;
+                    it->second = streamToEnq;
+                } else {
+                    ftqEntry.startPC = ftqEnqPC;
+                }
+                ftqEnqPC = alignToCacheLine(ftqEntry.startPC + 0x40);
+
+                bool stream_ended = streamToEnq.predEnded;
+                // check if this is the last cache line of the stream
+                bool end_is_within_line = streamToEnq.predStreamEnd - alignToCacheLine(ftqEntry.startPC) <= 0x40;
+                // whether the first byte of the branch instruction lies in this cache line
+                bool branch_is_within_line = streamToEnq.predBranchAddr - alignToCacheLine(ftqEntry.startPC) < 0x40;
+
+                ftqEntry.fsqID = ftqEnqFsqID;
+                if ((end_is_within_line || branch_is_within_line) && stream_ended) {
+                    ftqEntry.endPC = streamToEnq.predStreamEnd;
+                    ftqEntry.taken = true;
+                    ftqEntry.takenPC = streamToEnq.predBranchAddr;
+                    // done with this stream
+                    DPRINTF(DecoupleBP, "done stream %lu entering ftq %lu\n", ftqEnqFsqID, ftqID);
+                    ftqEnqFsqID++;
+                } else {
                     // align to the end of current cache line
-                    // TODO: parameterize, use blockAlignPC
                     ftqEntry.endPC = alignToCacheLine(ftqEntry.startPC + 0x40);
 
                     ftqEntry.taken = false;
                     ftqEntry.takenPC = 0;
-                    ftqEntry.fsqID = ftqEnqFsqID;
-                    ftq.insert(std::make_pair(ftqID, ftqEntry));
-                    ftqID++;
-                    DPRINTF(DecoupleBP, "a miss stream inc ftqID: %lu -> %lu\n", ftqID-1, ftqID);
-                    printFtqEntry(ftqEntry);
-                } else {
-                    assert(ftqEnqPC < streamToEnq.predStreamEnd);
-                    auto ftqEntry = FtqEntry();
-                    // TODO: reduce duplicate logic
-                    if (!streamToEnq.hasEnteredFtq) {
-                        ftqEntry.startPC = streamToEnq.streamStart;
-                        streamToEnq.hasEnteredFtq = true;
-                        it->second = streamToEnq;
-                    } else {
-                        ftqEntry.startPC = ftqEnqPC;
-                    }
-                    ftqEnqPC = alignToCacheLine(ftqEntry.startPC + 0x40);
-                    // check if this is the last cache line of the stream
-                    bool end_is_within_line = streamToEnq.predStreamEnd - alignToCacheLine(ftqEntry.startPC) <= 0x40;
-                    // whether the first byte of the branch instruction lies in this cache line
-                    bool branch_is_within_line = streamToEnq.predBranchAddr - alignToCacheLine(ftqEntry.startPC) < 0x40;
-                    if (end_is_within_line || branch_is_within_line) {
-                        ftqEntry.endPC = streamToEnq.predStreamEnd;
-                        ftqEntry.taken = true;
-                        ftqEntry.takenPC = streamToEnq.predBranchAddr;
-                        // done with this stream
-                        DPRINTF(DecoupleBP, "done stream %lu entering ftq %lu\n", ftqEnqFsqID, ftqID);
-                        ftqEnqFsqID++;
-                    } else {
-                        ftqEntry.endPC = alignToCacheLine(ftqEntry.startPC + 0x40);
-                        ftqEntry.taken = false;
-                        ftqEntry.takenPC = 0;
-                    }
-                    ftqEntry.fsqID = ftqEnqFsqID;
-
-                    ftq.insert(std::make_pair(ftqID, ftqEntry));
-                    ftqID++;
-                    DPRINTF(DecoupleBP, "an ended stream inc ftqID: %lu -> %lu\n", ftqID-1, ftqID);
-                    printFtqEntry(ftqEntry);
                 }
+                ftq.insert(std::make_pair(ftqID, ftqEntry));
+                ftqID++;
+                DPRINTF(DecoupleBP, "a %s stream inc ftqID: %lu -> %lu\n",
+                    stream_ended ? "ended" : "miss", ftqID-1, ftqID);
+                printFtqEntry(ftqEntry);
             }
         } else {
             // no stream that have not entered ftq
@@ -97,25 +78,29 @@ void DecoupledBranchPred::tryToEnqFtq()
     }
 }
 
+void DecoupledBranchPred::makeNewPredictionAndInsertFsq(FetchStream &entry)
+{
+    entry.streamStart = s0StreamPC;
+    // TODO: for real predictors it should be hit signal
+    entry.predEnded = false;
+    // TODO: when hit, the remaining signals should be the prediction result
+    entry.setExeWithPred();
+    fetchStreamQueue.insert(std::make_pair(fsqID, entry));
+    // only if the stream is predicted to be ended can we inc fsqID
+    if (entry.predEnded) {
+        fsqID++;
+    }
+    DPRINTF(DecoupleBP, "an new stream inc fsqID when empty: %lu -> %lu\n", fsqID-1, fsqID);
+    printFsqEntry(entry);
+}
+
 void DecoupledBranchPred::tryToEnqFsq()
 {
     if (fetchStreamQueue.size() < fetchStreamQueueSize) {
         // if queue empty, should make predictions
         if (fetchStreamQueue.size() == 0) {
-
             auto entry = FetchStream();
-            entry.streamStart = s0StreamPC;
-            // TODO: for real predictors it should be hit signal
-            entry.predEnded = false;
-            // TODO: when hit, the remaining signals should be the prediction result
-            entry.setExeWithPred();
-            fetchStreamQueue.insert(std::make_pair(fsqID, entry));
-            // only if the stream is predicted to be ended can we inc fsqID
-            if (entry.predEnded) {
-                fsqID++;
-            }
-            DPRINTF(DecoupleBP, "an new stream inc fsqID when empty: %lu -> %lu\n", fsqID-1, fsqID);
-            printFsqEntry(entry);
+            makeNewPredictionAndInsertFsq(entry);
         } else {
             auto it = fetchStreamQueue.end();
             it--;
@@ -123,19 +108,7 @@ void DecoupledBranchPred::tryToEnqFsq()
             if (back.predEnded || back.exeEnded) {
                 // make new predictions
                 auto entry = FetchStream();
-                entry.streamStart = s0StreamPC;
-                // TODO: remove duplicate logic
-                // TODO: for real predictors it should be hit signal
-                entry.predEnded = false;
-                // TODO: when hit, the remaining signals should be the prediction result
-                entry.setExeWithPred();
-                fetchStreamQueue.insert(std::make_pair(fsqID, entry));
-                // only if the stream is predicted to be ended can we inc fsqID
-                if (entry.predEnded) {
-                    fsqID++;
-                }
-                DPRINTF(DecoupleBP, "an new stream inc fsqID: %lu -> %lu\n", fsqID-1, fsqID);
-                printFsqEntry(entry);
+                makeNewPredictionAndInsertFsq(entry);
             } else {
                 bool hit = false; // TODO: use prediction result
                 // if hit, do something
