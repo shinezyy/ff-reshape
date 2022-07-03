@@ -41,6 +41,12 @@
 #ifndef __CPU_O3_DECOUPLED_FETCH_HH__
 #define __CPU_O3_DECOUPLED_FETCH_HH__
 
+#ifdef __CLION_CODING__
+#include "cpu/base_dyn_inst.hh"
+#include "cpu/o3/dyn_inst.hh"
+
+#endif
+
 #include "arch/decoder.hh"
 #include "arch/utility.hh"
 #include "base/statistics.hh"

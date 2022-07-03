@@ -40,20 +40,22 @@ class DecoupledBranchPred : public SimObject {
     public:
     typedef DecoupledBranchPredParams Params;
 
+    const unsigned streamStep{0x40};
+
     private:
     std::map<FsqID, FetchStream> fetchStreamQueue;
     int fetchStreamQueueSize;
-    FsqID fsqID{0}; // this is a queue ptr for fsq itself
+    FsqID fsqID{1}; // this is a queue ptr for fsq itself
     Addr ftqEnqPC;
-    FsqID ftqEnqFsqID{0}; // this is a queue ptr for ftq to read from fsq
+    FsqID ftqEnqFsqID{1}; // this is a queue ptr for ftq to read from fsq
 
     void tryToEnqFsq();
 
-    void makeNewPredictionAndInsertFsq(FetchStream &fetchStream);
-    
+    void makeNewPredictionAndInsertFsq();
+
 
     std::map<FtqID, FtqEntry> ftq;
-    int ftqSize;
+    unsigned ftqSize;
     FtqID ftqID{0}; // this is a queue ptr for ftq itself
     FtqID fetchFtqID{0}; // this is a queue ptr for fetch to read from ftq
     std::pair<FtqID, FtqEntry> fetchReadFtqEntryBuffer;
@@ -61,9 +63,10 @@ class DecoupledBranchPred : public SimObject {
 
     void tryToEnqFtq();
 
-
+    unsigned cacheLineOffsetBits{6}; // TODO: parameterize this
+    unsigned cacheLineSize{64};
     Addr alignToCacheLine(Addr addr) {
-        return addr & ~0x3f; // TODO: parameterize this
+        return addr & ~((1 << cacheLineOffsetBits) - 1);
     }
 
     std::string _name;
@@ -133,15 +136,31 @@ class DecoupledBranchPred : public SimObject {
     void recordPrediction(Addr stream_start, StreamLen stream_len, Addr next_stream,
                           const boost::dynamic_bitset<> &history, PredictionID id);
 
-    void printFtqEntry(FtqEntry e){
-        DPRINTF(DecoupleBP, "ftq entry start: %x, end: %x, takenPC: %x, taken: %d, target: %x, fsqID: %lu\n",
-            e.startPC, e.endPC, e.takenPC, e.taken, e.target, e.fsqID);
+    void printFtqEntry(const FtqEntry &e, const char *when){
+        DPRINTFR(DecoupleBP, "%s:: %#lx - [%#lx, %#lx) --> %#lx, taken: %d, fsqID: %lu\n",
+            when, e.startPC, e.takenPC, e.endPC, e.target, e.taken, e.fsqID);
     }
-    void printFsqEntry(FetchStream e){
-        DPRINTF(DecoupleBP, "fsq entry start: %x, predEnded: %d, predEnd: %x, predTarget: %x, predBranchAddr: %x, predBranchType: %x, hasEnteredFtq: %d\n\
-            exeEnded: %d, exeEnd: %x, exeTarget: %x, exeBranchAddr: %x, exeBranchType: %x\n",
-            e.streamStart, e.predEnded, e.predStreamEnd, e.predTarget, e.predBranchAddr, e.predBranchType, e.hasEnteredFtq,
-            e.exeEnded, e.exeStreamEnd, e.exeTarget, e.exeBranchAddr, e.exeBranchType);
+
+    void printFsqEntry(const FetchStream &e){
+        if (!e.exeEnded) {
+            DPRINTFR(DecoupleBP, "FSQ prediction:: %#lx-[%#lx, %#lx) --> %#lx, hasEnteredFtq: %d\n", e.streamStart,
+                     e.predBranchAddr, e.predStreamEnd, e.predTarget, e.hasEnteredFtq);
+        } else {
+            DPRINTFR(DecoupleBP, "Resolved: %i, resolved stream:: %#lx-[%#lx, %#lx) --> %#lx\n", e.exeEnded,
+                     e.streamStart, e.exeBranchAddr, e.exeStreamEnd, e.exeTarget);
+        }
+    }
+
+    void printFsqEntryFull(const FetchStream &e){
+        DPRINTFR(DecoupleBP, "FSQ prediction:: %#lx-[%#lx, %#lx) --> %#lx, hasEnteredFtq: %d\n", e.streamStart,
+                    e.predBranchAddr, e.predStreamEnd, e.predTarget, e.hasEnteredFtq);
+        DPRINTFR(DecoupleBP, "Resolved: %i, resolved stream:: %#lx-[%#lx, %#lx) --> %#lx\n", e.exeEnded,
+                    e.streamStart, e.exeBranchAddr, e.exeStreamEnd, e.exeTarget);
+    }
+
+    void printFtqEntryFull(const FtqEntry &e){
+        DPRINTFR(DecoupleBP, "Fetch Target:: %#lx-[%#lx, %#lx) --> %#lx\n",
+            e.startPC, e.takenPC, e.endPC, e.target);
     }
 
   public:
@@ -172,8 +191,8 @@ class DecoupledBranchPred : public SimObject {
      * @param actually_taken The correct branch direction.
      */
     void controlSquash(const FtqID inst_ftq_id, const FsqID inst_fsq_id, const TheISA::PCState control_pc,
-                       const TheISA::PCState &corr_target, bool isConditional, bool isIndirect, bool actually_taken,
-                       const InstSeqNum seq);
+                       const TheISA::PCState &corr_target, bool is_conditional, bool is_indirect,
+                       bool actually_taken, const InstSeqNum seq);
     /**
      * Squashes all outstanding updates until a given sequence number.
      * @param squashed_sn The sequence number to squash any younger updates up
@@ -182,7 +201,7 @@ class DecoupledBranchPred : public SimObject {
     void nonControlSquash(const FtqID inst_ftq_id, const FsqID inst_fsq_id, const TheISA::PCState inst_pc,
                           const InstSeqNum seq);
 
-    void commitInst(const InstSeqNum inst_sn);
+    void commitStream(const FsqID fsq_id);
 
     void commitConditional(const InstSeqNum inst_sn, const TheISA::PCState &pc,
                            bool actually_taken, const TheISA::PCState &target);
@@ -222,6 +241,9 @@ class DecoupledBranchPred : public SimObject {
     // bool hasFtqEntryToFetch();
     bool tryToFillFtqEntryBuffer();
 
+    void dumpFsq(const char* when);
+
+    bool squashing{false};
 };
 
 #endif // DecoupledBranchPred_HH

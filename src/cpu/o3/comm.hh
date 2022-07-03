@@ -191,6 +191,8 @@ struct TimeBufStruct {
         /// retired or squashed sequence number.
         InstSeqNum doneSeqNum; // *F, I
 
+        InstSeqNum doneFsqID; // F
+
         /// Tell Rename how many free entries it has in the ROB
         unsigned freeROBEntries; // *R
 

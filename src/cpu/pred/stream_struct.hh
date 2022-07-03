@@ -8,7 +8,11 @@
 
 struct FetchStream {
     Addr streamStart;
-    bool predEnded;
+
+    // indicating whether a backing prediction has finished
+    bool streamEnded;
+
+    // predicted stream end pc
     Addr predStreamEnd;
     // TODO: use PCState for target(gem5 specific)
     Addr predTarget;
@@ -26,13 +30,15 @@ struct FetchStream {
     // TODO: remove signals below
     bool hasEnteredFtq;
 
-    FetchStream(): streamStart(0), predEnded(false), predStreamEnd(0), predTarget(0),
+    boost::dynamic_bitset<> history;
+
+    FetchStream(): streamStart(0), streamEnded(false), predStreamEnd(0), predTarget(0),
         predBranchAddr(0), predBranchType(0), branchSeq(-1), exeEnded(false), exeStreamEnd(0), exeTarget(0),
         exeBranchAddr(0), exeBranchType(0), hasEnteredFtq(0) {}
 
     // the default exe result should be consistent with prediction
-    void setExeWithPred() {
-        exeEnded = predEnded;
+    void setDefaultResolve() {
+        exeEnded = streamEnded;
         exeStreamEnd = predStreamEnd;
         exeTarget = predTarget;
         exeBranchAddr = predBranchAddr;
@@ -70,6 +76,7 @@ struct StreamPrediction {
     bool valid;
     bool endIsRet;
     bool rasUpdated;
+    boost::dynamic_bitset<> history;
 };
 
 struct StreamPredictionWithID: public StreamPrediction {

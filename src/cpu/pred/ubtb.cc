@@ -35,52 +35,74 @@ StreamUBTB::putPCHistory(Addr pc, const boost::dynamic_bitset<> &history)
         prediction.valid = false;
         return;
     }
-    DPRINTF(DecoupleBP, "Prediction request: stream start=0x%#lx\n", pc);
-    if (ubtb.find(pc) == ubtb.end()) {
-        DPRINTF(DecoupleBP, "No entry found, guess a unlimited stream\n");
+    DPRINTF(DecoupleBP, "Prediction request: stream start=%#lx\n", pc);
+    const auto &it = ubtb.find(pc);
+    if (it == ubtb.end()) {
+        DPRINTF(DecoupleBP, "No entry found, guess an unlimited stream\n");
+        prediction.valid = false;
+        // prediction.bbStart = pc;
+        // prediction.bbEnd = 0;
+        // prediction.streamLength = unlimitedStreamLen;
+        // prediction.nextStream = 0;
+        // prediction.endIsRet = false;
+    } else {
+        DPRINTF(DecoupleBP, "UBTB Entry found\n");
         prediction.valid = true;
         prediction.bbStart = pc;
-        prediction.bbEnd = 0;
-        prediction.streamLength = unlimitedStreamLen;
-        prediction.nextStream = 0;
-        prediction.endIsRet = false;
+        prediction.bbEnd = it->second.bbEnd;
+        prediction.streamLength = it->second.length;
+        prediction.nextStream = it->second.nextStream;
+        prediction.endIsRet = it->second.endIsRet;
+        prediction.history = history;
     }
 }
 
 StreamPrediction
 StreamUBTB::getStream()
 {
+    DPRINTF(DecoupleBP, "Response stream prediction: %#lx->%#lx\n", prediction.bbStart, prediction.bbEnd);
     return prediction;
 }
 
-void StreamUBTB::update(const PredictionID pred_id, Addr stream_start_pc, Addr control_pc, Addr target,
-                        bool is_conditional, bool is_indirect, bool actually_taken,
+void StreamUBTB::update(const PredictionID fsq_id, Addr stream_start_pc, Addr control_pc, Addr target,
+                        bool is_conditional, bool is_indirect, unsigned control_size, bool actually_taken,
                         const boost::dynamic_bitset<> &history)
 {
     std::string buf;
     boost::to_string(history, buf);
     DPRINTF(DecoupleBP,
-            "StreamUBTB::update: pred_id: %d, control_pc: %#x, target: %#x, is_conditional: %d, is_indirect: %d, "
-            "actually_taken: %d, history: %s\n",
-            pred_id, control_pc, target, is_conditional, is_indirect, actually_taken, buf.c_str());
-
-    std::pop_heap(mruList.begin(), mruList.end(), older());
-    // now the LRU is at the end of mrulist
-    const auto &ubtb_entry = mruList.back();
-    DPRINTF(DecoupleBP, "StreamUBTB::update: pop ubtb_entry: %#x\n", ubtb_entry->first);
-    ubtb.erase(ubtb_entry->first);
+            "StreamUBTB::update: fsq id: %d, control_pc: %#x, target: %#x, is_conditional: %d, is_indirect: %d, "
+            "actually_taken: %d, history: %s, control size: %u\n",
+            fsq_id, control_pc, target, is_conditional, is_indirect, actually_taken, buf.c_str(), control_size);
 
     auto tag = makePCHistTag(stream_start_pc, history);
+    auto it = ubtb.find(tag);
+
+    bool new_entry = it == ubtb.end();
+
+    if (new_entry) {
+        std::pop_heap(mruList.begin(), mruList.end(), older());
+        const auto &ubtb_entry = mruList.back();
+        DPRINTF(DecoupleBP, "StreamUBTB::update: pop ubtb_entry: %#x\n", ubtb_entry->first);
+        ubtb.erase(ubtb_entry->first);
+    }
+
     ubtb[tag].tick = curTick();
     ubtb[tag].bbStart = stream_start_pc;
     ubtb[tag].bbEnd = control_pc;
-    ubtb[tag].length = control_pc - stream_start_pc;
+    ubtb[tag].length = control_pc - stream_start_pc + control_size;
     ubtb[tag].nextStream = target;
 
-    DPRINTF(DecoupleBP, "StreamUBTB::update: insert ubtb_entry, tag: %#lx:  %#lx - %u -  %#lx -> %#lx \n", tag,
-            ubtb[tag].bbStart, ubtb[tag].length, ubtb[tag].bbEnd, ubtb[tag].nextStream);
+    if (new_entry) {
+        auto it = ubtb.find(tag);
+        mruList.back() = it;
+        std::push_heap(mruList.begin(), mruList.end(), older());
+    }
 
-    mruList.pop_back();
+    DPRINTF(DecoupleBP, "StreamUBTB:: %s ubtb_entry, tag: %#lx:  %#lx - %u -  %#lx -> %#lx \n",
+            new_entry ? "Insert new" : "update", tag, ubtb[tag].bbStart, ubtb[tag].length, ubtb[tag].bbEnd,
+            ubtb[tag].nextStream);
+
 
     // Because fetch has been redirected, here we must make another prediction
 }

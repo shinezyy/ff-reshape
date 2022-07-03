@@ -32,7 +32,7 @@ class StreamPredictor : public TimedPredictor {
     std::pair<Addr, StreamPrediction> getStreamS1();
 
     void update(const PredictionID id, Addr stream_start_pc, Addr control_pc, Addr target, bool is_conditional,
-                bool is_indirect, bool actually_taken, const boost::dynamic_bitset<> &history) override;
+                bool is_indirect, bool actually_taken, const boost::dynamic_bitset<> &history);
 };
 
 

@@ -1036,7 +1036,7 @@ DecoupledFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
     } else if (fromCommit->commitInfo[tid].doneSeqNum) {
         // Update the branch predictor if it wasn't a squashed instruction
         // that was broadcasted.
-        branchPred->commitInst(fromCommit->commitInfo[tid].doneSeqNum);
+        branchPred->commitStream(fromCommit->commitInfo[tid].doneFsqID);
     }
 
     // Check squash signals from decode.
@@ -1250,6 +1250,10 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
             DPRINTF(Fetch, "[tid:%i] Fetch is stalled!\n", tid);
             return;
         }
+
+        if (doneWithAnFtqEntry) {
+            DPRINTF(Fetch, "Run out of an FTQ entry, waiting for next to fill\n");
+        }
     } else {
         if (fetchStatus[tid] == Idle) {
             ++fetchStats.idleCycles;
@@ -1287,8 +1291,9 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
     unsigned numInsts = fetchBufferSize / instSize;
     unsigned blkOffset = 0;
     if (fetchSource == CacheLine) {
-        blkOffset =
-            (fetchAddr - fetchBufferPC[tid]) / instSize;
+        blkOffset = (fetchAddr - fetchBufferPC[tid]) / instSize;
+        DPRINTF(Fetch, "Cycle Init compute: blkOffset: %i, fetchAddr: %#lx, fetchBufferPC: %#lx\n", blkOffset,
+                fetchAddr, fetchBufferPC[tid]);
     }
 
     // Loop through instruction memory from the cache.
@@ -1448,9 +1453,8 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
 
             // decoupled frontend do not assume knowing instruciont type when fetching,
             // anything is speculated
-            auto [predicted_taken_branch, doneFtqEntry] = lookupAndUpdateNextPC(instruction, nextPC);
+            std::tie(predicted_taken_branch, doneWithAnFtqEntry) = lookupAndUpdateNextPC(instruction, nextPC);
 
-            doneWithAnFtqEntry = doneFtqEntry;
             if (predicted_taken_branch) {
                 // predicted backward branch
                 DPRINTF(Fetch, "Taken branch detected with PC : 0x%x => 0x%x\n",
@@ -1467,6 +1471,8 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
             if (newMacro) {
                 fetchAddr = thisPC.instAddr() & BaseCPU::PCMask;
                 blkOffset = (fetchAddr - fetchBufferPC[tid]) / instSize;
+                DPRINTF(Fetch, "blkOffset: %i, fetchAddr: %#lx, fetchBufferPC: %#lx\n", blkOffset, fetchAddr,
+                        fetchBufferPC[tid]);
                 pc_offset = 0;
                 curMacroop = NULL;
             }
@@ -1509,6 +1515,10 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
         }
     }
 
+    if (!doneWithAnFtqEntry) {
+        DPRINTF(Fetch, "FTQ is empty, fetch is paused\n");
+    }
+
     if (fetchSource == LoopBuf) {
         DPRINTF(Fetch, "[tid:%i] Done fetching, still in lbuf.\n", tid);
 
@@ -1521,7 +1531,7 @@ DecoupledFetch<Impl>::fetch(bool &status_change)
                 "for this cycle.\n", tid);
     } else if (blkOffset >= fetchBufferSize) {
         DPRINTF(Fetch, "[tid:%i] Done fetching, reached the end of the"
-                "fetch buffer.\n", tid);
+                "fetch buffer: blk offset: %u, fetch buf size: %u\n", tid, blkOffset, fetchBufferSize);
     }
 
     macroop[tid] = curMacroop;

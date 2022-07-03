@@ -61,7 +61,7 @@ class PCState : public GenericISA::UPCState<MachInst>
     PCState(Addr val) : UPCState(val) { _compressed = false; _rv32 = false; }
 
     void compressed(bool c) { _compressed = c; }
-    bool compressed() { return _compressed; }
+    bool compressed() const { return _compressed; }
 
     void rv32(bool val) { _rv32 = val; }
     bool rv32() const { return _rv32; }

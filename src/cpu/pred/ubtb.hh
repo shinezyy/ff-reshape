@@ -57,7 +57,7 @@ class StreamUBTB : public TimedPredictor {
     StreamPrediction getStream();
 
     void update(const PredictionID pred_id, Addr stream_start_pc, Addr control_pc, Addr target, bool is_conditional,
-                bool is_indirect, bool actually_taken, const boost::dynamic_bitset<> &history) override;
+                bool is_indirect, unsigned control_size, bool actually_taken, const boost::dynamic_bitset<> &history);
 
     uint64_t makePCHistTag(Addr pc, const boost::dynamic_bitset<> &history);
 

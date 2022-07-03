@@ -1100,6 +1100,10 @@ DefaultCommit<Impl>::commitInsts()
                 // Set the doneSeqNum to the youngest committed instruction.
                 toIEW->commitInfo[tid].doneSeqNum = head_inst->seqNum;
 
+                if (head_inst->getFsqID() > 1) {
+                    toIEW->commitInfo[tid].doneFsqID = head_inst->getFsqID() - 1;
+                }
+
                 if (tid == 0)
                     canHandleInterrupts = !head_inst->isDelayedCommit();
 

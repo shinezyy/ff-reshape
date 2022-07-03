@@ -22,11 +22,6 @@ class TimedPredictor: public SimObject {
 
     virtual unsigned getDelay() {return 0;}
 
-    virtual void update(const PredictionID pred_id, Addr stream_start_pc, Addr control_pc, Addr target,
-                        bool is_conditional, bool is_indirect, bool actually_taken,
-                        const boost::dynamic_bitset<> &history)
-    {
-    }
 };
 
 #endif // __CPU_PRED_TIMED_PRED_HH__
