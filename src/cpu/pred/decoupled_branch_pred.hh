@@ -28,14 +28,6 @@ enum PredcitionSource {
     UBTB_PRED,
 };
 
-struct BPHistory {
-    boost::dynamic_bitset<> history;
-    Addr streamStart;
-    StreamLen predStreamLength;
-    Addr nextStream;
-    // PredcitionSource predSource;
-};
-
 class DecoupledBranchPred : public SimObject {
     public:
     typedef DecoupledBranchPredParams Params;
@@ -52,7 +44,6 @@ class DecoupledBranchPred : public SimObject {
     void tryToEnqFsq();
 
     void makeNewPredictionAndInsertFsq();
-
 
     std::map<FtqID, FtqEntry> ftq;
     unsigned ftqSize;
@@ -85,8 +76,6 @@ class DecoupledBranchPred : public SimObject {
     // std::queue<Addr> pcSent;
 
     std::queue<StreamPrediction> uBTBHistory;
-
-    std::map<PredictionID, BPHistory> bpHistory;
 
     // std::map<PredictionID, StreamPredictionWithID> ftq;
 

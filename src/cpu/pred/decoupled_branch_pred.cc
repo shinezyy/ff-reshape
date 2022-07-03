@@ -10,7 +10,6 @@ DecoupledBranchPred::DecoupledBranchPred(const Params &params)
     commitHistory.resize(historyBits, 0);
     speculativeHistory.resize(historyBits, 0);
     s2CtrlPC = 0x80000000;
-    recordPrediction(0x80000000, unlimitedStreamLen, predictionID, speculativeHistory, 0);
 
     // TODO: remove this
     ftqSize = 256;
@@ -213,8 +212,6 @@ void DecoupledBranchPred::tick()
     // if (s1BackingPred.valid) {
     //     incPredictionID();
     //     add2FTQ(s1BackingPred, predictionID);
-    //     recordPrediction(s1BackingPred.bbStart, s1BackingPred.streamLength, s1BackingPred.nextStream,
-    //                      s1History, predictionID);
     // }
     // s2Pred = s1BackingPred;
     // s1BackingPred.valid = false;
@@ -264,14 +261,6 @@ void DecoupledBranchPred::tick()
 
     // currently squashing only last for one cycle, change it if assuming longer squashing time
     squashing = false;
-}
-
-void DecoupledBranchPred::recordPrediction(Addr stream_start, StreamLen stream_len, Addr next_stream,
-                                           const boost::dynamic_bitset<> &history, PredictionID id)
-{
-    DPRINTF(DecoupleBP, "Make prediction: id: %u, stream=0x%lx, length=%u\n", id, stream_start, stream_len);
-    assert(bpHistory.find(id) == bpHistory.end());
-    bpHistory[id] = BPHistory{history, stream_start, stream_len, next_stream};
 }
 
 void DecoupledBranchPred::updateS0Hist()
@@ -384,11 +373,11 @@ void DecoupledBranchPred::controlSquash(const FtqID inst_ftq_id, const FsqID ins
 
     squashing = true;
 
-    // streamPred->update(pred_id, it->second.streamStart, control_pc.instAddr(), corr_target.instAddr(), is_conditional,
+    // streamPred->update(pred_id, it->second.streamStart, control_pc.instAddr(), corr_target.instAddr(),
+    // is_conditional,
     //                    is_indirect, actually_taken, it->second.history);
     s0StreamPC = corr_target.instAddr();
 
-    // bpHistory.erase(pred_id);
     // ftq.erase(pred_id);
     // only implemented 
     ftq.clear();
@@ -468,8 +457,7 @@ void DecoupledBranchPred::controlSquash(const FtqID inst_ftq_id, const FsqID ins
     // DPRINTF(DecoupleBP, "3 fsqID %lu, inst_fsq_id %lu\n", fsqID, inst_fsq_id);
 
     DPRINTF(DecoupleBP, "After squash,");
-    DPRINTF(DecoupleBP, "bpHistory size: %u, ftq size: %u fsq size: %u\n", bpHistory.size(), ftq.size(),
-            fetchStreamQueue.size());
+    DPRINTF(DecoupleBP, "FTQ size: %u FSQ size: %u\n", ftq.size(), fetchStreamQueue.size());
     DPRINTF(DecoupleBP,
             "ftqEnqPC set to %x, s0StreamPC set to %x, ftqEnqFsqID %lu, fetchFtqID %lu, fsqID %lu, ftqID %lu\n",
             ftqEnqPC, s0StreamPC, ftqEnqFsqID, fetchFtqID, fsqID, ftqID);
@@ -479,14 +467,6 @@ void DecoupledBranchPred::controlSquash(const FtqID inst_ftq_id, const FsqID ins
 void DecoupledBranchPred::nonControlSquash(const FtqID inst_ftq_id, const FsqID inst_fsq_id,
                                            const TheISA::PCState inst_pc, const InstSeqNum seq)
 {
-    // for (auto &control : bpHistory) {
-    //     if (control.first >= squashed_sn) {
-    //         // squash it and release resource
-    //     } else {
-    //         break;
-    //     }
-    // }
-
     DPRINTF(DecoupleBP, "non control squash: ftq_id: %lu, fsq_id: %lu, inst_pc: %x, seq: %lu\n",
             inst_ftq_id, inst_fsq_id, inst_pc.instAddr(), seq);
     squashing = true;
@@ -494,7 +474,6 @@ void DecoupledBranchPred::nonControlSquash(const FtqID inst_ftq_id, const FsqID 
     // Should not update s0StreamPC!!!
     // s0StreamPC = inst_pc.nextInstAddr();
 
-    // bpHistory.erase(pred_id);
     // ftq.erase(pred_id);
     // only implemented 
     ftq.clear();
