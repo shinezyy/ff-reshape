@@ -84,6 +84,7 @@ void DecoupledBranchPred::tryToEnqFtq()
                     ftq_entry.taken = false;
                     ftq_entry.takenPC = 0;
                 }
+                assert(ftqEnqFsqID <= fsqID);
                 ftq.insert(std::make_pair(ftqID, ftq_entry));
                 ftqID++;
                 DPRINTF(DecoupleBP, "a %s stream inc ftqID: %lu -> %lu\n",
@@ -104,8 +105,9 @@ void DecoupledBranchPred::tryToEnqFtq()
 void DecoupledBranchPred::makeNewPredictionAndInsertFsq()
 {
     FetchStream entry;
+    // TODO: this may be wrong, need to check if we should use the last s0StreamPC
+    entry.streamStart = s0StreamPC;
     if (s0UbtbPred.valid) {
-        entry.streamStart = s0UbtbPred.bbStart;
         entry.streamEnded = true;
         entry.predStreamEnd = s0UbtbPred.bbStart + s0UbtbPred.streamLength;
         entry.predBranchAddr = s0UbtbPred.bbEnd;
@@ -115,7 +117,6 @@ void DecoupledBranchPred::makeNewPredictionAndInsertFsq()
                 entry.predStreamEnd, entry.predTarget);
     } else {
         DPRINTF(DecoupleBP, "No valid prediction, gen missing stream: %#lx -> ...\n", s0StreamPC);
-        entry.streamStart = s0StreamPC;
         entry.streamEnded = false;
         entry.history.resize(historyBits, 0);
         // TODO: when hit, the remaining signals should be the prediction result
@@ -147,6 +148,7 @@ void DecoupledBranchPred::tryToEnqFsq()
                 // make new predictions
                 makeNewPredictionAndInsertFsq();
             } else {
+                // check if current stream hits after miss
                 DPRINTF(DecoupleBP, "FSQ is not empty, but stream has not ended\n");
                 bool hit = false; // TODO: use prediction result
                 // if hit, do something
@@ -173,11 +175,7 @@ void DecoupledBranchPred::tryToEnqFsq()
     } else {
         DPRINTF(DecoupleBP, "FSQ is full: %lu\n", fetchStreamQueue.size());
     }
-    DPRINTF(DecoupleBP,
-            "Exit ticking BP, s0StreamPC = %x, ftqEnqPC=%x, ftqEnqFsqID=%lu,"
-            " ftqID=%lu, fsqID=%lu, fetchFtqID=%lu, bufferValid=%d\n",
-            s0StreamPC, ftqEnqPC, ftqEnqFsqID, ftqID, fsqID, fetchFtqID, fetchReadFtqEntryBufferValid);
-    DPRINTF(DecoupleBP, "ftq entires %d, fsq entries %d\n", ftq.size(), fetchStreamQueue.size());
+
 }
 
 
@@ -261,6 +259,11 @@ void DecoupledBranchPred::tick()
 
     // currently squashing only last for one cycle, change it if assuming longer squashing time
     squashing = false;
+    DPRINTF(DecoupleBP,
+            "Exit ticking BP, s0StreamPC = %x, ftqEnqPC=%x, ftqEnqFsqID=%lu,"
+            " ftqID=%lu, fsqID=%lu, fetchFtqID=%lu, bufferValid=%d\n",
+            s0StreamPC, ftqEnqPC, ftqEnqFsqID, ftqID, fsqID, fetchFtqID, fetchReadFtqEntryBufferValid);
+    DPRINTF(DecoupleBP, "ftq entires %d, fsq entries %d\n", ftq.size(), fetchStreamQueue.size());
 }
 
 void DecoupledBranchPred::updateS0Hist()
@@ -321,7 +324,7 @@ DecoupledBranchPred::willTaken(TheISA::PCState &pc)
     auto taken_pc = ftq_entry_to_fetch.takenPC;
     DPRINTF(DecoupleBP, "Responsing fetch with");
     printFtqEntry(ftq_entry_to_fetch, "");
-    assert(pc.instAddr() <= end && pc.instAddr() >= start);
+    assert(pc.instAddr() < end && pc.instAddr() >= start);
     bool taken = pc.instAddr() == taken_pc && ftq_entry_to_fetch.taken;
     bool run_out_of_this_entry = pc.nextInstAddr() >= end; // npc could be end + 2
     if (run_out_of_this_entry) {
@@ -389,19 +392,22 @@ void DecoupledBranchPred::controlSquash(const FtqID inst_ftq_id, const FsqID ins
     // miss entry, write end info in it
     assert(it != fetchStreamQueue.end());
     auto &fsq_entry = it->second;
-    fsq_entry.exeEnded = true;
-    fsq_entry.exeBranchAddr = control_pc.instAddr();
-    fsq_entry.exeBranchType = 0;
-    fsq_entry.exeTarget = corr_target.instAddr();
-    fsq_entry.branchSeq = seq;
+
     // it->second = fsq_entry;
     // unsigned control_inst_size = control_pc.nextInstAddr() - control_pc.instAddr();
     unsigned control_inst_size = control_pc.compressed() ? 2 : 4;
-    fsq_entry.exeStreamEnd = fsq_entry.exeBranchAddr + control_inst_size;
 
     if (actually_taken) {
         DPRINTF(DecoupleBP, "a miss flow was redirected by taken branch, new fsq entry is:\n");
         printFsqEntry(fsq_entry);
+
+        fsq_entry.exeEnded = true;
+        fsq_entry.exeBranchAddr = control_pc.instAddr();
+        fsq_entry.exeBranchType = 0;
+        fsq_entry.exeTarget = corr_target.instAddr();
+        fsq_entry.branchSeq = seq;
+        fsq_entry.exeStreamEnd = fsq_entry.exeBranchAddr + control_inst_size;
+
 
         streamUBTB->update(inst_fsq_id, fsq_entry.streamStart, control_pc.instAddr(), corr_target.instAddr(),
                            is_conditional, is_indirect, control_inst_size, actually_taken, fsq_entry.history);
@@ -492,10 +498,17 @@ void DecoupledBranchPred::nonControlSquash(const FtqID inst_ftq_id, const FsqID 
     // since this is not a mispredict
     // but we should use a new ftq entry id
     ftqID = inst_ftq_id + 1;
-    fsqID = inst_fsq_id;
+    // fsqID = inst_fsq_id;
 
     ftqEnqPC = inst_pc.nextInstAddr();
-    ftqEnqFsqID = inst_fsq_id;
+    auto snpc = inst_pc.instAddr() + (inst_pc.compressed() ? 2 : 4);
+    // this is the last instruction of the stream
+    DPRINTFR(DecoupleBP, "non control squash, inst pc %x, npc %x, nextInstAddr %x\n", inst_pc.instAddr(), inst_pc.npc(), inst_pc.nextInstAddr());
+    if (snpc == fsq_entry.predStreamEnd) {
+        ftqEnqFsqID = inst_fsq_id + 1;
+    } else {
+        ftqEnqFsqID = inst_fsq_id;
+    }
     fetchFtqID = inst_ftq_id + 1;
     fetchReadFtqEntryBufferValid = false;
     // DPRINTF(DecoupleBP, "3 fsqID %lu, inst_fsq_id %lu\n", fsqID, inst_fsq_id);

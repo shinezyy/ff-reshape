@@ -36,7 +36,7 @@ StreamUBTB::putPCHistory(Addr pc, const boost::dynamic_bitset<> &history)
         return;
     }
     DPRINTF(DecoupleBP, "Prediction request: stream start=%#lx\n", pc);
-    const auto &it = ubtb.find(pc);
+    const auto &it = ubtb.find(pc); // TODO: use hash of pc and history
     if (it == ubtb.end()) {
         DPRINTF(DecoupleBP, "No entry found, guess an unlimited stream\n");
         prediction.valid = false;
