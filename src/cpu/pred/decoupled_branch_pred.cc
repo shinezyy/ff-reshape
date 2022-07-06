@@ -500,18 +500,36 @@ void DecoupledBranchPred::nonControlSquash(const FtqID inst_ftq_id, const FsqID 
     ftqID = inst_ftq_id + 1;
     // fsqID = inst_fsq_id;
 
-    ftqEnqPC = inst_pc.nextInstAddr();
+    // ftqEnqPC = inst_pc.nextInstAddr();
     auto snpc = inst_pc.instAddr() + (inst_pc.compressed() ? 2 : 4);
-    // this is the last instruction of the stream
     DPRINTFR(DecoupleBP, "non control squash, inst pc %x, npc %x, nextInstAddr %x\n", inst_pc.instAddr(), inst_pc.npc(), inst_pc.nextInstAddr());
+    // check if this is the last instruction of the stream
+    // if so, we should set ftqEnqPC to the start of the next stream(target of this stream)
+    // and set ftqEnqFsqID to the next stream's fsq id
+    // for cases of not ended stream, predStreamEnd is 0, so it won't equal to snpc
     if (snpc == fsq_entry.predStreamEnd) {
         ftqEnqFsqID = inst_fsq_id + 1;
+        ftqEnqPC = fsq_entry.predTarget;
     } else {
         ftqEnqFsqID = inst_fsq_id;
+        ftqEnqPC = snpc;
     }
+    
     fetchFtqID = inst_ftq_id + 1;
     fetchReadFtqEntryBufferValid = false;
     // DPRINTF(DecoupleBP, "3 fsqID %lu, inst_fsq_id %lu\n", fsqID, inst_fsq_id);
+
+    // we should set s0StreamPC to be the predTarget of the fsq entry
+    // in case that the stream is the newest entry in fsq,
+    // That's because, if an inst of this stream had been squashed due to a mispredict,
+    // and then a non-control squash was made on an inst previous to this inst,
+    // the s0StreamPC would be set incorrectly by the previous squash
+    Addr target = fsq_entry.predTarget;
+    bool this_entry_ended = fsq_entry.streamEnded;
+    if (++it == fetchStreamQueue.end() && this_entry_ended) {
+        s0StreamPC = target;
+        fsqID = inst_fsq_id + 1;
+    }
 
     DPRINTF(DecoupleBP, "FTQ size: %u FSQ size: %u\n", ftq.size(), fetchStreamQueue.size());
     DPRINTF(DecoupleBP,
