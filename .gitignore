@@ -9,6 +9,8 @@ cscope.out
 .*.swp
 .*.swo
 m5out
+*_out
+log
 /src/doxygen/html
 /ext/dramsim2/DRAMSim2
 /ext/mcpat/regression/*/*.out
