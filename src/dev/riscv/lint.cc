@@ -72,6 +72,10 @@ void Lint::update_mtip(void) {
     DPRINTF(Lint,"post mtip! time:%x cmp:%x\n",mtime,mtimecmp);
     intrctrl->post(lint_id,INT_TIMER_MACHINE,0);
   }
+  else if (int_enable && mtime < mtimecmp){
+    DPRINTF(Lint,"clear mtip! time:%x cmp:%x\n",mtime,mtimecmp);
+    intrctrl->clear(lint_id,INT_TIMER_MACHINE);
+  }
 }
 
 void Lint::update_time() {
