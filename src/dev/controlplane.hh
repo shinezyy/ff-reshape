@@ -81,7 +81,8 @@ class ControlPlane: public BasicPioDevice
     std::vector<Cache *> l2s;
     Cache * l3;
     int np;
-    uint32_t l2inc, l3inc;
+    uint32_t l2_tb_inc, l3_tb_inc;
+    uint32_t l2_tb_freq, l3_tb_freq;
     uint32_t l2_tb_size, l3_tb_size;
     double mixIpc;
     //these are used to record performance in one TTI

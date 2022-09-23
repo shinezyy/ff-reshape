@@ -248,8 +248,10 @@ def build_test_system(np):
             test_sys.controlplane.cpus = test_sys.cpu
             test_sys.controlplane.l2s = test_sys.l2
             test_sys.controlplane.l3 = test_sys.l3
-            test_sys.controlplane.l2inc = options.l2inc
-            test_sys.controlplane.l3inc = options.l3inc
+            test_sys.controlplane.l2_tb_inc = options.l2_tb_inc
+            test_sys.controlplane.l2_tb_freq = options.l2_tb_freq
+            test_sys.controlplane.l3_tb_inc = options.l3_tb_inc
+            test_sys.controlplane.l3_tb_freq = options.l3_tb_freq
             test_sys.controlplane.l2_tb_size = options.l2_tb_size
             test_sys.controlplane.l3_tb_size = options.l3_tb_size
             if options.l3_waymask_set:

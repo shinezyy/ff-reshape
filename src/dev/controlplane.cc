@@ -61,8 +61,10 @@ ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     l2s(p->l2s),
     l3(p->l3),
     np(cpus.size()),
-    l2inc(p->l2inc),
-    l3inc(p->l3inc),
+    l2_tb_inc(p->l2_tb_inc),
+    l3_tb_inc(p->l3_tb_inc),
+    l2_tb_freq(p->l2_tb_freq),
+    l3_tb_freq(p->l3_tb_freq),
     l2_tb_size(p->l2_tb_size),
     l3_tb_size(p->l3_tb_size),
     cpStat(*this)
@@ -171,6 +173,13 @@ ControlPlane::startQoS()
       l3->setWaymask(i,l3_waymask_set[i]);
     }
   }
+  for (int i = 1; i < LvNATasks::QosIdStart; i++)
+  {
+    l3->buckets[i]->set_bypass(false);
+    l3->buckets[i]->set_size(l3_tb_size);
+    l3->buckets[i]->set_inc(l3_tb_inc);
+    l3->buckets[i]->set_freq(l3_tb_freq);
+  }
 }
 
 void
@@ -186,7 +195,7 @@ ControlPlane::tuning()
   {
     int l3accesses = l3->buckets[i]->get_accesses();
     l3->buckets[i]->reset_accesses();
-    int l3inc = l3->buckets[i]->get_inc();
+    int l3_tb_inc = l3->buckets[i]->get_inc();
     // far from target
     if (diff > 0.08)
     {
@@ -194,11 +203,11 @@ ControlPlane::tuning()
     }// still needs adjustment
     else if (diff > 0.02)
     {
-      l3->buckets[i]->set_inc(l3inc-50);
+      l3->buckets[i]->set_inc(l3_tb_inc-50);
     }// relax a little
     else if (diff < -0.02)
     {
-      l3->buckets[i]->set_inc(l3inc+50);
+      l3->buckets[i]->set_inc(l3_tb_inc+50);
     }
   }
 }
