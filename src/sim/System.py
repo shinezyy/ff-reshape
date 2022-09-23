@@ -61,6 +61,8 @@ class System(SimObject):
     cxx_exports = [
         PyBindMethod("getMemoryMode"),
         PyBindMethod("setMemoryMode"),
+        PyBindMethod("setWorkBarrier"),
+        PyBindMethod("disableWorkBarrier"),
     ]
 
     memories = VectorParam.AbstractMemory(Self.all,
@@ -139,3 +141,4 @@ class System(SimObject):
     gcpt_restorer_file = Param.String("/the/mid/of/nowhere.xhit", "GCPT restorer image file")
 
     nohype_num = Param.Int(1, "number of nohype parts")
+    enable_work_barrier = Param.Bool(False, "enable work barrier")

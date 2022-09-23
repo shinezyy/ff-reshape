@@ -296,6 +296,30 @@ class System : public SimObject, public PCEventScope
     void setMemoryMode(Enums::MemoryMode mode);
     /** @} */
 
+    bool workBarrierOn;
+    unsigned int barrierMax;
+    unsigned int barrierCount;
+    /**
+     * @brief enbale the Work Barrier object
+     *
+     */
+    void setWorkBarrier(unsigned int setMax) {
+      workBarrierOn = true;
+      barrierMax = setMax;
+      barrierCount = 0;
+    }
+    void disableWorkBarrier() { workBarrierOn = false; }
+    bool hitWorkBarrier() {
+      if (workBarrierOn) {
+        barrierCount++;
+        if (barrierCount >= barrierMax) {
+          barrierCount = 0;
+          return true;
+        }
+      }
+      return false;
+    }
+
     /**
      * Get the cache line size of the system.
      */

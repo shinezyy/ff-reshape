@@ -326,6 +326,9 @@ def addCommonOptions(parser):
     parser.add_option("-I", "--maxinsts", action="store", type="int",
                       default=None, help="""Total number of instructions to
                                             simulate (default: run forever)""")
+    parser.add_option("--maxinsts0", action="store", type="int",
+                      default=None, help="""Total number of instructions on core0 to
+                                            simulate (default: run forever)""")
     parser.add_option("--work-item-id", action="store", type="int",
                       help="the specific work id for exit & checkpointing")
     parser.add_option("--num-work-ids", action="store", type="int",
@@ -562,7 +565,12 @@ def addFSOptions(parser):
     parser.add_option("--job-benchmark", action="store_true", default=False,
                       help="use small jobs benchmark")
     parser.add_option("--cycle_afterwarm", action="store", type="int",
-        default=1_000_000,
+        default=None,
         help="cycles after warmup cpt")
+    parser.add_option("--cycle_per_tti", action="store", type="int",
+        default=1_000_000,
+        help="cycles per TTI")
     parser.add_option("--enable-clint-sets", type="string",
     default=None)
+    parser.add_option("--num_tti", action="store", type="int",
+        default=None,help="number of TTI")

@@ -353,6 +353,18 @@ m5checkpoint(ThreadContext *tc, Tick delay, Tick period)
     }
 }
 
+void
+hitBarrier(ThreadContext* tc)
+{
+    DPRINTF(PseudoInst, "PseudoInst::hitBarrier() contextID:%d\n",tc->contextId());
+    if (tc->getSystemPtr()->workBarrierOn)  {
+        tc->quiesce();
+        if (tc->getSystemPtr()->hitWorkBarrier()){
+            exitSimLoop("hit all work barrier", 0);
+        }
+    }
+}
+
 uint64_t
 readfile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset)
 {

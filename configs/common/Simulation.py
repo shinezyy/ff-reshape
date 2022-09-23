@@ -273,6 +273,17 @@ def scriptCheckpoints(options, maxtick, cptdir):
 
     return exit_event
 
+def runOneTTI(testsys, maxtick):
+    # Run the simulation
+    exit_event = m5.simulate(maxtick - m5.curTick())
+    exit_cause = exit_event.getCause()
+    normal_flag = False
+    if exit_cause == "hit all work barrier":
+        for cpu in testsys.cpu:
+            cpu.activateAllContexts()
+        normal_flag = True
+    return exit_event, normal_flag
+
 def benchCheckpoints(testsys, options, maxtick, cptdir):
     exit_event = m5.simulate(maxtick - m5.curTick())
     exit_cause = exit_event.getCause()
@@ -281,24 +292,65 @@ def benchCheckpoints(testsys, options, maxtick, cptdir):
 
     cpu_period = testsys.cpu_clk_domain.clock[0].getValue()
 
+    TTI_period = options.cycle_per_tti
     if options.nohype:
         testsys.controlplane.startQoS()
 
+        if options.cycle_afterwarm:
+            run_n = options.cycle_afterwarm // TTI_period
+            for i in range(run_n):
+                testsys.controlplane.startTTI()
+                exit_event = m5.simulate(TTI_period*cpu_period)
+                testsys.controlplane.endTTI()
+                # testsys.controlplane.tuning()
+                m5.stats.dump()
+                m5.stats.reset()
+            return exit_event
+        elif options.num_tti:
+            # set work barrier on
+            testsys.setWorkBarrier(options.num_cpus)
+            # run once to make cores run evenly
+            exit_event,normal_res = runOneTTI(testsys, maxtick)
+            if not normal_res:
+                return exit_event
+            m5.stats.dump()
+            m5.stats.reset()
+            for i in range(options.num_tti):
+                testsys.controlplane.startTTI()
+                exit_event,normal_res = runOneTTI(testsys, maxtick)
+                if not normal_res:
+                    return exit_event
+                testsys.controlplane.endTTI()
+                # testsys.controlplane.tuning()
+                m5.stats.dump()
+                m5.stats.reset()
+            return exit_event
 
-        run_n = options.cycle_afterwarm // 1_000_000
-        for i in range(run_n):
-            testsys.controlplane.startTTI()
-            exit_event = m5.simulate(1_000_000*cpu_period)
-            testsys.controlplane.endTTI()
-            # testsys.controlplane.tuning()
-            m5.stats.dump()
-            m5.stats.reset()
     else:
-        for i in range(2):
-            exit_event = m5.simulate(1_000_000*cpu_period)
-            m5.stats.dump()
-            m5.stats.reset()
-        exit_event = m5.simulate(1_000_000*cpu_period)
+        if options.cycle_afterwarm:
+            print(f"cycle_afterwarm:{options.cycle_afterwarm}")
+            run_n = options.cycle_afterwarm // TTI_period
+            for i in range(run_n):
+                exit_event = m5.simulate(TTI_period*cpu_period)
+                m5.stats.dump()
+                m5.stats.reset()
+            return exit_event
+        elif options.num_tti:
+            # set work barrier on
+            testsys.setWorkBarrier(options.num_cpus)
+            exit_event,normal_res = runOneTTI(testsys, maxtick)
+            if not normal_res:
+                return exit_event
+            for i in range(options.num_tti):
+                exit_event,normal_res = runOneTTI(testsys, maxtick)
+                if not normal_res:
+                    return exit_event
+                m5.stats.dump()
+                m5.stats.reset()
+            return exit_event
+
+    exit_event = m5.simulate(maxtick - m5.curTick())
+    exit_cause = exit_event.getCause()
     return exit_event
 
     num_checkpoints = 0
@@ -592,6 +644,8 @@ def run(options, root, testsys, cpu_class):
     if options.maxinsts:
         for i in range(np):
             testsys.cpu[i].max_insts_any_thread = options.maxinsts
+    if options.maxinsts0:
+        testsys.cpu[0].max_insts_any_thread = options.maxinsts0
 
     for cpu in testsys.cpu:
         if options.branch_trace_en:
@@ -631,6 +685,8 @@ def run(options, root, testsys, cpu_class):
                 CpuConfig.config_branch_trace(cpu_class, switch_cpus[i], options)
             # O3 Config
             SSConfig.modifyO3CPUConfig(options, switch_cpus[i])
+        if options.maxinsts0:
+            switch_cpus[0].max_insts_any_thread = options.maxinsts0
 
         # If elastic tracing is enabled attach the elastic trace probe
         # to the switch CPUs
@@ -669,6 +725,8 @@ def run(options, root, testsys, cpu_class):
 
             if options.checker:
                 repeat_switch_cpus[i].addCheckerCpu()
+        if options.maxinsts0:
+            repeat_switch_cpus[0].max_insts_any_thread = options.maxinsts0
 
         testsys.repeat_switch_cpus = repeat_switch_cpus
 
@@ -723,6 +781,8 @@ def run(options, root, testsys, cpu_class):
             if options.checker:
                 switch_cpus[i].addCheckerCpu()
                 switch_cpus_1[i].addCheckerCpu()
+        if options.maxinsts0:
+            switch_cpus_1[0].max_insts_any_thread = options.maxinsts0
 
         testsys.switch_cpus = switch_cpus
         testsys.switch_cpus_1 = switch_cpus_1

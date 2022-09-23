@@ -207,6 +207,7 @@ int System::numSystemsRunning = 0;
 
 System::System(const Params &p)
     : SimObject(p), _systemPort("system_port", this),
+      workBarrierOn(p.enable_work_barrier),
       multiThread(p.multi_thread),
       pagePtr(0),
       init_param(p.init_param),
