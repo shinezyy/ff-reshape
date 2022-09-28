@@ -294,10 +294,9 @@ def benchCheckpoints(testsys, options, maxtick, cptdir):
 
     TTI_period = options.cycle_per_tti
     if options.nohype:
-        testsys.controlplane.startQoS()
-
         if options.cycle_afterwarm:
             run_n = options.cycle_afterwarm // TTI_period
+            testsys.controlplane.startQoS()
             for i in range(run_n):
                 testsys.controlplane.startTTI()
                 exit_event = m5.simulate(TTI_period*cpu_period)
@@ -316,10 +315,14 @@ def benchCheckpoints(testsys, options, maxtick, cptdir):
             m5.stats.dump()
             m5.stats.reset()
             for i in range(options.num_tti):
+                if i == 1:
+                    testsys.controlplane.startQoS()
                 testsys.controlplane.startTTI()
+                testsys.controlplane.setJob(0,0,True)
                 exit_event,normal_res = runOneTTI(testsys, maxtick)
                 if not normal_res:
                     return exit_event
+                testsys.controlplane.setJob(0,0,False)
                 testsys.controlplane.endTTI()
                 # testsys.controlplane.tuning()
                 m5.stats.dump()

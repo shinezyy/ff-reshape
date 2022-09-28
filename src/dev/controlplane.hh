@@ -75,6 +75,7 @@ class ControlPlane: public BasicPioDevice
     std::map<uint32_t, uint32_t> context2QosIDMap;
     std::map<uint32_t, uint32_t> QosIDAlterMap;
     std::vector<uint64_t> l3_waymask_set;
+    std::vector<uint64_t> l3_waymask_high_set;
 
   public:
     std::vector<DerivO3CPU *> cpus;

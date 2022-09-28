@@ -149,6 +149,7 @@ def addNoISAOptions(parser):
     parser.add_option("--sharel2", action="store_true")
     parser.add_option("--incll3",default=False,action="store_true")
     parser.add_option("--l3_waymask_set", type="string")
+    parser.add_option("--l3_waymask_high_set", type="string")
     parser.add_option("--cacheline_size", type="int", default=64)
 
     # Enable Ruby

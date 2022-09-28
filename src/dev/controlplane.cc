@@ -57,6 +57,7 @@ Tick ControlPlane::write(PacketPtr pkt) {
 ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     BasicPioDevice(*p, p->pio_size),
     l3_waymask_set(p->l3_waymask_set),
+    l3_waymask_high_set(p->l3_waymask_high_set),
     cpus(p->cpus),
     l2s(p->l2s),
     l3(p->l3),
@@ -173,7 +174,15 @@ ControlPlane::startQoS()
       l3->setWaymask(i,l3_waymask_set[i]);
     }
   }
-  for (int i = 1; i < LvNATasks::QosIdStart; i++)
+  if (!l3_waymask_high_set.empty())
+  {
+    l3->setWaymaskEnable(true);
+    for (size_t i = 0; i < l3_waymask_high_set.size(); i++)
+    {
+      l3->setWaymask(LvNATasks::job2QosId(i),l3_waymask_high_set[i]);
+    }
+  }
+  for (int i = 0; i < LvNATasks::QosIdStart; i++)
   {
     l3->buckets[i]->set_bypass(false);
     l3->buckets[i]->set_size(l3_tb_size);
