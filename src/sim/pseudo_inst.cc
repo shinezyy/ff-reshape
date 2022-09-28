@@ -358,9 +358,11 @@ hitBarrier(ThreadContext* tc)
 {
     DPRINTF(PseudoInst, "PseudoInst::hitBarrier() contextID:%d\n",tc->contextId());
     if (tc->getSystemPtr()->workBarrierOn)  {
-        tc->quiesce();
         if (tc->getSystemPtr()->hitWorkBarrier()){
             exitSimLoop("hit all work barrier", 0);
+        }
+        else {
+            tc->quiesce();
         }
     }
 }
