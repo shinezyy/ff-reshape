@@ -163,12 +163,15 @@ class BaseSetAssoc : public BaseTags
         {
             if (slice_bits)
             {
-                stats.sliceSetAccesses[id][bits<Addr>(
-                    indexingPolicy->extractSet(addr),slice_bits-1,0)]++;
+                Addr slice_idx = bits<Addr>(
+                    indexingPolicy->extractSet(addr),slice_bits-1,0);
+                stats.sliceSetAccesses[id][slice_idx]++;
+                id_map_set_access_vecs[id][slice_idx]++;
             }
             else
             {
                 stats.sliceSetAccesses[id][0]++;
+                id_map_set_access_vecs[id][0]++;
             }
         }
 

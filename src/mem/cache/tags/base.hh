@@ -168,7 +168,8 @@ class BaseTags : public ClockedObject
     std::map<uint32_t,std::vector<int>> id_map_set_access_vecs;
     std::map<uint32_t,std::vector<bool>> id_map_set_hot;
     std::map<uint32_t,std::vector<bool>> id_map_set_altflag;
-    std::set<uint32_t>* runningHighIds;
+    std::set<uint32_t>* usedHighIds;
+    double hot_threshold;
   public:
     typedef BaseTagsParams Params;
     BaseTags(const Params &p);
@@ -206,6 +207,12 @@ class BaseTags : public ClockedObject
      *
      */
     void updateHotSets();
+
+    /**
+     * @brief clear access counters
+     *
+     */
+    void clearSetAccCnts();
 
     /**
      * @brief check need alt policy

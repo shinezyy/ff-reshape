@@ -146,6 +146,7 @@ def addNoISAOptions(parser):
     parser.add_option("--l3_tb_freq", type="int", default=1000)
     parser.add_option("--l2_tb_size", type="int", default=1000)
     parser.add_option("--l3_tb_size", type="int", default=1000)
+    parser.add_option("--l3_hot_threshold", type="float", default=None)
     parser.add_option("--sharel2", action="store_true")
     parser.add_option("--incll3",default=False,action="store_true")
     parser.add_option("--l3_waymask_set", type="string")

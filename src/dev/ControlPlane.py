@@ -37,3 +37,5 @@ class ControlPlane(BasicPioDevice):
     l3_waymask_set = VectorParam.UInt64([], 'l3_waymask_choose')
     l3_waymask_high_set = VectorParam.UInt64([],
     'l3_waymask_choose for high priority task')
+    l3_hot_threshold = Param.Float(1.0, 'potion of accesses to decide\
+        hot sets')

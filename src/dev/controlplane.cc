@@ -58,6 +58,7 @@ ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     BasicPioDevice(*p, p->pio_size),
     l3_waymask_set(p->l3_waymask_set),
     l3_waymask_high_set(p->l3_waymask_high_set),
+    l3_hot_threshold(p->l3_hot_threshold),
     cpus(p->cpus),
     l2s(p->l2s),
     l3(p->l3),
@@ -94,6 +95,8 @@ ControlPlane::ControlPlane(const ControlPlaneParams *p) :
     l3->QosIDAlterMap[i] = alt_id;
   }
 
+  l3->tags->hot_threshold = l3_hot_threshold;
+
   resetTTIMeta();
 
 }
@@ -122,18 +125,28 @@ ControlPlane::registerRunningHighId(uint32_t qos_id, bool flag)
   {
     for (const auto &c:l2s)
     {
-      c->runningHighIds.insert(qos_id);
+      c->usedHighIds.insert(qos_id);
     }
-    l3->runningHighIds.insert(qos_id);
+    l3->usedHighIds.insert(qos_id);
   }
   else
   {
-    for (const auto &c:l2s)
-    {
-      c->runningHighIds.erase(qos_id);
-    }
-    l3->runningHighIds.erase(qos_id);
+    // for (const auto &c:l2s)
+    // {
+    //   c->usedHighIds.erase(qos_id);
+    // }
+    // l3->usedHighIds.erase(qos_id);
   }
+}
+
+void
+ControlPlane::clearUsedHighIds()
+{
+  for (const auto &c:l2s)
+  {
+    c->usedHighIds.clear();
+  }
+  l3->usedHighIds.clear();
 }
 
 void ControlPlane::resetTTIMeta()
@@ -226,8 +239,8 @@ ControlPlane::startTTI()
 {
   inform("start a TTI\n");
   resetTTIMeta();
-  // schedule auto tuning functions
-  // this->schedule();
+  //clear l3 access counters
+  l3->tags->clearSetAccCnts();
   //record all cpus as bg status at beginning
   for (size_t i = 0; i < np; i++)
   {
@@ -236,8 +249,6 @@ ControlPlane::startTTI()
     uint64_t now_insts = cpus[i]->getCommittedInsts();
     BgCpuMap[i]->bgUp(i,now_cycle,now_insts);
   }
-  //tell l3 tags updatehot
-  l3->tags->updateHotSets();
 }
 
 void
@@ -267,6 +278,10 @@ ControlPlane::endTTI()
   inform("A TTI ends\n");
   //mark a TTI end, calculate stats
   //record all cpus in bg status in the end
+  //tell l3 tags updatehot
+  l3->tags->updateHotSets();
+  //clear used high ids
+  clearUsedHighIds();
   for (size_t i = 0; i < np; i++)
   {
     uint64_t now_cycle = cpus[i]->getNumCycles();

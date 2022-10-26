@@ -260,6 +260,8 @@ def build_test_system(np):
             if options.l3_waymask_high_set:
                 ways = options.l3_waymask_high_set.split('-')
                 test_sys.controlplane.l3_waymask_high_set = [int(x,base=16) for x in ways]
+            if options.l3_hot_threshold:
+                test_sys.controlplane.l3_hot_threshold = options.l3_hot_threshold
 
         if options.enable_clint_sets:
             elinst_set = set([int(x) for x in options.enable_clint_sets.split('-')])

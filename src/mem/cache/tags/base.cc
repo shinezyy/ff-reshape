@@ -76,6 +76,8 @@ BaseTags::BaseTags(const Params &p)
         id_map_set_hot[i] = std::vector<bool>(num_slices,false);
         id_map_set_altflag[i] = std::vector<bool>(num_slices,false);
     }
+    //initialize the hot threshold as all hot
+    hot_threshold = 1.0;
 }
 
 void
@@ -96,57 +98,44 @@ BaseTags::updateHotSets()
             sum_acc += i.first;
         }
 
-        uint64_t sum80_threshold = sum_acc*0.8;
+        uint64_t sum_threshold = sum_acc * hot_threshold;
         std::sort(tmp_set_cnt.begin(),tmp_set_cnt.end(),std::greater_equal<>());
         uint64_t tmp_acc = 0;
         id_map_set_hot[qosid].assign(num_slices,false);
-        int i = 0;
-        for (i = 0; i < num_slices; i++)
+        for (int i = 0; i < num_slices; i++)
         {
             tmp_acc += tmp_set_cnt[i].first;
             id_map_set_hot[qosid][tmp_set_cnt[i].second] = true;
-            if (tmp_acc >= sum80_threshold){
-                i++;
+            if (tmp_acc >= sum_threshold){
                 break;
             }
         }
     }
 
     //TODO: now we update policy here for gem5performance
-    std::vector<bool> tmp_high(LvNATasks::NumId,false);
+    std::vector<bool> high_id_valid(LvNATasks::NumId,false);
     for (size_t qosid = 0; qosid < LvNATasks::NumId; qosid++)
     {
-        if (runningHighIds->count(qosid))
-            tmp_high[qosid] = true;
+        if (usedHighIds->count(qosid))
+            high_id_valid[qosid] = true;
     }
-    std::vector<bool> tmp_hot;
     for (size_t i = 0; i < num_slices; i++)
     {
-        tmp_hot.clear();
         int need_cnt = 0;
         for (size_t qosid = 0; qosid < LvNATasks::NumId; qosid++)
         {
             id_map_set_altflag[qosid][i] = false;
-            tmp_hot.push_back(id_map_set_hot[qosid][i]);
-            if (id_map_set_hot[qosid][i] && tmp_high[qosid])
+            if (id_map_set_hot[qosid][i] && high_id_valid[qosid])
                 need_cnt ++;
         }
         for (size_t qosid = 0; qosid < LvNATasks::NumId; qosid++)
         {
-            if (tmp_high[qosid])
+            if (high_id_valid[qosid])
             {
-                //is high job
-                //TODO: lvna: now high job always stick to old waymasks
-                /*
-                if (tmp_hot[qosid]){
-                    if (need_cnt <= 1)
-                        id_map_set_altflag[qosid][i] = true;
-                }
-                else{
-                    if (need_cnt == 0)
-                        id_map_set_altflag[qosid][i] = true;
-                }
-                */
+                //is high job and cold
+                if (need_cnt == 0)
+                    id_map_set_altflag[qosid][i] = true;
+
             }
             else
             {
@@ -158,11 +147,21 @@ BaseTags::updateHotSets()
     }
 }
 
+void
+BaseTags::clearSetAccCnts()
+{
+    for (size_t i = 0; i < LvNATasks::NumId; i++)
+    {
+        id_map_set_access_vecs[i].assign(num_slices,0);
+    }
+}
+
 bool
 BaseTags::needAltPolicy(Addr addr, uint32_t id)
 {
     int setn = indexingPolicy->extractSet(addr);
     return id_map_set_altflag[id][setn];
+    // return false;
 }
 
 ReplaceableEntry*

@@ -986,7 +986,7 @@ class BaseCache : public ClockedObject
     //this is used to record contextID to QoS ID map
     std::map<uint32_t, uint32_t> context2QosIDMap;
     std::map<uint32_t, uint32_t> QosIDAlterMap;
-    std::set<uint32_t> runningHighIds;
+    std::set<uint32_t> usedHighIds;
     /** System we are currently operating in. */
     System *system;
 

@@ -76,6 +76,7 @@ class ControlPlane: public BasicPioDevice
     std::map<uint32_t, uint32_t> QosIDAlterMap;
     std::vector<uint64_t> l3_waymask_set;
     std::vector<uint64_t> l3_waymask_high_set;
+    double l3_hot_threshold;
 
   public:
     std::vector<DerivO3CPU *> cpus;
@@ -111,6 +112,7 @@ class ControlPlane: public BasicPioDevice
 
     void setContextQosId(uint32_t ctx_id, uint32_t qos_id);
     void registerRunningHighId(uint32_t qos_id, bool flag);
+    void clearUsedHighIds();
 
   public:
     struct ControlPlaneStats : public Stats::Group
