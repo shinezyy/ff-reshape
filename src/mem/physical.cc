@@ -530,7 +530,7 @@ PhysicalMemory::unserializeStoreFrom(string filepath,
             // long restorer_size = ftell(fp);
             // assert( < 0x400);
 
-            uint32_t restorer_size = 0x400;
+            uint32_t restorer_size = 0x800;
             fseek(fp, 0, SEEK_SET);
             assert(restorer_size == fread(pmem_part_start, 1, restorer_size, fp));
             fclose(fp);
