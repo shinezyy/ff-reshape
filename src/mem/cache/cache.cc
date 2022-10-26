@@ -507,6 +507,7 @@ Cache::recvTimingReq(PacketPtr pkt)
             return;
         }
         int index = context2QosIDMap[task_id];
+        stats.reqPktReachNum[index]++;
         bool ok_to_pass = buckets[index]->checkPassPkt(pkt);
         if (ok_to_pass)
         {

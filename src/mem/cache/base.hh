@@ -1133,6 +1133,9 @@ class BaseCache : public ClockedObject
         /** Number of replacements of valid blocks. */
         Stats::Scalar replacements;
 
+        /** Number of request packets reaching cache. */
+        Stats::Vector reqPktReachNum;
+
         /** Number of data expansions. */
         Stats::Scalar dataExpansions;
 

@@ -2190,6 +2190,8 @@ BaseCache::CacheStats::CacheStats(BaseCache &c)
         this, "overall_avg_mshr_uncacheable_latency",
         "average overall mshr uncacheable latency"),
     replacements(this, "replacements", "number of replacements"),
+    reqPktReachNum(this, "req_pkt_reach_num",
+                    "number of request packets reaching cache"),
 
     dataExpansions(this, "data_expansions", "number of data expansions"),
     dataContractions(this, "data_contractions", "number of data contractions"),
@@ -2413,6 +2415,11 @@ BaseCache::CacheStats::regStats()
 
     dataExpansions.flags(nozero | nonan);
     dataContractions.flags(nozero | nonan);
+
+    reqPktReachNum
+        .init(max_requestors)
+        .flags(total | nozero | nonan)
+        ;
 }
 
 void
