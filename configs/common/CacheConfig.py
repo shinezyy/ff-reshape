@@ -252,7 +252,7 @@ def config_cache(options, system):
                 # Make sure connectAllPorts connects the right objects.
                 system.cpu[i].dcache = dcache_real
                 system.cpu[i].dcache_mon = dcache_mon
-            system.cpu[i].dcache.prefetcher_id = i
+            # system.cpu[i].dcache.prefetcher_id = i
 
         elif options.external_memory_system:
             # These port names are presented to whatever 'external' system
@@ -287,7 +287,7 @@ def config_cache(options, system):
             system.cpu[i].connectAllPorts(system.tol2bus[i], system.membus)
             system.l2[i].tags.num_slices = options.l2_slices
             system.l2[i].cpu_side = system.tol2bus[i].master
-            system.l2[i].prefetcher_id = i
+            # system.l2[i].prefetcher_id = i
             if options.l3_cache:
                 system.l2[i].mem_side = system.tol3bus.slave
             else:
