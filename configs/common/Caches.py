@@ -79,7 +79,7 @@ class L2Cache(Cache):
     tag_latency = 12
     data_latency = 12
     response_latency = 5
-    mshrs = 32
+    mshrs = 16
     tgts_per_mshr = 8
     write_buffers = 8
     replacement_policy = RRIPRP()
@@ -98,7 +98,7 @@ class L3Cache(Cache):
     mshrs = 20
     tgts_per_mshr = 12
     write_buffers = 8
-    replacement_policy = BRRIPRP()
+    replacement_policy = RRIPRP()
     size = '2MB'
     clusivity='mostly_excl'
     # Luoshan: add params
