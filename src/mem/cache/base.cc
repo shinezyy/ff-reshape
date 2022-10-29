@@ -126,7 +126,7 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
     tempBlock = new TempCacheBlk(blkSize);
 
     tags->tagsInit();
-    tags->runningHighIds = &this->runningHighIds;
+    tags->usedHighIds = &this->usedHighIds;
     if (prefetcher)
         prefetcher->setCache(this);
 
