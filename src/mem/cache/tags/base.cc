@@ -159,9 +159,12 @@ BaseTags::clearSetAccCnts()
 bool
 BaseTags::needAltPolicy(Addr addr, uint32_t id)
 {
+    if (hot_threshold == 1.0)
+    {
+        return false;
+    }
     int setn = indexingPolicy->extractSet(addr);
     return id_map_set_altflag[id][setn];
-    // return false;
 }
 
 ReplaceableEntry*
