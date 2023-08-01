@@ -76,6 +76,7 @@ enum PrefetchSourceType
     SPht,
     HWP_BOP,
     SPP,
+    HWP_Heap,
     NUM_PF_SOURCES
 };
 

@@ -5,6 +5,7 @@
 #ifndef GEM5_SMS_HH
 #define GEM5_SMS_HH
 
+#include <bitset>
 #include <vector>
 
 #include <boost/compute/detail/lru_cache.hpp>
@@ -103,7 +104,7 @@ class SMSPrefetcher : public Queued
     void periodStrideDepthDown();
 
     bool strideLookup(const PrefetchInfo &pfi, std::vector<AddrPriority> &address, bool late, Addr &pf_addr,
-                      PrefetchSourceType src);
+                      PrefetchSourceType src, bool &heap_allocated);
 
     AssociativeSet<StrideEntry> stride;
 
@@ -126,6 +127,92 @@ class SMSPrefetcher : public Queued
                    std::vector<AddrPriority> &addresses, bool late, Addr look_ahead_addr);
 
     int calcPeriod(const std::vector<SatCounter8> &bit_vec, bool late);
+
+    enum HeapPFState
+    {
+        HeapNewRegion = 0,
+        HeapSquashed,
+        HeapActive,
+    };
+
+#define HeapPFRegionSize 64
+    struct HeapAccRange
+    {
+        Addr start;
+        Addr mid;
+        Addr end;
+        Addr accessAddr{};
+        std::bitset<HeapPFRegionSize> bitvec{0};
+        std::vector<SatCounter8> confVec;
+
+        unsigned bitOffset(Addr addr, Addr blk_size=64) {
+            // use right half to store forward, left half to store backward
+            return addr > mid ? HeapPFRegionSize / 2 + (addr - mid) / blk_size - 1
+                              : HeapPFRegionSize / 2 - (mid - addr) / blk_size;
+        }
+        bool fallInRange(Addr addr) {
+            return addr >= start && addr <= end;
+        }
+
+        bool fallInSlackRange(Addr addr) {
+            return addr >= (start - 32*64) && (addr <= end + 32*64);
+        }
+
+        void reset() {
+            bitvec.reset();
+            for (auto &conf : confVec) {
+                conf.reset();
+            }
+            start = 0;
+            end = 0;
+            mid = 0;
+        }
+
+        HeapAccRange()
+        {
+            confVec.resize(HeapPFRegionSize, SatCounter8(3, 0));
+            reset();
+        }
+    };
+
+
+    struct HeapEntry
+    {
+        static const unsigned int pfLevels{8};
+        HeapPFState state{HeapNewRegion};
+        Addr pc{0};
+        Addr curStride;  // roughly speaking, curAddr - parentAddr
+        Addr curAddr;
+        Addr parentAddr;
+
+        unsigned decayCounter{0};
+        const unsigned decayPeriod{128};
+
+        unsigned hitCount{0};
+        unsigned outCount{0};
+        const unsigned outCountThreshold{2};
+
+        std::vector<HeapAccRange> footprints{pfLevels};
+    };
+
+    HeapEntry heapEntry;
+
+    boost::compute::detail::lru_cache<Addr, std::shared_ptr<SatCounter8>> potentialHeap;
+
+    bool heapLookup(const PrefetchInfo &pfi, std::vector<AddrPriority> &address, bool late, Addr &pf_addr,
+                    PrefetchSourceType src, HeapEntry &entry);
+
+    bool allocHeapEntry(const PrefetchInfo &pfi, std::vector<AddrPriority> &addresses);
+
+    void calcHeapPrefAndUpdateEntry(const PrefetchInfo &pfi, HeapEntry &entry, std::vector<AddrPriority> &addresses,
+                                    bool send_pf, unsigned calc_since_row);
+
+    void reCalcRegion(const PrefetchInfo &pfi, HeapEntry &entry, std::vector<AddrPriority> &addresses,
+                      bool send_pf = true);
+
+    void printHeapPFMap(HeapEntry &entry);
+
+    void heapSquash(HeapEntry &entry);
 
   public:
     SMSPrefetcher(const SMSPrefetcherParams &p);
@@ -153,6 +240,13 @@ class SMSPrefetcher : public Queued
     BOP *bop;
 
     SignaturePath  *spp;
+
+    struct XSPrefStats : public statistics::Group
+    {
+        XSPrefStats(statistics::Group *parent);
+        statistics::Scalar heapRootFound;
+        statistics::Scalar heapRootMiss;
+    } xsPrefStats;
 };
 
 }
